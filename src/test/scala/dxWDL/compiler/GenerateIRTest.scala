@@ -1,17 +1,14 @@
 package dxWDL.compiler
 
-
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.{CallableTaskDefinition}
+import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
-
-
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx.DxUtils
-import spray.json._
+
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -31,15 +28,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
                               "-fatalValidationWarnings",
                               "--locked",
                               "--project", dxProject.getId)
+
     private val cFlagsUnlocked = List("--compileMode", "ir",
                                       "-quiet",
                                       "-fatalValidationWarnings",
+
                                       "--project", dxProject.getId)
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
                         "--verboseKey", "GenerateIR",
                         "--locked",
                         "--project", DxUtils.dxEnv.getProjectContext().getId)
+
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -456,111 +456,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "detect a request for GPU" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
-//                                      :: "--verbose"
-//                                      :: "--verboseKey" :: "GenerateIR"
-                                      :: cFlags)
+            //                                      :: "--verbose"
+            //                                      :: "--verboseKey" :: "GenerateIR"
+            :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
 
         inside(retval) {
             case Main.SuccessfulTerminationIR(bundle) =>
-                bundle.allCallables.size shouldBe(1)
+                bundle.allCallables.size shouldBe (1)
                 val (_, callable) = bundle.allCallables.head
                 callable shouldBe a[IR.Applet]
                 val task = callable.asInstanceOf[IR.Applet]
-                task.instanceType shouldBe(IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
+                task.instanceType shouldBe (IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
         }
-    }
-
-    // ignore for now as the test will fail in staging
-    ignore should "Compile a workflow with a custom reorg applet" taggedAs(ProdTest) in {
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
-
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
-
-        val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString ::
-              List("--compileMode", "ir", "--project", dxProject.getId)
-        )
-
-        retval shouldBe a [Main.SuccessfulTerminationIR]
-        val bundle = retval match {
-            case Main.SuccessfulTerminationIR(ir) => ir
-            case _ => throw new Exception("sanity")
-        }
-
-        val wf: IR.Workflow =  bundle.primaryCallable.get match {
-            case wf: IR.Workflow => wf
-            case _ => throw new Exception("sanity")
-        }
-
-        wf.stages.size shouldBe(4)
-        wf.stages(3).calleeName shouldBe "applet-Fg623fj0jy8q7jjv9xV6q5fQ"
-    }
-
-    // ignore for now as the test will fail in staging
-    ignore should "Compile a workflow on the platform with the config file in the input" taggedAs(ProdTest)  in {
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
-
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg_config.json")
-
-        // remove locked workflow flag
-        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests")
-
-        val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
-        )
-        retval shouldBe a [Main.SuccessfulTermination]
-        val wfId: String = retval match {
-            case Main.SuccessfulTermination(ir) => ir
-            case _ => throw new Exception("sanity")
-        }
-
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
-
-        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
-            case Some(JsArray(x)) => x.toVector
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
-
-        wfStages.size shouldBe 4
-
-        val reorgStage = wfStages.last
-
-        // if its not a JsObject return empty string and test will fail
-        val reorgDetails = reorgStage match {
-            case JsObject(x) => JsObject(x)
-            case _ => throw new Exception("sanity")
-        }
-
-        reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg623fj0jy8q7jjv9xV6q5fQ")
-        )
-        // There should be 3 inputs, the output from output stage and the custom reorg config file.
-        val reorgInput: JsObject = reorgDetails.fields("input") match {
-            case JsObject(x) => JsObject(x)
-            case _ => throw new Exception("sanity")
-
-        }
-
-        reorgInput.fields.size shouldBe 2
-        reorgInput.fields.keys shouldBe Set(Utils.REORG_CONFIG, Utils.REORG_STATUS)
-    }
-
-    // ignore for now as the test will fail in staging
-    ignore should "Compile a workflow on the platform without config file in the input" taggedAs(ProdTest) in {
-        // This works in conjunction with "Compile a workflow on the platform with the config file in the input".
-        // There is less assertions here.
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
-
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
-
-        // remove locked workflow flag
-        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests_without_config")
-
-        val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
-        )
-        retval shouldBe a [Main.SuccessfulTermination]
-
     }
 }

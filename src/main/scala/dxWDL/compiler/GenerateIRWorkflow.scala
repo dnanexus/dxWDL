@@ -20,6 +20,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose,
+                              locked: Boolean,
                               reorg: Either[Boolean, ReorgAttrs]) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
@@ -584,13 +585,20 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         }.toVector
 
         val updatedOutputVars: Vector[CVar] = reorg match {
-            case Left(reorg_flag) => outputVars
-            case Right(reorg_attrs) => addOutputStatus(outputVars)
+            case Left(_) => outputVars
+            case Right(_) if locked => outputVars
+            case Right(_) if !locked => addOutputStatus(outputVars)
+
         }
 
         val appletKind: IR.AppletKind = reorg match {
-            case Left(reorg_flag) => IR.AppletKindWfOutputs
-            case Right(reorg_attrs) => IR.AppletKindWfCustomReorgOutputs
+            case Left(_) => IR.AppletKindWfOutputs
+            // if custom reorg app is used, check if workflow is not locked to ensure that the wf is top level
+            // You cannot declare a custom reorg app with a locked workflow.
+            // This is checked in Main.scala
+            case Right(_) if locked => IR.AppletKindWfOutputs
+            case Right(_) if !locked => IR.AppletKindWfCustomReorgOutputs
+
         }
 
         val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
@@ -798,7 +806,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
     // Compile a (single) user defined WDL workflow into a dx:workflow.
     //
-    private def apply2(locked: Boolean) =
+    private def apply2() =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
         val graph = wf.innerGraph
@@ -827,6 +835,11 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             } else {
                 (irwf, irCallables)
             }
+
+            // Only the top level workflow will have a custom reorg stage.
+            // All subworkflow are locked.
+            // Cannot use custom reorg stage with --locked flag.
+            // This is checked in Main.scala.
             case Right(reorgAttributes) =>
                 if (!locked) {
                     val (reorgStage, reorgApl) = addCustomReorgStage(wf.name,
@@ -844,8 +857,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         (wf2, apl2)
     }
 
-    def apply(locked: Boolean): (IR.Workflow, Vector[IR.Callable]) = {
-        val (irwf, irCallables) = apply2(locked)
+    def apply(): (IR.Workflow, Vector[IR.Callable]) = {
+        val (irwf, irCallables) = apply2()
 
         // sanity check
         val callableNames: Set[String] =

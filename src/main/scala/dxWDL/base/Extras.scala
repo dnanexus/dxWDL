@@ -683,7 +683,7 @@ object Extras {
         // FIXME: this shouldn't be printed out when running tests. During tests, nothing should
         // be printed out, some software relies on this assumption.
         Utils.trace(
-            true,
+            verbose.on,
             s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
                 |it may misplace or outright delete files.
                 |The applet: ${reorgAppId} requires CONTRIBUTE project access,

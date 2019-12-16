@@ -1,5 +1,6 @@
 package dxWDL.compiler
 
+import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Path, Paths}
 
 import org.scalatest.{FlatSpec, Matchers}
@@ -25,6 +26,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     val TEST_PROJECT = "dxWDL_playground"
+
     lazy val dxTestProject =
         try {
             DxPath.resolveProject(TEST_PROJECT)
@@ -40,13 +42,20 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                            "-locked",
                            "-quiet")
 
+    lazy private val cFlagsReorg = List(
+        "-compileMode", "NativeWithoutRuntimeAsset",
+        "--project", dxTestProject.getId,
+        "-quiet",  "--folder", "/reorg_tests")
+
     override def beforeAll() : Unit = {
         // building necessary applets before starting the tests
         val native_applets = Vector("native_concat",
                                     "native_diff",
                                     "native_mk_list",
                                     "native_sum",
-                                    "native_sum_012")
+                                    "native_sum_012",
+                                    "functional_reorg_test"
+        )
         val topDir = Paths.get(System.getProperty("user.dir"))
         native_applets.foreach { app =>
             try {
@@ -57,6 +66,29 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             }
         }
     }
+
+    private def getAppletId(path: String): String = {
+        val (app_stdout, app_stderr) = Utils.execCommand(
+            s"dx describe $path --json")
+
+        app_stdout.parseJson.asJsObject.fields.get("id") match {
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+    }
+
+    private def createExtras(extrasContent: String): String = {
+
+        val tmp_extras = File.createTempFile("reorg-", ".json")
+        tmp_extras.deleteOnExit()
+
+        val bw = new BufferedWriter(new FileWriter(tmp_extras))
+        bw.write(extrasContent)
+        bw.close()
+
+        tmp_extras.toString
+    }
+
 
 
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
@@ -128,6 +160,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
         val tasks : Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
+
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "functional_reorg_test", "native_mk_list", "native_diff", "native_concat"))
     }
 
@@ -258,5 +291,146 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
         //System.out.println(s"instanceType = ${instanceType}")
         instanceType should include ("_gpu")
+    }
+
+    it should "Compile a workflow with subworkflows on the platform with the reorg app" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
+        val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+        val extrasContent =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appletId}",
+                |    "conf" : null
+                |  }
+                |}
+                |""".stripMargin
+
+        val tmpFile= createExtras(extrasContent)
+        // remove locked workflow flag
+        val retval = Main.compile(
+            path.toString :: "-extras" :: tmpFile :: cFlagsReorg
+        )
+        retval shouldBe a [Main.SuccessfulTermination]
+        val wfId: String = retval match {
+            case Main.SuccessfulTermination(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
+
+        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
+            case Some(JsArray(x)) => x.toVector
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        // there should be 4 stages: 1) common 2) train_stations 3) outputs 4) reorg
+        wfStages.size shouldBe 4
+
+        val reorgStage = wfStages.last
+
+        // if its not a JsObject return empty string and test will fail
+        val reorgDetails = reorgStage match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+        }
+
+        reorgDetails.getFields("id", "executable") shouldBe Seq(
+            JsString("stage-reorg"), JsString(s"${appletId}")
+        )
+        // There should be 3 inputs, the output from output stage and the custom reorg config file.
+        val reorgInput: JsObject = reorgDetails.fields("input") match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+        }
+
+        // no reorg conf input. only status.
+        reorgInput.fields.size shouldBe 1
+        reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS)
+    }
+
+    // ignore for now as the test will fail in staging
+    it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" taggedAs(EdgeTest) in {
+        // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
+        val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
+        val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+        // upload random file
+        val (uploadOut, uploadErr) = Utils.execCommand(
+            s"dx upload ${path.toString} --destination /reorg_tests --brief"
+        )
+        val fileId = uploadOut.trim
+        val extrasContent =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appletId}",
+                |    "conf" : "dx://$fileId"
+                |  }
+                |}
+                |""".stripMargin
+
+        val tmpFile= createExtras(extrasContent)
+        // remove locked workflow flag
+        val retval = Main.compile(
+            path.toString :: "-extras" :: tmpFile :: cFlagsReorg
+        )
+
+        retval shouldBe a [Main.SuccessfulTermination]
+        val wfId: String = retval match {
+            case Main.SuccessfulTermination(wfId) => wfId
+            case _ => throw new Exception("sanity")
+        }
+
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
+
+        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
+            case Some(JsArray(x)) => x.toVector
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        val reorgStage = wfStages.last
+
+        val reorgDetails = reorgStage match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+        }
+
+        // There should be 3 inputs, the output from output stage and the custom reorg config file.
+        val reorgInput: JsObject = reorgDetails.fields("input") match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+        }
+        // no reorg conf input. only status.
+        reorgInput.fields.size shouldBe 2
+        reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS, Utils.REORG_CONFIG)
+    }
+    it should "Checks subworkflow with custom reorg app do not contain reorg attribute" taggedAs(EdgeTest) in {
+        // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
+        val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+        val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+        // upload random file
+        val extrasContent =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appletId}",
+                |    "conf" : null
+                |  }
+                |}
+                |""".stripMargin
+
+        val tmpFile = createExtras(extrasContent)
+
+        // remove compile mode
+        val retval = Main.compile(
+            path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg.drop(2)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case _ => throw new Exception("sanity")
+        }
+
+        // this is a subworkflow so there is no reorg_status___ added.
+        val trainsOutputVector: IR.Callable = bundle.allCallables("trains")
+        trainsOutputVector.outputVars.size shouldBe 1
     }
 }

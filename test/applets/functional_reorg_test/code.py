@@ -12,7 +12,7 @@ def create_folder(container, folder_name):
 
 
 @dxpy.entry_point('main')
-def main(___reorg_conf=None, ___reorg_status=None):
+def main(reorg_conf___=None, reorg_status___=None):
 
     job_describe = dxpy.describe(dxpy.JOB_ID)
     analysis_id = job_describe["analysis"]

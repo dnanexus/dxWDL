@@ -326,7 +326,6 @@ class ExtrasTest extends FlatSpec with Matchers {
   it should "throw IllegalArgumentException due to invalid file ID" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-
     val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
     val inputs : String = "file-1223445"
     val reorg : JsValue =

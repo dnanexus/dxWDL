@@ -123,8 +123,8 @@ case class GenerateIR(verbose: Verbose,
                                                                           callablesUsedInWorkflow)
 
         val gir = new GenerateIRWorkflow(
-            wf, wfSource, wfSourceStandAlone, callsLoToHi, callables, language, verbose, reorg)
-        gir.apply(locked)
+            wf, wfSource, wfSourceStandAlone, callsLoToHi, callables, language, verbose, locked, reorg)
+        gir.apply()
     }
 
     // Entry point for compiling tasks and workflows into IR

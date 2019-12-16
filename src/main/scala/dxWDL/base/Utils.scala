@@ -41,8 +41,8 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val UBUNTU_VERSION = "16.04"
     val VERSION_PROP = "dxWDL_version"
-    val REORG_CONFIG = "___reorg_conf"
-    val REORG_STATUS = "___reorg_status"
+    val REORG_CONFIG = "reorg_conf___"
+    val REORG_STATUS = "reorg_status___"
     val REORG_STATUS_COMPLETE = "completed"
 
 
