@@ -54,17 +54,17 @@ function tag {
 
 function build {
     # build the release on staging
-    echo "building staging release"
-    dx login --staging --token $staging_token --noprojects
-    $top_dir/scripts/build_release.py --multi-region $build_flags
-
-    ## test that it actually works
-    echo "running multi region tests on staging"
-    $top_dir/scripts/multi_region_tests.py
-    $top_dir/scripts/proxy_test.py
-
-    echo "leave staging"
-    dx clearenv
+#    echo "building staging release"
+#    dx login --staging --token $staging_token --noprojects
+#    $top_dir/scripts/build_release.py --multi-region $build_flags
+#
+#    ## test that it actually works
+#    echo "running multi region tests on staging"
+#    $top_dir/scripts/multi_region_tests.py
+#    $top_dir/scripts/proxy_test.py
+#
+#    echo "leave staging"
+#    dx clearenv
 
     ## build on production
     echo "building on production"
