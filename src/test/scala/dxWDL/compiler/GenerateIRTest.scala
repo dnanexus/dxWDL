@@ -690,6 +690,6 @@ class GenerateIRTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
         // this is a subworkflow so there is no reorg_status___ added.
         val trainsOutputVector: IR.Callable = bundle.allCallables("trains")
-        trainsOutputVector.outputVars.size shouldBe 2
+        trainsOutputVector.outputVars.size shouldBe 1
     }
 }
