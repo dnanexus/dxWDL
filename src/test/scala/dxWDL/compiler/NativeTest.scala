@@ -128,7 +128,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
         val tasks : Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
-        tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
+        tasks.keys shouldBe(Set("native_sum", "native_sum_012", "functional_reorg_test", "native_mk_list", "native_diff", "native_concat"))
     }
 
     it should "be able to include license information in details" in {
