@@ -6,6 +6,7 @@ package dxWDL.compiler
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.security.MessageDigest
+import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeMap
 import spray.json._
 import DefaultJsonProtocol._
@@ -23,11 +24,11 @@ import IR.{CVar, SArg}
 // on that property.
 case class Native(dxWDLrtId: Option[String],
                   folder: String,
-                  dxProject: DxProject,
+                  dxProject: DXProject,
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir : Map[String, (DxFile, DxFileDescribe)],
+                  fileInfoDir : Map[DXFile, DxDescribe],
                   typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
@@ -37,7 +38,7 @@ case class Native(dxWDLrtId: Option[String],
                   locked: Boolean,
                   verbose: Verbose) {
     case class ExecRecord(callable: IR.Callable,
-                          dxExec: DxExecutable,
+                          dxExec: DxExec,
                           links: Vector[ExecLinkInfo])
 
     private val verbose2:Boolean = verbose.containsKey("Native")
@@ -61,18 +62,19 @@ case class Native(dxWDLrtId: Option[String],
             case Some(id) =>
                 // Open the archive
                 // Extract the archive from the details field
-                val record = DxRecord.getInstance(id)
-                val desc = record.describe(Set(Field.Details))
-                val details = desc.details.get
+                val record = DXRecord.getInstance(id)
+                val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+                val details = DxUtils.jsValueOfJsonNode(
+                    record.describe(descOptions).getDetails(classOf[JsonNode]))
                 val dxLink = details.asJsObject.fields.get("archiveFileId") match {
                     case Some(x) => x
                     case None => throw new Exception(s"record does not have an archive field ${details}")
                 }
                 val dxFile = DxUtils.dxFileFromJsValue(dxLink)
-                val name = dxFile.describe().name
+                val name = dxFile.describe.getName()
                 Some(JsObject(
                          "name" -> JsString(name),
-                         "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
+                         "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
                      ))
         }
 
@@ -397,9 +399,6 @@ case class Native(dxWDLrtId: Option[String],
                                   |fields = ${JsObject(fields).prettyPrint}
                                   |
                                   |""".stripMargin)
-
-        // We need to sort the hash-tables. They are natually unsorted,
-        // causing the same object to have different checksums.
         val jsDet = Utils.makeDeterministic(JsObject(fields))
         val digest = chksum(jsDet.prettyPrint)
 
@@ -410,21 +409,11 @@ case class Native(dxWDLrtId: Option[String],
                 case None => Map.empty
                 case other => throw new Exception(s"Bad properties json value ${other}")
             }
-        val props = preExistingProps ++ Map(
-            Utils.VERSION_PROP -> JsString(Utils.getVersion()),
-            Utils.CHECKSUM_PROP -> JsString(digest)
-        )
-
-        // Add properties and attributes we don't want to fall under the checksum
-        // This allows, for example, moving the dx:executable, while
-	// still being able to reuse it.
-        val req = JsObject(fields ++ Map(
-                               "project" -> JsString(dxProject.id),
-                               "folder" -> JsString(folder),
-                               "parents" -> JsBoolean(true),
-                               "properties" -> JsObject(props)
-                           ))
-        (digest, req)
+        val checksumField = Map(Utils.CHECKSUM_PROP -> JsString(digest))
+        val props = Map("properties" ->
+                            JsObject(preExistingProps ++ checksumField))
+        val reqChk = (fields - "properies") ++ props
+        (digest, JsObject(reqChk))
     }
 
     // Do we need to build this applet/workflow?
@@ -433,21 +422,12 @@ case class Native(dxWDLrtId: Option[String],
     //   None: build is required
     //   Some(dxobject) : the right object is already on the platform
     private def isBuildRequired(name: String,
-                                digest: String) : Option[DxDataObject] = {
+                                digest: String) : Option[DXDataObject] = {
         // Have we built this applet already, but placed it elsewhere in the project?
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
             case Some((dxObj, desc)) =>
-                dxObj match {
-                    case a : DxAppDescribe =>
-                        Utils.trace(verbose.on, s"Found existing version of app ${name}")
-                    case apl : DxAppletDescribe =>
-                        Utils.trace(verbose.on, s"Found existing version of applet ${name} in folder ${apl.folder}")
-                    case wf : DxWorkflowDescribe =>
-                        Utils.trace(verbose.on, s"Found existing version of workflow ${name} in folder ${wf.folder}")
-                    case other =>
-                        throw new Exception(s"bad object ${other}")
-                }
+                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.folder}")
                 return Some(dxObj)
         }
 
@@ -471,7 +451,7 @@ case class Native(dxWDLrtId: Option[String],
             case _ =>
                 val dxClass = existingDxObjs.head.dxClass
                 Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
-                                           |path ${dxProject.id}:${folder}""".stripMargin)
+                                           |path ${dxProject.getId()}:${folder}""".stripMargin)
                 true
         }
 
@@ -484,12 +464,12 @@ case class Native(dxWDLrtId: Option[String],
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
                     val objs = existingDxObjs.map(_.dxObj)
-                    Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.id)}")
-                    dxProject.removeObjects(objs)
+                    Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+                    dxProject.removeObjects(objs.asJava)
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.id}:${folder}""".stripMargin)
+                                            | ${dxProject.getId}:${folder}""".stripMargin)
                 }
             }
             None
@@ -501,7 +481,7 @@ case class Native(dxWDLrtId: Option[String],
 
     // Create linking information for a dx:executable
     private def genLinkInfo(irCall: IR.Callable,
-                            dxObj: DxExecutable) : ExecLinkInfo = {
+                            dxObj: DxExec) : ExecLinkInfo = {
         val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
             case CVar(name, wdlType, _) => (name -> wdlType)
         }.toMap
@@ -604,7 +584,7 @@ case class Native(dxWDLrtId: Option[String],
         val runSpecWithExtras = runSpec ++ defaultTimeout ++ extraRunSpec ++ taskSpecificRunSpec
 
         // - If the docker image is a tarball, add a link in the details field.
-        val dockerFile: Option[DxFile] = applet.docker match {
+        val dockerFile: Option[DXFile] = applet.docker match {
             case IR.DockerImageNone => None
             case IR.DockerImageNetwork => None
             case IR.DockerImageDxFile(_, dxfile) =>
@@ -781,7 +761,20 @@ case class Native(dxWDLrtId: Option[String],
             else Map("access" -> access)
 
         // Add a checksum
-        checksumReq(applet.name, reqCore ++ accessField)
+        val (digest, req) = checksumReq(applet.name, reqCore ++ accessField)
+
+        // Add properties we do not want to fall under the checksum.
+        // This allows, for example, moving the dx:executable, while
+	// still being able to reuse it.
+        val reqWithEverything =
+            JsObject(req.asJsObject.fields ++ Map(
+                               "project" -> JsString(dxProject.getId),
+                               "folder" -> JsString(folder),
+                               "parents" -> JsBoolean(true),
+                               "properties" ->
+                                   JsObject(Utils.VERSION_PROP -> JsString(Utils.getVersion()))
+                     ))
+        (digest, reqWithEverything)
     }
 
     // Rebuild the applet if needed.
@@ -790,7 +783,7 @@ case class Native(dxWDLrtId: Option[String],
     // if the WDL code has changed.
     private def buildAppletIfNeeded(applet: IR.Applet,
                                     execDict: Map[String, ExecRecord])
-            : (DxApplet, Vector[ExecLinkInfo]) = {
+            : (DXApplet, Vector[ExecLinkInfo]) = {
         Utils.trace(verbose2, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -822,13 +815,13 @@ case class Native(dxWDLrtId: Option[String],
                 // Compile a WDL snippet into an applet.
                 val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
                 val id = apiParseReplyID(rep)
-                val dxApplet = DxApplet.getInstance(id)
+                val dxApplet = DXApplet.getInstance(id)
                 dxObjDir.insert(applet.name, dxApplet, digest)
                 dxApplet
             case Some(dxObj) =>
                 // Old applet exists, and it has not changed. Return the
                 // applet-id.
-                dxObj.asInstanceOf[DxApplet]
+                dxObj.asInstanceOf[DXApplet]
         }
         (dxApplet, aplLinks.values.toVector)
     }
@@ -1012,17 +1005,17 @@ case class Native(dxWDLrtId: Option[String],
 	// still being able to reuse it.
         val reqWithEverything =
             JsObject(reqWithChecksum.asJsObject.fields ++ Map(
-                         "project" -> JsString(dxProject.id),
+                         "project" -> JsString(dxProject.getId),
                          "folder" -> JsString(folder),
                          "parents" -> JsBoolean(true)
                      ))
         (digest, reqWithEverything)
     }
 
-    private def buildWorkflow(req: JsValue) : DxWorkflow = {
+    private def buildWorkflow(req: JsValue) : DXWorkflow = {
         val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        val dxwf = DxWorkflow.getInstance(id)
+        val dxwf = DXWorkflow.getInstance(id)
 
         // Close the workflow
         if (!leaveWorkflowsOpen)
@@ -1035,7 +1028,7 @@ case class Native(dxWDLrtId: Option[String],
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
     private def buildWorkflowIfNeeded(wf: IR.Workflow,
-                                      execDict: Map[String, ExecRecord]) : DxWorkflow = {
+                                      execDict: Map[String, ExecRecord]) : DXWorkflow = {
         val (digest, wfNewReq) = workflowNewReq(wf, execDict)
         val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
@@ -1046,7 +1039,7 @@ case class Native(dxWDLrtId: Option[String],
             case Some(dxObj) =>
                 // Old workflow exists, and it has not changed.
                 // we need to find a way to get the dependencies.
-                dxObj.asInstanceOf[DxWorkflow]
+                dxObj.asInstanceOf[DXWorkflow]
         }
     }
 
@@ -1063,25 +1056,23 @@ case class Native(dxWDLrtId: Option[String],
                         val execRecord = apl.kind match {
                             case IR.AppletKindNative(id) =>
                                 // native applets do not depend on other data-objects
-                                val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
-                                ExecRecord(apl, dxExec, Vector.empty)
+                                ExecRecord(apl, DxExec(id), Vector.empty)
                             case IR.AppletKindWorkflowCustomReorg(id) =>
                                 // does this has to be a different class?
-                                val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
-                                ExecRecord(apl, dxExec, Vector.empty)
+                                ExecRecord(apl, DxExec(id), Vector.empty)
                             case _ =>
                                 val (dxApplet, dependencies) = buildAppletIfNeeded(apl, accu)
-                                ExecRecord(apl, dxApplet, dependencies)
+                                ExecRecord(apl, DxExec(dxApplet.getId), dependencies)
                         }
                         accu + (apl.name -> execRecord)
                     case wf : IR.Workflow =>
                         val dxwfl = buildWorkflowIfNeeded(wf, accu)
-                        accu + (wf.name -> ExecRecord(wf, dxwfl, Vector.empty))
+                        accu + (wf.name -> ExecRecord(wf, DxExec(dxwfl.getId), Vector.empty))
                 }
         }
 
         // build the toplevel workflow, if it is defined
-        val primary : Option[DxExecutable] = bundle.primaryCallable.flatMap{ callable =>
+        val primary : Option[DxExec] = bundle.primaryCallable.flatMap{ callable =>
             execDict.get(callable.name) match {
                 case None => None
                 case Some(ExecRecord(_, dxExec, _)) => Some(dxExec)

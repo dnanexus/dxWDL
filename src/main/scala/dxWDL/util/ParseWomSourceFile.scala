@@ -132,12 +132,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                          convertNestedScatterToSubworkflow = false)
 
         val bundle = bundleChk match {
-            case Left(errors) =>
-                System.out.println("=== WOM file =====")
-                System.out.println(mainFileContents)
-                throw new Exception(s"""|WOM validation errors:
-                                        | ${errors}
-                                        |""".stripMargin)
+            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                         | ${errors}
+                                                         |""".stripMargin)
             case Right(bundle) => bundle
         }
         val lang = (languageFactory.languageName.toLowerCase,

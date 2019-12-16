@@ -8,12 +8,13 @@ file type is very different between WDL and DNAx.
   */
 package dxWDL.util
 
+import com.dnanexus.{DXFile, DXExecution}
 import spray.json._
 import wom.types._
 import wom.values._
 
 import dxWDL.base._
-import dxWDL.dx._
+import dxWDL.dx.{DxDescribe, DXWorkflowStage, DxUtils}
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -27,14 +28,14 @@ import dxWDL.dx._
 // all the files it references.
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
-case class DxlStage(dxStage: DxWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
+case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlWorkflowInput(varName: String) extends DxLink
-case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
+case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
 case class WdlVarLinksConverter(verbose: Verbose,
-                                fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                                fileInfoDir: Map[DXFile, DxDescribe],
                                 typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
 
@@ -275,7 +276,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
 
     def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : (WomValue,
-                                                                        Vector[DxFile]) = {
+                                                                        Vector[DXFile]) = {
         val jsv1 =
             jsv match {
                 case JsObject(fields) if fields contains "___" =>
@@ -321,7 +322,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
                     val dxFiles = DxUtils.findDxFiles(jsn)
-                    val jsFiles = dxFiles.map(_.getLinkAsJson)
+                    val jsFiles = dxFiles.map(x => DxUtils.jsValueOfJsonNode(x.getLinkAsJson))
                     // Dx allows hashes as an input/output type. If the JSON value is
                     // not a hash (js-object), we need to add an outer layer to it.
                     val jsn1 = JsObject("___" -> jsn)

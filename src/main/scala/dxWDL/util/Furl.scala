@@ -15,16 +15,17 @@
 
 package dxWDL.util
 
+import com.dnanexus.{DXContainer, DXFile, DXProject}
 import dxWDL.base.Utils
 import dxWDL.base.Utils.DX_URL_PREFIX
-import dxWDL.dx._
+import dxWDL.dx.{DxPath, DxDescribe}
 
 sealed trait Furl
 
 case class FurlLocal(path : String) extends Furl
 case class FurlDx(value : String,
-                  dxProj : Option[DxProject],
-                  dxFile: DxFile) extends Furl
+                  dxProj : Option[DXProject],
+                  dxFile: DXFile) extends Furl
 
 object Furl {
     // From a string such as:
@@ -35,13 +36,15 @@ object Furl {
     private def parseDxFurl(buf: String) : FurlDx = {
         val s = buf.substring(DX_URL_PREFIX.length)
         val proj_file = s.split("::")(0)
+
         val dxFile = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
-        dxFile.project match {
-            case None =>
-                FurlDx(buf, None, dxFile)
-            case Some(DxProject(proj)) if proj.startsWith("project-") =>
-                FurlDx(buf, Some(DxProject(proj)), dxFile)
-            case Some(DxProject(proj)) if proj.startsWith("container-") =>
+        val dxProj = dxFile.getProject
+        if (dxProj == null)
+            return FurlDx(buf, None, dxFile)
+        dxFile.getProject match {
+            case dxProj : DXProject =>
+                FurlDx(buf, Some(dxProj), dxFile)
+            case cont : DXContainer =>
                 FurlDx(buf, None, dxFile)
             case _ =>
                 throw new Exception(s"Invalid path ${buf}")
@@ -75,28 +78,28 @@ object Furl {
     // We need to change the standard so that the conversion from file to
     // string is well defined, and requires an explicit conversion function.
     //
-    def dxFileToFurl(dxFile: DxFile,
-                     fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : FurlDx = {
+    def dxFileToFurl(dxFile: DXFile,
+                     fileInfoDir: Map[DXFile, DxDescribe]) : FurlDx = {
         // Try the cache first; if the file isn't there, submit an API call.
-        val (folder, name) = fileInfoDir.get(dxFile.id) match {
+        val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>
-                val desc = dxFile.describe()
-                (desc.folder, desc.name)
-            case Some((_,miniDesc)) =>
+                val desc = dxFile.describe
+                 (desc.getFolder, desc.getName)
+            case Some(miniDesc) =>
                 (miniDesc.folder, miniDesc.name)
         }
         val logicalName = s"${folder}/${name}"
         val fid = dxFile.getId
-        dxFile.project match {
-            case None =>
-                FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}",
-                       None,
-                       dxFile)
-            case Some(proj) =>
-                val projId = proj.getId
-                FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
-                       Some(DxProject.getInstance(projId)),
-                       dxFile)
+        val proj = dxFile.getProject
+        if (proj == null) {
+            FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}",
+                   None,
+                   dxFile)
+        } else {
+            val projId = proj.getId
+            FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
+                   Some(DXProject.getInstance(projId)),
+                   dxFile)
         }
     }
 }

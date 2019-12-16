@@ -19,7 +19,7 @@ task Add {
 package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
-import com.dnanexus.DXAPI
+import com.dnanexus.{DXAPI, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.ErrorOr.ErrorOr
 import java.lang.management._
@@ -219,7 +219,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-                val fileName = dxFile.describe().name
+                val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
                 Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
@@ -590,12 +590,12 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
         // Figure out which instance we are on right now
-        val dxJob = DxJob(DxUtils.dxEnv.getJob())
+        val dxJob = DxUtils.dxEnv.getJob()
 
         val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
         val retval: JsValue =
             DxUtils.jsValueOfJsonNode(
-                DXAPI.jobDescribe(dxJob.id,
+                DXAPI.jobDescribe(dxJob.getId,
                                   DxUtils.jsonNodeOfJsValue(descFieldReq),
                                   classOf[JsonNode]))
         val crntInstanceType:String = retval.asJsObject.fields.get("instanceType") match {
@@ -620,7 +620,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         val instanceType:String = calcInstanceType(inputs)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DxJob = DxUtils.runSubJob("body", Some(instanceType), originalInputs,
+        val dxSubJob : DXJob = DxUtils.runSubJob("body", Some(instanceType), originalInputs,
                                                  Vector.empty, maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job

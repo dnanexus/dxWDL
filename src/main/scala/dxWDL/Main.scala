@@ -1,5 +1,7 @@
 package dxWDL
 
+import com.dnanexus._
+import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
@@ -222,7 +224,7 @@ object Main extends App {
 
 
     private def pathOptions(options: OptionsMap,
-                            verbose: Verbose) : (DxProject, String) = {
+                            verbose: Verbose) : (DXProject, String) = {
         var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)
@@ -283,7 +285,7 @@ object Main extends App {
                                             |the platform""".stripMargin)
             }
         Utils.trace(verbose.on,
-                    s"""|project ID: ${dxProject.id}
+                    s"""|project ID: ${dxProject.getId}
                         |folder: ${dxFolder}""".stripMargin)
         (dxProject, dxFolder)
     }
@@ -486,7 +488,6 @@ object Main extends App {
             dxProject.listFolder(folder)
         } catch {
             case e : Throwable =>
-                System.err.println(s"err when validating folder ${folder} : ${e}")
                 return UnsuccessfulTermination(s"Folder ${folder} is invalid")
         }
 
@@ -612,9 +613,8 @@ object Main extends App {
                                    dxIoFunctions : DxIoFunctions,
                                    defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                                    rtDebugLvl: Int): Termination = {
-        val dxProject = DxUtils.dxCrntProject
-        //val dxProject = DxUtils.dxEnv.getProjectContext()
         val verbose = rtDebugLvl > 0
+        val dxProject = DxUtils.dxEnv.getProjectContext()
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
@@ -697,21 +697,24 @@ object Main extends App {
                                                           JsValue,
                                                           Option[WdlRuntimeAttrs]) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-        val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+        val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
                 Utils.trace(true,
                             s"""|applet field not found locally, performing
                                 |an API call.
                                 |""".stripMargin)
-                val dxJob = DxJob(DxUtils.dxEnv.getJob())
-                dxJob.describe().applet
+                val dxJob : DXJob = DxUtils.dxEnv.getJob()
+                dxJob.describe().getApplet()
             case Some(JsString(x)) =>
-                DxApplet(x, None)
+                DXApplet.getInstance(x)
             case Some(other) =>
                 throw new Exception(s"malformed applet field ${other} in job info")
         }
 
-        val details: JsValue = applet.describe(Set(Field.Details)).details.get
+        val descOptions = DXDataObject.DescribeOptions.get().withDetails
+        val details: JsValue = DxUtils.jsValueOfJsonNode(
+            applet.describe(descOptions).getDetails(classOf[JsonNode]))
+
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
         val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
@@ -729,7 +732,7 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[String, (DxFile, DxFileDescribe)] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, DxDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{
@@ -737,13 +740,7 @@ object Main extends App {
         }.toVector
 
         // Describe all the files, in one go
-        val descAll = DxFile.bulkDescribe(allFilesReferenced)
-        descAll.map{
-            case (DxFile(fid, proj), desc) =>
-                fid -> (DxFile(fid, proj), desc)
-            case (other, _) =>
-                throw new Exception(s"wrong object type ${other} (should be a file)")
-        }.toMap
+        DxBulkDescribe.apply(allFilesReferenced)
     }
 
     def internalOp(args : Seq[String]) : Termination = {

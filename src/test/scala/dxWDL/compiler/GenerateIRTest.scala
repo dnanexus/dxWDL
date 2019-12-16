@@ -10,7 +10,7 @@ import wom.callable.MetaValueElement
 
 import dxWDL.Main
 import dxWDL.base.Utils
-import dxWDL.dx._
+import dxWDL.dx.DxUtils
 import spray.json._
 
 // These tests involve compilation -without- access to the platform.
@@ -21,28 +21,25 @@ class GenerateIRTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
-    private val dxProject = {
-        val p = DxUtils.dxEnv.getProjectContext()
-        if (p == null)
-            throw new Exception("Must be logged in to run this test")
-        DxProject(p)
-    }
+    private val dxProject = DxUtils.dxEnv.getProjectContext()
+    if (dxProject == null)
+        throw new Exception("Must be logged in to run this test")
 
     // task compilation
     private val cFlags = List("--compileMode", "ir",
                               "-quiet",
                               "-fatalValidationWarnings",
                               "--locked",
-                              "--project", dxProject.id)
+                              "--project", dxProject.getId)
     private val cFlagsUnlocked = List("--compileMode", "ir",
                                       "-quiet",
                                       "-fatalValidationWarnings",
-                                      "--project", dxProject.id)
+                                      "--project", dxProject.getId)
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
                         "--verboseKey", "GenerateIR",
                         "--locked",
-                        "--project", dxProject.id)
+                        "--project", DxUtils.dxEnv.getProjectContext().getId)
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -166,7 +163,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
             path.toString :: List("--compileMode", "ir", "--quiet",
-                                  "--project", dxProject.id)
+                                  "--project", DxUtils.dxEnv.getProjectContext().getId)
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -456,7 +453,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "detect a request for GPU" in {
+    it should "detect a request for GPU" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -482,7 +479,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
         val retval = Main.compile(
             path.toString :: "-extras" :: extrasPath.toString ::
-              List("--compileMode", "ir", "--project", dxProject.id)
+              List("--compileMode", "ir", "--project", dxProject.getId)
         )
 
         retval shouldBe a [Main.SuccessfulTerminationIR]
@@ -566,29 +563,4 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTermination]
 
     }
-
-    it should "pass as subworkflows do not have expression statement in output block" taggedAs(EdgeTest) in {
-        val path = pathFromBasename("subworkflows", basename="trains.wdl")
-
-
-        val retval = Main.compile(
-            path.toString :: cFlags
-        )
-        retval shouldBe a [Main.SuccessfulTerminationIR]
-    }
-
-    // this is currently failing.
-    it should "pass with subworkflows having expression" taggedAs(EdgeTest)  in {
-        val path = pathFromBasename("subworkflows", basename="ensure_trains.wdl")
-
-        val retval = Main.compile(
-            path.toString
-//                :: "--verbose"
-//                :: "--verboseKey" :: "GenerateIR"
-                :: cFlags
-        )
-        retval shouldBe a [Main.SuccessfulTerminationIR]
-    }
-
-
 }

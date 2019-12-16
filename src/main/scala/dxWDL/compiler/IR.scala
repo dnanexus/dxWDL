@@ -8,12 +8,13 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
+import com.dnanexus.DXFile
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
 import wom.values.WomValue
 
 import dxWDL.base.Utils
-import dxWDL.dx.{DxFile, DxWorkflowStage}
+import dxWDL.dx.DXWorkflowStage
 
 object IR {
     // stages that the compiler uses in generated DNAx workflows
@@ -79,7 +80,7 @@ object IR {
     sealed trait DockerImage
     case object DockerImageNone extends DockerImage
     case object DockerImageNetwork extends DockerImage
-    case class DockerImageDxFile(url: String, tarball: DxFile) extends DockerImage
+    case class DockerImageDxFile(url: String, tarball: DXFile) extends DockerImage
 
     // A unified type representing a WDL workflow or a WDL applet.
     // This is useful when compiling WDL workflows, because they can
@@ -141,7 +142,7 @@ object IR {
     sealed trait SArg
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WomValue) extends SArg
-    case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
+    case class SArgLink(stageId: DXWorkflowStage, argName: CVar) extends SArg
     case class SArgWorkflowInput(argName: CVar) extends SArg
 
     // A stage can call an applet or a workflow.
@@ -150,7 +151,7 @@ object IR {
     // symbols. It is shown to the user on the UI. The [id] is unique
     // across the workflow.
     case class Stage(description: String,
-                     id: DxWorkflowStage,
+                     id: DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])

@@ -20,6 +20,7 @@ This is the dx JSON input:
   */
 package dxWDL.compiler
 
+import com.dnanexus.{DXFile, DXProject}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
@@ -27,7 +28,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
-import dxWDL.dx._
+import dxWDL.dx.{DxDescribe, DxPath, DxUtils}
 import dxWDL.util._
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 
@@ -41,11 +42,11 @@ import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 // }
 //
 
-case class InputFileScanResults(path2file: Map[String, DxFile],
-                                dxFiles: Vector[DxFile])
+case class InputFileScanResults(path2file: Map[String, DXFile],
+                                dxFiles: Vector[DXFile])
 
 case class InputFileScan(bundle: IR.Bundle,
-                         dxProject: DxProject,
+                         dxProject: DXProject,
                          verbose: Verbose) {
 
     private def findDxFiles(womType: WomType,
@@ -149,7 +150,7 @@ case class InputFileScan(bundle: IR.Bundle,
         }.flatten.toVector
 
         // files that have already been resolved
-        val dxFiles : Vector[DxFile] = jsFileDesc.collect{
+        val dxFiles : Vector[DXFile] = jsFileDesc.collect{
             case jsv : JsObject => DxUtils.dxFileFromJsValue(jsv)
         }.toVector
 
@@ -159,8 +160,8 @@ case class InputFileScan(bundle: IR.Bundle,
             case JsString(x) => x
         }.toVector
         val resolvedPaths = DxPath.resolveBulk(dxPaths, dxProject).map {
-            case (key, dxobj) if dxobj.isInstanceOf[DxFile] =>
-                key -> dxobj.asInstanceOf[DxFile]
+            case (key, dxobj) if dxobj.isInstanceOf[DXFile] =>
+                key -> dxobj.asInstanceOf[DXFile]
             case (key, dxobj) =>
                 throw new Exception(s"Scanning the input file produced ${dxobj} which is not a file")
         }.toMap
@@ -169,8 +170,8 @@ case class InputFileScan(bundle: IR.Bundle,
     }
 }
 
-case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                     path2file: Map[String, DxFile],
+case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
+                     path2file: Map[String, DXFile],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {
     val verbose2:Boolean = verbose.containsKey("InputFile")

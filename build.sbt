@@ -12,7 +12,7 @@ resolvers ++= Seq(
 )
 
 // reduce the maximum number of errors shown by the Scala compiler
-maxErrors := 7
+maxErrors := 10
 
 //coverageEnabled := true
 
@@ -99,7 +99,6 @@ libraryDependencies ++= Seq(
 // comment out this line in order to allow native
 // tests
 // Test / testOptions += Tests.Argument("-l", "native")
-Test / testOptions += Tests.Argument("-oF")
 
 Test / parallelExecution := false
 

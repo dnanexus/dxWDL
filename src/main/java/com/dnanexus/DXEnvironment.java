@@ -321,6 +321,30 @@ public class DXEnvironment {
         }
 
         /**
+         * Sets the current job to the specified job.
+         *
+         * @param job job object
+         *
+         * @return the same Builder object
+         */
+        public Builder setJob(DXJob job) {
+            jobId = Preconditions.checkNotNull(job).getId();
+            return this;
+        }
+
+        /**
+         * Sets the project context to the specified project.
+         *
+         * @param projectContext project context
+         *
+         * @return the same Builder object
+         */
+        public Builder setProjectContext(DXProject projectContext) {
+            projectContextId = Preconditions.checkNotNull(projectContext).getId();
+            return this;
+        }
+
+        /**
          * Sets the security context to use to authenticate to the Platform.
          *
          * @param json security context JSON
@@ -332,6 +356,18 @@ public class DXEnvironment {
         @Deprecated
         public Builder setSecurityContext(JsonNode json) {
             securityContext = json.deepCopy();
+            return this;
+        }
+
+        /**
+         * Sets the workspace to the specified container.
+         *
+         * @param workspace workspace container
+         *
+         * @return the same Builder object
+         */
+        public Builder setWorkspace(DXContainer workspace) {
+            workspaceId = Preconditions.checkNotNull(workspace).getId();
             return this;
         }
 
@@ -491,8 +527,11 @@ public class DXEnvironment {
      *
      * @return job object, or {@code null} if the currently running job cannot be determined
      */
-    public String getJob() {
-        return jobId;
+    public DXJob getJob() {
+        if (jobId == null) {
+            return null;
+        }
+        return DXJob.getInstanceWithEnvironment(jobId, this);
     }
 
     /**
@@ -500,8 +539,11 @@ public class DXEnvironment {
      *
      * @return project, or {@code null} if the project context cannot be determined
      */
-    public String getProjectContext() {
-        return projectContextId;
+    public DXProject getProjectContext() {
+        if (projectContextId == null) {
+            return null;
+        }
+        return DXProject.getInstanceWithEnvironment(projectContextId, this);
     }
 
     /**
@@ -523,6 +565,20 @@ public class DXEnvironment {
      */
     JsonNode getSecurityContextJson() {
         return this.securityContext;
+    }
+
+    /**
+     * Returns the temporary workspace of the currently running job, or the current project if this
+     * method is called outside the Execution Environment.
+     *
+     * @return {@code DXContainer} for the container, or {@code null} if the container cannot be
+     *         determined
+     */
+    public DXContainer getWorkspace() {
+        if (this.workspaceId == null) {
+            return null;
+        }
+        return DXContainer.getInstanceWithEnvironment(this.workspaceId, this);
     }
 
     /**

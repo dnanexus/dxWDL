@@ -1,6 +1,7 @@
 package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
+import com.dnanexus.DXFile
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
@@ -12,7 +13,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
-import dxWDL.dx.{DxFile, DxUtils, DxdaManifest, DxfuseManifest}
+import dxWDL.dx.{DxUtils, DxdaManifest, DxfuseManifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
@@ -29,7 +30,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         womValue
     }
 
-    def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue) : Vector[DxFile] = {
+    def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue) : Vector[DXFile] = {
         val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", womType, jsv)
         dxFiles
     }
@@ -158,7 +159,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // to the $HOME/inputs directory. However, since downloaded files may have the same
     // name, we may need to disambiguate them.
     private def createUniqueDownloadPath(basename: String,
-                                         dxFile: DxFile,
+                                         dxFile: DXFile,
                                          existingFiles: Set[Path],
                                          inputsDir: Path) : Path = {
         val shortPath = inputsDir.resolve(basename)
@@ -286,7 +287,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                             // bam_file : {
                             //   stream : true
                             // }
-                            if (value.contains("stream") &&
+                            if (value.contains("stream") && 
                                 value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
                                 findFiles(womValue)
                             } else {
@@ -338,7 +339,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx if streamingFiles contains dxUrl =>
                         // file should be streamed
                         val existingFiles = accu.values.toSet
-                        val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
                                                             dxIoFunctions.config.dxfuseMountpoint)
                         accu + (dxUrl -> path)
@@ -346,7 +347,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
-                        val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
                                                             inputsDir)
                         accu + (dxUrl -> path)
@@ -354,7 +355,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             }
 
         // Create a manifest for all the streaming files; we'll use dxfuse to handle them.
-        val filesToMount : Map[DxFile, Path] =
+        val filesToMount : Map[DXFile, Path] =
             furl2path.collect{
                 case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
                     dxUrl.dxFile -> localPath
@@ -362,10 +363,10 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         val dxfuseManifest = DxfuseManifest.apply(filesToMount, dxIoFunctions)
 
         // Create a manifest for the download agent (dxda)
-        val filesToDownloadWithDxda : Map[String, (DxFile, Path)] =
+        val filesToDownloadWithDxda : Map[DXFile, Path] =
             furl2path.collect{
                 case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
-                    dxUrl.dxFile.id -> (dxUrl.dxFile, localPath)
+                    dxUrl.dxFile -> localPath
             }
         val dxdaManifest = DxdaManifest.apply(filesToDownloadWithDxda)
 

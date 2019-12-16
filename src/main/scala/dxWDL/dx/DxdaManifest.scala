@@ -3,6 +3,7 @@
 
 package dxWDL.dx
 
+import com.dnanexus.{DXFile, DXContainer}
 import java.nio.file.Path
 import spray.json._
 
@@ -33,11 +34,11 @@ object DxdaManifest {
  */
 
     // create a manifest for a single file
-    private def processFile(desc : DxFileDescribe,
+    private def processFile(desc : DxDescribe,
                             destination : Path) : JsValue = {
         val partsRaw : Map[Int, DxFilePart] = desc.parts match {
             case None => throw new Exception(
-                s"""|No options for file ${desc.id},
+                s"""|No options for file ${desc.dxobj.getId},
                     |name=${desc.name} folder=${desc.folder}""".stripMargin)
             case Some(x) => x
         }
@@ -49,31 +50,29 @@ object DxdaManifest {
         val destinationFile : java.io.File = destination.toFile()
         val name = destinationFile.getName()
         val folder = destinationFile.getParent().toString
-        JsObject("id" -> JsString(desc.id),
+        JsObject("id" -> JsString(desc.dxobj.getId),
                  "name" -> JsString(name),
                  "folder" -> JsString(folder),
                  "parts" -> JsObject(parts))
     }
 
     // The project is just a hint. The files don't have to actually reside in it.
-    def apply(file2LocalMapping: Map[String, (DxFile, Path)]) : DxdaManifest = {
+    def apply(file2LocalMapping: Map[DXFile, Path]) : DxdaManifest = {
+
         // collect all the information per file
-        val files : Vector[DxFile] = file2LocalMapping.values.map(_._1).toVector
-        val fileDescs : Map[String, (DxFile, DxFileDescribe)] =
-            DxFile.bulkDescribe(files, Set(Field.Parts)).map {
-                case (dxFile, desc) => dxFile.id -> (dxFile, desc)
-            }.toMap
+        val fileDescs : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
+                                                                       parts = true)
 
         // create a sub-map per container
-        val fileDescsByContainer : Map[DxProject, Map[String, (DxFile, DxFileDescribe)]] =
-            fileDescs.foldLeft(Map.empty[DxProject, Map[String, (DxFile, DxFileDescribe)]]) {
-                case (accu, (fid, (dxFile, dxDesc))) =>
-                    val container = DxProject.getInstance(dxDesc.project)
+        val fileDescsByContainer : Map[DXContainer, Map[DXFile, DxDescribe]] =
+            fileDescs.foldLeft(Map.empty[DXContainer, Map[DXFile, DxDescribe]]) {
+                case (accu, (dxFile, dxDesc)) =>
+                    val container = dxDesc.container
                     accu.get(container) match {
                         case None =>
-                            accu + (container -> Map(dxFile.id -> (dxFile, dxDesc)))
+                            accu + (container -> Map(dxFile -> dxDesc))
                         case Some(m) =>
-                            accu + (container -> (m + (dxFile.id -> (dxFile, dxDesc))))
+                            accu + (container -> (m + (dxFile -> dxDesc)))
                     }
             }
 
@@ -81,8 +80,8 @@ object DxdaManifest {
             case (dxContainer, fileDescs) =>
                 val projectFilesToLocalPath : Vector[JsValue] =
                     fileDescs.map{
-                        case (fid, (dxFile, dxDesc)) =>
-                            val (_, local: Path) = file2LocalMapping(fid)
+                        case (dxFile, dxDesc) =>
+                            val local: Path = file2LocalMapping(dxFile)
                             processFile(dxDesc, local)
                     }.toVector
                 dxContainer.getId -> JsArray(projectFilesToLocalPath)

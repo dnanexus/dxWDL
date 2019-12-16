@@ -6,23 +6,24 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 import spray.json._
 
 import dxWDL.base._
 import dxWDL.base.Utils.CHECKSUM_PROP
-import dxWDL.dx._
+import dxWDL.dx.{DxUtils, DxDescribe, DxFindDataObjects}
 
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name :String,
                         crDate : LocalDateTime,
-                        dxObj : DxDataObject,
+                        dxObj : DXDataObject,
                         digest : Option[String]) {
     lazy val dxClass:String =
         dxObj.getClass.getSimpleName match {
-            case "DxWorkflow" => "Workflow"
-            case "DxApplet" => "Applet"
+            case "DXWorkflow" => "Workflow"
+            case "DXApplet" => "Applet"
             case other => other
         }
 }
@@ -31,7 +32,7 @@ case class DxObjectInfo(name :String,
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
 case class DxObjectDirectory(ns: IR.Bundle,
-                             dxProject:DxProject,
+                             dxProject:DXProject,
                              folder: String,
                              projectWideReuse: Boolean,
                              verbose: Verbose) {
@@ -48,7 +49,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // not clear this is useful to the majority of users, so it is
     // gated by the [projectWideReuse] flag.
     private val projectWideExecutableDir :
-            Map[String, Vector[(DxDataObject, DxObjectDescribe)]] =
+            Map[String, Vector[(DXDataObject, DxDescribe)]] =
         if (projectWideReuse) projectBulkLookup()
         else Map.empty
 
@@ -65,7 +66,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         // find applets
         val t0 = System.nanoTime()
-        val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
+        val dxAppletsInFolder: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -79,7 +80,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // find workflows
         val t2 = System.nanoTime()
-        val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
+        val dxWorkflowsInFolder: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -98,7 +99,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                 val creationDate = new java.util.Date(desc.created)
                 val crLdt:LocalDateTime = LocalDateTime.ofInstant(creationDate.toInstant(),
                                                                   ZoneId.systemDefault())
-                val chksum = desc.properties.flatMap{ p => p.get(CHECKSUM_PROP) }
+                val chksum = desc.properties.get(CHECKSUM_PROP)
                 DxObjectInfo(desc.name, crLdt, dxObj, chksum)
         }.toList
 
@@ -131,9 +132,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // findDataObjects can be an expensive call, both on the server and client sides.
     // We limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows.
-    private def projectBulkLookup() : Map[String, Vector[(DxDataObject, DxObjectDescribe)]] = {
+    private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DxDescribe)]] = {
         val t0 = System.nanoTime()
-        val dxAppletsInProject: Map[DxDataObject, DxObjectDescribe] =
+        val dxAppletsInProject: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -144,10 +145,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
         Utils.trace(verbose.on,
                     s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)")
 
-        val hm = HashMap.empty[String, Vector[(DxDataObject, DxObjectDescribe)]]
+        val hm = HashMap.empty[String, Vector[(DXDataObject, DxDescribe)]]
         dxAppletsInProject.foreach{ case (dxObj, desc) =>
-            val chksum = desc.properties.flatMap{ p => p.get(CHECKSUM_PROP) }
-            chksum match {
+            desc.properties.get(CHECKSUM_PROP) match {
                 case None => ()
                 case Some(digest) =>
                     if (hm contains digest)
@@ -173,7 +173,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // Note: in case of checksum collision, there could be several hits.
     // Return only the one that starts with the name we are looking for.
     def lookupOtherVersions(execName: String, digest: String)
-            : Option[(DxDataObject, DxObjectDescribe)] = {
+            : Option[(DXDataObject, DxDescribe)] = {
         val checksumMatches = projectWideExecutableDir.get(digest) match {
             case None => return None
             case Some(vec) => vec
@@ -186,7 +186,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         return Some(checksumAndNameMatches.head)
     }
 
-    def insert(name:String, dxObj:DxDataObject, digest: String) : Unit = {
+    def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
         val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, Some(digest))
         objDir(name) = Vector(aInfo)
     }
@@ -217,7 +217,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // move the object to the new location
         newFolder(destFolder)
-        dxProject.moveObjects(Vector(objInfo.dxObj), destFolder)
+        dxProject.move(List(objInfo.dxObj).asJava, List.empty[String].asJava, destFolder)
 
         // add the date to the object name
         val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")

@@ -3,12 +3,11 @@ package dxWDL.base
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import com.dnanexus.AccessLevel
+import com.dnanexus.{AccessLevel, DXFile}
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
 
-import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
                         maxRestarts: Option[Int]) {
@@ -664,8 +663,8 @@ object Extras {
         if (reorgConf != "") {
             // format dx file ID
             val reorgFileID: String = reorgConf.replace("dx://", "")
-            // if input file  ID is invalid, DxFile.getInstance will thow an IllegalArgumentException
-            val file: DxFile = DxFile.getInstance(reorgFileID)
+            // if input file  ID is invalid, DXFile.getInstance will thow an IllegalArgumentException
+            val file: DXFile = DXFile.getInstance(reorgFileID)
             // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
             file.describe()
         }
@@ -680,6 +679,21 @@ object Extras {
         val (reorgAppId, reorgConf) = checkAttrs(fields)
         veryifyReorgApp(reorgAppId)
         verifyInputs(reorgConf)
+
+        // FIXME: this shouldn't be printed out when running tests. During tests, nothing should
+        // be printed out, some software relies on this assumption.
+        Utils.trace(
+            true,
+            s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
+                |it may misplace or outright delete files.
+                |The applet: ${reorgAppId} requires CONTRIBUTE project access,
+                |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
+                |You can refer to this example:
+                |
+                |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
+            """.stripMargin.replaceAll("\n", " ")
+        )
+
         Some(ReorgAttrs(reorgAppId, reorgConf))
     }
 
