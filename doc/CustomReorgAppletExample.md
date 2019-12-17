@@ -63,10 +63,10 @@ import json
 import dxpy
 
 @dxpy.entry_point('main')
-def main(___reorg_conf=None, ___reorg_status=None):
+def main(reorg_conf___=None, reorg_status___=None):
 
-    # download and parse `___reorg_conf`
-    conf_file = dxpy.DXFile(___reorg_conf)
+    # download and parse `reorg_conf___`
+    conf_file = dxpy.DXFile(reorg_conf___)
     dxpy.download_dxfile(conf.get_id(), "conf.json")
     with open('conf.json') as f:
         conf = json.load(f)
@@ -103,7 +103,7 @@ def main(___reorg_conf=None, ___reorg_status=None):
 ## dxapp.json
 
 This is the spec for the applet.
-`___reorg_conf` is declared in `custom-reorg.conf` in extras.json (JSON file provided to `-extras`).
+`reorg_conf___` is declared in `custom-reorg.conf` in extras.json (JSON file provided to `-extras`).
 
 ```
 {
@@ -113,7 +113,7 @@ This is the spec for the applet.
   "dxapi": "1.0.0",
   "inputSpec": [
     {
-      "name": "___reorg_conf",
+      "name": "reorg_conf___",
       "label": "Config",
       "help": "",
       "class": "file",
@@ -121,7 +121,7 @@ This is the spec for the applet.
       "optional": true
     },
     {
-      "name": "___reorg_status",
+      "name": "reorg_status___",
       "label": "Config",
       "help": "",
       "class": "string",
