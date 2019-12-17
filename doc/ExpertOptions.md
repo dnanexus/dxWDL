@@ -493,13 +493,13 @@ For example:
 
 The config-file based reorg applet needs to have the following specs as inputs.
 
-`___reorg_conf` and `___reorg_status`:
+`reorg_conf___` and `reorg_status___`:
 
 ```json
 {
   "inputSpec": [
     {
-      "name": "___reorg_conf",
+      "name": "reorg_conf___",
       "label": "Auxiliary config input used for reorganisation.",
       "help": "",
       "class": "file",
@@ -507,7 +507,7 @@ The config-file based reorg applet needs to have the following specs as inputs.
       "optional": true
     },
     {
-      "name": "___reorg_status",
+      "name": "reorg_status___",
       "label": "A string from output stage that act as a signal to indicate the workflow has completed.",
       "help": "",
       "class": "string",
@@ -518,9 +518,9 @@ The config-file based reorg applet needs to have the following specs as inputs.
 ```
 
 When compiling a workflow with a custom-reorg applet declared with `-extras` JSON,
-a string variable `___reorg_status` with the value of `completed` will be included in the output stage.
+a string variable `reorg_status___` with the value of `completed` will be included in the output stage.
 
-The `___reorg_status` is used to act as a dependency to signal that the workflow has completed.
+The `reorg_status___` is used to act as a dependency to signal that the workflow has completed.
 
 For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md)
 # Toplevel calls compiled as stages
