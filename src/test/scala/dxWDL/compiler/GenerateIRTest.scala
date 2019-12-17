@@ -453,7 +453,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "detect a request for GPU" taggedAs(EdgeTest) in {
+    it should "detect a request for GPU" in {
         val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
             //                                      :: "--verbose"
@@ -468,6 +468,27 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 callable shouldBe a[IR.Applet]
                 val task = callable.asInstanceOf[IR.Applet]
                 task.instanceType shouldBe (IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
+        }
+    }
+
+    it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
+        val retval = Main.compile(path.toString
+                                      //:: "--verbose"
+                                      //:: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(bundle) =>
+                bundle.allCallables.foreach {
+                    case (name, wf : IR.Workflow) =>
+                        System.out.println(s"""|name=${wf.name}
+                                               |inputs=${wf.inputs}
+                                               |outputs=${wf.outputs}""".stripMargin)
+                    case (name, _) =>
+                        ()
+                }
         }
     }
 }
