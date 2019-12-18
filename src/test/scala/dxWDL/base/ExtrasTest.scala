@@ -10,6 +10,7 @@ import DefaultJsonProtocol._
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)
+    val verbose2 = Verbose(false, true, Set.empty)
 
     private def getIdFromName(name: String): String = {
       val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
@@ -189,11 +190,12 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val js = runSpec.parseJson
         assertThrows[Exception] {
-            Extras.parse(js, verbose)
+            Extras.parse(js, verbose2)
         }
     }
 
-    it should "parse the custom_reorg object" in {
+    // Need to include method to upload the README.md file.
+    ignore should "parse the custom_reorg object" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
@@ -209,7 +211,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin.parseJson
 
-        val extras = Extras.parse(reorg, verbose)
+        val extras = Extras.parse(reorg, verbose2)
         extras.customReorgAttributes  should be (
             Some(ReorgAttrs(appId, fileId))
         )
@@ -228,7 +230,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
 
         val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-            Extras.parse(reorg, verbose)
+            Extras.parse(reorg, verbose2)
         }
 
         thrown.getMessage should be ("app_id must be specified in the custom_reorg section.")
@@ -248,7 +250,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
 
       val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-          Extras.parse(reorg, verbose)
+          Extras.parse(reorg, verbose2)
       }
 
       //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
@@ -259,175 +261,164 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "Allow inputs to be null in custom reorg" in {
 
-      // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-      val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-      val reorg: JsValue   =
-        s"""|{
-            | "custom_reorg" : {
-            |    "app_id" : "${appId}",
-            |    "conf" : null
-            |  }
-            |}
-            |""".stripMargin.parseJson
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf" : null
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
-
-      val extras = Extras.parse(reorg, verbose)
-      extras.customReorgAttributes should be (
-        Some(ReorgAttrs(appId, ""))
-      )
-  }
-
-  it should "throw IllegalArgumentException due to invalid applet ID" in {
-
-    // invalid applet ID
-    val appId : String = "applet-123456"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": null
-          |   }
-          |}
-          |""".stripMargin.parseJson
-
-    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-      Extras.parse(reorg, verbose)
+        val extras = Extras.parse(reorg, verbose2)
+        extras.customReorgAttributes should be (
+            Some(ReorgAttrs(appId, ""))
+        )
     }
 
-    thrown.getMessage should be  (
-      s"dxId must match applet-[A-Za-z0-9]{24}"
-    )
+    it should "throw IllegalArgumentException due to invalid applet ID" in {
 
-  }
+    // invalid applet ID
+        val appId : String = "applet-123456"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": null
+                |   }
+                |}
+                |""".stripMargin.parseJson
+
+        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+            Extras.parse(reorg, verbose2)
+        }
+
+        thrown.getMessage should be  (
+            s"dxId must match applet-[A-Za-z0-9]{24}"
+        )
+    }
 
     ignore should "throw ResourceNotFoundException due to non-existent applet" in {
 
-    // non-existent (made up) applet ID
-    val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": null
-          |   }
-          |}
-          |""".stripMargin.parseJson
+        // non-existent (made up) applet ID
+        val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
+        val reorg : JsValue =
+            s"""|{
+              |  "custom_reorg" : {
+              |      "app_id" : "${appId}",
+              |      "conf": null
+              |   }
+              |}
+              |""".stripMargin.parseJson
 
-    val thrown = intercept[Exception] {
-      Extras.parse(reorg, verbose)
+        val thrown = intercept[Exception] {
+            Extras.parse(reorg, verbose2)
     }
 
     thrown.getMessage should be  (
       s"""Error running command dx describe $appId --json"""
     )
 
-  }
-
-  it should "throw IllegalArgumentException due to invalid file ID" in {
-
-    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-    val inputs : String = "file-1223445"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": "${inputs}"
-          |   }
-          |}
-          |""".stripMargin.parseJson
-
-    val thrown = intercept[java.lang.IllegalArgumentException] {
-      Extras.parse(reorg, verbose)
     }
+    it should "throw IllegalArgumentException due to invalid file ID" in {
 
-    thrown.getMessage should be  (
-      s"dxId must match file-[A-Za-z0-9]{24}"
-    )
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val inputs : String = "file-1223445"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": "${inputs}"
+                |   }
+                |}
+                |""".stripMargin.parseJson
 
-  }
-
-  it should "throw ResourceNotFoundException due to non-existant file" in {
+        val thrown = intercept[java.lang.IllegalArgumentException] {
+            Extras.parse(reorg, verbose2)
+        }
+        thrown.getMessage should be  (
+            s"dxId must match file-[A-Za-z0-9]{24}"
+        )
+    }
+    it should "throw ResourceNotFoundException due to non-existant file" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
-    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-    val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": "${inputs}"
-          |   }
-          |}
-          |""".stripMargin.parseJson
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": "${inputs}"
+                |   }
+                |}
+                |""".stripMargin.parseJson
 
-    val thrown = intercept[ResourceNotFoundException] {
-      Extras.parse(reorg, verbose)
+        val thrown = intercept[ResourceNotFoundException] {
+            Extras.parse(reorg, verbose2)
+        }
+
+        val fileId : String = inputs.replace("dx://", "")
+
+        thrown.getMessage should be  (s""""${fileId}" is not a recognized ID""")
     }
 
-    val fileId : String = inputs.replace("dx://", "")
-
-    thrown.getMessage should be  (
-      s""""${fileId}" is not a recognized ID"""
-    )
-
-  }
-
-    // FIXME: tab should be set to 4 spaces
     ignore should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
 
-    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId : String = getIdFromName("/release_test/Sum ")
-    val reorg: JsValue =
-      s"""|{
-          | "custom_reorg" : {
-          |    "app_id" : "${appId}",
-          |    "conf": "null"
-          |  }
-          |}
-          |""".stripMargin.parseJson
+        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId : String = getIdFromName("/release_test/Sum ")
+        val reorg: JsValue =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf": "null"
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
-    val thrown = intercept[PermissionDeniedException] {
-      Extras.parse(reorg, verbose)
+            val thrown = intercept[PermissionDeniedException] {
+                Extras.parse(reorg, verbose2)
+            }
 
+        thrown.getMessage should be (
+            s"ERROR: App(let) for custom reorg stage ${appId} does not " +
+            s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
+        )
     }
 
-    thrown.getMessage should be (
-      s"ERROR: App(let) for custom reorg stage ${appId} does not " +
-        s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
-    )
-  }
+    it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
 
-  it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
+        val appId : String = getIdFromName("cloud_workstation")
+        val reorg: JsValue =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf": null
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
-    val appId : String = getIdFromName("cloud_workstation")
-    val reorg: JsValue =
-      s"""|{
-          | "custom_reorg" : {
-          |    "app_id" : "${appId}",
-          |    "conf": null
-          |  }
-          |}
-          |""".stripMargin.parseJson
+        val extras = Extras.parse(reorg, verbose)
+        extras.customReorgAttributes  should be (
+            Some(ReorgAttrs(appId, ""))
+        )
+    }
 
-    val extras = Extras.parse(reorg, verbose)
-    extras.customReorgAttributes  should be (
-      Some(ReorgAttrs(appId, ""))
-    )
-  }
-
-  it should "generate valid JSON execution policy" in {
+    it should "generate valid JSON execution policy" in {
     val expectedJs : JsValue =
         """|{
-               | "executionPolicy": {
-               |    "restartOn": {
-               |       "*": 5
-               |    },
-               |    "maxRestarts" : 4
-               | }
-               |}
-               |""".stripMargin.parseJson
+            | "executionPolicy": {
+            |    "restartOn": {
+            |       "*": 5
+            |    },
+            |    "maxRestarts" : 4
+            | }
+            |}
+            |""".stripMargin.parseJson
 
         val execPolicy = DxExecPolicy(Some(Map("*" -> 5)),
                                       Some(4))
@@ -437,14 +428,14 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "generate valid JSON timeout policy" in {
         val expectedJs : JsValue =
             """|{
-               |  "timeoutPolicy": {
-               |     "*": {
-               |        "hours": 12,
-               |        "minutes" : 30
-               |     }
-               |  }
-               |}
-               |""".stripMargin.parseJson
+                |  "timeoutPolicy": {
+                |     "*": {
+                |        "hours": 12,
+                |        "minutes" : 30
+                |     }
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
         val timeout = DxTimeout(None, Some(12), Some(30))
         JsObject(timeout.toJson) should be(expectedJs)
@@ -453,16 +444,16 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "handle default runtime attributes" in {
         val runtimeAttrs : JsValue=
             """|{
-               | "default_runtime_attributes" : {
-               |     "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1",
-               |     "zones": "us-west1-a us-west1-b us-west1-c us-central1-c us-central1-b",
-               |     "failOnStderr" : false,
-               |     "continueOnReturnCode" : 0,
-               |     "preemptible": "0",
-               |     "bootDiskSizeGb": "10",
-               |     "noAddress": "false"
-               | }
-               |}""".stripMargin.parseJson
+                | "default_runtime_attributes" : {
+                |     "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1",
+                |     "zones": "us-west1-a us-west1-b us-west1-c us-central1-c us-central1-b",
+                |     "failOnStderr" : false,
+                |     "continueOnReturnCode" : 0,
+                |     "preemptible": "0",
+                |     "bootDiskSizeGb": "10",
+                |     "noAddress": "false"
+                | }
+                |}""".stripMargin.parseJson
 
         val extras = Extras.parse(runtimeAttrs, verbose)
         val dockerOpt: Option[WomValue] = extras.defaultRuntimeAttributes.m.get("docker")
@@ -839,5 +830,5 @@ class ExtrasTest extends FlatSpec with Matchers {
         val detailsJson = dxAttrs.getDetailsJson
 
         expected should be (detailsJson)
-    }
+}
 }
