@@ -402,7 +402,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |}
                 |""".stripMargin.parseJson
 
-        val extras = Extras.parse(reorg, verbose)
+        val extras = Extras.parse(reorg, verbose2)
         extras.customReorgAttributes  should be (
             Some(ReorgAttrs(appId, ""))
         )
