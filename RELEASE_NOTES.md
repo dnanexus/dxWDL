@@ -3,7 +3,8 @@
 ## 1.37.1
 - Bug fix for calling a task inside a scatter with an optional that is not provided.
 
-## 1.37
+
+## 1.37   16-Dec-2019
 
 - Fix issue with invalid WOM when compiling workflows containing sub-workflow with expression in output block while using custom reorg applet.
 - Warning message for custom reorg applet will only show when `--verbosity` is set.

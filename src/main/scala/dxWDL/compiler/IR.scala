@@ -35,8 +35,8 @@ object IR {
     // specification fields, such as {help, suggestions, patterns}.
     //
     case class  CVar(name: String,
-                    womType: WomType,
-                    default: Option[WomValue]) {
+                     womType: WomType,
+                     default: Option[WomValue]) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //

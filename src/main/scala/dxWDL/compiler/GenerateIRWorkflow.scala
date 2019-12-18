@@ -55,6 +55,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     // For example:
     // workflow w {
     //   Int? x = 3
+    //   String s = "glasses"
     //   ...
     // }
     // We handle only the case where the default is a constant.
@@ -145,6 +146,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                             |is unspecified. This is illegal in a locked workflow.""".stripMargin.replaceAll("\n", " "))
 
                 case None =>
+                    // Perhaps the callee is not going to use the argument, lets not fail
+                    // right here, but leave it for runtime.
                     IR.SArgEmpty
 
                 case Some(tcInput) if WomValueAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
@@ -235,9 +238,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val (allInputs, optionalArgNames) = Block.closure(block)
-        allInputs.flatMap { case (name, womType) =>
-            val isOptionalArg = (optionalArgNames contains name)
+        val allInputs = Block.closure(block)
+        allInputs.flatMap { case (name, (womType, isOptionalArg)) =>
             lookupInEnv(name, womType, env, isOptionalArg)
         }.toMap
     }
@@ -245,16 +247,16 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     // Find the closure of a graph, besides its normal inputs. Create an input
     // node for each of these external references.
     private def graphClosure(inputNodes: Vector[GraphInputNode],
-                             subBlocks: Vector[Block]) : Map[String, WomType] = {
-        val allInputs : Map[String, WomType] = subBlocks.map{ block =>
-            val (inputs, _) = Block.closure(block)
-            inputs
+                             subBlocks: Vector[Block]) : Map[String, (WomType, Boolean)] = {
+        val allInputs : Map[String, (WomType, Boolean)] = subBlocks.map{ block =>
+            Block.closure(block)
         }.flatten.toMap
 
         // remove the regular inputs
         val regularInputNames : Set[String] = inputNodes.map {
             case iNode => iNode.localName
         }.toSet
+
         allInputs.filter{
             case (name, _) =>
                 !(regularInputNames contains name)
@@ -299,7 +301,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             // there are several subblocks, we need a subworkflow to string them
             // together.
             //
-            // The subworkflow may access declerations outside of its scope.
+            // The subworkflow may access declarations outside of its scope.
             // For example, stage-0.result, and stage-1.result are inputs to
             // stage-2, that belongs to a subworkflow. Because the subworkflow is
             // locked, we need to make them proper inputs.
@@ -316,8 +318,9 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             //
             val pathStr = blockPath.map(x => x.toString).mkString("_")
             val closureInputs = graphClosure(inputNodes, subBlocks)
-            Utils.trace(verbose.on, s"""|compileNestedBlock, closureInputs=
-                                        | ${closureInputs}
+            Utils.trace(verbose.on, s"""|compileNestedBlock
+                                        |    inputNodes = ${inputNodes.map(_.singleOutputPort)}
+                                        |    closureInputs= ${closureInputs}
                                         |""".stripMargin)
             val (subwf, auxCallables, _ ) = compileWorkflowLocked(wfName + "_block_" + pathStr,
                                                                   inputNodes,
@@ -690,7 +693,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
     private def compileWorkflowLocked(wfName: String,
                                       inputNodes: Vector[GraphInputNode],
-                                      closureInputs: Map[String, WomType],
+                                      closureInputs: Map[String, (WomType, Boolean)],
                                       outputNodes: Vector[GraphOutputNode],
                                       blockPath: Vector[Int],
                                       subBlocks : Vector[Block],
@@ -703,11 +706,21 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
 
-        // inputs that are a result of accessing declarations in an ecompassing
+        // inputs that are a result of accessing declarations in an encompassing
         // WDL workflow.
         val clsInputs: Vector[(CVar, SArg)] = closureInputs.map{
-            case (name, womType) =>
+            case (name, (womType, false)) =>
+                // no default value
                 val cVar = CVar(name, womType, None)
+                (cVar, IR.SArgWorkflowInput(cVar))
+            case (name, (womType, true)) =>
+                // there is a default value. This input is de facto optional.
+                // We change the type of the CVar and make sure it is optional.
+                val cVar =
+                    if (Utils.isOptional(womType))
+                        CVar(name, womType, None)
+                    else
+                        CVar(name, WomOptionalType(womType), None)
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
         val allWfInputs = wfInputs ++ clsInputs
