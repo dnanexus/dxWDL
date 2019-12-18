@@ -54,14 +54,16 @@ case class WfOutputs(wf: WorkflowDefinition,
 
         // Some of the inputs could be optional. If they are missing,
         // add in a None value.
-        val (allInputs, _) = Block.closure(Block(wf.innerGraph.outputNodes.toVector))
-        val envInitialFilled : Map[String, WomValue] = allInputs.flatMap { case (name, womType) =>
+        val allInputs = Block.closure(Block(wf.innerGraph.outputNodes.toVector))
+        val envInitialFilled : Map[String, WomValue] = allInputs.flatMap { case (name, (womType, hasDefaultVal)) =>
             (envInitial.get(name), womType) match {
                 case (None, WomOptionalType(t)) =>
                     Some(name -> WomOptionalValue(t, None))
+                case (None, _) if hasDefaultVal =>
+                    None
                 case (None, _) =>
-                    // input is missing, it could have a default at the callee,
-                    // so we don't want to throw an exception
+                    // input is missing, and there is no default at the callee,
+                    Utils.warning(utlVerbose, s"input is missing for ${name}, and there is no default at the callee")
                     None
                 case (Some(x), _) =>
                     Some(name -> x)

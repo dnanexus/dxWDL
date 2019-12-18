@@ -67,6 +67,9 @@ wdl_v1_list = [
     # of an error
     "missing_optional_output_file",
 
+    # calling with an optional argument not specified
+    "scatter_subworkflow_with_optional",
+
     # streaming
     "streaming_inputs"
 ]

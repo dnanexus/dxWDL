@@ -453,7 +453,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "detect a request for GPU" taggedAs(EdgeTest) in {
+    it should "detect a request for GPU" in {
         val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
             //                                      :: "--verbose"
@@ -468,6 +468,33 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 callable shouldBe a[IR.Applet]
                 val task = callable.asInstanceOf[IR.Applet]
                 task.instanceType shouldBe (IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
+        }
+    }
+
+    it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case _ => throw new Exception("sanity")
+        }
+
+        val wfs : Vector[IR.Workflow] = bundle.allCallables.map {
+            case (name, wf : IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
+            case (_, _) => None
+        }.flatten.toVector
+        wfs.length shouldBe(1)
+        val subwf = wfs(0)
+
+        val samtools = subwf.inputs.find{ case (cVar, _) => cVar.name == "samtools_memory" }
+        inside(samtools) {
+            case Some(cVar) =>
+                System.out.println(cVar)
         }
     }
 }

@@ -20,8 +20,8 @@ class BlockTest extends FlatSpec with Matchers {
     }
 
     private def closureAll(b: Block) : Map[String, WomType] = {
-        val (cls, optionalArgs) = Block.closure(b)
-        cls
+        val cls = Block.closure(b)
+        cls.map{ case (name, (womType,_)) => name -> womType}.toMap
     }
 
     it should "calculate closure correctly" in {
@@ -366,8 +366,10 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        val (c0All, c0Optionals) = Block.closure(subBlocks(0))
+        val c0All = Block.closure(subBlocks(0))
         c0All.keys.toSet should be(Set("unpassed_arg_default"))
+
+        val c0Optionals = c0All.collect{ case (name, (_, true)) => name }.toSet
         c0Optionals should be(Set("unpassed_arg_default"))
 
         closureAll(subBlocks(1)).keys.toSet should be(Set.empty)

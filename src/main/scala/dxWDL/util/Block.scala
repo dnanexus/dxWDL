@@ -578,10 +578,10 @@ object Block {
     //    }
     // requires "flag" and "rain".
     //
-    // Also, return a list of optional inputs, they can be omitted
-    // in source WDL code.
+    // For each input also return whether is has a default. This makes it,
+    // de facto, optional.
     //
-    def closure(block: Block) : (Map[String, WomType], Set[String]) = {
+    def closure(block: Block) : Map[String, (WomType, Boolean)] = {
         // make a deep list of all the nodes inside the block
         val allBlockNodes : Set[GraphNode] = block.nodes.map{
             case sctNode: ScatterNode =>
@@ -653,7 +653,11 @@ object Block {
             case _ => None
         }.toSet
 
-        (allInputs, optionalInputs)
+        allInputs.map {
+            case (name, womType) =>
+                val hasDefault = optionalInputs contains name
+                name -> (womType, hasDefault)
+        }.toMap
     }
 
     // Figure out all the outputs from a sequence of WDL statements.
