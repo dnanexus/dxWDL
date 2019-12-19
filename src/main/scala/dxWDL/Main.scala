@@ -843,6 +843,7 @@ object Main extends App {
             |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
             |                             job log at runtime. Zero means write the minimum,
             |                             one is the default, and two is for internal debugging.
+            |      -streamAllFiles        mount all files with dxfuse, do not use the download agent
             |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx
