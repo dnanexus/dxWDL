@@ -52,7 +52,8 @@ object Field extends Enumeration {
         Parts,
         Project,
         Properties,
-        Size = Value
+        Size,
+        Stages = Value
 }
 
 trait DxObjectDescribe {
@@ -130,6 +131,7 @@ object DxObject {
             case Field.Project => "project"
             case Field.Properties => "properties"
             case Field.Size => "size"
+            case Field.Stages => "stages"
         }.toVector
         val m : Map[String, JsValue] = fieldStrings.map{ x => x -> JsTrue }.toMap
         JsObject(m)

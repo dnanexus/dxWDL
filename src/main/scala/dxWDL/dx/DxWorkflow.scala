@@ -4,6 +4,11 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
+case class DxWorkflowStageDesc(id: String,
+                               executable : String,
+                               name : String,
+                               input : JsValue)
+
 case class DxWorkflowDescribe(project : String,
                               id  : String,
                               name : String,
@@ -13,10 +18,28 @@ case class DxWorkflowDescribe(project : String,
                               properties: Option[Map[String, String]],
                               details : Option[JsValue],
                               inputSpec : Option[Vector[IOParameter]],
-                              outputSpec : Option[Vector[IOParameter]]) extends DxObjectDescribe
+                              outputSpec : Option[Vector[IOParameter]],
+                              stages : Option[Vector[DxWorkflowStageDesc]]) extends DxObjectDescribe
 
 case class DxWorkflow(id : String,
                       project : Option[DxProject]) extends DxExecutable {
+    private def parseStages(jsv : JsValue) : Vector[DxWorkflowStageDesc] = {
+        val jsVec = jsv match {
+            case JsArray(a) => a
+            case other => throw new Exception(s"Malfored JSON ${other}")
+        }
+        jsVec.map{
+            case jsv2 =>
+                val stage = jsv2.asJsObject.getFields("id", "executable", "name", "input") match {
+                    case Seq(JsString(id), JsString(exec), JsString(name), input) =>
+                        DxWorkflowStageDesc(id, exec, name, input)
+                    case other =>
+                        throw new Exception(s"Malfored JSON ${other}")
+                }
+                stage
+        }.toVector
+    }
+
     def describe(fields : Set[Field.Value] = Set.empty) : DxWorkflowDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
         val defaultFields = Set(Field.Project,
@@ -50,14 +73,16 @@ case class DxWorkflow(id : String,
                                    None,
                                    None,
                                    Some(DxObject.parseIOSpec(inputSpec.toVector)),
-                                   Some(DxObject.parseIOSpec(outputSpec.toVector)))
+                                   Some(DxObject.parseIOSpec(outputSpec.toVector)),
+                                   None)
             case _ =>
                 throw new Exception(s"Malformed JSON ${descJs}")
         }
 
         val details = descJs.asJsObject.fields.get("details")
         val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-        desc.copy(details = details, properties = props)
+        val stages = descJs.asJsObject.fields.get("stages").map(parseStages)
+        desc.copy(details = details, properties = props, stages = stages)
     }
 
     def close() : Unit = {
