@@ -3,11 +3,12 @@ package dxWDL.base
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import com.dnanexus.{AccessLevel, DXFile}
+import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
 
+import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
                         maxRestarts: Option[Int]) {
@@ -663,8 +664,8 @@ object Extras {
         if (reorgConf != "") {
             // format dx file ID
             val reorgFileID: String = reorgConf.replace("dx://", "")
-            // if input file  ID is invalid, DXFile.getInstance will thow an IllegalArgumentException
-            val file: DXFile = DXFile.getInstance(reorgFileID)
+            // if input file  ID is invalid, DxFile.getInstance will thow an IllegalArgumentException
+            val file: DxFile = DxFile.getInstance(reorgFileID)
             // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
             file.describe()
         }
@@ -680,8 +681,6 @@ object Extras {
         veryifyReorgApp(reorgAppId)
         verifyInputs(reorgConf)
 
-        // FIXME: this shouldn't be printed out when running tests. During tests, nothing should
-        // be printed out, some software relies on this assumption.
         Utils.trace(
             verbose.on,
             s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
@@ -693,7 +692,6 @@ object Extras {
                 |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
             """.stripMargin.replaceAll("\n", " ")
         )
-
         Some(ReorgAttrs(reorgAppId, reorgConf))
     }
 

@@ -9,8 +9,8 @@ import org.scalatest.BeforeAndAfterAll
 import scala.io.Source
 import dxWDL.Main
 import dxWDL.Main.SuccessfulTermination
-import dxWDL.base.Utils
-import dxWDL.dx.DxPath
+import dxWDL.base.{Utils, Verbose}
+import dxWDL.dx._
 import dxWDL.util.ParseWomSourceFile
 import spray.json._
 
@@ -48,6 +48,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         "-quiet",  "--folder", "/reorg_tests")
 
     override def beforeAll() : Unit = {
+        // build the directory with the native applets
+        Utils.execCommand(
+            s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
+                quiet=true)
+
         // building necessary applets before starting the tests
         val native_applets = Vector("native_concat",
                                     "native_diff",
@@ -59,8 +64,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         val topDir = Paths.get(System.getProperty("user.dir"))
         native_applets.foreach { app =>
             try {
-                val (stdout, stderr) = Utils.execCommand(s"dx build $topDir/test/applets/$app --destination /unit_tests/applets/",
-                                                         quiet=true)
+                val (stdout, stderr) = Utils.execCommand(
+                    s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/unit_tests/applets/",
+                    quiet=true)
             } catch {
                 case _: Throwable =>
             }
@@ -68,13 +74,20 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     private def getAppletId(path: String): String = {
-        val (app_stdout, app_stderr) = Utils.execCommand(
-            s"dx describe $path --json")
-
-        app_stdout.parseJson.asJsObject.fields.get("id") match {
-            case Some(JsString(x)) => x
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
+        val folder = Paths.get(path).getParent().toAbsolutePath().toString()
+        val basename = Paths.get(path).getFileName().toString()
+        val verbose = Verbose(false, true, Set.empty)
+        val results = DxFindDataObjects(Some(10), verbose).apply(
+            dxTestProject,
+            Some(folder),
+            recurse = false,
+            klassRestriction = None,
+            withProperties = Vector.empty,
+            nameConstraints = Vector(basename),
+            withInputOutputSpec = false)
+        results.size shouldBe(1)
+        val desc = results.values.head
+        desc.id
     }
 
     private def createExtras(extrasContent: String): String = {
@@ -146,7 +159,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX) in {
+    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX, EdgeTest) in {
         val outputPath = "/tmp/dx_extern.wdl"
         Main.dxni(
             List("--force", "--quiet",
@@ -192,9 +205,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
         }
 
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
-
-        val license = stdout.parseJson.asJsObject.fields.get("details") match {
+        val dxApplet = DxApplet.getInstance(appId)
+        val desc = dxApplet.describe(Set(Field.Details))
+        val license = desc.details match {
             case Some(JsObject(x)) => x.get("upstreamProjects") match {
                 case None => List.empty
                 case Some(s) => s
@@ -243,7 +256,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "minutes" -> JsNumber(0)))
     }
 
-    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
         val appId = Main.compile(
@@ -269,7 +282,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    it should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "allow choosing GPU instances" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "GPU2.wdl")
 
         val appId = Main.compile(path.toString :: cFlags) match {
@@ -316,29 +329,19 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             case _ => throw new Exception("sanity")
         }
 
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
-
-        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
-            case Some(JsArray(x)) => x.toVector
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
+        val wf = DxWorkflow.getInstance(wfId)
+        val wfDesc = wf.describe(Set(Field.Stages))
+        val wfStages = wfDesc.stages.get
 
         // there should be 4 stages: 1) common 2) train_stations 3) outputs 4) reorg
         wfStages.size shouldBe 4
-
         val reorgStage = wfStages.last
 
-        // if its not a JsObject return empty string and test will fail
-        val reorgDetails = reorgStage match {
-            case JsObject(x) => JsObject(x)
-            case _ => throw new Exception("sanity")
-        }
+        reorgStage.id shouldBe("stage-reorg")
+        reorgStage.executable shouldBe(appletId)
 
-        reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString(s"${appletId}")
-        )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
-        val reorgInput: JsObject = reorgDetails.fields("input") match {
+        val reorgInput: JsObject = reorgStage.input match {
             case JsObject(x) => JsObject(x)
             case _ => throw new Exception("sanity")
         }
@@ -349,7 +352,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // ignore for now as the test will fail in staging
-    it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" taggedAs(EdgeTest) in {
+    it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" in {
         // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
         val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
         val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
@@ -379,22 +382,13 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             case _ => throw new Exception("sanity")
         }
 
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
-
-        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
-            case Some(JsArray(x)) => x.toVector
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
-
+        val wf = DxWorkflow.getInstance(wfId)
+        val wfDesc = wf.describe(Set(Field.Stages))
+        val wfStages = wfDesc.stages.get
         val reorgStage = wfStages.last
 
-        val reorgDetails = reorgStage match {
-            case JsObject(x) => JsObject(x)
-            case _ => throw new Exception("sanity")
-        }
-
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
-        val reorgInput: JsObject = reorgDetails.fields("input") match {
+        val reorgInput: JsObject = reorgStage.input match {
             case JsObject(x) => JsObject(x)
             case _ => throw new Exception("sanity")
         }
@@ -402,7 +396,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         reorgInput.fields.size shouldBe 2
         reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS, Utils.REORG_CONFIG)
     }
-    it should "Checks subworkflow with custom reorg app do not contain reorg attribute" taggedAs(EdgeTest) in {
+    it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
         // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
         val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
         val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")

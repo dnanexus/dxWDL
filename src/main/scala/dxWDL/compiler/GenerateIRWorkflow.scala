@@ -29,14 +29,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
     // generate a stage Id, this is a string of the form: 'stage-xxx'
     private var stageNum = 0
-    private def genStageId(stageName: Option[String] = None) : DXWorkflowStage = {
+    private def genStageId(stageName: Option[String] = None) : DxWorkflowStage = {
         stageName match {
             case None =>
-                val retval = DXWorkflowStage(s"stage-${stageNum}")
+                val retval = DxWorkflowStage(s"stage-${stageNum}")
                 stageNum += 1
                 retval
             case Some(nm) =>
-                DXWorkflowStage(s"stage-${nm}")
+                DxWorkflowStage(s"stage-${nm}")
         }
     }
 

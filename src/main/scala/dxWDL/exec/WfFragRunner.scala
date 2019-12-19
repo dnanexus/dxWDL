@@ -37,7 +37,7 @@ package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
-import com.dnanexus._
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import spray.json._
@@ -372,7 +372,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     private def execDNAxExecutable(dxExecId: String,
                                    dbgName: String,
                                    callInputs : JsValue,
-                                   instanceType: Option[String]) : (Int, DXExecution) = {
+                                   instanceType: Option[String]) : (Int, DxExecution) = {
         // We may need to run a collect subjob. Add the the sequence
         // number to each invocation, so the collect subjob will be
         // able to put the results back together in the correct order.
@@ -404,9 +404,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case _ => throw new AppInternalException(
                         s"Bad format returned from jobNew ${info.prettyPrint}")
                 }
-                DXJob.getInstance(id)
+                DxJob.getInstance(id)
             } else if (dxExecId.startsWith("applet-")) {
-                val applet = DXApplet.getInstance(dxExecId)
+                val applet = DxApplet.getInstance(dxExecId)
                 val fields = Map(
                     "name" -> JsString(dbgName),
                     "input" -> callInputs,
@@ -422,14 +422,14 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case _ => throw new AppInternalException(
                         s"Bad format returned from jobNew ${info.prettyPrint}")
                 }
-                DXJob.getInstance(id)
+                DxJob.getInstance(id)
             } else if (dxExecId.startsWith("workflow-")) {
-                val workflow = DXWorkflow.getInstance(dxExecId)
-                val dxAnalysis :DXAnalysis = workflow.newRun()
-                    .setRawInput(DxUtils.jsonNodeOfJsValue(callInputs))
-                    .setName(dbgName)
-                    .putProperty("seq_number", seqNum.toString)
-                    .run()
+                val workflow = DxWorkflow.getInstance(dxExecId)
+                val dxAnalysis :DxAnalysis = workflow.newRun(
+                    input = callInputs,
+                    name = dbgName)
+                val props = Map("seq_number" -> seqNum.toString)
+                dxAnalysis.setProperties(props)
                 dxAnalysis
             } else {
                 throw new Exception(s"Unsupported execution ${dxExecId}")
@@ -439,7 +439,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
     private def execCall(call: CallNode,
                          callInputs: Map[String, WomValue],
-                         callNameHint: Option[String]) : (Int, DXExecution) = {
+                         callNameHint: Option[String]) : (Int, DxExecution) = {
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
         val calleeName = call.callable.name
@@ -469,7 +469,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     // create promises to this call. This allows returning
     // from the parent job immediately.
     private def genPromisesForCall(call: CallNode,
-                                   dxExec: DXExecution) : Map[String, WdlVarLinks] = {
+                                   dxExec: DxExecution) : Map[String, WdlVarLinks] = {
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
         linkInfo.outputs.map{
@@ -651,7 +651,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     // Launch a subjob to collect and marshal the call results.
     // Remove the declarations already calculated
     private def collectScatter(sctNode: ScatterNode,
-                               childJobs : Vector[DXExecution]) : Map[String, WdlVarLinks] = {
+                               childJobs : Vector[DxExecution]) : Map[String, WdlVarLinks] = {
         val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
             case scp : ScatterGathererPort =>
                 scp.identifier.localName.value -> scp.womType
@@ -670,7 +670,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         val (svNode, collection) = evalScatterCollection(sctNode, env)
 
         // loop on the collection, call the applet in the inner loop
-        val childJobs : Vector[DXExecution] =
+        val childJobs : Vector[DxExecution] =
             collection.map{ item =>
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callInputs = evalCallInputs(call, innerEnv)
@@ -691,7 +691,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         val (_, linkInfo) = execLinkInfo.toVector.head
 
         // loop on the collection, call the applet in the inner loop
-        val childJobs : Vector[DXExecution] =
+        val childJobs : Vector[DxExecution] =
             collection.map{ item =>
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callHint = readableNameForScatterItem(item)

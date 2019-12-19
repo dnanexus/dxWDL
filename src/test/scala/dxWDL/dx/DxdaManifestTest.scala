@@ -1,6 +1,5 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXDataObject, DXFile, DXProject}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -10,7 +9,7 @@ import dxWDL.base.Utils
 class DxdaManifestTest extends FlatSpec with Matchers {
 
     val TEST_PROJECT = "dxWDL_playground"
-    lazy val dxTestProject : DXProject =
+    lazy val dxTestProject : DxProject =
         try {
             DxPath.resolveProject(TEST_PROJECT)
         } catch {
@@ -34,7 +33,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
     // describe a platform file, including its parts, with the dx-toolkit. We can then compare
     // it to what we get from our DxdaManifest code.
     //
-    private def describeWithParts(dxFile: DXFile) : JsValue = {
+    private def describeWithParts(dxFile: DxFile) : JsValue = {
         val cmd = s"""dx api ${dxFile.getId} describe '{"fields": { "parts" : true } }'"""
         val (stdout, stderr) = Utils.execCommand(cmd)
         val jsv = stdout.parseJson
@@ -60,13 +59,13 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         )
 
         // resolve the paths
-        val resolvedObjects : Map[String, DXDataObject] = DxPath.resolveBulk(fileDir.keys.toVector,
+        val resolvedObjects : Map[String, DxDataObject] = DxPath.resolveBulk(fileDir.keys.toVector,
                                                                              dxTestProject)
-        val filesInManifest : Map[DXFile, Path] = resolvedObjects.map{
+        val filesInManifest : Map[String, (DxFile, Path)] = resolvedObjects.map{
             case (dxPath, dataObj) =>
-                val dxFile = dataObj.asInstanceOf[DXFile]
+                val dxFile = dataObj.asInstanceOf[DxFile]
                 val local : Path = fileDir(dxPath)
-                dxFile -> local
+                dxFile.id -> (dxFile, local)
         }.toMap
 
         // create a manifest
@@ -76,7 +75,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         // compare to data obtained with dx-toolkit
         val expected : Vector[JsValue] = resolvedObjects.map{
             case (dxPath, dataObj) =>
-                val dxFile = dataObj.asInstanceOf[DXFile]
+                val dxFile = dataObj.asInstanceOf[DxFile]
                 val local : Path = fileDir(dxPath)
                 val jsv = describeWithParts(dxFile)
 

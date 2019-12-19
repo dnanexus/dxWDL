@@ -339,8 +339,8 @@ class ExtrasTest extends FlatSpec with Matchers {
         val thrown = intercept[java.lang.IllegalArgumentException] {
             Extras.parse(reorg, verbose2)
         }
-        thrown.getMessage should be  (
-            s"dxId must match file-[A-Za-z0-9]{24}"
+        thrown.getMessage should include  (
+            "does not match [A-Za-z0-9]{24}"
         )
     }
     it should "throw ResourceNotFoundException due to non-existant file" in {

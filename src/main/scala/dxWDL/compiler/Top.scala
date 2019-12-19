@@ -3,7 +3,6 @@
 
 package dxWDL.compiler
 
-import com.dnanexus._
 import java.nio.file.{Path, Paths}
 
 import wom.callable._
@@ -16,8 +15,8 @@ import dxWDL.dx._
 import dxWDL.util._
 
 // The end result of the compiler
-case class CompilationResults(primaryCallable: Option[DxExec],
-                              execDict: Map[String, DxExec])
+case class CompilationResults(primaryCallable: Option[DxExecutable],
+                              execDict: Map[String, DxExecutable])
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -52,7 +51,7 @@ case class Top(cOpt: CompilerOptions) {
 
         val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
         val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
-        if (!dxObj.isInstanceOf[DXRecord])
+        if (!dxObj.isInstanceOf[DxRecord])
             throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
         dxObj.getId
     }
@@ -61,11 +60,11 @@ case class Top(cOpt: CompilerOptions) {
     // be available to all subjobs we run.
     private def cloneRtLibraryToProject(region: String,
                                         dxWDLrtId: String,
-                                        dxProject: DXProject) : Unit = {
+                                        dxProject: DxProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.resolveProject(projNameRt)
-        DxUtils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
+        DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId),
                            dxProject,
                            DX_WDL_ASSET,
                            dxProjRt,
@@ -75,9 +74,9 @@ case class Top(cOpt: CompilerOptions) {
     // Backend compiler pass
     private def compileNative(bundle: IR.Bundle,
                               folder: String,
-                              dxProject: DXProject,
+                              dxProject: DxProject,
                               runtimePathConfig: DxPathConfig,
-                              fileInfoDir: Map[DXFile, DxDescribe]) : CompilationResults = {
+                              fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
                 throw new Exception("Invalid value IR for compilation mode")
@@ -197,8 +196,8 @@ case class Top(cOpt: CompilerOptions) {
     // Scan the JSON inputs files for dx:files, and batch describe them. This
     // reduces the number of API calls.
     private def bulkFileDescribe(bundle: IR.Bundle,
-                                 dxProject: DXProject) : (Map[String, DXFile],
-                                                          Map[DXFile, DxDescribe]) = {
+                                 dxProject: DxProject) : (Map[String, DxFile],
+                                                          Map[String, (DxFile, DxFileDescribe)]) = {
         val defResults : InputFileScanResults = cOpt.defaults match {
             case None => InputFileScanResults(Map.empty, Vector.empty)
             case Some(path) =>
@@ -212,8 +211,12 @@ case class Top(cOpt: CompilerOptions) {
                                      accu.dxFiles ++ res.dxFiles)
         }
 
-        (allResults.path2file,
-         DxBulkDescribe.apply(allResults.dxFiles))
+        val allDescribe = DxFile.bulkDescribe(allResults.dxFiles)
+        val allFiles : Map[String, (DxFile, DxFileDescribe)] = allDescribe.map{
+            case (f : DxFile, desc) => f.id -> (f, desc)
+            case _ => throw new Exception("has to be all files")
+        }.toMap
+        (allResults.path2file, allFiles)
     }
 
 
@@ -254,8 +257,8 @@ case class Top(cOpt: CompilerOptions) {
 
     // Compile IR only
     private def handleInputFiles(bundle: IR.Bundle,
-                                 path2file: Map[String, DXFile],
-                                 fileInfoDir: Map[DXFile, DxDescribe]) : IR.Bundle = {
+                                 path2file: Map[String, DxFile],
+                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : IR.Bundle = {
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) =>
@@ -285,7 +288,7 @@ case class Top(cOpt: CompilerOptions) {
 
     // compile and generate intermediate code only
     def applyOnlyIR(source: Path,
-                    dxProject: DXProject) : IR.Bundle = {
+                    dxProject: DxProject) : IR.Bundle = {
         // generate IR
         val bundle : IR.Bundle = womToIR(source)
 
@@ -300,7 +303,7 @@ case class Top(cOpt: CompilerOptions) {
     // Compile up to native dx applets and workflows
     def apply(source: Path,
               folder: String,
-              dxProject: DXProject,
+              dxProject: DxProject,
               runtimePathConfig: DxPathConfig) : Option[String] = {
         val bundle : IR.Bundle = womToIR(source)
 
