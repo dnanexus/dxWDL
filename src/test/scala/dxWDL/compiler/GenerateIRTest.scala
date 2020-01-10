@@ -297,14 +297,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
+  private def getAppletByName(name: String, bundle: IR.Bundle): IR.Applet =
+    bundle.allCallables(name) match {
+      case a: IR.Applet => a
+      case _            => throw new Exception(s"${name} is not an applet")
+    }
+
   private def getTaskByName(
       name: String,
       bundle: IR.Bundle
   ): CallableTaskDefinition = {
-    val applet = bundle.allCallables(name) match {
-      case a: IR.Applet => a
-      case _            => throw new Exception(s"${name} is not an applet")
-    }
+    val applet = getAppletByName(name, bundle)
     val task: CallableTaskDefinition = applet.kind match {
       case IR.AppletKindTask(x) => x
       case _                    => throw new Exception(s"${name} is not a task")
@@ -312,8 +315,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     task
   }
 
-  it should "recognize help in parameters_meta" in {
-    val path = pathFromBasename("compiler", "help_params.wdl")
+  it should "recognize help in parameters_meta via WOM" in {
+    val path = pathFromBasename("compiler", "help_input_params.wdl")
     val retval = Main.compile(
       path.toString :: cFlags
     )
@@ -363,6 +366,57 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "help" -> MetaValueElement.MetaValueElementString("righthand file")
           )
         )
+      )
+    )
+  }
+
+  it should "recognize help in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "help_input_params.wdl")
+    val retval = Main.compile(
+      path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("cgrep", bundle)
+    println(cgrepApplet.inputs)
+    cgrepApplet.inputs shouldBe Vector(
+      IR.CVar(
+        "in_file",
+        WomSingleFileType,
+        None,
+        Some(Vector(IR.IOAttrHelp("The input file to be searched")))
+      ),
+      IR.CVar(
+        "pattern",
+        WomStringType,
+        None,
+        Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+      )
+    )
+  }
+
+  it should "ignore help in parameters_meta via CVar for output CVars" in {
+    val path = pathFromBasename("compiler", "help_output_params.wdl")
+    val retval = Main.compile(
+      path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("cgrep", bundle)
+    cgrepApplet.outputs shouldBe Vector(
+      IR.CVar(
+        "count",
+        WomIntegerType,
+        None,
+        None
       )
     )
   }
