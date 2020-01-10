@@ -6,21 +6,21 @@ version 1.0
 # `help` should ve a valid key and the message passed through
 
 # Correct
-task cgrep {
+task help_output_params_cgrep {
     input {
         String pattern
         File in_file
     }
     parameter_meta {
         in_file : {
-					help: "The input file to be searched"
-				}
-				pattern: {
-					help: "The pattern to use to search in_file"
-				}
-				count: {
-					help: "The number of lines in the input file containing the pattern"
-				}
+          help: "The input file to be searched"
+        }
+        pattern: {
+          help: "The pattern to use to search in_file"
+        }
+        count: {
+          help: "The number of lines in the input file containing the pattern"
+        }
     }
     command {
         grep '${pattern}' ${in_file} | wc -l
@@ -30,21 +30,21 @@ task cgrep {
     }
 }
 
-task diff {
+task help_output_params_diff {
     input {
         File a
         File b
     }
     parameter_meta {
         a : {
-					help: "lefthand file"
-				}
+          help: "lefthand file"
+        }
         b : {
-					help: "righthand file"
-				}
-				result: {
-					help: "The number of different lines"
-				}
+          help: "righthand file"
+        }
+        result: {
+          help: "The number of different lines"
+        }
     }
     runtime {
         docker: "ubuntu:16.04"
