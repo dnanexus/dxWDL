@@ -16,7 +16,7 @@ task help_input_params_cgrep {
         help: "The input file to be searched"
       }
       pattern: {
-        help: "The pattern to use to search in_file
+        help: "The pattern to use to search in_file"
       }
     }
     command {
@@ -27,7 +27,7 @@ task help_input_params_cgrep {
     }
 }
 
-task help_input_paramsdiff {
+task help_input_params_diff {
     input {
         File a
         File b

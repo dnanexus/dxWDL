@@ -326,7 +326,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
 
-    val cgrepTask = getTaskByName("cgrep", bundle)
+    val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
     cgrepTask.parameterMeta shouldBe (
       Map(
         "in_file" -> MetaValueElement.MetaValueElementObject(
@@ -353,7 +353,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
       )
     ))
 
-    val diffTask = getTaskByName("diff", bundle)
+    val diffTask = getTaskByName("help_input_params_diff", bundle)
     diffTask.parameterMeta shouldBe (
       Map(
         "a" -> MetaValueElement.MetaValueElementObject(
@@ -381,7 +381,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
 
-    val cgrepApplet = getAppletByName("cgrep", bundle)
+    val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
     println(cgrepApplet.inputs)
     cgrepApplet.inputs shouldBe Vector(
       IR.CVar(
@@ -410,7 +410,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
 
-    val cgrepApplet = getAppletByName("cgrep", bundle)
+    val cgrepApplet = getAppletByName("help_output_params_cgrep", bundle)
     cgrepApplet.outputs shouldBe Vector(
       IR.CVar(
         "count",
