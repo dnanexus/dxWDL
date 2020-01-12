@@ -87,7 +87,8 @@ case class CollectSubJobs(
   //private val verbose = runtimeDebugLevel >= 1
   private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
-  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
   def launch(
@@ -119,7 +120,8 @@ case class CollectSubJobs(
     val dxJob = DxJob(DxUtils.dxEnv.getJob())
     val parentJob: DxJob = dxJob.describe().parentJob.get
 
-    val childExecs: Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
+    val childExecs: Vector[DxExecution] =
+      DxFindExecutions.apply(Some(parentJob))
 
     // make sure the collect subjob is not included. Theoretically,
     // it should not be returned as a search result, becase we did
@@ -130,7 +132,9 @@ case class CollectSubJobs(
 
   // Describe all the scatter child jobs. Use a bulk-describe
   // for efficiency.
-  private def describeChildExecs(execs: Vector[DxExecution]): Vector[ChildExecDesc] = {
+  private def describeChildExecs(
+      execs: Vector[DxExecution]
+  ): Vector[ChildExecDesc] = {
     val jobInfoReq: Vector[JsValue] = execs.map { job =>
       JsObject(
         "id" -> JsString(job.getId),
@@ -145,32 +149,45 @@ case class CollectSubJobs(
     System.err.println(s"bulk-describe request=${req}")
     val retval: JsValue =
       DxUtils.jsValueOfJsonNode(
-        DXAPI.systemDescribeExecutions(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        DXAPI.systemDescribeExecutions(
+          DxUtils.jsonNodeOfJsValue(req),
+          classOf[JsonNode]
+        )
       )
-    val results: Vector[JsValue] = retval.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x.toVector
-      case _                => throw new Exception(s"wrong type for executableName ${retval}")
-    }
+    val results: Vector[JsValue] =
+      retval.asJsObject.fields.get("results") match {
+        case Some(JsArray(x)) => x.toVector
+        case _ =>
+          throw new Exception(s"wrong type for executableName ${retval}")
+      }
     (execs zip results).map {
       case (dxExec, desc) =>
         val fields = desc.asJsObject.fields.get("describe") match {
           case Some(JsObject(fields)) => fields
-          case _                      => throw new Exception(s"result does not contains a describe field ${desc}")
+          case _ =>
+            throw new Exception(
+              s"result does not contains a describe field ${desc}"
+            )
         }
         val execName = fields.get("executableName") match {
           case Some(JsString(name)) => name
-          case _                    => throw new Exception(s"wrong type for executableName ${desc}")
+          case _ =>
+            throw new Exception(s"wrong type for executableName ${desc}")
         }
         val seqNum = fields.get("properties") match {
           case Some(obj) =>
             obj.asJsObject.getFields("seq_number") match {
               case Seq(JsString(seqNum)) => seqNum.toInt
-              case _                     => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
+              case _ =>
+                throw new Exception(
+                  s"wrong value for properties ${desc}, ${obj}"
+                )
             }
           case _ => throw new Exception(s"wrong type for properties ${desc}")
         }
         val outputs = fields.get("output") match {
-          case None    => throw new Exception(s"No output field for a child job ${desc}")
+          case None =>
+            throw new Exception(s"No output field for a child job ${desc}")
           case Some(o) => o
         }
         ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
@@ -215,7 +232,9 @@ case class CollectSubJobs(
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
             case (_, None) =>
               // Required output that is missing
-              throw new Exception(s"Could not find compulsory field <${name}> in results")
+              throw new Exception(
+                s"Could not find compulsory field <${name}> in results"
+              )
             case (_, Some(jsv)) =>
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
           }
@@ -231,7 +250,8 @@ case class CollectSubJobs(
     call.callable.outputs.map { cot: OutputDefinition =>
       val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
       val womType = cot.womType
-      val value: WomValue = collectCallField(cot.name, womType, childJobsComplete)
+      val value: WomValue =
+        collectCallField(cot.name, womType, childJobsComplete)
       val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
       fullName -> wvl
     }.toMap

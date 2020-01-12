@@ -47,44 +47,51 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     val folder = jsv.asJsObject.fields.get("folder") match {
       case None                   => throw new Exception("folder field missing")
       case Some(JsString(folder)) => folder
-      case Some(other)            => throw new Exception(s"malformed folder field ${other}")
-    }
-    val properties: Map[String, String] = jsv.asJsObject.fields.get("properties") match {
-      case None => Map.empty
-      case Some(JsObject(fields)) =>
-        fields.map {
-          case (key, JsString(value)) =>
-            key -> value
-          case (key, other) =>
-            throw new Exception(s"key ${key} has malformed property ${other}")
-        }.toMap
-      case Some(other) => throw new Exception(s"malformed properties field ${other}")
-    }
-    val inputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
-      case None         => None
-      case Some(JsNull) => None
-      case Some(JsArray(iSpecVec)) =>
-        Some(iSpecVec.map(parseParamSpec).toVector)
       case Some(other) =>
-        throw new Exception(s"malformed inputSpec field ${other}")
+        throw new Exception(s"malformed folder field ${other}")
     }
-    val outputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("outputSpec") match {
-      case None         => None
-      case Some(JsNull) => None
-      case Some(JsArray(oSpecVec)) =>
-        Some(oSpecVec.map(parseParamSpec).toVector)
-      case Some(other) =>
-        throw new Exception(s"malformed output field ${other}")
-    }
+    val properties: Map[String, String] =
+      jsv.asJsObject.fields.get("properties") match {
+        case None => Map.empty
+        case Some(JsObject(fields)) =>
+          fields.map {
+            case (key, JsString(value)) =>
+              key -> value
+            case (key, other) =>
+              throw new Exception(s"key ${key} has malformed property ${other}")
+          }.toMap
+        case Some(other) =>
+          throw new Exception(s"malformed properties field ${other}")
+      }
+    val inputSpec: Option[Vector[IOParameter]] =
+      jsv.asJsObject.fields.get("inputSpec") match {
+        case None         => None
+        case Some(JsNull) => None
+        case Some(JsArray(iSpecVec)) =>
+          Some(iSpecVec.map(parseParamSpec).toVector)
+        case Some(other) =>
+          throw new Exception(s"malformed inputSpec field ${other}")
+      }
+    val outputSpec: Option[Vector[IOParameter]] =
+      jsv.asJsObject.fields.get("outputSpec") match {
+        case None         => None
+        case Some(JsNull) => None
+        case Some(JsArray(oSpecVec)) =>
+          Some(oSpecVec.map(parseParamSpec).toVector)
+        case Some(other) =>
+          throw new Exception(s"malformed output field ${other}")
+      }
     val created: Long = jsv.asJsObject.fields.get("created") match {
       case None                 => throw new Exception("'created' field is missing")
       case Some(JsNumber(date)) => date.toLong
-      case Some(other)          => throw new Exception(s"malformed created field ${other}")
+      case Some(other) =>
+        throw new Exception(s"malformed created field ${other}")
     }
     val modified: Long = jsv.asJsObject.fields.get("modified") match {
       case None                 => throw new Exception("'modified' field is missing")
       case Some(JsNumber(date)) => date.toLong
-      case Some(other)          => throw new Exception(s"malformed created field ${other}")
+      case Some(other) =>
+        throw new Exception(s"malformed created field ${other}")
     }
     val details: Option[JsValue] = jsv.asJsObject.fields.get("details")
 
@@ -152,9 +159,11 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         val dxDataObj = dxObj.asInstanceOf[DxDataObject]
         (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
       case _ =>
-        throw new Exception(s"""|malformed result: expecting {project, id, describe} fields, got:
+        throw new Exception(
+          s"""|malformed result: expecting {project, id, describe} fields, got:
                     |${jsv.prettyPrint}
-                    |""".stripMargin)
+                    |""".stripMargin
+        )
     }
   }
 
@@ -268,7 +277,8 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       repJs.asJsObject.fields.get("results") match {
         case None                   => throw new Exception(s"missing results field ${repJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
-        case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
+        case Some(other) =>
+          throw new Exception(s"malformed results field ${other.prettyPrint}")
       }
 
     (results.toMap, next)
@@ -285,7 +295,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
-        throw new Exception("class limitation must be one of {record, file, applet, workflow}")
+        throw new Exception(
+          "class limitation must be one of {record, file, applet, workflow}"
+        )
     }
     val scope = buildScope(dxProject, folder, recurse)
 

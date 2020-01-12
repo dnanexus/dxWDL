@@ -38,11 +38,17 @@ case class Native(
     locked: Boolean,
     verbose: Verbose
 ) {
-  case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
+  case class ExecRecord(
+      callable: IR.Callable,
+      dxExec: DxExecutable,
+      links: Vector[ExecLinkInfo]
+  )
 
   private val verbose2: Boolean = verbose.containsKey("Native")
-  private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
+  private val rtDebugLvl =
+    runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
 
   // Are we setting up a private docker registry?
@@ -66,7 +72,10 @@ case class Native(
         val details = desc.details.get
         val dxLink = details.asJsObject.fields.get("archiveFileId") match {
           case Some(x) => x
-          case None    => throw new Exception(s"record does not have an archive field ${details}")
+          case None =>
+            throw new Exception(
+              s"record does not have an archive field ${details}"
+            )
         }
         val dxFile = DxUtils.dxFileFromJsValue(dxLink)
         val name = dxFile.describe().name
@@ -158,16 +167,26 @@ case class Native(
         case WomSingleFileType => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
-        case WomNonEmptyArrayType(WomBooleanType)      => mkPrimitiveArray("boolean", optional)
-        case WomNonEmptyArrayType(WomIntegerType)      => mkPrimitiveArray("int", optional)
-        case WomNonEmptyArrayType(WomFloatType)        => mkPrimitiveArray("float", optional)
-        case WomNonEmptyArrayType(WomStringType)       => mkPrimitiveArray("string", optional)
-        case WomNonEmptyArrayType(WomSingleFileType)   => mkPrimitiveArray("file", optional)
-        case WomMaybeEmptyArrayType(WomBooleanType)    => mkPrimitiveArray("boolean", true)
-        case WomMaybeEmptyArrayType(WomIntegerType)    => mkPrimitiveArray("int", true)
-        case WomMaybeEmptyArrayType(WomFloatType)      => mkPrimitiveArray("float", true)
-        case WomMaybeEmptyArrayType(WomStringType)     => mkPrimitiveArray("string", true)
-        case WomMaybeEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", true)
+        case WomNonEmptyArrayType(WomBooleanType) =>
+          mkPrimitiveArray("boolean", optional)
+        case WomNonEmptyArrayType(WomIntegerType) =>
+          mkPrimitiveArray("int", optional)
+        case WomNonEmptyArrayType(WomFloatType) =>
+          mkPrimitiveArray("float", optional)
+        case WomNonEmptyArrayType(WomStringType) =>
+          mkPrimitiveArray("string", optional)
+        case WomNonEmptyArrayType(WomSingleFileType) =>
+          mkPrimitiveArray("file", optional)
+        case WomMaybeEmptyArrayType(WomBooleanType) =>
+          mkPrimitiveArray("boolean", true)
+        case WomMaybeEmptyArrayType(WomIntegerType) =>
+          mkPrimitiveArray("int", true)
+        case WomMaybeEmptyArrayType(WomFloatType) =>
+          mkPrimitiveArray("float", true)
+        case WomMaybeEmptyArrayType(WomStringType) =>
+          mkPrimitiveArray("string", true)
+        case WomMaybeEmptyArrayType(WomSingleFileType) =>
+          mkPrimitiveArray("file", true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
@@ -191,16 +210,19 @@ case class Native(
           Utils.ignore(dxFile)
         } catch {
           case e: Throwable =>
-            throw new Exception(s"""|credentials has to point to a platform file.
+            throw new Exception(
+              s"""|credentials has to point to a platform file.
                                                 |It is now:
                                                 |   ${credentials}
                                                 |Error:
                                                 |  ${e}
-                                                |""".stripMargin)
+                                                |""".stripMargin
+            )
         }
 
         // strip the URL from the dx:// prefix, so we can use dx-download directly
-        val credentialsWithoutPrefix = credentials.substring(Utils.DX_URL_PREFIX.length)
+        val credentialsWithoutPrefix =
+          credentials.substring(Utils.DX_URL_PREFIX.length)
         s"""|
                     |# if we need to set up a private docker registry,
                     |# download the credentials file and login. Do not expose the
@@ -344,12 +366,19 @@ case class Native(
             |}""".stripMargin.trim
   }
 
-  private def genBashScript(applet: IR.Applet, instanceType: IR.InstanceType): String = {
+  private def genBashScript(
+      applet: IR.Applet,
+      instanceType: IR.InstanceType
+  ): String = {
     val body: String = applet.kind match {
       case IR.AppletKindNative(_) =>
-        throw new Exception("Sanity: generating a bash script for a native applet")
+        throw new Exception(
+          "Sanity: generating a bash script for a native applet"
+        )
       case IR.AppletKindWorkflowCustomReorg(_) =>
-        throw new Exception("Sanity: generating a bash script for a custom reorg applet")
+        throw new Exception(
+          "Sanity: generating a bash script for a custom reorg applet"
+        )
       case IR.AppletKindWfFragment(_, _, _) =>
         genBashScriptWfFragment()
       case IR.AppletKindWfInputs =>
@@ -403,7 +432,10 @@ case class Native(
   }
 
   // Add a checksum to a request
-  private def checksumReq(name: String, fields: Map[String, JsValue]): (String, JsValue) = {
+  private def checksumReq(
+      name: String,
+      fields: Map[String, JsValue]
+  ): (String, JsValue) = {
     Utils.trace(
       verbose2,
       s"""|${name} -> checksum request
@@ -448,7 +480,10 @@ case class Native(
   // Returns:
   //   None: build is required
   //   Some(dxobject) : the right object is already on the platform
-  private def isBuildRequired(name: String, digest: String): Option[DxDataObject] = {
+  private def isBuildRequired(
+      name: String,
+      digest: String
+  ): Option[DxDataObject] = {
     // Have we built this applet already, but placed it elsewhere in the project?
     dxObjDir.lookupOtherVersions(name, digest) match {
       case None => ()
@@ -480,18 +515,29 @@ case class Native(
         val dxObjInfo = existingDxObjs.head
         dxObjInfo.digest match {
           case None =>
-            throw new Exception(s"There is an existing non-dxWDL applet ${name}")
+            throw new Exception(
+              s"There is an existing non-dxWDL applet ${name}"
+            )
           case Some(digest2) if digest != digest2 =>
-            Utils.trace(verbose.on, s"${dxObjInfo.dxClass} ${name} has changed, rebuild required")
+            Utils.trace(
+              verbose.on,
+              s"${dxObjInfo.dxClass} ${name} has changed, rebuild required"
+            )
             true
           case Some(_) =>
-            Utils.trace(verbose.on, s"${dxObjInfo.dxClass} ${name} has not changed")
+            Utils.trace(
+              verbose.on,
+              s"${dxObjInfo.dxClass} ${name} has not changed"
+            )
             false
         }
       case _ =>
         val dxClass = existingDxObjs.head.dxClass
-        Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
-                                           |path ${dxProject.id}:${folder}""".stripMargin)
+        Utils.warning(
+          verbose,
+          s"""|More than one ${dxClass} ${name} found in
+                                           |path ${dxProject.id}:${folder}""".stripMargin
+        )
         true
     }
 
@@ -508,8 +554,10 @@ case class Native(
           dxProject.removeObjects(objs)
         } else {
           val dxClass = existingDxObjs.head.dxClass
-          throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.id}:${folder}""".stripMargin)
+          throw new Exception(
+            s"""|${dxClass} ${name} already exists in
+                                            | ${dxProject.id}:${folder}""".stripMargin
+          )
         }
       }
       None
@@ -520,7 +568,10 @@ case class Native(
   }
 
   // Create linking information for a dx:executable
-  private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
+  private def genLinkInfo(
+      irCall: IR.Callable,
+      dxObj: DxExecutable
+  ): ExecLinkInfo = {
     val callInputDefs: Map[String, WomType] = irCall.inputVars.map {
       case CVar(name, wdlType, _) => (name -> wdlType)
     }.toMap
@@ -535,7 +586,8 @@ case class Native(
     repJs.asJsObject.fields.get("id") match {
       case None              => throw new Exception("API call did not returnd an ID")
       case Some(JsString(x)) => x
-      case other             => throw new Exception(s"API call returned invalid ID ${other}")
+      case other =>
+        throw new Exception(s"API call returned invalid ID ${other}")
     }
   }
 
@@ -569,7 +621,8 @@ case class Native(
     // find the dxWDL asset
     val instanceType: String = applet.instanceType match {
       case x: IR.InstanceTypeConst =>
-        val xDesc = InstanceTypeReq(x.dxInstanceType, x.memoryMB, x.diskGB, x.cpu, x.gpu)
+        val xDesc =
+          InstanceTypeReq(x.dxInstanceType, x.memoryMB, x.diskGB, x.cpu, x.gpu)
         instanceTypeDB.apply(xDesc)
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
@@ -593,7 +646,13 @@ case class Native(
         None,
         None,
         None,
-        Some(DxTimeout(Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS), Some(0), Some(0)))
+        Some(
+          DxTimeout(
+            Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS),
+            Some(0),
+            Some(0)
+          )
+        )
       ).toRunSpecJson
 
     // Start with the default dx-attribute section, and override
@@ -668,7 +727,8 @@ case class Native(
       case None    => DxAccess.empty
       case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
     }
-    val taskAccess = extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
+    val taskAccess =
+      extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
 
     val access: DxAccess = applet.kind match {
       case IR.AppletKindTask(_) =>
@@ -739,7 +799,8 @@ case class Native(
           // meta information used for running workflow fragments
           val fqnDictTypes = JsObject(applet.inputVars.map {
             case cVar =>
-              val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
+              val tStr =
+                WomTypeSerialization(typeAliases).toString(cVar.womType)
               cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
@@ -758,7 +819,8 @@ case class Native(
     // Add the pricing model, and make the prices opaque.
     val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
     val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-    val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+    val dbOpaqueInstance =
+      Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
@@ -773,7 +835,9 @@ case class Native(
     // this applet is copied, we need to maintain referential integrity.
     val dxLinks = aplLinks.map {
       case (name, execLinkInfo) =>
-        ("link_" + name) -> JsObject("$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
+        ("link_" + name) -> JsObject(
+          "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
+        )
     }.toMap
     val (runSpec: JsValue, details: Map[String, JsValue]) =
       calcRunSpec(applet, auxInfo ++ dxLinks ++ metaInfo, bashScript)
@@ -835,7 +899,8 @@ case class Native(
 
     // Calculate a checksum of the inputs that went into the
     // making of the applet.
-    val (digest, appletApiRequest) = appletNewReq(applet, bashScript, folder, aplLinks)
+    val (digest, appletApiRequest) =
+      appletNewReq(applet, bashScript, folder, aplLinks)
     if (verbose2) {
       val fName = s"${applet.name}_req.json"
       val trgPath = Utils.appCompileDirPath.resolve(fName)
@@ -846,7 +911,10 @@ case class Native(
     val dxApplet = buildRequired match {
       case None =>
         // Compile a WDL snippet into an applet.
-        val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+        val rep = DXAPI.appletNew(
+          DxUtils.jsonNodeOfJsValue(appletApiRequest),
+          classOf[JsonNode]
+        )
         val id = apiParseReplyID(rep)
         val dxApplet = DxApplet.getInstance(id)
         dxObjDir.insert(applet.name, dxApplet, digest)
@@ -864,28 +932,33 @@ case class Native(
   // It comprises mappings from variable name to WomType.
   private def genStageInputs(inputs: Vector[(CVar, SArg)]): JsValue = {
     // sort the inputs, to make the request deterministic
-    val jsInputs: TreeMap[String, JsValue] = inputs.foldLeft(TreeMap.empty[String, JsValue]) {
-      case (m, (cVar, sArg)) =>
-        sArg match {
-          case IR.SArgEmpty =>
-            // We do not have a value for this input at compile time.
-            // For compulsory applet inputs, the user will have to fill
-            // in a value at runtime.
-            m
-          case IR.SArgConst(wValue) =>
-            val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-            m ++ fields.toMap
-          case IR.SArgLink(dxStage, argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-            m ++ fields.toMap
-          case IR.SArgWorkflowInput(argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-            m ++ fields.toMap
-        }
-    }
+    val jsInputs: TreeMap[String, JsValue] =
+      inputs.foldLeft(TreeMap.empty[String, JsValue]) {
+        case (m, (cVar, sArg)) =>
+          sArg match {
+            case IR.SArgEmpty =>
+              // We do not have a value for this input at compile time.
+              // For compulsory applet inputs, the user will have to fill
+              // in a value at runtime.
+              m
+            case IR.SArgConst(wValue) =>
+              val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+              m ++ fields.toMap
+            case IR.SArgLink(dxStage, argName) =>
+              val wvl = WdlVarLinks(
+                cVar.womType,
+                DxlStage(dxStage, IORef.Output, argName.dxVarName)
+              )
+              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+              m ++ fields.toMap
+            case IR.SArgWorkflowInput(argName) =>
+              val wvl =
+                WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+              m ++ fields.toMap
+          }
+      }
     JsObject(jsInputs)
   }
 
@@ -894,7 +967,10 @@ case class Native(
   // A WDL input can generate one or two DNAx inputs.  This requires
   // creating a vector of JSON values from each input.
   //
-  private def buildWorkflowInputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
+  private def buildWorkflowInputSpec(
+      cVar: CVar,
+      sArg: SArg
+  ): Vector[JsValue] = {
     // deal with default values
     val sArgDefault: Option[WomValue] = sArg match {
       case IR.SArgConst(wdlValue) =>
@@ -915,7 +991,10 @@ case class Native(
   }
 
   // Note: a single WDL output can generate one or two JSON outputs.
-  private def buildWorkflowOutputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
+  private def buildWorkflowOutputSpec(
+      cVar: CVar,
+      sArg: SArg
+  ): Vector[JsValue] = {
     val oSpec: Vector[JsValue] = cVarToSpec(cVar)
 
     // add the field names, to help index this structure
@@ -934,7 +1013,10 @@ case class Native(
           s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
         )
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+        val wvl = WdlVarLinks(
+          cVar.womType,
+          DxlStage(dxStage, IORef.Output, argName.dxVarName)
+        )
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar) =>
         val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
@@ -1010,7 +1092,10 @@ case class Native(
           .sortWith(_._1.name < _._1.name)
           .map { case (cVar, sArg) => buildWorkflowOutputSpec(cVar, sArg) }
           .flatten
-        Map("inputs" -> JsArray(wfInputSpec), "outputs" -> JsArray(wfOutputSpec))
+        Map(
+          "inputs" -> JsArray(wfInputSpec),
+          "outputs" -> JsArray(wfOutputSpec)
+        )
       } else {
         Map.empty
       }
@@ -1054,7 +1139,8 @@ case class Native(
   }
 
   private def buildWorkflow(req: JsValue): DxWorkflow = {
-    val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep =
+      DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val id = apiParseReplyID(rep)
     val dxwf = DxWorkflow.getInstance(id)
 

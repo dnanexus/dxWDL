@@ -31,9 +31,16 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
       Field.OutputSpec
     )
     val allFields = fields ++ defaultFields
-    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(
+      projSpec + ("fields" -> DxObject.requestFields(allFields))
+    )
     val response =
-      DXAPI.appletDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+      DXAPI.appletDescribe(
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
+      )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc = descJs.asJsObject.getFields(
       "project",
@@ -72,7 +79,9 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
     }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields
+      .get("properties")
+      .map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 }

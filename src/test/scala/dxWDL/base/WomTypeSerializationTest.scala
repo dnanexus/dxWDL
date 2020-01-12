@@ -35,9 +35,16 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   }
 
   val personType =
-    WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), Some("Person"))
+    WomCompositeType(
+      Map("name" -> WomStringType, "age" -> WomIntegerType),
+      Some("Person")
+    )
   val houseType = WomCompositeType(
-    Map("street" -> WomStringType, "zip code" -> WomIntegerType, "owner" -> personType),
+    Map(
+      "street" -> WomStringType,
+      "zip code" -> WomIntegerType,
+      "owner" -> personType
+    ),
     Some("House")
   )
 
@@ -48,7 +55,8 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   )
 
   it should "work for structs" in {
-    val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, WomType] =
+      Map("Person" -> personType, "House" -> houseType)
     val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (t <- structTestCases) {
@@ -64,7 +72,8 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   )
 
   it should "detect bad type descriptions" in {
-    val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, WomType] =
+      Map("Person" -> personType, "House" -> houseType)
     val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (typeDesc <- badTypeNames) {
@@ -77,7 +86,10 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   it should "detect objects that aren't structs" in {
     val typeSerialize = WomTypeSerialization(Map.empty)
     val objectWithoutName =
-      WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), None)
+      WomCompositeType(
+        Map("name" -> WomStringType, "age" -> WomIntegerType),
+        None
+      )
     assertThrows[Exception] {
       typeSerialize.toString(objectWithoutName)
     }

@@ -15,7 +15,10 @@ case class DxProjectDescribe(
     details: Option[JsValue]
 ) extends DxObjectDescribe
 
-case class FolderContents(dataObjects: Vector[DxDataObject], subFolders: Vector[String])
+case class FolderContents(
+    dataObjects: Vector[DxDataObject],
+    subFolders: Vector[String]
+)
 
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
@@ -38,14 +41,29 @@ case class DxProject(id: String) extends DxDataObject {
           DxUtils.dxEnv
         )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val desc = descJs.asJsObject.getFields("id", "name", "created", "modified") match {
-      case Seq(JsString(id), JsString(name), JsNumber(created), JsNumber(modified)) =>
-        DxProjectDescribe(id, name, created.toLong, modified.toLong, None, None)
-      case _ =>
-        throw new Exception(s"malformed JSON ${descJs}")
-    }
+    val desc =
+      descJs.asJsObject.getFields("id", "name", "created", "modified") match {
+        case Seq(
+            JsString(id),
+            JsString(name),
+            JsNumber(created),
+            JsNumber(modified)
+            ) =>
+          DxProjectDescribe(
+            id,
+            name,
+            created.toLong,
+            modified.toLong,
+            None,
+            None
+          )
+        case _ =>
+          throw new Exception(s"malformed JSON ${descJs}")
+      }
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields
+      .get("properties")
+      .map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 
@@ -131,7 +149,10 @@ case class DxProject(id: String) extends DxDataObject {
     Utils.ignore(repJs)
   }
 
-  def moveObjects(objs: Vector[DxDataObject], destinationFolder: String): Unit = {
+  def moveObjects(
+      objs: Vector[DxDataObject],
+      destinationFolder: String
+  ): Unit = {
     val request = JsObject(
       "objects" -> JsArray(objs.map { x =>
         JsString(x.id)
@@ -148,7 +169,12 @@ case class DxProject(id: String) extends DxDataObject {
           DxUtils.dxEnv
         )
       case _ if (id.startsWith("project-")) =>
-        DXAPI.projectMove(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+        DXAPI.projectMove(
+          id,
+          DxUtils.jsonNodeOfJsValue(request),
+          classOf[JsonNode],
+          DxUtils.dxEnv
+        )
       case _ =>
         throw new Exception(s"invalid project id ${id}")
     }

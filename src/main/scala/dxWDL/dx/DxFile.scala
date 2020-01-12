@@ -37,12 +37,26 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
       Field.Size
     )
     val allFields = fields ++ defaultFields
-    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(
+      projSpec + ("fields" -> DxObject.requestFields(allFields))
+    )
     val response =
-      DXAPI.fileDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+      DXAPI.fileDescribe(
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
+      )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "folder", "created", "modified") match {
+      descJs.asJsObject.getFields(
+        "project",
+        "id",
+        "name",
+        "folder",
+        "created",
+        "modified"
+      ) match {
         case Seq(
             JsString(project),
             JsString(id),
@@ -73,7 +87,9 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
       case other       => throw new Exception(s"size ${other} is not a number")
     }
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields
+      .get("properties")
+      .map(DxObject.parseJsonProperties)
     val parts = descJs.asJsObject.fields.get("parts").map(DxFile.parseFileParts)
     desc.copy(size = size, details = details, properties = props, parts = parts)
   }
@@ -124,11 +140,15 @@ object DxFile {
     //System.out.println(jsv.prettyPrint)
     jsv.asJsObject.fields.map {
       case (partNumber, partDesc) =>
-        val dxPart = partDesc.asJsObject.getFields("md5", "size", "state") match {
-          case Seq(JsString(md5), JsNumber(size), JsString(state)) =>
-            DxFilePart(state, size.toLong, md5)
-          case _ => throw new Exception(s"malformed part description ${partDesc.prettyPrint}")
-        }
+        val dxPart =
+          partDesc.asJsObject.getFields("md5", "size", "state") match {
+            case Seq(JsString(md5), JsNumber(size), JsString(state)) =>
+              DxFilePart(state, size.toLong, md5)
+            case _ =>
+              throw new Exception(
+                s"malformed part description ${partDesc.prettyPrint}"
+              )
+          }
         partNumber.toInt -> dxPart
     }.toMap
   }
@@ -167,15 +187,20 @@ object DxFile {
       DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val resultsPerObj: Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x
-      case other            => throw new Exception(s"API call returned invalid data ${other}")
-    }
+    val resultsPerObj: Vector[JsValue] =
+      repJs.asJsObject.fields.get("results") match {
+        case Some(JsArray(x)) => x
+        case other =>
+          throw new Exception(s"API call returned invalid data ${other}")
+      }
     resultsPerObj.zipWithIndex.map {
       case (jsv, i) =>
         val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
           case None =>
-            throw new ResourceNotFoundException(s""""${objs(i).id}" is not a recognized ID""", 404)
+            throw new ResourceNotFoundException(
+              s""""${objs(i).id}" is not a recognized ID""",
+              404
+            )
           case Some(descJs) =>
             val (dxFile, dxDesc) =
               descJs.asJsObject.getFields(
@@ -217,7 +242,8 @@ object DxFile {
               }
 
             // The parts may be empty, only files have it, and we don't always ask for it.
-            val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
+            val parts =
+              descJs.asJsObject.fields.get("parts").map(parseFileParts)
             val details = descJs.asJsObject.fields.get("details")
             val dxDescFull = dxDesc.copy(parts = parts, details = details)
             (dxFile, dxDescFull)

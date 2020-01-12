@@ -114,7 +114,10 @@ case class DxObjectDirectory(
       case (dxObj, desc) =>
         val creationDate = new java.util.Date(desc.created)
         val crLdt: LocalDateTime =
-          LocalDateTime.ofInstant(creationDate.toInstant(), ZoneId.systemDefault())
+          LocalDateTime.ofInstant(
+            creationDate.toInstant(),
+            ZoneId.systemDefault()
+          )
         val chksum = desc.properties.flatMap { p =>
           p.get(CHECKSUM_PROP)
         }
@@ -261,9 +264,17 @@ case class DxObjectDirectory(
 
     dxClass match {
       case "Workflow" =>
-        DXAPI.workflowRename(objInfo.dxObj.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        DXAPI.workflowRename(
+          objInfo.dxObj.getId,
+          DxUtils.jsonNodeOfJsValue(req),
+          classOf[JsonNode]
+        )
       case "Applet" =>
-        DXAPI.appletRename(objInfo.dxObj.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        DXAPI.appletRename(
+          objInfo.dxObj.getId,
+          DxUtils.jsonNodeOfJsValue(req),
+          classOf[JsonNode]
+        )
       case other => throw new Exception(s"Unkown class ${other}")
     }
   }

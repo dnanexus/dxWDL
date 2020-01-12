@@ -44,14 +44,19 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
               Utils.getUnqualifiedName(cNode.callable.name)
           }.toSet
         case other =>
-          throw new Exception(s"Don't know how to deal with class ${other.getClass.getSimpleName}")
+          throw new Exception(
+            s"Don't know how to deal with class ${other.getClass.getSimpleName}"
+          )
       }
       Utils.getUnqualifiedName(callable.name) -> deps
     }.toMap
 
     // Find executables such that all of their dependencies are
     // satisfied. These can be compiled.
-    def next(callables: Vector[Callable], ready: Vector[Callable]): Vector[Callable] = {
+    def next(
+        callables: Vector[Callable],
+        ready: Vector[Callable]
+    ): Vector[Callable] = {
       val readyNames = ready.map(_.name).toSet
       val satisfiedCallables = callables.filter { c =>
         val deps = immediateDeps(c.name)
@@ -64,12 +69,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           name -> (immediateDeps(name) -- readyNames)
         }.toMap
         val explanationLines = stuckWaitingOn.mkString("\n")
-        throw new Exception(s"""|Sanity: cannot find the next callable to compile.
+        throw new Exception(
+          s"""|Sanity: cannot find the next callable to compile.
                                         |ready = ${readyNames}
                                         |stuck = ${stuck}
                                         |stuckWaitingOn =
                                         |${explanationLines}
-                                        |""".stripMargin)
+                                        |""".stripMargin
+        )
       }
       satisfiedCallables
     }
@@ -100,7 +107,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       reorg: Either[Boolean, ReorgAttrs]
   ): (IR.Workflow, Vector[IR.Callable]) = {
     // sort from low to high according to the source lines.
-    val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
+    val callsLoToHi =
+      ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
 
     // Make a list of all task/workflow calls made inside the block. We will need to link
     // to the equivalent dx:applets and dx:workflows.
@@ -111,9 +119,12 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           // wdl to internal workflows.
           val localName = Utils.getUnqualifiedName(cNode.callable.name)
           if (localName.startsWith("Scatter"))
-            throw new Exception("""|The workflow contains a nested scatter, it is not
+            throw new Exception(
+              """|The workflow contains a nested scatter, it is not
                                                |handled currently due to a cromwell WOM library issue
-                                               |""".stripMargin.replaceAll("\n", " "))
+                                               |""".stripMargin
+                .replaceAll("\n", " ")
+            )
           callables(localName)
         case cNode: CallNode =>
           val localname = Utils.getUnqualifiedName(cNode.callable.name)
@@ -168,12 +179,22 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           case None =>
             throw new Exception(s"Did not find sources for workflow ${wf.name}")
           case Some(wfSource) =>
-            compileWorkflow(wf, typeAliases, wfSource, callables, language, locked, reorg)
+            compileWorkflow(
+              wf,
+              typeAliases,
+              wfSource,
+              callables,
+              language,
+              locked,
+              reorg
+            )
         }
       case x =>
-        throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
+        throw new Exception(
+          s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                         |${x}
-                                        |""".stripMargin.replaceAll("\n", " "))
+                                        |""".stripMargin.replaceAll("\n", " ")
+        )
     }
   }
 
@@ -208,9 +229,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
             accu + (wfName -> wfSource)
         }
     }
-    Utils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
+    Utils.trace(
+      verbose.on,
+      s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}"
+    )
     Utils.traceLevelInc()
-    val depOrder: Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+    val depOrder: Vector[Callable] = sortByDependencies(
+      womBundle.allCallables.values.toVector
+    )
     Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
     Utils.traceLevelDec()
 
@@ -266,6 +292,11 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     assert(allCallables.size == allCallablesSortedNames.size)
 
     Utils.traceLevelDec()
-    IR.Bundle(primary, allCallables, allCallablesSortedNames, womBundle.typeAliases)
+    IR.Bundle(
+      primary,
+      allCallables,
+      allCallablesSortedNames,
+      womBundle.typeAliases
+    )
   }
 }

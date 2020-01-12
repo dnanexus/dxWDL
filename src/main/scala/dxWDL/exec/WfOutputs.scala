@@ -38,7 +38,9 @@ case class WfOutputs(
       expr.evaluateValue(env, dxIoFunctions)
     val value = result match {
       case Invalid(errors) =>
-        throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
+        throw new Exception(
+          s"Failed to evaluate expression ${expr} with ${errors}"
+        )
       case Valid(x: WomValue) => x
     }
 
@@ -49,14 +51,20 @@ case class WfOutputs(
     womType.coerceRawValue(value).get
   }
 
-  def apply(envInitial: Map[String, WomValue], addStatus: Boolean = false): Map[String, JsValue] = {
+  def apply(
+      envInitial: Map[String, WomValue],
+      addStatus: Boolean = false
+  ): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
-    val outputNodes: Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
+    val outputNodes: Vector[GraphOutputNode] =
+      wf.innerGraph.outputNodes.toVector
     Utils.appletLog(
       verbose,
       s"""|Evaluating workflow outputs
-                                     |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
+                                     |${WomPrettyPrintApproxWdl.graphOutputs(
+           outputNodes
+         )}
                                      |""".stripMargin
     )
 
@@ -99,7 +107,8 @@ case class WfOutputs(
         name -> value
 
       case expr: ExpressionBasedGraphOutputNode =>
-        val value = evaluateWomExpression(expr.womExpression, expr.womType, envFull)
+        val value =
+          evaluateWomExpression(expr.womExpression, expr.womType, envFull)
         val name = expr.graphOutputPort.name
         envFull += (name -> value)
         name -> value
@@ -112,7 +121,8 @@ case class WfOutputs(
     val outputFields: Map[String, JsValue] = outputs
       .map {
         case (outputVarName, womValue) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+          val wvl =
+            wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList
@@ -120,7 +130,9 @@ case class WfOutputs(
       .toMap
 
     if (addStatus) {
-      outputFields + (Utils.REORG_STATUS -> JsString(Utils.REORG_STATUS_COMPLETE))
+      outputFields + (Utils.REORG_STATUS -> JsString(
+        Utils.REORG_STATUS_COMPLETE
+      ))
     } else {
       outputFields
     }

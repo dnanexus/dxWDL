@@ -32,7 +32,10 @@ case class WorkflowOutputReorg(
   //
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
-  def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject): Vector[String] = {
+  def bulkGetFilenames(
+      files: Seq[DxFile],
+      dxProject: DxProject
+  ): Vector[String] = {
     val info: Map[DxFile, DxFileDescribe] = DxFile.bulkDescribe(files.toVector)
     info.values.map(_.name).toVector
   }
@@ -47,9 +50,15 @@ case class WorkflowOutputReorg(
   // however, that would require a describe API call per output
   // file. Instead, we find all the output files that do not also
   // appear in the input.
-  def analysisFileOutputs(dxProject: DxProject, dxAnalysis: DxAnalysis): Vector[DxFile] = {
+  def analysisFileOutputs(
+      dxProject: DxProject,
+      dxAnalysis: DxAnalysis
+  ): Vector[DxFile] = {
     val req = JsObject(
-      "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
+      "fields" -> JsObject(
+        "input" -> JsBoolean(true),
+        "output" -> JsBoolean(true)
+      )
     )
     val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
@@ -90,7 +99,10 @@ case class WorkflowOutputReorg(
         else
           None
     }.toVector
-    Utils.appletLog(verbose, s"analysis has ${outputFiles.length} verified output files")
+    Utils.appletLog(
+      verbose,
+      s"analysis has ${outputFiles.length} verified output files"
+    )
 
     outputFiles
   }
@@ -106,7 +118,8 @@ case class WorkflowOutputReorg(
     Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
     // find all analysis output files
-    val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxProject, dxAnalysis)
+    val analysisFiles: Vector[DxFile] =
+      analysisFileOutputs(dxProject, dxAnalysis)
     if (analysisFiles.isEmpty)
       return
 
@@ -126,10 +139,16 @@ case class WorkflowOutputReorg(
     val folderContents: FolderContents = dxProject.listFolder(outFolder)
     Utils.appletLog(verbose, s"subfolders=${folderContents.subFolders}")
     if (!(folderContents.subFolders contains intermFolder)) {
-      Utils.appletLog(verbose, s"Creating intermediate results sub-folder ${intermFolder}")
+      Utils.appletLog(
+        verbose,
+        s"Creating intermediate results sub-folder ${intermFolder}"
+      )
       dxProject.newFolder(intermFolder, true)
     } else {
-      Utils.appletLog(verbose, s"Intermediate results sub-folder ${intermFolder} already exists")
+      Utils.appletLog(
+        verbose,
+        s"Intermediate results sub-folder ${intermFolder} already exists"
+      )
     }
     dxProject.moveObjects(intermediateFiles, intermFolder)
   }

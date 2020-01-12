@@ -37,7 +37,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
   )
 
   private val cFlagsUnlocked =
-    List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings", "--project", dxProject.getId)
+    List(
+      "--compileMode",
+      "ir",
+      "-quiet",
+      "-fatalValidationWarnings",
+      "--project",
+      dxProject.getId
+    )
 
   val dbgFlags = List(
     "--compileMode",
@@ -52,18 +59,24 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
   it should "IR compile a single WDL task" in {
     val path = pathFromBasename("compiler", "add.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[
+      Main.SuccessfulTerminationIR
+    ]
   }
 
   it should "IR compile a task with docker" in {
     val path = pathFromBasename("compiler", "BroadGenomicsDocker.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[
+      Main.SuccessfulTerminationIR
+    ]
   }
 
   // workflow compilation
   it should "IR compile a linear WDL workflow without expressions" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[
+      Main.SuccessfulTerminationIR
+    ]
   }
 
   it should "IR compile a linear WDL workflow" in {
@@ -82,12 +95,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
   it should "IR compile a non trivial linear workflow with variable coercions" in {
     val path = pathFromBasename("compiler", "cast.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[
+      Main.SuccessfulTerminationIR
+    ]
   }
 
   it should "IR compile a workflow with two consecutive calls" in {
     val path = pathFromBasename("compiler", "strings.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[
+      Main.SuccessfulTerminationIR
+    ]
   }
 
   it should "IR compile a workflow with a scatter without a call" in {
@@ -170,7 +187,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
   it should "missing workflow inputs" in {
     val path = pathFromBasename("input_file", "missing_args.wdl")
     Main.compile(
-      path.toString :: List("--compileMode", "ir", "--quiet", "--project", dxProject.id)
+      path.toString :: List(
+        "--compileMode",
+        "ir",
+        "--quiet",
+        "--project",
+        dxProject.id
+      )
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
@@ -275,7 +298,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  private def getTaskByName(name: String, bundle: IR.Bundle): CallableTaskDefinition = {
+  private def getTaskByName(
+      name: String,
+      bundle: IR.Bundle
+  ): CallableTaskDefinition = {
     val applet = bundle.allCallables(name) match {
       case a: IR.Applet => a
       case _            => throw new Exception(s"${name} is not an applet")
@@ -303,7 +329,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
       "in_file" -> MetaValueElement.MetaValueElementString("stream")
     ))
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+    iDef.parameterMeta shouldBe (Some(
+      MetaValueElement.MetaValueElementString("stream")
+    ))
 
     val diffTask = getTaskByName("diff", bundle)
     diffTask.parameterMeta shouldBe (Map(
@@ -326,12 +354,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
     val cgrepTask = getTaskByName("cgrep", bundle)
     cgrepTask.parameterMeta shouldBe (Map(
       "in_file" -> MetaValueElement
-        .MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))
+        .MetaValueElementObject(
+          Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))
+        )
     ))
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     iDef.parameterMeta shouldBe (Some(
       MetaValueElement
-        .MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))
+        .MetaValueElementObject(
+          Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))
+        )
     ))
 
     val diffTask = getTaskByName("diff", bundle)
@@ -417,25 +449,32 @@ class GenerateIRTest extends FlatSpec with Matchers {
   it should "respect import flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
-    val retval = Main.compile(path.toString :: "--imports" :: libraryPath.toString :: cFlags)
+    val retval = Main.compile(
+      path.toString :: "--imports" :: libraryPath.toString :: cFlags
+    )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "respect import -p flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
-    val retval = Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
+    val retval =
+      Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "pass environment between deep stages" in {
-    val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
+    val path =
+      pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "handle multiple struct definitions" in {
-    val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order", "file3.wdl")
+    val path = pathFromBasename(
+      "struct/DEVEX-1196-struct-resolution-wrong-order",
+      "file3.wdl"
+    )
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -500,7 +539,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
   }
 
   it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs (EdgeTest) in {
-    val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
+    val path =
+      pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
     val retval = Main.compile(
       path.toString
 //                                      :: "--verbose"
@@ -516,15 +556,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val wfs: Vector[IR.Workflow] = bundle.allCallables
       .map {
-        case (name, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
-        case (_, _)                                                           => None
+        case (name, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub =>
+          Some(wf)
+        case (_, _) => None
       }
       .flatten
       .toVector
     wfs.length shouldBe (1)
     val subwf = wfs(0)
 
-    val samtools = subwf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
+    val samtools = subwf.inputs.find {
+      case (cVar, _) => cVar.name == "samtools_memory"
+    }
     inside(samtools) {
       case Some((cVar, _)) =>
         cVar.womType shouldBe (WomOptionalType(WomStringType))

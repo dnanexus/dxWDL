@@ -61,7 +61,10 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/", quiet = true)
+    Utils.execCommand(
+      s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
+      quiet = true
+    )
 
     // building necessary applets before starting the tests
     val native_applets = Vector(
@@ -193,7 +196,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     // check that the generated file contains the correct tasks
     val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
-    val tasks: Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
+    val tasks: Map[String, String] =
+      ParseWomSourceFile(false).scanForTasks(content)
 
     tasks.keys shouldBe (Set(
       "native_sum",
@@ -249,7 +253,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "deep nesting" taggedAs (NativeTestXX) in {
-    val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
+    val path =
+      pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(
       path.toString
       /*                :: "--verbose"
@@ -269,7 +274,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -280,7 +286,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other => throw new Exception(s"Unexpected result ${other}")
     }
     timeout shouldBe JsObject(
-      "*" -> JsObject("days" -> JsNumber(2), "hours" -> JsNumber(0), "minutes" -> JsNumber(0))
+      "*" -> JsObject(
+        "days" -> JsNumber(2),
+        "hours" -> JsNumber(0),
+        "minutes" -> JsNumber(0)
+      )
     )
   }
 
@@ -296,7 +306,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -319,7 +330,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -441,7 +453,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     // remove compile mode
     val retval = Main.compile(
-      path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg.drop(2)
+      path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg
+        .drop(2)
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
 

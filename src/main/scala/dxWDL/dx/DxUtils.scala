@@ -113,7 +113,10 @@ object DxUtils {
   def makeEBOR(dxExec: DxExecution, fieldName: String): JsValue = {
     if (dxExec.isInstanceOf[DxJob]) {
       JsObject(
-        "$dnanexus_link" -> JsObject("field" -> JsString(fieldName), "job" -> JsString(dxExec.id))
+        "$dnanexus_link" -> JsObject(
+          "field" -> JsString(fieldName),
+          "job" -> JsString(dxExec.id)
+        )
       )
     } else if (dxExec.isInstanceOf[DxAnalysis]) {
       JsObject(
@@ -159,12 +162,15 @@ object DxUtils {
     val req = JsObject(fields ++ instanceFields ++ dependsFields)
     Utils.appletLog(verbose, s"subjob request=${req.prettyPrint}")
 
-    val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+    val retval: JsonNode =
+      DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
     val info: JsValue = jsValueOfJsonNode(retval)
     val id: String = info.asJsObject.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
-        throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
+        throw new AppInternalException(
+          s"Bad format returned from jobNew ${info.prettyPrint}"
+        )
     }
     DxJob(id)
   }
@@ -177,11 +183,17 @@ object DxUtils {
 
     val billTo = jso.fields.get("billTo") match {
       case Some(JsString(x)) => x
-      case _                 => throw new Exception(s"Failed to get billTo from project ${dxProject.id}")
+      case _ =>
+        throw new Exception(
+          s"Failed to get billTo from project ${dxProject.id}"
+        )
     }
     val region = jso.fields.get("region") match {
       case Some(JsString(x)) => x
-      case _                 => throw new Exception(s"Failed to get region from project ${dxProject.id}")
+      case _ =>
+        throw new Exception(
+          s"Failed to get region from project ${dxProject.id}"
+        )
     }
     (billTo, region)
   }
@@ -199,7 +211,8 @@ object DxUtils {
     val innerObj = jsValue match {
       case JsObject(fields) =>
         fields.get("$dnanexus_link") match {
-          case None    => throw new AppInternalException(s"Non-dxfile json $jsValue")
+          case None =>
+            throw new AppInternalException(s"Non-dxfile json $jsValue")
           case Some(x) => x
         }
       case _ =>
@@ -215,14 +228,17 @@ object DxUtils {
         val fid =
           linkFields.get("id") match {
             case Some(JsString(s)) => s
-            case _                 => throw new AppInternalException(s"No file ID found in $jsValue")
+            case _ =>
+              throw new AppInternalException(s"No file ID found in $jsValue")
           }
         linkFields.get("project") match {
           case Some(JsString(pid: String)) => (fid, Some(pid))
           case _                           => (fid, None)
         }
       case _ =>
-        throw new AppInternalException(s"Could not parse a dxlink from $innerObj")
+        throw new AppInternalException(
+          s"Could not parse a dxlink from $innerObj"
+        )
     }
 
     projId match {
@@ -250,7 +266,10 @@ object DxUtils {
       )
       return
     }
-    Utils.trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.id}")
+    Utils.trace(
+      verbose.on,
+      s"The asset ${pkgName} is from a different project ${rmtProject.id}"
+    )
 
     // clone
     val req = JsObject(
@@ -258,27 +277,41 @@ object DxUtils {
       "project" -> JsString(dxProject.id),
       "destination" -> JsString("/")
     )
-    val rep = DXAPI.projectClone(rmtProject.id, jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep = DXAPI.projectClone(
+      rmtProject.id,
+      jsonNodeOfJsValue(req),
+      classOf[JsonNode]
+    )
     val repJs: JsValue = jsValueOfJsonNode(rep)
 
     val exists = repJs.asJsObject.fields.get("exists") match {
-      case None => throw new Exception("API call did not returnd an exists field")
+      case None =>
+        throw new Exception("API call did not returnd an exists field")
       case Some(JsArray(x)) =>
         x.map {
           case JsString(id) => id
           case _            => throw new Exception("bad type, not a string")
         }.toVector
-      case other => throw new Exception(s"API call returned invalid exists field")
+      case other =>
+        throw new Exception(s"API call returned invalid exists field")
     }
     val existingRecords = exists.filter(_.startsWith("record-"))
     existingRecords.size match {
       case 0 =>
         val localAssetRecord = DxRecord(assetRecord.id, None)
-        Utils.trace(verbose.on, s"Created ${localAssetRecord.id} pointing to asset ${pkgName}")
+        Utils.trace(
+          verbose.on,
+          s"Created ${localAssetRecord.id} pointing to asset ${pkgName}"
+        )
       case 1 =>
-        Utils.trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
+        Utils.trace(
+          verbose.on,
+          s"The project already has a record pointing to asset ${pkgName}"
+        )
       case _ =>
-        throw new Exception(s"clone returned too many existing records ${exists}")
+        throw new Exception(
+          s"clone returned too many existing records ${exists}"
+        )
     }
   }
 
@@ -309,7 +342,10 @@ object DxUtils {
     var rc = false
     var counter = 0
     while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-      Utils.appletLog(verbose, s"downloading file ${path.toString} (try=${counter})")
+      Utils.appletLog(
+        verbose,
+        s"downloading file ${path.toString} (try=${counter})"
+      )
       rc = downloadOneFile(path, dxfile, counter)
       counter = counter + 1
     }

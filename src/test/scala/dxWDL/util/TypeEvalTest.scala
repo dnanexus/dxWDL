@@ -18,7 +18,14 @@ class TypeEvalTest extends FlatSpec with Matchers {
   def parseWdlCode(sourceCode: String): WomBundle = {
     val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
     val bundle =
-      languageFactory.getWomBundle(sourceCode, None, "{}", List.empty, List(languageFactory), false)
+      languageFactory.getWomBundle(
+        sourceCode,
+        None,
+        "{}",
+        List.empty,
+        List(languageFactory),
+        false
+      )
     bundle match {
       case Right(bn) =>
         bn
@@ -58,7 +65,10 @@ class TypeEvalTest extends FlatSpec with Matchers {
            |""".stripMargin
 
   // Figure out the type of an expression
-  def evalType(expr: WomExpression, inputTypes: Map[String, WomType]): WomType = {
+  def evalType(
+      expr: WomExpression,
+      inputTypes: Map[String, WomType]
+  ): WomType = {
     val result: ErrorOr[WomType] = expr.evaluateType(inputTypes)
     result match {
       case Invalid(_) =>
@@ -76,10 +86,13 @@ class TypeEvalTest extends FlatSpec with Matchers {
     wf.name should equal("foo")
 
     val call: Callable = bundle.allCallables.get("Add") match {
-      case None       => throw new AppInternalException(s"Call Add not found in WDL file")
+      case None =>
+        throw new AppInternalException(s"Call Add not found in WDL file")
       case Some(call) => call
     }
-    call.getClass.toString should equal("class wom.callable.CallableTaskDefinition")
+    call.getClass.toString should equal(
+      "class wom.callable.CallableTaskDefinition"
+    )
 
     call.inputs.foreach {
       case inputDef =>

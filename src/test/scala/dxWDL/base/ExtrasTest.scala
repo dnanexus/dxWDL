@@ -170,11 +170,22 @@ class ExtrasTest extends FlatSpec with Matchers {
     val extras = Extras.parse(js, verbose)
 
     val restartPolicy =
-      Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
+      Map(
+        "UnresponsiveWorker" -> 2,
+        "JMInternalError" -> 0,
+        "ExecutionError" -> 4
+      )
     extras.defaultTaskDxAttributes should be(
       Some(
         DxAttrs(
-          Some(DxRunSpec(None, Some(DxExecPolicy(Some(restartPolicy), Some(5))), None, None)),
+          Some(
+            DxRunSpec(
+              None,
+              Some(DxExecPolicy(Some(restartPolicy), Some(5))),
+              None,
+              None
+            )
+          ),
           None
         )
       )
@@ -242,7 +253,9 @@ class ExtrasTest extends FlatSpec with Matchers {
       Extras.parse(reorg, verbose2)
     }
 
-    thrown.getMessage should be("app_id must be specified in the custom_reorg section.")
+    thrown.getMessage should be(
+      "app_id must be specified in the custom_reorg section."
+    )
   }
 
   it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" in {
@@ -463,12 +476,15 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |}""".stripMargin.parseJson
 
     val extras = Extras.parse(runtimeAttrs, verbose)
-    val dockerOpt: Option[WomValue] = extras.defaultRuntimeAttributes.m.get("docker")
+    val dockerOpt: Option[WomValue] =
+      extras.defaultRuntimeAttributes.m.get("docker")
     dockerOpt match {
       case None =>
         throw new Exception("Wrong type for dockerOpt")
       case Some(docker) =>
-        docker should equal(WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+        docker should equal(
+          WomString("quay.io/encode-dcc/atac-seq-pipeline:v1")
+        )
     }
   }
 
@@ -482,7 +498,9 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
     val extrasEmpty = Extras.parse(rtEmpty, verbose)
-    extrasEmpty.defaultRuntimeAttributes should equal(WdlRuntimeAttrs(Map.empty))
+    extrasEmpty.defaultRuntimeAttributes should equal(
+      WdlRuntimeAttrs(Map.empty)
+    )
   }
 
   it should "accept per task attributes" in {
@@ -553,7 +571,9 @@ class ExtrasTest extends FlatSpec with Matchers {
           None
         ),
         "Add" -> DxAttrs(
-          Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
+          Some(
+            DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
+          ),
           None
         )
       )
@@ -630,7 +650,9 @@ class ExtrasTest extends FlatSpec with Matchers {
     extras.perTaskDxAttributes should be(
       Map(
         "Add" -> DxAttrs(
-          Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
+          Some(
+            DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
+          ),
           Some(
             DxDetails(
               Some(
@@ -698,7 +720,9 @@ class ExtrasTest extends FlatSpec with Matchers {
     extras.defaultTaskDxAttributes should be(
       Some(
         DxAttrs(
-          Some(DxRunSpec(None, None, None, Some(DxTimeout(None, Some(12), None)))),
+          Some(
+            DxRunSpec(None, None, None, Some(DxTimeout(None, Some(12), None)))
+          ),
           None
         )
       )
@@ -741,7 +765,13 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(data, verbose)
     extras.dockerRegistry should be(
-      Some(DockerRegistry("foo.bar.dnanexus.com", "perkins", "The Bandersnatch has gotten loose"))
+      Some(
+        DockerRegistry(
+          "foo.bar.dnanexus.com",
+          "perkins",
+          "The Bandersnatch has gotten loose"
+        )
+      )
     )
   }
 
@@ -811,8 +841,22 @@ class ExtrasTest extends FlatSpec with Matchers {
              |""".stripMargin.parseJson
 
     val upstreamProjects = List(
-      DxLicense("name", "repoURL", "version1", "license1", "licenseURL", "author1"),
-      DxLicense("name2", "repoURL", "version2", "license2", "licenseURL", "author2")
+      DxLicense(
+        "name",
+        "repoURL",
+        "version1",
+        "license1",
+        "licenseURL",
+        "author1"
+      ),
+      DxLicense(
+        "name2",
+        "repoURL",
+        "version2",
+        "license2",
+        "licenseURL",
+        "author2"
+      )
     )
 
     val dxDetails = DxDetails(Some(upstreamProjects))
@@ -872,7 +916,8 @@ class ExtrasTest extends FlatSpec with Matchers {
             |
           """.stripMargin.parseJson
 
-    val expected: Map[String, JsValue] = Map("upstreamProjects" -> expectedContent)
+    val expected: Map[String, JsValue] =
+      Map("upstreamProjects" -> expectedContent)
 
     val dxAttrs: DxAttrs = DxAttrs(
       None,

@@ -19,14 +19,35 @@ case class DxRecord(id: String, project: Option[DxProject]) extends DxDataObject
   def describe(fields: Set[Field.Value] = Set.empty): DxRecordDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields =
-      Set(Field.Project, Field.Id, Field.Name, Field.Folder, Field.Created, Field.Modified)
+      Set(
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Folder,
+        Field.Created,
+        Field.Modified
+      )
     val allFields = fields ++ defaultFields
-    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(
+      projSpec + ("fields" -> DxObject.requestFields(allFields))
+    )
     val response =
-      DXAPI.recordDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+      DXAPI.recordDescribe(
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
+      )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "folder", "created", "modified") match {
+      descJs.asJsObject.getFields(
+        "project",
+        "id",
+        "name",
+        "folder",
+        "created",
+        "modified"
+      ) match {
         case Seq(
             JsString(projectId),
             JsString(id),
@@ -35,11 +56,22 @@ case class DxRecord(id: String, project: Option[DxProject]) extends DxDataObject
             JsNumber(created),
             JsNumber(modified)
             ) =>
-          DxRecordDescribe(projectId, id, name, folder, created.toLong, modified.toLong, None, None)
+          DxRecordDescribe(
+            projectId,
+            id,
+            name,
+            folder,
+            created.toLong,
+            modified.toLong,
+            None,
+            None
+          )
       }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields
+      .get("properties")
+      .map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 }
