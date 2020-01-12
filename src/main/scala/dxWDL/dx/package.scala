@@ -36,7 +36,7 @@ case class IOParameter(
     ioClass: DxIOClass.Value,
     optional: Boolean,
     help: Option[String] = None,
-    pattern: Option[String] = None
+    patterns: Option[Vector[String]] = None
 )
 
 // Extra fields for describe
@@ -89,11 +89,15 @@ object DxObject {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
-    val pattern = jsv.asJsObject.fields.get("pattern") match {
-      case Some(JsString(s)) => Some(s)
-      case _                 => None
+    val patterns = jsv.asJsObject.fields.get("patterns") match {
+      case Some(JsArray(a)) =>
+        Some(a.flatMap {
+          case JsString(s) => Some(s)
+          case _           => None
+        })
+      case _ => None
     }
-    ioParam.copy(optional = optFlag, pattern = pattern, help = help)
+    ioParam.copy(optional = optFlag, patterns = patterns, help = help)
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {

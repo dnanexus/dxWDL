@@ -120,8 +120,8 @@ case class Native(
           attributes.flatMap {
             case IR.IOAttrHelp(text) =>
               Some("help" -> JsString(text))
-            case IR.IOAttrPattern(text) =>
-              Some("pattern" -> JsString(text))
+            case IR.IOAttrPatterns(patterns) =>
+              Some("patterns" -> JsArray(patterns.map(JsString(_))))
             case _ => None
           }.toMap
         }

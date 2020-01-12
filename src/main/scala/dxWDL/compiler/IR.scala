@@ -26,7 +26,7 @@ object IR {
   // information.
   sealed abstract class IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
-  final case class IOAttrPattern(text: String) extends IOAttr
+  final case class IOAttrPatterns(patterns: Vector[String]) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.

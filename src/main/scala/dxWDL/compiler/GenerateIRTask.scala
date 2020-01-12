@@ -123,10 +123,14 @@ case class GenerateIRTask(
               case _ => None
             }
           }
-          case ("pattern", value) =>
+          case ("patterns", value) =>
             value match {
-              case MetaValueElementString(text) =>
-                Some(IR.IOAttrHelp(text))
+              case MetaValueElementArray(array) =>
+                Some(IR.IOAttrPatterns(array.flatMap {
+                  case MetaValueElementString(pattern) => Some(pattern)
+                  case _                               => None
+
+                }.toVector))
               case _ => None
             }
           case _ => None

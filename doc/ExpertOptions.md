@@ -108,6 +108,7 @@ $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -default
 
 # Extensions
 
+## Runtime
 A task declaration has a runtime section where memory, cpu, and disk
 space can be specified. Based on these attributes, an instance type is chosen by
 the compiler. If you wish to choose an instance type from the
@@ -130,6 +131,7 @@ runtime {
 }
 ```
 
+## Streaming
 Normally, a file used in a task is downloaded to the instance, and
 then used locally (*locallized*). If the file only needs to be
 examined once in sequential order, then this can be optimized by
@@ -242,6 +244,47 @@ workflow math {
 
 Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md)
 for limited support.
+
+# parameter_meta section
+
+The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#parameter-metadata-section) defines a `parameter_meta` section that may contain key value pairs to assoicate metadata with input and output variables. Currently, three keywords are supported:
+
+- `help`, which maps directly to the dxapp.json inputSpec.help field
+- `patterns`, which maps directly to the dxapp.json inputSpec.patterns field
+- `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
+
+More about `help` and `patterns` can be read [here](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications). Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input vars.
+
+## Example parameter_meta app
+
+```wdl
+task cgrep {
+    input {
+        String pattern
+        File in_file
+    }
+    parameter_meta {
+        in_file: {
+          help: "The input file to be searched",
+          patterns: ["*.txt", "*.tsv"],
+          stream: true
+        }
+        pattern: {
+          help: "The pattern to use to search in_file"
+        }
+    }
+    command {
+        grep '${pattern}' ${in_file} | wc -l
+        cp ${in_file} out_file
+    }
+    output {
+        Int count = read_int(stdout())
+        File out_file = "out_file"
+    }
+}
+```
+
+* Note the comma seperating the members of the object for `in_file`
 
 # Calling existing applets
 
