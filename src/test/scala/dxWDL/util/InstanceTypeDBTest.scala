@@ -9,17 +9,18 @@ import dxWDL.base.Utils
 
 class InstanceTypeDBTest extends FlatSpec with Matchers {
 
-    // The original list is at:
-    // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
-    //
-    // The g2,i2,x1 instances have been removed, because they are not
-    // enabled for customers by default.  In addition, the PV (Paravirtual)
-    // instances have been removed, because they work only on Ubuntu
-    // 12.04.
-    //
-    // Removed the ssd2 instances, because they actually use EBS storage. A better
-    // solution would be asking the platform for the available instances.
-    private val instanceList : String = """{
+  // The original list is at:
+  // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
+  //
+  // The g2,i2,x1 instances have been removed, because they are not
+  // enabled for customers by default.  In addition, the PV (Paravirtual)
+  // instances have been removed, because they work only on Ubuntu
+  // 12.04.
+  //
+  // Removed the ssd2 instances, because they actually use EBS storage. A better
+  // solution would be asking the platform for the available instances.
+  private val instanceList: String =
+    """{
         "mem2_ssd1_x2":       {"internalName": "m3.large",                          "traits": {"numCores":   2, "totalMemoryMB":    7225, "ephemeralStorageGB":   27}},
         "mem2_ssd1_x4":       {"internalName": "m3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":   14785, "ephemeralStorageGB":   72}},
         "mem2_ssd1_x8":       {"internalName": "m3.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   29905, "ephemeralStorageGB":  147}},
@@ -36,8 +37,8 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         "mem3_ssd1_x32":      {"internalName": "r3.8xlarge",                        "traits": {"numCores":  32, "totalMemoryMB":  245751, "ephemeralStorageGB":  597}}
 }"""
 
-    private val awsOnDemandHourlyPrice =
-                """|{
+  private val awsOnDemandHourlyPrice =
+    """|{
                    | "cc2.8xlarge": 2.000,
                    | "cg1.4xlarge": 2.100,
                    | "m4.large": 0.108,
@@ -102,300 +103,327 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
                    |}
                    |""".stripMargin.trim
 
-
-    // Create an availble instance list based on a hard coded list
-    private def genTestDB(pricingInfo: Boolean) : InstanceTypeDB = {
-        def intOfJs(jsVal : JsValue) : Int = {
-            jsVal match {
-                case JsNumber(x) => x.toInt
-                case _ => throw new Exception("sanity")
-            }
-        }
-        val awsOnDemandHourlyPriceTable: Map[String, Float] = {
-            val fields : Map[String, JsValue] = awsOnDemandHourlyPrice.parseJson.asJsObject.fields
-            fields.map{ case(name, v) =>
-                val price: Float = v match {
-                    case JsNumber(x) => x.toFloat
-                    case _ => throw new Exception("sanity")
-                }
-                name -> price
-            }.toMap
-        }
-
-        val allInstances : Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
-        val db = allInstances.map{ case(name, v) =>
-            val fields : Map[String, JsValue] = v.asJsObject.fields
-            val internalName = fields("internalName") match {
-                case JsString(s) => s
-                case _ => throw new Exception("sanity")
-            }
-            val price: Float =
-                if (pricingInfo) awsOnDemandHourlyPriceTable(internalName)
-                else 0
-            val traits = fields("traits").asJsObject.fields
-            val memoryMB = intOfJs(traits("totalMemoryMB"))
-            val diskGB = intOfJs(traits("ephemeralStorageGB"))
-            val cpu = intOfJs(traits("numCores"))
-            DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, false)
-        }.toVector
-        InstanceTypeDB(pricingInfo, db)
+  // Create an availble instance list based on a hard coded list
+  private def genTestDB(pricingInfo: Boolean): InstanceTypeDB = {
+    def intOfJs(jsVal: JsValue): Int = {
+      jsVal match {
+        case JsNumber(x) => x.toInt
+        case _           => throw new Exception("sanity")
+      }
+    }
+    val awsOnDemandHourlyPriceTable: Map[String, Float] = {
+      val fields: Map[String, JsValue] = awsOnDemandHourlyPrice.parseJson.asJsObject.fields
+      fields.map {
+        case (name, v) =>
+          val price: Float = v match {
+            case JsNumber(x) => x.toFloat
+            case _           => throw new Exception("sanity")
+          }
+          name -> price
+      }.toMap
     }
 
-    private def useDB(db: InstanceTypeDB) : Unit = {
-        db.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
-        db.chooseAttrs(Some(3*1024), Some(100), Some(5), None) should equal("mem1_ssd1_x8")
-        db.chooseAttrs(Some(2*1024), Some(20), None, None) should equal("mem1_ssd1_x2")
-        db.chooseAttrs(Some(30*1024), Some(128), Some(8), None) should equal("mem3_ssd1_x8")
-
-        assertThrows[Exception] {
-            // no instance with 1024 CPUs
-            db.chooseAttrs(None, None, Some(1024), None)
+    val allInstances: Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
+    val db = allInstances.map {
+      case (name, v) =>
+        val fields: Map[String, JsValue] = v.asJsObject.fields
+        val internalName = fields("internalName") match {
+          case JsString(s) => s
+          case _           => throw new Exception("sanity")
         }
+        val price: Float =
+          if (pricingInfo) awsOnDemandHourlyPriceTable(internalName)
+          else 0
+        val traits   = fields("traits").asJsObject.fields
+        val memoryMB = intOfJs(traits("totalMemoryMB"))
+        val diskGB   = intOfJs(traits("ephemeralStorageGB"))
+        val cpu      = intOfJs(traits("numCores"))
+        DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, false)
+    }.toVector
+    InstanceTypeDB(pricingInfo, db)
+  }
 
+  private def useDB(db: InstanceTypeDB): Unit = {
+    db.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
+    db.chooseAttrs(Some(3 * 1024), Some(100), Some(5), None) should equal("mem1_ssd1_x8")
+    db.chooseAttrs(Some(2 * 1024), Some(20), None, None) should equal("mem1_ssd1_x2")
+    db.chooseAttrs(Some(30 * 1024), Some(128), Some(8), None) should equal("mem3_ssd1_x8")
 
-        db.apply(InstanceTypeDB.parse(None,
-                                      Some(WomString("3 GB")),
-                                      Some(WomString("local-disk 10 HDD")),
-                                      Some(WomString("1")),
-                                      None)) should equal("mem1_ssd1_x2")
-        db.apply(InstanceTypeDB.parse(None,
-                                      Some(WomString("37 GB")),
-                                      Some(WomString("local-disk 10 HDD")),
-                                      Some(WomString("6")),
-                                      None)) should equal("mem3_ssd1_x8")
-        db.apply(InstanceTypeDB.parse(None,
-                                      Some(WomString("2 GB")),
-                                      Some(WomString("local-disk 100 HDD")),
-                                      None,
-                                      None)) should equal("mem1_ssd1_x8")
-        db.apply(InstanceTypeDB.parse(None,
-                                      Some(WomString("2.1GB")),
-                                      Some(WomString("local-disk 100 HDD")),
-                                      None,
-                                      None)) should equal("mem1_ssd1_x8")
-
-        db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x8")),
-                                      None,
-                                      None,
-                                      None,
-                                      None)) should equal("mem3_ssd1_x8")
-
-        db.apply(InstanceTypeDB.parse(None,
-                                      Some(WomString("235 GB")),
-                                      Some(WomString("local-disk 550 HDD")),
-                                      Some(WomString("32")),
-                                      None)) should equal("mem3_ssd1_x32")
-        db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x32")),
-                                      None,
-                                      None,
-                                      None,
-                                      None)) should equal("mem3_ssd1_x32")
-
-        db.apply(InstanceTypeDB.parse(None,
-                                      None,
-                                      None,
-                                      Some(WomString("8")),
-                                      None)) should equal("mem1_ssd1_x8")
+    assertThrows[Exception] {
+      // no instance with 1024 CPUs
+      db.chooseAttrs(None, None, Some(1024), None)
     }
 
-    val dbFull = genTestDB(true)
-    val dbOpaque = InstanceTypeDB.opaquePrices(dbFull)
-    val dbNoPrices = genTestDB(false)
+    db.apply(
+      InstanceTypeDB.parse(
+        None,
+        Some(WomString("3 GB")),
+        Some(WomString("local-disk 10 HDD")),
+        Some(WomString("1")),
+        None
+      )
+    ) should equal("mem1_ssd1_x2")
+    db.apply(
+      InstanceTypeDB.parse(
+        None,
+        Some(WomString("37 GB")),
+        Some(WomString("local-disk 10 HDD")),
+        Some(WomString("6")),
+        None
+      )
+    ) should equal("mem3_ssd1_x8")
+    db.apply(
+      InstanceTypeDB
+        .parse(None, Some(WomString("2 GB")), Some(WomString("local-disk 100 HDD")), None, None)
+    ) should equal("mem1_ssd1_x8")
+    db.apply(
+      InstanceTypeDB
+        .parse(None, Some(WomString("2.1GB")), Some(WomString("local-disk 100 HDD")), None, None)
+    ) should equal("mem1_ssd1_x8")
 
+    db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x8")), None, None, None, None)) should equal(
+      "mem3_ssd1_x8"
+    )
 
-    it should "Work even without access to pricing information" in {
-        // parameters are:          RAM,     disk,     cores
-        dbNoPrices.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
+    db.apply(
+      InstanceTypeDB.parse(
+        None,
+        Some(WomString("235 GB")),
+        Some(WomString("local-disk 550 HDD")),
+        Some(WomString("32")),
+        None
+      )
+    ) should equal("mem3_ssd1_x32")
+    db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x32")), None, None, None, None)) should equal(
+      "mem3_ssd1_x32"
+    )
 
-        dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None) should equal("mem1_ssd1_x4")
+    db.apply(InstanceTypeDB.parse(None, None, None, Some(WomString("8")), None)) should equal(
+      "mem1_ssd1_x8"
+    )
+  }
+
+  val dbFull     = genTestDB(true)
+  val dbOpaque   = InstanceTypeDB.opaquePrices(dbFull)
+  val dbNoPrices = genTestDB(false)
+
+  it should "Work even without access to pricing information" in {
+    // parameters are:          RAM,     disk,     cores
+    dbNoPrices.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
+
+    dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None) should equal("mem1_ssd1_x4")
+  }
+
+  it should "Choose reasonable platform instance types" in {
+    useDB(dbFull)
+  }
+
+  it should "perform JSON serialization" in {
+    val js  = dbFull.toJson
+    val db2 = js.asJsObject.convertTo[InstanceTypeDB]
+    dbFull should equal(db2)
+  }
+
+  it should "pretty print" in {
+    // Test pretty printing
+    Utils.ignore(dbFull.prettyPrint)
+  }
+
+  it should "work even with opaque prices" in {
+    useDB(dbOpaque)
+  }
+
+  it should "compare two instance types" in {
+    dbFull.lteqByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be(true)
+    dbFull.lteqByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be(false)
+
+    // non existant instance
+    dbFull.lteqByResources("mem1_ssd2_x2", "ggxx") should be(false)
+  }
+
+  it should "catch parsing errors" in {
+    assertThrows[Exception] {
+      // illegal request format
+      InstanceTypeDB.parse(Some(WomInteger(4)), None, None, None, None)
     }
 
-    it should "Choose reasonable platform instance types" in {
-        useDB(dbFull)
+    // memory specification
+    InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None, None) shouldBe
+      InstanceTypeReq(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None, None)
+
+    InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None, None) shouldBe
+      InstanceTypeReq(None, Some(230), None, None, None)
+
+    InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None, None) shouldBe
+      InstanceTypeReq(
+        None,
+        Some(((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
+        None,
+        None,
+        None
+      )
+
+    InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None, None) shouldBe
+      InstanceTypeReq(None, Some(230 * 1024), None, None, None)
+
+    InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None, None) shouldBe
+      InstanceTypeReq(
+        None,
+        Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
+        None,
+        None,
+        None
+      )
+
+    InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, None) shouldBe
+      InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, None)
+
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, Some(WomString("230 44 34 GB")), None, None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, Some(WomFloat(230.3)), None, None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, Some(WomString("230 XXB")), None, None, None)
     }
 
-    it should "perform JSON serialization" in {
-        val js = dbFull.toJson
-        val db2 = js.asJsObject.convertTo[InstanceTypeDB]
-        dbFull should equal(db2)
+    // disk spec
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, None, Some(WomString("just give me a disk")), None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, None, Some(WomString("local-disk xxxx")), None, None)
+    }
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, None, Some(WomInteger(1024)), None, None)
     }
 
-    it should "pretty print" in {
-        // Test pretty printing
-        Utils.ignore(dbFull.prettyPrint)
+    // cpu
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, None, None, Some(WomString("xxyy")), None)
+    }
+    InstanceTypeDB.parse(None, None, None, Some(WomInteger(1)), None) shouldBe InstanceTypeReq(
+      None,
+      None,
+      None,
+      Some(1),
+      None
+    )
+    InstanceTypeDB.parse(None, None, None, Some(WomFloat(1.2)), None) shouldBe InstanceTypeReq(
+      None,
+      None,
+      None,
+      Some(1),
+      None
+    )
+
+    assertThrows[Exception] {
+      InstanceTypeDB.parse(None, None, None, Some(WomBoolean(false)), None)
     }
 
-    it should "work even with opaque prices" in {
-        useDB(dbOpaque)
-    }
+    // gpu
+    InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, Some(WomBoolean(true))) shouldBe
+      InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, Some(true))
 
-    it should "compare two instance types" in {
-        dbFull.lteqByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be (true)
-        dbFull.lteqByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be (false)
+    InstanceTypeDB.parse(None, None, None, None, Some(WomBoolean(false))) shouldBe
+      InstanceTypeReq(None, None, None, None, Some(false))
+  }
 
-        // non existant instance
-        dbFull.lteqByResources("mem1_ssd2_x2", "ggxx") should be (false)
-    }
-
-    it should "catch parsing errors" in {
-        assertThrows[Exception] {
-            // illegal request format
-            InstanceTypeDB.parse(Some(WomInteger(4)), None, None, None, None)
-        }
-
-        // memory specification
-        InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None, None)
-
-        InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some(230), None, None, None)
-
-        InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some(((230D * 1000D * 1000D * 1000D) / (1024D * 1024D)).toInt), None, None, None)
-
-        InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some(230 * 1024), None, None, None)
-
-        InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt), None, None, None)
-
-        InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, None) shouldBe
-        InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, None)
-
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, Some(WomString("230 44 34 GB")), None, None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, Some(WomFloat(230.3)), None, None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, Some(WomString("230 XXB")), None, None, None)
-        }
-
-        // disk spec
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, None, Some(WomString("just give me a disk")), None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, None, Some(WomString("local-disk xxxx")), None, None)
-        }
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, None, Some(WomInteger(1024)), None, None)
-        }
-
-        // cpu
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, None, None, Some(WomString("xxyy")), None)
-        }
-        InstanceTypeDB.parse(None, None, None, Some(WomInteger(1)), None) shouldBe InstanceTypeReq(None, None, None, Some(1), None)
-        InstanceTypeDB.parse(None, None, None, Some(WomFloat(1.2)), None) shouldBe InstanceTypeReq(None, None, None, Some(1), None)
-
-        assertThrows[Exception] {
-            InstanceTypeDB.parse(None, None, None, Some(WomBoolean(false)), None)
-        }
-
-        // gpu
-        InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, Some(WomBoolean(true))) shouldBe
-        InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, Some(true))
-
-        InstanceTypeDB.parse(None, None, None, None, Some(WomBoolean(false))) shouldBe
-        InstanceTypeReq(None, None, None, None, Some(false))
-    }
-
-    it should "work on large instances (JIRA-1258)" in {
-        val db = InstanceTypeDB(true,
-            Vector(
-                DxInstanceType(
-                    "mem3_ssd1_x32",
-                    245751,
-                    32,
-                    597,
-                    13.0.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false
-                ),
-                DxInstanceType(
-                    "mem4_ssd1_x128",
-                    1967522,
-                    128,
-                    3573,
-                    14.0.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false
-                )
-            )
+  it should "work on large instances (JIRA-1258)" in {
+    val db = InstanceTypeDB(
+      true,
+      Vector(
+        DxInstanceType(
+          "mem3_ssd1_x32",
+          245751,
+          32,
+          597,
+          13.0.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          false
+        ),
+        DxInstanceType(
+          "mem4_ssd1_x128",
+          1967522,
+          128,
+          3573,
+          14.0.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          false
         )
+      )
+    )
 
-        db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None) should equal("mem3_ssd1_x32")
-        db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None) should equal("mem4_ssd1_x128")
-    }
+    db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None) should equal("mem3_ssd1_x32")
+    db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None) should equal("mem4_ssd1_x128")
+  }
 
-    it should "prefer v2 instances over v1's" in {
-        val db = InstanceTypeDB(true,
-            Vector(
-                DxInstanceType(
-                    "mem1_ssd1_v2_x4",
-                    8000,
-                    80,
-                    4,
-                    0.2.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false),
-                DxInstanceType(
-                    "mem1_ssd1_x4",
-                    8000,
-                    80,
-                    4,
-                    0.2.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false)
-            )
+  it should "prefer v2 instances over v1's" in {
+    val db = InstanceTypeDB(
+      true,
+      Vector(
+        DxInstanceType(
+          "mem1_ssd1_v2_x4",
+          8000,
+          80,
+          4,
+          0.2.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          false
+        ),
+        DxInstanceType("mem1_ssd1_x4", 8000, 80, 4, 0.2.toFloat, Vector(("Ubuntu", "16.04")), false)
+      )
+    )
+
+    db.chooseAttrs(None, None, Some(4), None) should equal("mem1_ssd1_v2_x4")
+  }
+
+  it should "respect requests for GPU instances" taggedAs (EdgeTest) in {
+    val db = InstanceTypeDB(
+      true,
+      Vector(
+        DxInstanceType(
+          "mem1_ssd1_v2_x4",
+          8000,
+          80,
+          4,
+          0.2.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          false
+        ),
+        DxInstanceType(
+          "mem1_ssd1_x4",
+          8000,
+          80,
+          4,
+          0.2.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          false
+        ),
+        DxInstanceType(
+          "mem3_ssd1_gpu_x8",
+          30000,
+          100,
+          8,
+          1.0.toFloat,
+          Vector(("Ubuntu", "16.04")),
+          true
         )
+      )
+    )
 
-        db.chooseAttrs(None, None, Some(4), None) should equal("mem1_ssd1_v2_x4")
+    db.chooseAttrs(None, None, Some(4), Some(true)) should equal("mem3_ssd1_gpu_x8")
+
+    assertThrows[Exception] {
+      // No non-GPU instance has 8 cpus
+      db.chooseAttrs(None, None, Some(8), Some(false))
     }
-
-    it should "respect requests for GPU instances" taggedAs(EdgeTest) in {
-        val db = InstanceTypeDB(true,
-            Vector(
-                DxInstanceType(
-                    "mem1_ssd1_v2_x4",
-                    8000,
-                    80,
-                    4,
-                    0.2.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false),
-                DxInstanceType(
-                    "mem1_ssd1_x4",
-                    8000,
-                    80,
-                    4,
-                    0.2.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    false),
-                DxInstanceType(
-                    "mem3_ssd1_gpu_x8",
-                    30000,
-                    100,
-                    8,
-                    1.0.toFloat,
-                    Vector(("Ubuntu", "16.04")),
-                    true)
-            )
-        )
-
-        db.chooseAttrs(None, None, Some(4), Some(true)) should equal("mem3_ssd1_gpu_x8")
-
-        assertThrows[Exception] {
-            // No non-GPU instance has 8 cpus
-            db.chooseAttrs(None, None, Some(8), Some(false))
-        }
-    }
+  }
 }
