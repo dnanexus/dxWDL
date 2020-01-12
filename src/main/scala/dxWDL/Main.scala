@@ -43,7 +43,10 @@ object Main extends App {
   // runtime, not at compile time. On the cloud instance running the
   // job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
+  private def buildRuntimePathConfig(
+      streamAllFiles: Boolean,
+      verbose: Boolean
+  ): DxPathConfig = {
     DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
   }
 
@@ -60,17 +63,18 @@ object Main extends App {
   def splitCmdLine(arglist: List[String]): List[List[String]] = {
     def isKeyword(word: String): Boolean = word.startsWith("-")
 
-    val keywordAndOptions: List[List[String]] = arglist.foldLeft(List.empty[List[String]]) {
-      case (head :: tail, word) if (isKeyword(word)) =>
-        List(word) :: head :: tail
-      case ((head :: tail), word) =>
-        (word :: head) :: tail
-      case (head, word) if (isKeyword(word)) =>
-        List(word) :: head
-      case (Nil, word) if (isKeyword(word)) => List(List(word))
-      case (Nil, word) if (!isKeyword(word)) =>
-        throw new Exception("Keyword must precede options")
-    }
+    val keywordAndOptions: List[List[String]] =
+      arglist.foldLeft(List.empty[List[String]]) {
+        case (head :: tail, word) if (isKeyword(word)) =>
+          List(word) :: head :: tail
+        case ((head :: tail), word) =>
+          (word :: head) :: tail
+        case (head, word) if (isKeyword(word)) =>
+          List(word) :: head
+        case (Nil, word) if (isKeyword(word)) => List(List(word))
+        case (Nil, word) if (!isKeyword(word)) =>
+          throw new Exception("Keyword must precede options")
+      }
     keywordAndOptions.map(_.reverse).reverse
   }
 
@@ -91,9 +95,12 @@ object Main extends App {
         subargs: List[String]
     ): Unit = {
       if (expectedNumArgs != subargs.length)
-        throw new Exception(s"""|Wrong number of arguments for ${keyword}.
+        throw new Exception(
+          s"""|Wrong number of arguments for ${keyword}.
                                         |Expected ${expectedNumArgs}, input is
-                                        |${subargs}""".stripMargin.replaceAll("\n", " "))
+                                        |${subargs}""".stripMargin
+            .replaceAll("\n", " ")
+        )
     }
     val cmdLineOpts = splitCmdLine(arglist)
     val options = HashMap.empty[String, List[String]]
@@ -178,7 +185,9 @@ object Main extends App {
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
           case _ =>
-            throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
+            throw new IllegalArgumentException(
+              s"Unregonized keyword ${keyword}"
+            )
         }
         options.get(nKeyword) match {
           case None =>
@@ -221,7 +230,10 @@ object Main extends App {
     System.err.println(Utils.exceptionToString(e))
   }
 
-  private def pathOptions(options: OptionsMap, verbose: Verbose): (DxProject, String) = {
+  private def pathOptions(
+      options: OptionsMap,
+      verbose: Verbose
+  ): (DxProject, String) = {
     var folderOpt: Option[String] = options.get("folder") match {
       case None          => None
       case Some(List(f)) => Some(f)
@@ -330,14 +342,17 @@ object Main extends App {
       case None                 => Set.empty
       case Some(modulesToTrace) => modulesToTrace.toSet
     }
-    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
+    val verbose =
+      Verbose(options contains "verbose", options contains "quiet", verboseKeys)
 
     val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-      case None                                                 => CompilerFlag.All
-      case Some(List(x)) if (x.toLowerCase == "IR".toLowerCase) => CompilerFlag.IR
+      case None => CompilerFlag.All
+      case Some(List(x)) if (x.toLowerCase == "IR".toLowerCase) =>
+        CompilerFlag.IR
       case Some(List(x)) if (x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase) =>
         CompilerFlag.NativeWithoutRuntimeAsset
-      case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
+      case Some(other) =>
+        throw new Exception(s"unrecognized compiler flag ${other}")
     }
     val defaults: Option[Path] = options.get("defaults") match {
       case None          => None
@@ -359,11 +374,12 @@ object Main extends App {
       case None     => List.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
-    val runtimeDebugLevel: Option[Int] = options.get("runtimeDebugLevel") match {
-      case None                  => None
-      case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
-      case _                     => throw new Exception("debug level specified twice")
-    }
+    val runtimeDebugLevel: Option[Int] =
+      options.get("runtimeDebugLevel") match {
+        case None                  => None
+        case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
+        case _                     => throw new Exception("debug level specified twice")
+      }
 
     if (extras != None) {
 
@@ -422,17 +438,22 @@ object Main extends App {
           .replaceAll("_", "")
           .replaceAll("-", "")
         if (!bufNorm.startsWith("wdl"))
-          throw new Exception(s"unknown language ${bufNorm}. Only WDL is supported")
+          throw new Exception(
+            s"unknown language ${bufNorm}. Only WDL is supported"
+          )
         val suffix = bufNorm.substring("wdl".length)
         if (suffix contains "draft2")
           Language.WDLvDraft2
         else if (suffix contains ("10"))
           Language.WDLv1_0
         else
-          throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
+          throw new Exception(
+            s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1"
+          )
       case _ => throw new Exception("only one language can be specified")
     }
-    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
+    val verbose =
+      Verbose(options contains "verbose", options contains "quiet", verboseKeys)
     DxniOptions(
       options contains "apps",
       options contains "force",
@@ -467,7 +488,11 @@ object Main extends App {
           return SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
-          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
+          val dxPathConfig = DxPathConfig.apply(
+            baseDNAxDir,
+            cOpt.streamAllFiles,
+            cOpt.verbose.on
+          )
           val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
           val desc = retval.getOrElse("")
           return SuccessfulTermination(desc)
@@ -478,7 +503,11 @@ object Main extends App {
     }
   }
 
-  private def dxniApplets(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
+  private def dxniApplets(
+      options: OptionsMap,
+      dOpt: DxniOptions,
+      outputFile: Path
+  ): Termination = {
     val (dxProject, folder) =
       try {
         pathOptions(options, dOpt.verbose)
@@ -515,9 +544,18 @@ object Main extends App {
     }
   }
 
-  private def dxniApps(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
+  private def dxniApps(
+      options: OptionsMap,
+      dOpt: DxniOptions,
+      outputFile: Path
+  ): Termination = {
     try {
-      compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.language, dOpt.verbose)
+      compiler.DxNI.applyApps(
+        outputFile,
+        dOpt.force,
+        dOpt.language,
+        dOpt.verbose
+      )
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
@@ -564,12 +602,14 @@ object Main extends App {
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
+    val (task, typeAliases) =
+      ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
 
-    val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
+    val jobInputOutput =
+      new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     val taskRunner = exec.TaskRunner(
       task,
@@ -597,7 +637,8 @@ object Main extends App {
 
       case InternalOp.TaskEpilog =>
         val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
-        val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
+        val outputFields: Map[String, JsValue] =
+          taskRunner.epilog(localizedInputs, dxUrl2path)
 
         // write outputs, ignore null values, these could occur for optional
         // values that were not specified.
@@ -609,7 +650,8 @@ object Main extends App {
         SuccessfulTermination(s"success ${op}")
 
       case InternalOp.TaskRelaunch =>
-        val outputFields: Map[String, JsValue] = taskRunner.relaunch(inputs, originalInputs)
+        val outputFields: Map[String, JsValue] =
+          taskRunner.relaunch(inputs, originalInputs)
         val json = JsObject(outputFields.filter {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
@@ -644,11 +686,17 @@ object Main extends App {
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
-    val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
+    val (wf, taskDir, typeAliases) =
+      ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
+      new exec.WfFragInputOutput(
+        dxIoFunctions,
+        dxProject,
+        rtDebugLvl,
+        typeAliases
+      )
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -669,7 +717,11 @@ object Main extends App {
             defaultRuntimeAttributes,
             rtDebugLvl
           )
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
+          fragRunner.apply(
+            fragInputs.blockPath,
+            fragInputs.env,
+            RunnerWfFragmentMode.Launch
+          )
         case InternalOp.Collect =>
           val fragRunner = new exec.WfFragRunner(
             wf,
@@ -685,7 +737,11 @@ object Main extends App {
             defaultRuntimeAttributes,
             rtDebugLvl
           )
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
+          fragRunner.apply(
+            fragInputs.blockPath,
+            fragInputs.env,
+            RunnerWfFragmentMode.Collect
+          )
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(
             wf,
@@ -764,10 +820,12 @@ object Main extends App {
     }
 
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
-    val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
+    val JsString(womSourceCodeEncoded) =
+      details.asJsObject.fields("womSourceCode")
     val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
-    val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
+    val JsString(instanceTypeDBEncoded) =
+      details.asJsObject.fields("instanceTypeDB")
     val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
     val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
@@ -782,7 +840,9 @@ object Main extends App {
 
   // Make a list of all the files cloned for access by this applet.
   // Bulk describe all the them.
-  private def runtimeBulkFileDescribe(jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
+  private def runtimeBulkFileDescribe(
+      jobInputPath: Path
+  ): Map[String, (DxFile, DxFileDescribe)] = {
     val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
@@ -800,7 +860,9 @@ object Main extends App {
   }
 
   def internalOp(args: Seq[String]): Termination = {
-    val operation = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
+    val operation = InternalOp.values find (
+        x => normKey(x.toString) == normKey(args.head)
+    )
     operation match {
       case None =>
         UnsuccessfulTermination(s"unknown internal action ${args.head}")
@@ -810,7 +872,8 @@ object Main extends App {
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
           Utils.jobFilesOfHomeDir(homeDir)
-        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
+        val dxPathConfig =
+          buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
@@ -867,13 +930,16 @@ object Main extends App {
   def dispatchCommand(args: Seq[String]): Termination = {
     if (args.isEmpty)
       return BadUsageTermination("")
-    val action = Actions.values find (x => normKey(x.toString) == normKey(args.head))
+    val action = Actions.values find (
+        x => normKey(x.toString) == normKey(args.head)
+    )
     action match {
       case None => BadUsageTermination("")
       case Some(x) =>
         x match {
-          case Actions.Compile  => compile(args.tail)
-          case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
+          case Actions.Compile => compile(args.tail)
+          case Actions.Config =>
+            SuccessfulTermination(ConfigFactory.load().toString)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
           case Actions.Version  => SuccessfulTermination(Utils.getVersion())

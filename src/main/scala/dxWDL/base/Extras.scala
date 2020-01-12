@@ -10,7 +10,10 @@ import wom.values._
 
 import dxWDL.dx._
 
-case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
+case class DxExecPolicy(
+    restartOn: Option[Map[String, Int]],
+    maxRestarts: Option[Int]
+) {
   def toJson: Map[String, JsValue] = {
     val restartOnFields = restartOn match {
       case None => Map.empty
@@ -30,7 +33,11 @@ case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option
   }
 }
 
-case class DxTimeout(days: Option[Int], hours: Option[Int], minutes: Option[Int]) {
+case class DxTimeout(
+    days: Option[Int],
+    hours: Option[Int],
+    minutes: Option[Int]
+) {
   def toJson: Map[String, JsValue] = {
     val daysField: Map[String, JsValue] = days match {
       case None    => Map.empty
@@ -86,7 +93,10 @@ case class DxAccess(
     networkField ++ projectField ++ allProjectsField ++ developerField ++ projectCreationField
   }
 
-  private def takeMaxAccessLevel(x: AccessLevel, y: AccessLevel): AccessLevel = {
+  private def takeMaxAccessLevel(
+      x: AccessLevel,
+      y: AccessLevel
+  ): AccessLevel = {
     def levelToInt(al: AccessLevel): Int = al match {
       case AccessLevel.ADMINISTER => 5
       case AccessLevel.CONTRIBUTE => 4
@@ -121,7 +131,10 @@ case class DxAccess(
         case _            => None
       }
     }
-    def mergeBooleans(a: Option[Boolean], b: Option[Boolean]): Option[Boolean] = {
+    def mergeBooleans(
+        a: Option[Boolean],
+        b: Option[Boolean]
+    ): Option[Boolean] = {
       Vector(a, b).flatten match {
         case Vector(x)    => Some(x)
         case Vector(x, y) => Some(x || y)
@@ -139,7 +152,13 @@ case class DxAccess(
     val developerMrg = mergeBooleans(developer, dxa.developer)
     val projectCreationMrg = mergeBooleans(projectCreation, dxa.projectCreation)
 
-    DxAccess(networkMrg, projectMrg, allProjectsMrg, developerMrg, projectCreationMrg)
+    DxAccess(
+      networkMrg,
+      projectMrg,
+      allProjectsMrg,
+      developerMrg,
+      projectCreationMrg
+    )
   }
 }
 
@@ -162,8 +181,9 @@ case class DxRunSpec(
         execPolicy.toJson
     }
     val restartableEntryPointsFields = restartableEntryPoints match {
-      case None                => Map.empty
-      case Some(value: String) => Map("restartableEntryPoints" -> JsString(value))
+      case None => Map.empty
+      case Some(value: String) =>
+        Map("restartableEntryPoints" -> JsString(value))
     }
     val timeoutFields = timeoutPolicy match {
       case None             => Map.empty
@@ -267,7 +287,11 @@ object WdlRuntimeAttrs extends DefaultJsonProtocol {
   }
 }
 
-case class DockerRegistry(registry: String, username: String, credentials: String)
+case class DockerRegistry(
+    registry: String,
+    username: String,
+    credentials: String
+)
 
 case class Extras(
     defaultRuntimeAttributes: WdlRuntimeAttrs,
@@ -319,8 +343,17 @@ object Extras {
     "custom_reorg"
   )
   val RUNTIME_ATTRS =
-    Set("dx_instance_type", "memory", "disks", "cpu", "docker", "docker_registry", "custom_reorg")
-  val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
+    Set(
+      "dx_instance_type",
+      "memory",
+      "disks",
+      "cpu",
+      "docker",
+      "docker_registry",
+      "custom_reorg"
+    )
+  val RUN_SPEC_ATTRS =
+    Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
   val RUN_SPEC_ACCESS_ATTRS =
     Set("network", "project", "allProjects", "developer", "projectCreation")
   val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
@@ -336,11 +369,15 @@ object Extras {
   val TASK_DX_ATTRS = Set("runSpec", "details")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
-  private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
+  private def checkedParseIntField(
+      fields: Map[String, JsValue],
+      fieldName: String
+  ): Option[Int] = {
     fields.get(fieldName) match {
       case None                => None
       case Some(JsNumber(bnm)) => Some(bnm.intValue)
-      case Some(other)         => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -351,7 +388,8 @@ object Extras {
     fields.get(fieldName) match {
       case None                => None
       case Some(JsString(str)) => Some(str)
-      case Some(other)         => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -363,7 +401,8 @@ object Extras {
       case None                => None
       case Some(JsString(str)) => Some(str)
       case Some(JsNull)        => Some("")
-      case Some(other)         => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -376,10 +415,12 @@ object Extras {
       case Some(JsArray(vec)) =>
         val v = vec.map {
           case JsString(str) => str
-          case other         => throw new Exception(s"Malformed ${fieldName} (${other})")
+          case other =>
+            throw new Exception(s"Malformed ${fieldName} (${other})")
         }
         Some(v)
-      case Some(other) => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -390,7 +431,8 @@ object Extras {
     fields.get(fieldName) match {
       case None               => None
       case Some(JsBoolean(b)) => Some(b)
-      case Some(other)        => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -410,11 +452,15 @@ object Extras {
     }
   }
 
-  private def checkedParseObjectField(fields: Map[String, JsValue], fieldName: String): JsValue = {
+  private def checkedParseObjectField(
+      fields: Map[String, JsValue],
+      fieldName: String
+  ): JsValue = {
     fields.get(fieldName) match {
       case None                   => JsNull
       case Some(JsObject(fields)) => JsObject(fields)
-      case Some(other)            => throw new Exception(s"Malformed ${fieldName} (${other})")
+      case Some(other) =>
+        throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
 
@@ -427,12 +473,16 @@ object Extras {
       return None
     val m1 = m.asJsObject.fields.map {
       case (name, JsNumber(nmb)) => name -> nmb.intValue
-      case (name, other)         => throw new Exception(s"Malformed ${fieldName} (${name} -> ${other})")
+      case (name, other) =>
+        throw new Exception(s"Malformed ${fieldName} (${name} -> ${other})")
     }.toMap
     return Some(m1)
   }
 
-  private def parseWdlRuntimeAttrs(jsv: JsValue, verbose: Verbose): WdlRuntimeAttrs = {
+  private def parseWdlRuntimeAttrs(
+      jsv: JsValue,
+      verbose: Verbose
+  ): WdlRuntimeAttrs = {
     if (jsv == JsNull)
       return WdlRuntimeAttrs(Map.empty)
     val fields = jsv.asJsObject.fields
@@ -527,16 +577,20 @@ object Extras {
       throw new Exception("Exactly one entry-point timeout can be specified")
     val key = fields.keys.head
     if (key != "*")
-      throw new Exception("""Only a general timeout for all entry points is supported ("*")""")
+      throw new Exception(
+        """Only a general timeout for all entry points is supported ("*")"""
+      )
     val subObj = checkedParseObjectField(fields, "*")
     if (subObj == JsNull)
       return None
     val subFields = subObj.asJsObject.fields
     for (k <- subFields.keys) {
       if (!(RUN_SPEC_TIMEOUT_ATTRS contains k))
-        throw new Exception(s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
+        throw new Exception(
+          s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
                                         |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                        |""".stripMargin.replaceAll("\n", "")
+        )
 
     }
     return Some(
@@ -564,12 +618,17 @@ object Extras {
       checkedParseStringField(fields, "restartableEntryPoints") match {
         case None                                            => None
         case Some(str) if List("all", "master") contains str => Some(str)
-        case Some(str)                                       => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
+        case Some(str) =>
+          throw new Exception(
+            s"Unsupported restartableEntryPoints value ${str}"
+          )
       }
     return Some(
       DxRunSpec(
         parseAccess(checkedParseObjectField(fields, "access")),
-        parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
+        parseExecutionPolicy(
+          checkedParseObjectField(fields, "executionPolicy")
+        ),
         restartable,
         parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy"))
       )
@@ -577,7 +636,9 @@ object Extras {
 
   }
 
-  private def parseUpstreamProjects(jsv: Option[JsValue]): Option[List[DxLicense]] = {
+  private def parseUpstreamProjects(
+      jsv: Option[JsValue]
+  ): Option[List[DxLicense]] = {
     if (jsv == JsNull)
       return None
 
@@ -595,7 +656,10 @@ object Extras {
     Some(DxDetails(parseUpstreamProjects(fields.get("upstreamProjects"))))
   }
 
-  private def parseTaskDxAttrs(jsv: JsValue, verbose: Verbose): Option[DxAttrs] = {
+  private def parseTaskDxAttrs(
+      jsv: JsValue,
+      verbose: Verbose
+  ): Option[DxAttrs] = {
     if (jsv == JsNull)
       return None
     val fields = jsv.asJsObject.fields
@@ -614,7 +678,10 @@ object Extras {
 
   }
 
-  private def parseDockerRegistry(jsv: JsValue, verbose: Verbose): Option[DockerRegistry] = {
+  private def parseDockerRegistry(
+      jsv: JsValue,
+      verbose: Verbose
+  ): Option[DockerRegistry] = {
     if (jsv == JsNull)
       return None
     val fields = jsv.asJsObject.fields
@@ -627,7 +694,10 @@ object Extras {
     }
     def getSome(fieldName: String): String = {
       checkedParseStringField(fields, fieldName) match {
-        case None    => throw new Exception(s"${fieldName} must be specified in the docker section")
+        case None =>
+          throw new Exception(
+            s"${fieldName} must be specified in the docker section"
+          )
         case Some(x) => x
       }
     }
@@ -641,25 +711,30 @@ object Extras {
 
     for (k <- fields.keys) {
       if (!(CUSTOM_REORG_ATTRS contains k))
-        throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute ${k},
+        throw new IllegalArgumentException(
+          s"""|Unsupported custom reorg attribute ${k},
                         |we currently support ${CUSTOM_REORG_ATTRS}
-                        |""".stripMargin.replaceAll("\n", ""))
+                        |""".stripMargin.replaceAll("\n", "")
+        )
     }
 
     val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
       case None =>
-        throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
-      case Some(x) => x
-    }
-
-    val reorgConf: String = checkedParseStringFieldReplaceNull(fields, "conf") match {
-      case None =>
         throw new IllegalArgumentException(
-          "conf must be specified in the custom_reorg section. " +
-            "Please set the value to null if there is no conf file."
+          "app_id must be specified in the custom_reorg section."
         )
       case Some(x) => x
     }
+
+    val reorgConf: String =
+      checkedParseStringFieldReplaceNull(fields, "conf") match {
+        case None =>
+          throw new IllegalArgumentException(
+            "conf must be specified in the custom_reorg section. " +
+              "Please set the value to null if there is no conf file."
+          )
+        case Some(x) => x
+      }
 
     return (reorgAppId, reorgConf)
 
@@ -670,10 +745,13 @@ object Extras {
     val app_regex = "app-[0-9a-zA-Z]{24}"
     val applet_regex = "applet-[0-9a-zA-Z]{24}"
 
-    val isValidID: Boolean = reorgAppId.matches(app_regex) || reorgAppId.matches(applet_regex)
+    val isValidID: Boolean = reorgAppId.matches(app_regex) || reorgAppId
+      .matches(applet_regex)
 
     if (!isValidID) {
-      throw new IllegalArgumentException("dxId must match applet-[A-Za-z0-9]{24}")
+      throw new IllegalArgumentException(
+        "dxId must match applet-[A-Za-z0-9]{24}"
+      )
     }
 
     // FIXME: This needs to be done --without-- using dx. Use java/scala describe instead.
@@ -710,7 +788,10 @@ object Extras {
 
   }
 
-  def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+  def parseCustomReorgAttrs(
+      jsv: JsValue,
+      verbose: Verbose
+  ): Option[ReorgAttrs] = {
     if (jsv == JsNull)
       return None
 
@@ -767,10 +848,19 @@ object Extras {
       }
 
     Extras(
-      parseWdlRuntimeAttrs(checkedParseObjectField(fields, "default_runtime_attributes"), verbose),
-      parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes"), verbose),
+      parseWdlRuntimeAttrs(
+        checkedParseObjectField(fields, "default_runtime_attributes"),
+        verbose
+      ),
+      parseTaskDxAttrs(
+        checkedParseObjectField(fields, "default_task_dx_attributes"),
+        verbose
+      ),
       perTaskDxAttrs,
-      parseDockerRegistry(checkedParseObjectField(fields, "docker_registry"), verbose),
+      parseDockerRegistry(
+        checkedParseObjectField(fields, "docker_registry"),
+        verbose
+      ),
       parseCustomReorgAttrs(
         checkedParseObjectField(fields, fieldName = "custom_reorg"),
         verbose

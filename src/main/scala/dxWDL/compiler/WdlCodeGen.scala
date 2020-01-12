@@ -254,8 +254,10 @@ task Add {
   //   call Hello
   // }
   //
-  private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
-  private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
+  private val callLibrary: Regex =
+    "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+  private val callLibraryNoArgs: Regex =
+    "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
   private def flattenWorkflow(wdlWfSource: String): String = {
     val originalLines = wdlWfSource.split("\n").toList
     val cleanLines = originalLines.map { line =>
@@ -341,9 +343,18 @@ task Add {
             accu
           } else {
             val sourceCode = callable match {
-              case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
+              case IR.Applet(
+                  _,
+                  _,
+                  _,
+                  _,
+                  _,
+                  IR.AppletKindTask(_),
+                  taskSourceCode
+                  ) =>
                 // This is a task, include its source code, instead of a header.
-                val taskDir = ParseWomSourceFile(false).scanForTasks(taskSourceCode)
+                val taskDir =
+                  ParseWomSourceFile(false).scanForTasks(taskSourceCode)
                 assert(taskDir.size == 1)
                 val taskBody = taskDir.values.head
                 WdlCodeSnippet(taskBody)

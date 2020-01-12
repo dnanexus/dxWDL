@@ -8,10 +8,13 @@ object DxFindExecutions {
 
   private def parseOneResult(value: JsValue): DxExecution = {
     value.asJsObject.fields.get("id") match {
-      case None                                             => throw new Exception(s"field id not found in ${value.prettyPrint}")
-      case Some(JsString(id)) if id.startsWith("job-")      => DxJob.getInstance(id)
-      case Some(JsString(id)) if id.startsWith("analysis-") => DxAnalysis.getInstance(id)
-      case Some(other)                                      => throw new Exception(s"malformed id field ${other.prettyPrint}")
+      case None =>
+        throw new Exception(s"field id not found in ${value.prettyPrint}")
+      case Some(JsString(id)) if id.startsWith("job-") => DxJob.getInstance(id)
+      case Some(JsString(id)) if id.startsWith("analysis-") =>
+        DxAnalysis.getInstance(id)
+      case Some(other) =>
+        throw new Exception(s"malformed id field ${other.prettyPrint}")
     }
   }
 
@@ -45,7 +48,8 @@ object DxFindExecutions {
       repJs.asJsObject.fields.get("results") match {
         case None                   => throw new Exception(s"missing results field ${repJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
-        case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
+        case Some(other) =>
+          throw new Exception(s"malformed results field ${other.prettyPrint}")
       }
 
     (results, next)

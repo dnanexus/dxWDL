@@ -30,7 +30,8 @@ case class Top(cOpt: CompilerOptions) {
       region: String
   ): (String, String) = {
     val destination = region2project.get(region) match {
-      case None       => throw new Exception(s"Region ${region} is currently unsupported")
+      case None =>
+        throw new Exception(s"Region ${region} is currently unsupported")
       case Some(dest) => dest
     }
 
@@ -49,14 +50,18 @@ case class Top(cOpt: CompilerOptions) {
   // project configured for this region.
   private def getAssetId(region: String): String = {
     val region2project = Utils.getRegions()
-    val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
+    val (projNameRt, folder) =
+      getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-    val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
+    val assetDxPath =
+      s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
     val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
     if (!dxObj.isInstanceOf[DxRecord])
-      throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
+      throw new Exception(
+        s"Found dx object of wrong type ${dxObj} at ${assetDxPath}"
+      )
     dxObj.getId
   }
 
@@ -68,9 +73,16 @@ case class Top(cOpt: CompilerOptions) {
       dxProject: DxProject
   ): Unit = {
     val region2project = Utils.getRegions()
-    val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
+    val (projNameRt, folder) =
+      getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
-    DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)
+    DxUtils.cloneAsset(
+      DxRecord.getInstance(dxWDLrtId),
+      dxProject,
+      DX_WDL_ASSET,
+      dxProjRt,
+      verbose
+    )
   }
 
   // Backend compiler pass
@@ -101,7 +113,13 @@ case class Top(cOpt: CompilerOptions) {
 
     // Efficiently build a directory of the currently existing applets.
     // We don't want to build them if we don't have to.
-    val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse, verbose)
+    val dxObjDir = DxObjectDirectory(
+      bundle,
+      dxProject,
+      folder,
+      cOpt.projectWideReuse,
+      verbose
+    )
 
     // Generate dx:applets and dx:workflow from the IR
     new Native(
@@ -128,7 +146,9 @@ case class Top(cOpt: CompilerOptions) {
   private def checkDeclarations(varNames: Seq[String]): Unit = {
     for (varName <- varNames)
       if (varName contains "___")
-        throw new Exception(s"Variable ${varName} is using the reserved substring ___")
+        throw new Exception(
+          s"Variable ${varName} is using the reserved substring ___"
+        )
   }
 
   // check that streaming annotations are only done for files.
@@ -136,12 +156,18 @@ case class Top(cOpt: CompilerOptions) {
     callable match {
       case wf: WorkflowDefinition =>
         if (wf.parameterMeta.size > 0)
-          Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
+          Utils.warning(
+            verbose,
+            "dxWDL workflows ignore their parameter meta section"
+          )
         val g = wf.innerGraph
         checkDeclarations(g.inputNodes.map(_.localName).toSeq)
         checkDeclarations(g.outputNodes.map(_.localName).toSeq)
-        val allDeclarations = g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
-        checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
+        val allDeclarations =
+          g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
+        checkDeclarations(
+          allDeclarations.map(_.identifier.localName.value).toSeq
+        )
 
       case task: CallableTaskDefinition =>
         checkDeclarations(task.inputs.map(_.name).toSeq)
@@ -172,14 +198,18 @@ case class Top(cOpt: CompilerOptions) {
             // identical definitions are somehow, through the magic of Scala,
             // unequal.
             case Some(existing) if (existing.toString != callable.toString) =>
-              Utils.error(s"""|${key} appears with two different callable definitions
+              Utils.error(
+                s"""|${key} appears with two different callable definitions
                                         |1)
                                         |${callable}
                                         |
                                         |2)
                                         |${existing}
-                                        |""".stripMargin)
-              throw new Exception(s"${key} appears twice, with two different definitions")
+                                        |""".stripMargin
+              )
+              throw new Exception(
+                s"${key} appears twice, with two different definitions"
+              )
             case _ => ()
           }
       }
@@ -189,13 +219,15 @@ case class Top(cOpt: CompilerOptions) {
             case None =>
               allTypeAliases = allTypeAliases + (key -> definition)
             case Some(existing) if (existing != definition) =>
-              Utils.error(s"""|${key} appears twice, with two different definitions
+              Utils.error(
+                s"""|${key} appears twice, with two different definitions
                                         |1)
                                         |${definition}
                                         |
                                         |2)
                                         |${existing}
-                                        |""".stripMargin)
+                                        |""".stripMargin
+              )
               throw new Exception(s"${key} type alias appears twice")
             case _ => ()
           }
@@ -203,7 +235,12 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     // Merge all the bundles together
-    WomBundle(mainBundle.primaryCallable, allCallables, allTypeAliases, Set.empty)
+    WomBundle(
+      mainBundle.primaryCallable,
+      allCallables,
+      allTypeAliases,
+      Set.empty
+    )
   }
 
   // Scan the JSON inputs files for dx:files, and batch describe them. This
@@ -221,7 +258,10 @@ case class Top(cOpt: CompilerOptions) {
     val allResults: InputFileScanResults = cOpt.inputs.foldLeft(defResults) {
       case (accu: InputFileScanResults, inputFilePath) =>
         val res = InputFileScan(bundle, dxProject, verbose).apply(inputFilePath)
-        InputFileScanResults(accu.path2file ++ res.path2file, accu.dxFiles ++ res.dxFiles)
+        InputFileScanResults(
+          accu.path2file ++ res.path2file,
+          accu.dxFiles ++ res.dxFiles
+        )
     }
 
     val allDescribe = DxFile.bulkDescribe(allResults.dxFiles)
@@ -288,8 +328,9 @@ case class Top(cOpt: CompilerOptions) {
 
     // generate dx inputs from the Cromwell-style input specification.
     cOpt.inputs.foreach { path =>
-      val dxInputs = InputFile(fileInfoDir, path2file, bundle.typeAliases, cOpt.verbose)
-        .dxFromCromwell(bundle2, path)
+      val dxInputs =
+        InputFile(fileInfoDir, path2file, bundle.typeAliases, cOpt.verbose)
+          .dxFromCromwell(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = Utils.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
@@ -336,7 +377,8 @@ case class Top(cOpt: CompilerOptions) {
     // pass the dx:project is required to establish
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
-    val cResults = compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
+    val cResults =
+      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
     val execIds = cResults.primaryCallable match {
       case None =>
         cResults.execDict.map { case (_, dxExec) => dxExec.getId }.mkString(",")

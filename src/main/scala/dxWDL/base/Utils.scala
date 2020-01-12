@@ -55,7 +55,8 @@ object Utils {
   // the regions live in dxWDL.conf
   def getRegions(): Map[String, String] = {
     val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
-    val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+    val l: List[Config] =
+      config.getConfigList("dxWDL.region2project").asScala.toList
     val region2project: Map[String, String] = l.map { pair =>
       val r = pair.getString("region")
       val projName = pair.getString("path")
@@ -121,7 +122,9 @@ object Utils {
   // Dots are illegal in applet variable names.
   def encodeAppletVarName(varName: String): String = {
     if (varName contains ".")
-      throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
+      throw new Exception(
+        s"Variable ${varName} includes the illegal symbol \\."
+      )
     varName
   }
 
@@ -129,7 +132,10 @@ object Utils {
   //    http://stackoverflow.com/questions/25999255/delete-directory-recursively-in-scala
   def deleteRecursive(file: java.io.File): Unit = {
     if (file.isDirectory) {
-      Option(file.listFiles).map(_.toList).getOrElse(Nil).foreach(deleteRecursive(_))
+      Option(file.listFiles)
+        .map(_.toList)
+        .getOrElse(Nil)
+        .foreach(deleteRecursive(_))
     }
     file.delete
   }
@@ -274,7 +280,11 @@ object Utils {
   }
 
   // Logging output for applets at runtime
-  def appletLog(verbose: Boolean, msg: String, limit: Int = APPLET_LOG_MSG_LIMIT): Unit = {
+  def appletLog(
+      verbose: Boolean,
+      msg: String,
+      limit: Int = APPLET_LOG_MSG_LIMIT
+  ): Unit = {
     if (verbose) {
       val shortMsg =
         if (msg.length > limit)

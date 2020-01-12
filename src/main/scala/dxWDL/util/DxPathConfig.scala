@@ -70,7 +70,11 @@ case class DxPathConfig(
 }
 
 object DxPathConfig {
-  def apply(homeDir: Path, streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
+  def apply(
+      homeDir: Path,
+      streamAllFiles: Boolean,
+      verbose: Boolean
+  ): DxPathConfig = {
     val metaDir: Path = homeDir.resolve("meta")
     val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")

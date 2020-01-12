@@ -61,7 +61,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
                 case None =>
                   allSources(path) = fileContent
                 case Some(oldContent) if oldContent != fileContent =>
-                  Invalid(s"${path} has been imported twice, with different content")
+                  Invalid(
+                    s"${path} has been imported twice, with different content"
+                  )
                 case _ => ()
               }
               Valid(bundle)
@@ -97,23 +99,37 @@ case class ParseWomSourceFile(verbose: Boolean) {
   private def getBundle(
       mainFile: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Vector[WomBundle]
+  ) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
     val allSources = HashMap.empty[String, WorkflowSource]
 
     val absPath = Paths.get(mainFile.toAbsolutePath.toString)
-    val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
+    val mainFileContents =
+      Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
 
     // We need to get all the WDL sources, so we could analyze them
     val mainFileResolvers =
-      DirectoryResolver.localFilesystemResolvers(Some(DefaultPathBuilder.build(mainFile)))
+      DirectoryResolver.localFilesystemResolvers(
+        Some(DefaultPathBuilder.build(mainFile))
+      )
 
     // look for source files in each of the import directories
     val fileImportResolvers: List[ImportResolver] = imports.map { p =>
-      val p2: cromwell.core.path.Path = DefaultPathBuilder.build(p.toAbsolutePath)
-      DirectoryResolver(p2, customName = None, deleteOnClose = false, directoryHash = None)
+      val p2: cromwell.core.path.Path =
+        DefaultPathBuilder.build(p.toAbsolutePath)
+      DirectoryResolver(
+        p2,
+        customName = None,
+        deleteOnClose = false,
+        directoryHash = None
+      )
     }
     val importResolvers: List[ImportResolver] =
       mainFileResolvers ++ fileImportResolvers :+ HttpResolver(relativeTo = None)
@@ -145,14 +161,18 @@ case class ParseWomSourceFile(verbose: Boolean) {
       case Right(bundle) => bundle
     }
     val lang =
-      (languageFactory.languageName.toLowerCase, languageFactory.languageVersionName) match {
+      (
+        languageFactory.languageName.toLowerCase,
+        languageFactory.languageVersionName
+      ) match {
         case ("wdl", "draft-2")     => Language.WDLvDraft2
         case ("wdl", "draft-3")     => Language.WDLv1_0
         case ("wdl", "1.0")         => Language.WDLv1_0
         case ("wdl", "development") => Language.WDLv2_0
         case ("wdl", "Biscayne")    => Language.WDLv2_0
         case ("cwl", "1.0")         => Language.CWLv1_0
-        case (l, v)                 => throw new Exception(s"Unsupported language (${l}) version (${v})")
+        case (l, v) =>
+          throw new Exception(s"Unsupported language (${l}) version (${v})")
       }
 
     // build wom bundles for all the referenced files
@@ -177,9 +197,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
               List(languageFactory),
               convertNestedScatterToSubworkflow = false
             ) match {
-              case Left(errors)  => throw new Exception(s"""|WOM validation errors:
+              case Left(errors) =>
+                throw new Exception(
+                  s"""|WOM validation errors:
                                                                          | ${errors}
-                                                                         |""".stripMargin)
+                                                                         |""".stripMargin
+                )
               case Right(bundle) => bundle
             }
           Some(path -> bundle)
@@ -200,11 +223,18 @@ case class ParseWomSourceFile(verbose: Boolean) {
   def apply(
       sourcePath: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Vector[WomBundle]
+  ) = {
     val (lang, bundle, allSources, subBundles) = getBundle(sourcePath, imports)
     lang match {
       case Language.CWLv1_0 =>
-        throw new Exception("CWL is not handled at the moment, only WDL is supported")
+        throw new Exception(
+          "CWL is not handled at the moment, only WDL is supported"
+        )
       case _ => ()
     }
     (lang, bundle, allSources, subBundles)
@@ -274,13 +304,17 @@ case class ParseWomSourceFile(verbose: Boolean) {
     return None
   }
 
-  private def findNextTask(lines: List[String]): Option[(List[String], String, String)] = {
+  private def findNextTask(
+      lines: List[String]
+  ): Option[(List[String], String, String)] = {
     val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s*)\\{".r
     val taskEndLine: Regex = "^}(\\s)*$".r
     findWdlElement(lines, taskStartLine, taskEndLine)
   }
 
-  private def findNextWorkflow(lines: List[String]): Option[(List[String], String, String)] = {
+  private def findNextWorkflow(
+      lines: List[String]
+  ): Option[(List[String], String, String)] = {
     val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s*)\\{".r
     val workflowEndLine: Regex = "^}(\\s)*$".r
     findWdlElement(lines, workflowStartLine, workflowEndLine)
@@ -341,7 +375,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //   call lib.Multiply as mul { ... }
   // }
   //
-  private def allNodesDoNotDescendIntoSubWorkflows(graph: Graph): Set[GraphNode] = {
+  private def allNodesDoNotDescendIntoSubWorkflows(
+      graph: Graph
+  ): Set[GraphNode] = {
     graph.nodes ++
       graph.scatters.flatMap(x => allNodesDoNotDescendIntoSubWorkflows(x.innerGraph)) ++
       graph.conditionals.flatMap(x => allNodesDoNotDescendIntoSubWorkflows(x.innerGraph)) ++
@@ -379,7 +415,14 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
 
     val bundleChk: Checked[WomBundle] =
-      languageFactory.getWomBundle(wdlWfSource, None, "{}", List.empty, List.empty, false)
+      languageFactory.getWomBundle(
+        wdlWfSource,
+        None,
+        "{}",
+        List.empty,
+        List.empty,
+        false
+      )
     bundleChk match {
       case Left(errors) =>
         Utils.error("Found Errors in generated WDL source")
@@ -399,7 +442,11 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //  * directory of type aliases
   def parseWdlWorkflow(
       wfSource: String
-  ): (WorkflowDefinition, Map[String, CallableTaskDefinition], Map[String, WomType]) = {
+  ): (
+      WorkflowDefinition,
+      Map[String, CallableTaskDefinition],
+      Map[String, WomType]
+  ) = {
     val languageFactory = getLanguageFactory(wfSource)
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(
@@ -423,9 +470,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val taskDir = womBundle.allCallables.flatMap {
       case (name, callable) =>
         callable match {
-          case task: CallableTaskDefinition   => Some(name -> task)
-          case exec: ExecutableTaskDefinition => Some(name -> exec.callableTaskDefinition)
-          case _                              => None
+          case task: CallableTaskDefinition => Some(name -> task)
+          case exec: ExecutableTaskDefinition =>
+            Some(name -> exec.callableTaskDefinition)
+          case _ => None
         }
     }.toMap
     (wf, taskDir, womBundle.typeAliases)
@@ -435,9 +483,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
   def getMainTask(bundle: WomBundle): CallableTaskDefinition = {
     // check if the primary is nonempty
     val task: Option[CallableTaskDefinition] = bundle.primaryCallable match {
-      case Some(task: CallableTaskDefinition)   => Some(task)
-      case Some(exec: ExecutableTaskDefinition) => Some(exec.callableTaskDefinition)
-      case _                                    => None
+      case Some(task: CallableTaskDefinition) => Some(task)
+      case Some(exec: ExecutableTaskDefinition) =>
+        Some(exec.callableTaskDefinition)
+      case _ => None
     }
     task match {
       case Some(x) => x
@@ -454,10 +503,19 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
   }
 
-  def parseWdlTask(wfSource: String): (CallableTaskDefinition, Map[String, WomType]) = {
+  def parseWdlTask(
+      wfSource: String
+  ): (CallableTaskDefinition, Map[String, WomType]) = {
     val languageFactory = getLanguageFactory(wfSource)
     val bundleChk: Checked[WomBundle] =
-      languageFactory.getWomBundle(wfSource, None, "{}", List.empty, List(languageFactory), false)
+      languageFactory.getWomBundle(
+        wfSource,
+        None,
+        "{}",
+        List.empty,
+        List(languageFactory),
+        false
+      )
     val womBundle = bundleChk match {
       case Left(errors)  => throw new Exception(s"""|WOM validation errors:
                                                          | ${errors}

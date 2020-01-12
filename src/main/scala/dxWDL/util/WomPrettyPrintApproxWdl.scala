@@ -52,16 +52,19 @@ object WomPrettyPrintApproxWdl {
               applyGNode(node, indent + "  ")
             }
             .mkString("\n")
-        Some(s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
+        Some(
+          s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
                          |${innerBlock}
                          |${indent}}
-                         |""".stripMargin)
+                         |""".stripMargin
+        )
 
       case call: CommandCallNode =>
         val inputNames = call.upstream
           .collect {
             case exprNode: ExpressionNode =>
-              val paramName = getUnqualifiedName(exprNode.identifier.localName.value)
+              val paramName =
+                getUnqualifiedName(exprNode.identifier.localName.value)
               s"${paramName} = ${exprNode.womExpression.sourceString}"
           }
           .mkString(",")
@@ -109,7 +112,13 @@ object WomPrettyPrintApproxWdl {
       case RequiredInputDefinition(iName, womType, _, _) =>
         s"${typeName(womType)} ${iName}"
 
-      case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+      case OverridableInputDefinitionWithDefault(
+          iName,
+          womType,
+          defaultExpr,
+          _,
+          _
+          ) =>
         s"${typeName(womType)} ${iName} = ${defaultExpr.sourceString}"
 
       // An input whose value should always be calculated from the default, and is

@@ -41,11 +41,21 @@ import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 // }
 //
 
-case class InputFileScanResults(path2file: Map[String, DxFile], dxFiles: Vector[DxFile])
+case class InputFileScanResults(
+    path2file: Map[String, DxFile],
+    dxFiles: Vector[DxFile]
+)
 
-case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbose) {
+case class InputFileScan(
+    bundle: IR.Bundle,
+    dxProject: DxProject,
+    verbose: Verbose
+) {
 
-  private def findDxFiles(womType: WomType, jsValue: JsValue): Vector[JsValue] = {
+  private def findDxFiles(
+      womType: WomType,
+      jsValue: JsValue
+  ): Vector[JsValue] = {
     (womType, jsValue) match {
       // base case: primitive types
       case (WomBooleanType, _)      => Vector.empty
@@ -97,7 +107,9 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         }.toVector
 
       case _ =>
-        throw new AppInternalException(s"Unsupported combination ${womType} ${jsValue.prettyPrint}")
+        throw new AppInternalException(
+          s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
+        )
     }
   }
 
@@ -174,7 +186,9 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         case (key, dxobj) if dxobj.isInstanceOf[DxFile] =>
           key -> dxobj.asInstanceOf[DxFile]
         case (key, dxobj) =>
-          throw new Exception(s"Scanning the input file produced ${dxobj} which is not a file")
+          throw new Exception(
+            s"Scanning the input file produced ${dxobj} which is not a file"
+          )
       }
       .toMap
 
@@ -189,12 +203,16 @@ case class InputFile(
     verbose: Verbose
 ) {
   val verbose2: Boolean = verbose.containsKey("InputFile")
-  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
   // Convert a job input to a WomValue. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def womValueFromCromwellJSON(womType: WomType, jsValue: JsValue): WomValue = {
+  private def womValueFromCromwellJSON(
+      womType: WomType,
+      jsValue: JsValue
+  ): WomValue = {
     (womType, jsValue) match {
       // base case: primitive types
       case (WomBooleanType, JsBoolean(b))   => WomBoolean(b.booleanValue)
@@ -285,7 +303,10 @@ case class InputFile(
     inputFields
   }
 
-  private def getExactlyOnce(fields: HashMap[String, JsValue], fqn: String): Option[JsValue] = {
+  private def getExactlyOnce(
+      fields: HashMap[String, JsValue],
+      fqn: String
+  ): Option[JsValue] = {
     fields.get(fqn) match {
       case None =>
         Utils.trace(verbose2, s"getExactlyOnce ${fqn} => None")
@@ -305,7 +326,10 @@ case class InputFile(
       callee: IR.Callable,
       defaultFields: HashMap[String, JsValue]
   ): IR.Stage = {
-    Utils.trace(verbose2, s"addDefaultToStage ${stg.id.getId}, ${stg.description}")
+    Utils.trace(
+      verbose2,
+      s"addDefaultToStage ${stg.id.getId}, ${stg.description}"
+    )
     val inputsFull: Vector[(SArg, CVar)] = stg.inputs.zipWithIndex.map {
       case (sArg, idx) =>
         val cVar = callee.inputVars(idx)
@@ -375,7 +399,8 @@ case class InputFile(
     val wfWithDefaults =
       if (wf.locked) {
         // Locked workflows, we have workflow level inputs
-        val wfInputsWithDefaults = addDefaultsToWorkflowInputs(wf.inputs, wf.name, defaultFields)
+        val wfInputsWithDefaults =
+          addDefaultsToWorkflowInputs(wf.inputs, wf.name, defaultFields)
         wf.copy(inputs = wfInputsWithDefaults)
       } else {
         // Workflow is unlocked, we don't have proper
@@ -386,7 +411,12 @@ case class InputFile(
           if (stg.id.getId == s"stage-${COMMON}") {
             addDefaultsToStage(stg, wf.name, callee, defaultFields)
           } else {
-            addDefaultsToStage(stg, s"${wf.name}.${stg.description}", callee, defaultFields)
+            addDefaultsToStage(
+              stg,
+              s"${wf.name}.${stg.description}",
+              callee,
+              defaultFields
+            )
           }
         }
         wf.copy(stages = stagesWithDefaults)
@@ -408,7 +438,8 @@ case class InputFile(
     Utils.trace(verbose.on, s"Embedding defaults into the IR")
 
     // read the default inputs file (xxxx.json)
-    val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
+    val wdlDefaults: JsObject =
+      Utils.readFileContent(defaultInputs).parseJson.asJsObject
     val defaultFields: HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
 
     val callablesWithDefaults = bundle.allCallables.map {
@@ -429,10 +460,15 @@ case class InputFile(
         Some(embedDefaultsIntoWorkflow(wf, bundle.allCallables, defaultFields))
     }
     if (!defaultFields.isEmpty) {
-      throw new Exception(s"""|Could not map all default fields.
-                                    |These were left: ${defaultFields}""".stripMargin)
+      throw new Exception(
+        s"""|Could not map all default fields.
+                                    |These were left: ${defaultFields}""".stripMargin
+      )
     }
-    bundle.copy(primaryCallable = primaryCallable, allCallables = callablesWithDefaults)
+    bundle.copy(
+      primaryCallable = primaryCallable,
+      allCallables = callablesWithDefaults
+    )
   }
 
   // Converting a Cromwell style input JSON file, into a valid DNAx input file
@@ -463,8 +499,10 @@ case class InputFile(
     def checkAllUsed(): Unit = {
       if (inputFields.isEmpty)
         return
-      throw new Exception(s"""|Could not map all default fields.
-                                    |These were left: ${inputFields}""".stripMargin)
+      throw new Exception(
+        s"""|Could not map all default fields.
+                                    |These were left: ${inputFields}""".stripMargin
+      )
     }
   }
 
@@ -479,7 +517,8 @@ case class InputFile(
     Utils.traceLevelInc()
 
     // read the input file xxxx.json
-    val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
+    val wdlInputs: JsObject =
+      Utils.readFileContent(inputPath).parseJson.asJsObject
     val inputFields: HashMap[String, JsValue] = preprocessInputs(wdlInputs)
     val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
@@ -503,7 +542,9 @@ case class InputFile(
       case None if tasks.size == 1 =>
         handleTask(tasks.head)
       case None =>
-        throw new Exception(s"Cannot generate one input file for ${tasks.size} tasks")
+        throw new Exception(
+          s"Cannot generate one input file for ${tasks.size} tasks"
+        )
       case Some(task: IR.Applet) =>
         handleTask(task)
 
@@ -532,18 +573,20 @@ case class InputFile(
         }
 
         // filter out auxiliary stages
-        val auxStages = Set(s"stage-${COMMON}", s"stage-${OUTPUT_SECTION}", s"stage-${REORG}")
+        val auxStages =
+          Set(s"stage-${COMMON}", s"stage-${OUTPUT_SECTION}", s"stage-${REORG}")
         val middleStages = wf.stages.filter { stg =>
           !(auxStages contains stg.id.getId)
         }
         // Inputs for top level calls
         middleStages.foreach { stg =>
           // Find the input definitions for the stage, by locating the callee
-          val callee: IR.Callable = bundle.allCallables.get(stg.calleeName) match {
-            case None =>
-              throw new Exception(s"callable ${stg.calleeName} is missing")
-            case Some(x) => x
-          }
+          val callee: IR.Callable =
+            bundle.allCallables.get(stg.calleeName) match {
+              case None =>
+                throw new Exception(s"callable ${stg.calleeName} is missing")
+              case Some(x) => x
+            }
           callee.inputVars.foreach { cVar =>
             val fqn = s"${wf.name}.${stg.description}.${cVar.name}"
             val dxName = s"${stg.description}.${cVar.name}"

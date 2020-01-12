@@ -32,7 +32,10 @@ case class JobInputOutput(
     womValue
   }
 
-  def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue): Vector[DxFile] = {
+  def unpackJobInputFindRefFiles(
+      womType: WomType,
+      jsv: JsValue
+  ): Vector[DxFile] = {
     val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", womType, jsv)
     dxFiles
   }
@@ -46,7 +49,9 @@ case class JobInputOutput(
       expr.evaluateValue(env, dxIoFunctions)
     val value = result match {
       case Invalid(errors) =>
-        throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
+        throw new Exception(
+          s"Failed to evaluate expression ${expr} with ${errors}"
+        )
       case Valid(x: WomValue) => x
     }
 
@@ -80,7 +85,9 @@ case class JobInputOutput(
           case RequiredInputDefinition(iName, womType, _, _) =>
             fields.get(iName.value) match {
               case None =>
-                throw new Exception(s"Input ${iName} is required but not provided")
+                throw new Exception(
+                  s"Input ${iName} is required but not provided"
+                )
               case Some(x: JsValue) =>
                 // Conversion from JSON to WomValue
                 unpackJobInput(iName.value, womType, x)
@@ -88,7 +95,13 @@ case class JobInputOutput(
 
           // An input definition that has a default value supplied.
           // Typical WDL example would be a declaration like: "Int x = 5"
-          case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+          case OverridableInputDefinitionWithDefault(
+              iName,
+              womType,
+              defaultExpr,
+              _,
+              _
+              ) =>
             fields.get(iName.value) match {
               case None =>
                 // use the default expression
@@ -99,7 +112,13 @@ case class JobInputOutput(
 
           // An input whose value should always be calculated from the default, and is
           // not allowed to be overridden.
-          case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+          case FixedInputDefinitionWithDefault(
+              iName,
+              womType,
+              defaultExpr,
+              _,
+              _
+              ) =>
             fields.get(iName.value) match {
               case None => ()
               case Some(_) =>
@@ -195,10 +214,14 @@ case class JobInputOutput(
 
   // Recursively go into a womValue, and replace file string with
   // an equivalent. Use the [translation] map to translate.
-  private def translateFiles(womValue: WomValue, translation: Map[String, String]): WomValue = {
+  private def translateFiles(
+      womValue: WomValue,
+      translation: Map[String, String]
+  ): WomValue = {
     womValue match {
       // primitive types, pass through
-      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
+      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) =>
+        womValue
 
       // single file
       case WomSingleFile(s) =>
@@ -235,7 +258,10 @@ case class JobInputOutput(
 
       // special case: an optional file. If it doesn't exist,
       // return None
-      case WomOptionalValue(WomSingleFileType, Some(WomSingleFile(localPath))) =>
+      case WomOptionalValue(
+          WomSingleFileType,
+          Some(WomSingleFile(localPath))
+          ) =>
         translation.get(localPath) match {
           case None =>
             WomOptionalValue(WomSingleFileType, None)
@@ -306,7 +332,9 @@ case class JobInputOutput(
                 //   stream : true
                 // }
                 if (value.contains("stream") &&
-                    value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
+                    value("stream")
+                      .asInstanceOf[MetaValueElement.MetaValueElementBoolean]
+                      .value) {
                   findFiles(womValue)
                 } else {
                   Vector.empty
@@ -335,7 +363,12 @@ case class JobInputOutput(
       parameterMeta: Map[String, MetaValueElement],
       inputs: Map[InputDefinition, WomValue],
       inputsDir: Path
-  ): (Map[InputDefinition, WomValue], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
+  ): (
+      Map[InputDefinition, WomValue],
+      Map[Furl, Path],
+      DxdaManifest,
+      DxfuseManifest
+  ) = {
     val fileURLs: Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
     Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -372,7 +405,12 @@ case class JobInputOutput(
               // The file needs to be localized
               val existingFiles = accu.values.toSet
               val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
-              val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
+              val path = createUniqueDownloadPath(
+                desc.name,
+                dxUrl.dxFile,
+                existingFiles,
+                inputsDir
+              )
               accu + (dxUrl -> path)
           }
       }
@@ -426,7 +464,9 @@ case class JobInputOutput(
       .map {
         case FurlLocal(p) => Paths.get(p)
         case dxUrl: FurlDx =>
-          throw new Exception(s"Should not find cloud file on local machine (${dxUrl})")
+          throw new Exception(
+            s"Should not find cloud file on local machine (${dxUrl})"
+          )
       }
       .toVector
 
@@ -457,10 +497,11 @@ case class JobInputOutput(
     }.toMap
 
     // invert the furl2path map
-    val alreadyOnCloud_path2furl: Map[Path, Furl] = furl2path.foldLeft(Map.empty[Path, Furl]) {
-      case (accu, (furl, path)) =>
-        accu + (path -> furl)
-    }
+    val alreadyOnCloud_path2furl: Map[Path, Furl] =
+      furl2path.foldLeft(Map.empty[Path, Furl]) {
+        case (accu, (furl, path)) =>
+          accu + (path -> furl)
+      }
     val path2furl = alreadyOnCloud_path2furl ++ uploaded_path2furl
 
     // Replace the files that need to be uploaded, file paths with FURLs

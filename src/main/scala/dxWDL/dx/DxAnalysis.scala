@@ -21,7 +21,14 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
   def describe(fields: Set[Field.Value] = Set.empty): DxAnalysisDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields =
-      Set(Field.Project, Field.Id, Field.Name, Field.Folder, Field.Created, Field.Modified)
+      Set(
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Folder,
+        Field.Created,
+        Field.Modified
+      )
     val allFields = fields ++ defaultFields
     val request = JsObject(
       projSpec +
@@ -35,7 +42,14 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
     )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "folder", "created", "modified") match {
+      descJs.asJsObject.getFields(
+        "project",
+        "id",
+        "name",
+        "folder",
+        "created",
+        "modified"
+      ) match {
         case Seq(
             JsString(project),
             JsString(id),
@@ -44,13 +58,24 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
             JsNumber(created),
             JsNumber(modified)
             ) =>
-          DxAnalysisDescribe(project, id, name, folder, created.toLong, modified.toLong, None, None)
+          DxAnalysisDescribe(
+            project,
+            id,
+            name,
+            folder,
+            created.toLong,
+            modified.toLong,
+            None,
+            None
+          )
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
       }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields
+      .get("properties")
+      .map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 
