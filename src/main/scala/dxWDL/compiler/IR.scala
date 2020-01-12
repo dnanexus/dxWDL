@@ -17,15 +17,15 @@ import dxWDL.dx.{DxFile, DxWorkflowStage}
 
 object IR {
   // stages that the compiler uses in generated DNAx workflows
-  val COMMON = "common"
-  val OUTPUT_SECTION = "outputs"
-  val REORG = "reorg"
+  val COMMON              = "common"
+  val OUTPUT_SECTION      = "outputs"
+  val REORG               = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
   // Compile time representaiton of supported parameter_meta section
   // information.
   sealed abstract class IOAttr
-  final case class IOAttrHelp(text: String) extends IOAttr
+  final case class IOAttrHelp(text: String)                 extends IOAttr
   final case class IOAttrPatterns(patterns: Vector[String]) extends IOAttr
 
   // Compile time representation of a variable. Used also as
@@ -85,8 +85,8 @@ object IR {
   //  DxAsset: the image is a platform asset
   //
   sealed trait DockerImage
-  case object DockerImageNone extends DockerImage
-  case object DockerImageNetwork extends DockerImage
+  case object DockerImageNone                                extends DockerImage
+  case object DockerImageNetwork                             extends DockerImage
   case class DockerImageDxFile(url: String, tarball: DxFile) extends DockerImage
 
   // A unified type representing a WDL workflow or a WDL applet.
@@ -107,7 +107,7 @@ object IR {
   //   WfOutputs:  evaluate workflow outputs
   //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
   sealed trait AppletKind
-  case class AppletKindNative(id: String) extends AppletKind
+  case class AppletKindNative(id: String)                 extends AppletKind
   case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
   case class AppletKindWfFragment(
       calls: Vector[String],
@@ -117,11 +117,11 @@ object IR {
   case object AppletKindWfInputs extends AppletKind
 
   // Output - default and custom reorg
-  case object AppletKindWfOutputs extends AppletKind
+  case object AppletKindWfOutputs            extends AppletKind
   case object AppletKindWfCustomReorgOutputs extends AppletKind
 
   // Reorg - default and custom reorg
-  case object AppletKindWorkflowOutputReorg extends AppletKind
+  case object AppletKindWorkflowOutputReorg            extends AppletKind
   case class AppletKindWorkflowCustomReorg(id: String) extends AppletKind
 
   /** @param name          Name of applet
@@ -142,7 +142,7 @@ object IR {
       kind: AppletKind,
       womSourceCode: String
   ) extends Callable {
-    def inputVars = inputs
+    def inputVars  = inputs
     def outputVars = outputs
   }
 
@@ -151,10 +151,10 @@ object IR {
     *  or a workflow input.
     */
   sealed trait SArg
-  case object SArgEmpty extends SArg
-  case class SArgConst(wdlValue: WomValue) extends SArg
+  case object SArgEmpty                                        extends SArg
+  case class SArgConst(wdlValue: WomValue)                     extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
-  case class SArgWorkflowInput(argName: CVar) extends SArg
+  case class SArgWorkflowInput(argName: CVar)                  extends SArg
 
   // A stage can call an applet or a workflow.
   //
@@ -189,7 +189,7 @@ object IR {
       locked: Boolean,
       level: Level.Value
   ) extends Callable {
-    def inputVars = inputs.map { case (cVar, _)   => cVar }.toVector
+    def inputVars  = inputs.map { case (cVar, _)  => cVar }.toVector
     def outputVars = outputs.map { case (cVar, _) => cVar }.toVector
   }
 

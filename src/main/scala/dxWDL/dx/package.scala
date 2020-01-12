@@ -3,8 +3,8 @@ package dxWDL.dx
 import spray.json._
 
 object DxIOClass extends Enumeration {
-  val INT, FLOAT, STRING, BOOLEAN, FILE, ARRAY_OF_INTS, ARRAY_OF_FLOATS,
-      ARRAY_OF_STRINGS, ARRAY_OF_BOOLEANS, ARRAY_OF_FILES, HASH, OTHER = Value
+  val INT, FLOAT, STRING, BOOLEAN, FILE, ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS,
+      ARRAY_OF_BOOLEANS, ARRAY_OF_FILES, HASH, OTHER = Value
 
   def fromString(s: String): DxIOClass.Value = {
     s match {
@@ -41,8 +41,8 @@ case class IOParameter(
 
 // Extra fields for describe
 object Field extends Enumeration {
-  val Analysis, Applet, Created, Details, Folder, Id, InputSpec, Modified, Name,
-      OutputSpec, ParentJob, Parts, Project, Properties, Size, Stages = Value
+  val Analysis, Applet, Created, Details, Folder, Id, InputSpec, Modified, Name, OutputSpec,
+      ParentJob, Parts, Project, Properties, Size, Stages = Value
 }
 
 trait DxObjectDescribe {
@@ -150,7 +150,7 @@ object DxObject {
       throw new IllegalArgumentException(
         s"${id} is not of the form class-alphnumeric{24}"
       )
-    val klass = parts(0)
+    val klass      = parts(0)
     val numLetters = parts(1)
     if (!numLetters.matches("[A-Za-z0-9]{24}"))
       throw new IllegalArgumentException(
@@ -205,7 +205,7 @@ case class DxWorkflowStage(id: String) {
   def getInputReference(inputName: String): JsValue = {
     JsObject(
       "$dnanexus_link" -> JsObject(
-        "stage" -> JsString(id),
+        "stage"      -> JsString(id),
         "inputField" -> JsString(inputName)
       )
     )
@@ -213,7 +213,7 @@ case class DxWorkflowStage(id: String) {
   def getOutputReference(outputName: String): JsValue = {
     JsObject(
       "$dnanexus_link" -> JsObject(
-        "stage" -> JsString(id),
+        "stage"       -> JsString(id),
         "outputField" -> JsString(outputName)
       )
     )

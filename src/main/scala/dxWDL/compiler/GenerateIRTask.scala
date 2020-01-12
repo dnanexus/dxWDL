@@ -23,8 +23,7 @@ case class GenerateIRTask(
 ) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
-  private class DynamicInstanceTypesException private (ex: Exception)
-      extends RuntimeException(ex) {
+  private class DynamicInstanceTypesException private (ex: Exception) extends RuntimeException(ex) {
     def this() =
       this(new RuntimeException("Runtime instance type calculation required"))
   }
@@ -59,10 +58,10 @@ case class GenerateIRTask(
 
     try {
       val dxInstanceType = evalAttr("dx_instance_type")
-      val memory = evalAttr("memory")
-      val diskSpace = evalAttr("disks")
-      val cores = evalAttr("cpu")
-      val gpu = evalAttr("gpu")
+      val memory         = evalAttr("memory")
+      val diskSpace      = evalAttr("disks")
+      val cores          = evalAttr("cpu")
+      val gpu            = evalAttr("gpu")
       val iTypeDesc =
         InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
       IR.InstanceTypeConst(
@@ -84,8 +83,7 @@ case class GenerateIRTask(
     dockerExpr match {
       case None =>
         IR.DockerImageNone
-      case Some(expr)
-          if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
+      case Some(expr) if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
         val wdlConst = WomValueAnalysis.evalConst(WomStringType, expr)
         wdlConst match {
           case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
