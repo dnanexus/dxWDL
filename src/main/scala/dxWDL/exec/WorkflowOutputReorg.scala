@@ -51,7 +51,7 @@ case class WorkflowOutputReorg(
     val req = JsObject(
       "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
     )
-    val rep            = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
+    val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val outputs = repJs.asJsObject.fields.get("output") match {
       case None    => throw new Exception("Failed to get analysis outputs")
@@ -63,7 +63,7 @@ case class WorkflowOutputReorg(
     }
 
     val fileOutputs: Set[DxFile] = DxUtils.findDxFiles(outputs).toSet
-    val fileInputs: Set[DxFile]  = DxUtils.findDxFiles(inputs).toSet
+    val fileInputs: Set[DxFile] = DxUtils.findDxFiles(inputs).toSet
     val realOutputs: Set[DxFile] = fileOutputs.toSet -- fileInputs.toSet
     Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
     Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
@@ -97,11 +97,11 @@ case class WorkflowOutputReorg(
 
   // Move all intermediate results to a sub-folder
   def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
-    val dxEnv        = DxUtils.dxEnv
-    val dxProject    = DxProject(dxEnv.getProjectContext())
-    val dxProjDesc   = dxProject.describe()
-    val dxAnalysis   = DxJob(dxEnv.getJob).describe().analysis.get
-    val outFolder    = dxAnalysis.describe().folder
+    val dxEnv = DxUtils.dxEnv
+    val dxProject = DxProject(dxEnv.getProjectContext())
+    val dxProjDesc = dxProject.describe()
+    val dxAnalysis = DxJob(dxEnv.getJob).describe().analysis.get
+    val outFolder = dxAnalysis.describe().folder
     val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
     Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
@@ -110,12 +110,12 @@ case class WorkflowOutputReorg(
     if (analysisFiles.isEmpty)
       return
 
-    val exportIds: Set[String]   = exportFiles.map(_.id).toSet
+    val exportIds: Set[String] = exportFiles.map(_.id).toSet
     val exportNames: Seq[String] = bulkGetFilenames(exportFiles, dxProject)
     Utils.appletLog(verbose, s"exportFiles=${exportNames}")
 
     // Figure out which of the files should be kept
-    val intermediateFiles   = analysisFiles.filter(x => !(exportIds contains x.id))
+    val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
     val iNames: Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
     Utils.appletLog(verbose, s"intermediate files=${iNames}")
     if (intermediateFiles.isEmpty)

@@ -627,13 +627,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
   }
 
   it should "recognize that an argument with a default can be omitted at the call site" in {
-    val path   = pathFromBasename("compiler", "call_level2.wdl")
+    val path = pathFromBasename("compiler", "call_level2.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "check for reserved symbols" in {
-    val path   = pathFromBasename("compiler", "reserved.wdl")
+    val path = pathFromBasename("compiler", "reserved.wdl")
     val retval = Main.compile(path.toString :: cFlags)
 
     inside(retval) {
@@ -643,25 +643,25 @@ class GenerateIRTest extends FlatSpec with Matchers {
   }
 
   it should "do nested scatters" in {
-    val path   = pathFromBasename("compiler", "nested_scatter.wdl")
+    val path = pathFromBasename("compiler", "nested_scatter.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "handle struct imported several times" in {
-    val path   = pathFromBasename("struct/struct_imported_twice", "file3.wdl")
+    val path = pathFromBasename("struct/struct_imported_twice", "file3.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "handle file constants in a workflow" in {
-    val path   = pathFromBasename("compiler", "wf_constants.wdl")
+    val path = pathFromBasename("compiler", "wf_constants.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "respect import flag" in {
-    val path        = pathFromBasename("compiler/imports", "A.wdl")
+    val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
     val retval = Main.compile(
       path.toString :: "--imports" :: libraryPath.toString :: cFlags
@@ -670,7 +670,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
   }
 
   it should "respect import -p flag" in {
-    val path        = pathFromBasename("compiler/imports", "A.wdl")
+    val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
     val retval =
       Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
@@ -726,7 +726,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
   }
 
   it should "correctly flatten a workflow with imports" in {
-    val path   = pathFromBasename("compiler", "wf_to_flatten.wdl")
+    val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }

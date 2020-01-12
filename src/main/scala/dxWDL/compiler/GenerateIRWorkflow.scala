@@ -124,7 +124,7 @@ case class GenerateIRWorkflow(
   // compile a call into a stage in an IR.Workflow
   private def compileCall(call: CallNode, env: CallEnv, locked: Boolean): IR.Stage = {
     // Find the callee
-    val calleeName          = Utils.getUnqualifiedName(call.callable.name)
+    val calleeName = Utils.getUnqualifiedName(call.callable.name)
     val callee: IR.Callable = callables(calleeName)
     val callInputs: Seq[AnonymousExpressionNode] = call.upstream.collect {
       case tcExpr: AnonymousExpressionNode => tcExpr
@@ -310,7 +310,7 @@ case class GenerateIRWorkflow(
       // complex sub-block. It could have many calls generating
       // many applets and subworkflows.
       val (stage, aux) = compileWfFragment(wfName, subBlocks(0), blockPath :+ 0, env)
-      val fragName     = stage.calleeName
+      val fragName = stage.calleeName
       val main = aux.find(_.name == fragName) match {
         case None    => throw new Exception(s"Could not find ${fragName}")
         case Some(x) => x
@@ -335,7 +335,7 @@ case class GenerateIRWorkflow(
       //       |
       //       |- stage-4
       //
-      val pathStr       = blockPath.map(x => x.toString).mkString("_")
+      val pathStr = blockPath.map(x => x.toString).mkString("_")
       val closureInputs = graphClosure(inputNodes, subBlocks)
       Utils.trace(
         verbose.on,
@@ -438,10 +438,10 @@ case class GenerateIRWorkflow(
         // add the iteration variable to the inner environment
         assert(sctNode.scatterVariableNodes.size == 1)
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-        val iterVarName                 = svNode.identifier.localName.value
-        val cVar                        = CVar(iterVarName, svNode.womType, None)
-        val innerEnv                    = env + (iterVarName -> LinkedVar(cVar, IR.SArgEmpty))
-        val (callable, aux)             = compileNestedBlock(wfName, sctNode.innerGraph, blockPath, innerEnv)
+        val iterVarName = svNode.identifier.localName.value
+        val cVar = CVar(iterVarName, svNode.womType, None)
+        val innerEnv = env + (iterVarName -> LinkedVar(cVar, IR.SArgEmpty))
+        val (callable, aux) = compileNestedBlock(wfName, sctNode.innerGraph, blockPath, innerEnv)
         (Some(callable.name), aux :+ callable)
     }
 
@@ -483,7 +483,7 @@ case class GenerateIRWorkflow(
         cVar.name -> LinkedVar(cVar, sArg)
     }.toMap
 
-    var allStageInfo    = Vector.empty[(IR.Stage, Vector[IR.Callable])]
+    var allStageInfo = Vector.empty[(IR.Stage, Vector[IR.Callable])]
     var remainingBlocks = subBlocks
 
     // link together all the stages into a linear workflow
@@ -503,7 +503,7 @@ case class GenerateIRWorkflow(
           // Add bindings for the output variables. This allows later calls to refer
           // to these results.
           for (cVar <- stage.outputs) {
-            val fqn     = call.identifier.localName.value ++ "." + cVar.name
+            val fqn = call.identifier.localName.value ++ "." + cVar.name
             val cVarFqn = cVar.copy(name = fqn)
             env = env + (fqn -> LinkedVar(cVarFqn, IR.SArgLink(stage.id, cVar)))
           }
@@ -540,12 +540,12 @@ case class GenerateIRWorkflow(
   private def buildSimpleWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv): (CVar, SArg) = {
     outputNode match {
       case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        val cVar   = CVar(id.fullyQualifiedName.value, womType, None)
+        val cVar = CVar(id.fullyQualifiedName.value, womType, None)
         val source = sourcePort.name
         (cVar, getSArgFromEnv(source, env))
       case expr: ExpressionBasedGraphOutputNode
           if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
-        val cVar   = CVar(expr.graphOutputPort.name, expr.womType, None)
+        val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
         val source = expr.womExpression.sourceString
         (cVar, getSArgFromEnv(source, env))
       case expr: ExpressionBasedGraphOutputNode =>
@@ -773,7 +773,7 @@ case class GenerateIRWorkflow(
     }.toVector
     val allWfInputs = wfInputs ++ clsInputs
 
-    val (allStageInfo, env)    = assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, true)
+    val (allStageInfo, env) = assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, true)
     val (stages, auxCallables) = allStageInfo.unzip
 
     // Handle outputs that are constants or variables, we can output them directly.

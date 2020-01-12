@@ -21,7 +21,7 @@ case class FolderContents(dataObjects: Vector[DxDataObject], subFolders: Vector[
 case class DxProject(id: String) extends DxDataObject {
   def describe(fields: Set[Field.Value] = Set.empty): DxProjectDescribe = {
     val defaultFields = Set(Field.Id, Field.Name, Field.Created, Field.Modified)
-    val request       = JsObject("fields" -> DxObject.requestFields(defaultFields))
+    val request = JsObject("fields" -> DxObject.requestFields(defaultFields))
     val response =
       if (id.startsWith("project-"))
         DXAPI.projectDescribe(
@@ -45,7 +45,7 @@ case class DxProject(id: String) extends DxDataObject {
         throw new Exception(s"malformed JSON ${descJs}")
     }
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 
@@ -106,7 +106,7 @@ case class DxProject(id: String) extends DxDataObject {
   def newFolder(folderPath: String, parents: Boolean): Unit = {
     val request = JsObject(
       "project" -> JsString(id),
-      "folder"  -> JsString(folderPath),
+      "folder" -> JsString(folderPath),
       "parents" -> (if (parents) JsTrue else JsFalse)
     )
     val response = id match {
@@ -136,7 +136,7 @@ case class DxProject(id: String) extends DxDataObject {
       "objects" -> JsArray(objs.map { x =>
         JsString(x.id)
       }.toVector),
-      "folders"     -> JsArray(Vector.empty[JsString]),
+      "folders" -> JsArray(Vector.empty[JsString]),
       "destination" -> JsString(destinationFolder)
     )
     val response = id match {

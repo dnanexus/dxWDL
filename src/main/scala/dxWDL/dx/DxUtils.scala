@@ -11,9 +11,9 @@ import dxWDL.base.{AppInternalException, Utils, Verbose}
 
 object DxUtils {
   private val DOWNLOAD_RETRY_LIMIT = 3
-  private val UPLOAD_RETRY_LIMIT   = 3
+  private val UPLOAD_RETRY_LIMIT = 3
 
-  lazy val dxEnv         = DXEnvironment.create()
+  lazy val dxEnv = DXEnvironment.create()
   lazy val dxCrntProject = DxProject(dxEnv.getProjectContext())
 
   def isDxId(objName: String): Boolean = {
@@ -118,7 +118,7 @@ object DxUtils {
     } else if (dxExec.isInstanceOf[DxAnalysis]) {
       JsObject(
         "$dnanexus_link" -> JsObject(
-          "field"    -> JsString(fieldName),
+          "field" -> JsString(fieldName),
           "analysis" -> JsString(dxExec.id)
         )
       )
@@ -136,7 +136,7 @@ object DxUtils {
   ): DxJob = {
     val fields = Map(
       "function" -> JsString(entryPoint),
-      "input"    -> inputs
+      "input" -> inputs
     )
     val instanceFields = instanceType match {
       case None => Map.empty
@@ -160,7 +160,7 @@ object DxUtils {
     Utils.appletLog(verbose, s"subjob request=${req.prettyPrint}")
 
     val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-    val info: JsValue    = jsValueOfJsonNode(retval)
+    val info: JsValue = jsValueOfJsonNode(retval)
     val id: String = info.asJsObject.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
@@ -172,7 +172,7 @@ object DxUtils {
   // describe a project, and extract fields that not currently available
   // through dxjava.
   def projectDescribeExtraInfo(dxProject: DxProject): (String, String) = {
-    val rep           = DXAPI.projectDescribe(dxProject.id, classOf[JsonNode])
+    val rep = DXAPI.projectDescribe(dxProject.id, classOf[JsonNode])
     val jso: JsObject = jsValueOfJsonNode(rep).asJsObject
 
     val billTo = jso.fields.get("billTo") match {
@@ -254,11 +254,11 @@ object DxUtils {
 
     // clone
     val req = JsObject(
-      "objects"     -> JsArray(JsString(assetRecord.id)),
-      "project"     -> JsString(dxProject.id),
+      "objects" -> JsArray(JsString(assetRecord.id)),
+      "project" -> JsString(dxProject.id),
       "destination" -> JsString("/")
     )
-    val rep            = DXAPI.projectClone(rmtProject.id, jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep = DXAPI.projectClone(rmtProject.id, jsonNodeOfJsValue(req), classOf[JsonNode])
     val repJs: JsValue = jsValueOfJsonNode(rep)
 
     val exists = repJs.asJsObject.fields.get("exists") match {
@@ -291,7 +291,7 @@ object DxUtils {
       val fid = dxfile.id
       try {
         // Use dx download. Quote the path, because it may contains spaces.
-        val dxDownloadCmd    = s"""dx download ${fid} -o "${path.toString()}" """
+        val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
         val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
         true
       } catch {
@@ -306,7 +306,7 @@ object DxUtils {
       if (!Files.exists(dir))
         Files.createDirectories(dir)
     }
-    var rc      = false
+    var rc = false
     var counter = 0
     while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
       Utils.appletLog(verbose, s"downloading file ${path.toString} (try=${counter})")

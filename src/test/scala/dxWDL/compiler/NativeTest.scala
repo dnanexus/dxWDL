@@ -89,9 +89,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   private def getAppletId(path: String): String = {
-    val folder   = Paths.get(path).getParent().toAbsolutePath().toString()
+    val folder = Paths.get(path).getParent().toAbsolutePath().toString()
     val basename = Paths.get(path).getFileName().toString()
-    val verbose  = Verbose(false, true, Set.empty)
+    val verbose = Verbose(false, true, Set.empty)
     val results = DxFindDataObjects(Some(10), verbose).apply(
       dxTestProject,
       Some(folder),
@@ -130,7 +130,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
-    val path   = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
+    val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTermination]
   }
@@ -220,7 +220,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet  = DxApplet.getInstance(appId)
+    val dxApplet = DxApplet.getInstance(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -244,7 +244,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet  = DxApplet.getInstance(appId)
+    val dxApplet = DxApplet.getInstance(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (a, b) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -269,7 +269,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
               |]
             """.stripMargin.parseJson
 
-    val path      = pathFromBasename("compiler", "add.wdl")
+    val path = pathFromBasename("compiler", "add.wdl")
     val extraPath = pathFromBasename("compiler/extras", "extras_license.json")
 
     val appId = Main.compile(
@@ -283,7 +283,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     val dxApplet = DxApplet.getInstance(appId)
-    val desc     = dxApplet.describe(Set(Field.Details))
+    val desc = dxApplet.describe(Set(Field.Details))
     val license = desc.details match {
       case Some(JsObject(x)) =>
         x.get("upstreamProjects") match {
@@ -332,15 +332,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
     timeout shouldBe JsObject(
       "*" -> JsObject(
-        "days"    -> JsNumber(2),
-        "hours"   -> JsNumber(0),
+        "days" -> JsNumber(2),
+        "hours" -> JsNumber(0),
         "minutes" -> JsNumber(0)
       )
     )
   }
 
   it should "timeout can be overriden from the extras file" taggedAs (NativeTestXX) in {
-    val path      = pathFromBasename("compiler", "add_timeout_override.wdl")
+    val path = pathFromBasename("compiler", "add_timeout_override.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
     val appId = Main.compile(
       path.toString
@@ -377,7 +377,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     // make sure the timeout is what it should be
     val (stdout, stderr) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
-    val obj  = stdout.parseJson.asJsObject
+    val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
     val obj4 = obj3.fields("main").asJsObject
@@ -391,7 +391,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "Compile a workflow with subworkflows on the platform with the reorg app" taggedAs (EdgeTest) in {
-    val path     = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
     val extrasContent =
       s"""|{
@@ -413,8 +413,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case _                              => throw new Exception("sanity")
     }
 
-    val wf       = DxWorkflow.getInstance(wfId)
-    val wfDesc   = wf.describe(Set(Field.Stages))
+    val wf = DxWorkflow.getInstance(wfId)
+    val wfDesc = wf.describe(Set(Field.Stages))
     val wfStages = wfDesc.stages.get
 
     // there should be 4 stages: 1) common 2) train_stations 3) outputs 4) reorg
@@ -438,7 +438,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   // ignore for now as the test will fail in staging
   it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
-    val path     = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
     // upload random file
     val (uploadOut, uploadErr) = Utils.execCommand(
@@ -466,9 +466,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case _                                => throw new Exception("sanity")
     }
 
-    val wf         = DxWorkflow.getInstance(wfId)
-    val wfDesc     = wf.describe(Set(Field.Stages))
-    val wfStages   = wfDesc.stages.get
+    val wf = DxWorkflow.getInstance(wfId)
+    val wfDesc = wf.describe(Set(Field.Stages))
+    val wfStages = wfDesc.stages.get
     val reorgStage = wfStages.last
 
     // There should be 3 inputs, the output from output stage and the custom reorg config file.
@@ -482,7 +482,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
-    val path     = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
     // upload random file
     val extrasContent =

@@ -100,7 +100,7 @@ case class Block(nodes: Vector[GraphNode]) {
   def validate(): Unit = {
     // There can be no calls in the first nodes
     val allButLast: Vector[GraphNode] = this.nodes.dropRight(1)
-    val allCalls                      = Block.deepFindCalls(allButLast)
+    val allCalls = Block.deepFindCalls(allButLast)
     assert(allCalls.size == 0)
   }
 
@@ -126,8 +126,8 @@ case class Block(nodes: Vector[GraphNode]) {
         // WDL allows scatter on one element only
         assert(ssc.scatterVariableNodes.size == 1)
         val svNode: ScatterVariableNode = ssc.scatterVariableNodes.head
-        val collection                  = svNode.scatterExpressionNode.womExpression.sourceString
-        val name                        = svNode.identifier.localName.value
+        val collection = svNode.scatterExpressionNode.womExpression.sourceString
+        val name = svNode.identifier.localName.value
         s"scatter (${name} in ${collection})"
       case cond: ConditionalNode =>
         s"if (${cond.conditionExpression.womExpression.sourceString})"
@@ -203,7 +203,7 @@ object Block {
     assert(nodes.size > 0)
     nodes.flatMap { node =>
       val ancestors = node.upstreamAncestry
-      val others    = nodes - node
+      val others = nodes - node
       if ((ancestors.intersect(others)).isEmpty) {
         Some(node)
       } else {
@@ -215,7 +215,7 @@ object Block {
   // Sort a group of nodes according to dependencies. Note that this is a partial
   // ordering only.
   def partialSortByDep(nodes: Set[GraphNode]): Vector[GraphNode] = {
-    var ordered              = Vector.empty[GraphNode]
+    var ordered = Vector.empty[GraphNode]
     var rest: Set[GraphNode] = nodes
 
     while (!rest.isEmpty) {
@@ -303,12 +303,12 @@ object Block {
   def splitGraph(graph: Graph, callsLoToHi: Vector[String]): (
       Vector[GraphInputNode], // inputs
       Vector[GraphInputNode], // missing inner inputs that propagate
-      Vector[Block],          // blocks
+      Vector[Block], // blocks
       Vector[GraphOutputNode]
   ) // outputs
   = {
     var rest: Set[GraphNode] = graph.nodes
-    var blocks               = Vector.empty[Block]
+    var blocks = Vector.empty[Block]
 
     // separate out the inputs
     val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
@@ -367,7 +367,7 @@ object Block {
   def split(graph: Graph, wfSource: String): (
       Vector[GraphInputNode], // inputs
       Vector[GraphInputNode], // implicit inputs
-      Vector[Block],          // blocks
+      Vector[Block], // blocks
       Vector[GraphOutputNode]
   ) // outputs
   = {
@@ -476,7 +476,7 @@ object Block {
   sealed trait Category {
     val nodes: Vector[GraphNode]
   }
-  case class AllExpressions(override val nodes: Vector[GraphNode])              extends Category
+  case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
   case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
   case class CallWithSubexpressions(override val nodes: Vector[GraphNode], value: CallNode)
       extends Category
@@ -510,7 +510,7 @@ object Block {
     def toString(catg: Category): String = {
       // convert Block$Cond to Cond
       val fullClassName = catg.getClass.toString
-      val index         = fullClassName.lastIndexOf('$')
+      val index = fullClassName.lastIndexOf('$')
       if (index == -1)
         fullClassName
       else
@@ -556,10 +556,10 @@ object Block {
     assert(path.size >= 1)
 
     val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
-    var subBlock          = blocks(path.head)
+    var subBlock = blocks(path.head)
     for (i <- path.tail) {
-      val catg               = categorize(subBlock)
-      val innerGraph         = Category.getInnerGraph(catg)
+      val catg = categorize(subBlock)
+      val innerGraph = Category.getInnerGraph(catg)
       val (_, _, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
       subBlock = blocks2(i)
     }
@@ -650,7 +650,7 @@ object Block {
     //
     val optionalInputs: Set[String] = block.nodes.flatMap {
       case cNode: CallNode =>
-        val missingCallArgs  = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
+        val missingCallArgs = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         val callee: Callable = cNode.callable
         missingCallArgs.flatMap {
           case (name, womType) =>
@@ -690,7 +690,7 @@ object Block {
 
     xtrnPorts.map { outputPort =>
       // Is this really the fully qualified name?
-      val fqn     = outputPort.identifier.localName.value
+      val fqn = outputPort.identifier.localName.value
       val womType = outputPort.womType
       fqn -> womType
     }.toMap
@@ -748,7 +748,7 @@ object Block {
   ): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes)
-    val inputs: Set[String]  = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
+    val inputs: Set[String] = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
     //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
     inputs.intersect(outputs)
   }

@@ -104,9 +104,9 @@ case class DxInstanceType(
   // types don't have the exact memory and disk space that you would
   // expect. For example, mem1_ssd1_x2 has less disk space than mem2_ssd1_x2.
   def compareByResources(that: DxInstanceType): Int = {
-    val memDelta  = (this.memoryMB / 1024) - (that.memoryMB / 1024)
+    val memDelta = (this.memoryMB / 1024) - (that.memoryMB / 1024)
     val diskDelta = (this.diskGB / 16) - (that.diskGB / 16)
-    val cpuDelta  = this.cpu - that.cpu
+    val cpuDelta = this.cpu - that.cpu
 
     val retval =
       if (memDelta == 0 && diskDelta == 0 && cpuDelta == 0)
@@ -259,7 +259,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
 
   // sort the instances, and print them out
   def prettyPrint(): String = {
-    var remain: Set[DxInstanceType]          = instances.toSet
+    var remain: Set[DxInstanceType] = instances.toSet
     var sortediTypes: Vector[DxInstanceType] = Vector()
     while (!remain.isEmpty) {
       val smallest = calcMinimalInstanceType(remain)
@@ -300,7 +300,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case None                 => None
       case Some(WomString(buf)) =>
         // extract number
-        val numRex  = """(\d+\.?\d*)""".r
+        val numRex = """(\d+\.?\d*)""".r
         val numbers = numRex.findAllIn(buf).toList
         if (numbers.length != 1)
           throw new Exception(s"Can not parse memory specification ${buf}")
@@ -315,7 +315,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
         // extract memory units
         val memUnitRex = """([a-zA-Z]+)""".r
-        val memUnits   = memUnitRex.findAllIn(buf).toList
+        val memUnits = memUnitRex.findAllIn(buf).toList
         if (memUnits.length > 1)
           throw new Exception(s"Can not parse memory specification ${buf}")
         val memBytes: Double =
@@ -349,9 +349,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val diskGB: Option[Int] = wdlDiskGB match {
       case None => None
       case Some(WomString(buf)) =>
-        val components  = buf.split("\\s+")
+        val components = buf.split("\\s+")
         val ignoreWords = Set("local-disk", "hdd", "sdd", "ssd")
-        val l           = components.filter(x => !(ignoreWords contains x.toLowerCase))
+        val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
         if (l.length != 1)
           throw new Exception(s"Can't parse disk space specification ${buf}")
         val i =
@@ -427,7 +427,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       }
       osSupported.map { elem =>
         val distribution = getJsStringField(elem, "distribution")
-        val release      = getJsStringField(elem, "release")
+        val release = getJsStringField(elem, "release")
         distribution -> release
       }.toVector
     }
@@ -443,7 +443,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           .build()
       )
       .build()
-    val rep            = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
+    val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
       repJs.asJsObject.fields.get(availableField) match {
@@ -454,11 +454,11 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // convert to a list of DxInstanceTypes, with prices set to zero
     availableInstanceTypes.asJsObject.fields.map {
       case (iName, jsValue) =>
-        val numCores       = getJsIntField(jsValue, "numCores")
-        val memoryMB       = getJsIntField(jsValue, "totalMemoryMB")
-        val diskSpaceGB    = getJsIntField(jsValue, "ephemeralStorageGB")
-        val os             = getSupportedOSes(jsValue)
-        val gpu            = iName contains "_gpu"
+        val numCores = getJsIntField(jsValue, "numCores")
+        val memoryMB = getJsIntField(jsValue, "totalMemoryMB")
+        val diskSpaceGB = getJsIntField(jsValue, "ephemeralStorageGB")
+        val os = getSupportedOSes(jsValue)
+        val gpu = iName contains "_gpu"
         val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
         iName -> dxInstanceType
     }.toMap
@@ -488,10 +488,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           throw new Exception("Insufficient permissions")
       }
 
-    val js: JsValue           = DxUtils.jsValueOfJsonNode(rep)
+    val js: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val pricingModelsByRegion = getJsField(js, "pricingModelsByRegion")
-    val pricingModel          = getJsField(pricingModelsByRegion, region)
-    val computeRatesPerHour   = getJsField(pricingModel, "computeRatesPerHour")
+    val pricingModel = getJsField(pricingModelsByRegion, region)
+    val computeRatesPerHour = getJsField(pricingModel, "computeRatesPerHour")
 
     // convert from JsValue to a Map
     computeRatesPerHour.asJsObject.fields.map {
@@ -622,7 +622,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // sort the prices from low to high, and then replace
     // with rank.
-    var crnt_price      = 0
+    var crnt_price = 0
     val sortedInstances = db.instances.sortWith(_.price < _.price)
     val opaque = sortedInstances.map { it =>
       crnt_price += 1

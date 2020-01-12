@@ -13,7 +13,7 @@ class WomValueSerializationTest extends FlatSpec with Matchers {
     Some("House")
   )
   val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
-  val valueSerializer                   = WomValueSerialization(typeAliases)
+  val valueSerializer = WomValueSerialization(typeAliases)
 
   val valueTestCases: List[WomValue] = List(
     // primitive types

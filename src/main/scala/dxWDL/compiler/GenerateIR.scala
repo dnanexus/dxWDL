@@ -215,7 +215,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     Utils.traceLevelDec()
 
     // compile the tasks/workflows from bottom to top.
-    var allCallables       = Map.empty[String, IR.Callable]
+    var allCallables = Map.empty[String, IR.Callable]
     var allCallablesSorted = Vector.empty[IR.Callable]
 
     // Only the toplevel workflow may be unlocked. This happens

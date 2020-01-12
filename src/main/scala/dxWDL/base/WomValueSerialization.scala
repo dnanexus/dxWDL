@@ -43,10 +43,10 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
 
       // general case, the keys are not strings.
       case (WomMapType(keyType, valueType), WomMap(_, m)) =>
-        val keys: WomValue   = WomArray(WomArrayType(keyType), m.keys.toVector)
-        val kJs              = womToJSON(keys.womType, keys)
+        val keys: WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
+        val kJs = womToJSON(keys.womType, keys)
         val values: WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
-        val vJs              = womToJSON(values.womType, values)
+        val vJs = womToJSON(values.womType, values)
         JsObject("keys" -> kJs, "values" -> vJs)
 
       case (WomPairType(lType, rType), WomPair(l, r)) =>
@@ -117,7 +117,7 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
       case (WomPairType(lType, rType), JsObject(_)) =>
         jsv.asJsObject.getFields("left", "right") match {
           case Seq(lJs, rJs) =>
-            val left  = womFromJSON(lType, lJs)
+            val left = womFromJSON(lType, lJs)
             val right = womFromJSON(rType, rJs)
             WomPair(left, right)
           case _ => throw new Exception(s"Malformed serialized par ${jsv}")
@@ -132,7 +132,7 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
       case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
         val m: Map[String, WomValue] = fields.map {
           case (key, elemValue) =>
-            val t: WomType     = typeMap(key)
+            val t: WomType = typeMap(key)
             val elem: WomValue = womFromJSON(t, elemValue)
             key -> elem
         }.toMap
@@ -146,7 +146,7 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
   // serialization routines
   def toJSON(w: WomValue): JsValue = {
     JsObject(
-      "womType"  -> JsString(WomTypeSerialization(typeAliases).toString(w.womType)),
+      "womType" -> JsString(WomTypeSerialization(typeAliases).toString(w.womType)),
       "womValue" -> womToJSON(w.womType, w)
     )
   }

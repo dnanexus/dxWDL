@@ -11,10 +11,10 @@ import dxWDL.util._
 
 object Main extends App {
   sealed trait Termination
-  case class SuccessfulTermination(output: String)                     extends Termination
+  case class SuccessfulTermination(output: String) extends Termination
   case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
-  case class UnsuccessfulTermination(output: String)                   extends Termination
-  case class BadUsageTermination(info: String)                         extends Termination
+  case class UnsuccessfulTermination(output: String) extends Termination
+  case class BadUsageTermination(info: String) extends Termination
 
   type OptionsMap = Map[String, List[String]]
 
@@ -96,7 +96,7 @@ object Main extends App {
                                         |${subargs}""".stripMargin.replaceAll("\n", " "))
     }
     val cmdLineOpts = splitCmdLine(arglist)
-    val options     = HashMap.empty[String, List[String]]
+    val options = HashMap.empty[String, List[String]]
     cmdLineOpts.foreach {
       case Nil => throw new Exception("sanity: empty command line option")
       case keyOrg :: subargs =>
@@ -211,7 +211,7 @@ object Main extends App {
     // it does not contain problematic JSON characters.
     val errMsg = JsObject(
       "error" -> JsObject(
-        "type"    -> JsString(errType),
+        "type" -> JsString(errType),
         "message" -> JsString(Utils.sanitize(e.getMessage))
       )
     ).prettyPrint
@@ -458,8 +458,8 @@ object Main extends App {
       return BadUsageTermination("")
 
     try {
-      val cOpt                = compilerOptions(options)
-      val top                 = compiler.Top(cOpt)
+      val cOpt = compilerOptions(options)
+      val top = compiler.Top(cOpt)
       val (dxProject, folder) = pathOptions(options, cOpt.verbose)
       cOpt.compileMode match {
         case CompilerFlag.IR =>
@@ -468,8 +468,8 @@ object Main extends App {
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
-          val retval       = top.apply(sourceFile, folder, dxProject, dxPathConfig)
-          val desc         = retval.getOrElse("")
+          val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
+          val desc = retval.getOrElse("")
           return SuccessfulTermination(desc)
       }
     } catch {
@@ -560,8 +560,8 @@ object Main extends App {
   ): Termination = {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
-    val verbose                 = rtDebugLvl > 0
-    val inputLines: String      = Utils.readFileContent(jobInputPath)
+    val verbose = rtDebugLvl > 0
+    val inputLines: String = Utils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
     val (task, typeAliases) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
@@ -570,7 +570,7 @@ object Main extends App {
     dxPathConfig.createCleanDirs()
 
     val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
-    val inputs         = jobInputOutput.loadInputs(originalInputs, task)
+    val inputs = jobInputOutput.loadInputs(originalInputs, task)
     val taskRunner = exec.TaskRunner(
       task,
       taskSourceCode,
@@ -596,7 +596,7 @@ object Main extends App {
         SuccessfulTermination(s"success ${op}")
 
       case InternalOp.TaskEpilog =>
-        val (localizedInputs, dxUrl2path)      = taskRunner.readEnvFromDisk()
+        val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
         val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
 
         // write outputs, ignore null values, these could occur for optional
@@ -737,7 +737,7 @@ object Main extends App {
 
     // write outputs, ignore null values, these could occur for optional
     // values that were not specified.
-    val json   = JsObject(outputFields)
+    val json = JsObject(outputFields)
     val ast_pp = json.prettyPrint
     Utils.writeFileContent(jobOutputPath, ast_pp)
 
@@ -763,13 +763,13 @@ object Main extends App {
         throw new Exception(s"malformed applet field ${other} in job info")
     }
 
-    val details: JsValue               = applet.describe(Set(Field.Details)).details.get
+    val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
-    val womSourceCode                  = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+    val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw                           = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
-    val instanceTypeDB                  = dbRaw.parseJson.convertTo[InstanceTypeDB]
+    val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+    val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
     val runtimeAttrs: Option[WdlRuntimeAttrs] =
       details.asJsObject.fields.get("runtimeAttrs") match {
@@ -805,13 +805,13 @@ object Main extends App {
       case None =>
         UnsuccessfulTermination(s"unknown internal action ${args.head}")
       case Some(op) if args.length == 4 =>
-        val homeDir        = Paths.get(args(1))
-        val rtDebugLvl     = parseRuntimeDebugLevel(args(2))
+        val homeDir = Paths.get(args(1))
+        val rtDebugLvl = parseRuntimeDebugLevel(args(2))
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
           Utils.jobFilesOfHomeDir(homeDir)
-        val dxPathConfig  = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
-        val fileInfoDir   = runtimeBulkFileDescribe(jobInputPath)
+        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
+        val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
         // Get the WOM source code (currently WDL, could be also CWL in the future)

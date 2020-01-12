@@ -21,28 +21,28 @@ class InvalidInputException(s: String) extends Exception(s) {}
 class IllegalArgumentException(s: String) extends Exception(s) {}
 
 object Utils {
-  val APPLET_LOG_MSG_LIMIT           = 1000
-  val CHECKSUM_PROP                  = "dxWDL_checksum"
-  val DEFAULT_RUNTIME_DEBUG_LEVEL    = 1
+  val APPLET_LOG_MSG_LIMIT = 1000
+  val CHECKSUM_PROP = "dxWDL_checksum"
+  val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
   val DEFAULT_APPLET_TIMEOUT_IN_DAYS = 2
-  val DXFUSE_MAX_MEMORY_CONSUMPTION  = 300 * 1024 * 1024 // how much memory dxfuse takes
-  val DXAPI_NUM_OBJECTS_LIMIT        = 1000 // maximal number of objects in a single API request
-  val DX_WDL_ASSET                   = "dxWDLrt"
-  val DX_URL_PREFIX                  = "dx://"
-  val DX_WDL_RUNTIME_CONF_FILE       = "dxWDL_runtime.conf"
-  val FLAT_FILES_SUFFIX              = "___dxfiles"
-  val INTERMEDIATE_RESULTS_FOLDER    = "intermediate"
-  val LAST_STAGE                     = "last"
-  val LINK_INFO_FILENAME             = "linking.json"
-  val MAX_NUM_RENAME_TRIES           = 100
-  val MAX_STRING_LEN                 = 32 * 1024 // Long strings cause problems with bash and the UI
-  val MAX_STAGE_NAME_LEN             = 60 // maximal length of a workflow stage name
-  val MAX_NUM_FILES_MOVE_LIMIT       = 1000
-  val UBUNTU_VERSION                 = "16.04"
-  val VERSION_PROP                   = "dxWDL_version"
-  val REORG_CONFIG                   = "reorg_conf___"
-  val REORG_STATUS                   = "reorg_status___"
-  val REORG_STATUS_COMPLETE          = "completed"
+  val DXFUSE_MAX_MEMORY_CONSUMPTION = 300 * 1024 * 1024 // how much memory dxfuse takes
+  val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
+  val DX_WDL_ASSET = "dxWDLrt"
+  val DX_URL_PREFIX = "dx://"
+  val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
+  val FLAT_FILES_SUFFIX = "___dxfiles"
+  val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
+  val LAST_STAGE = "last"
+  val LINK_INFO_FILENAME = "linking.json"
+  val MAX_NUM_RENAME_TRIES = 100
+  val MAX_STRING_LEN = 32 * 1024 // Long strings cause problems with bash and the UI
+  val MAX_STAGE_NAME_LEN = 60 // maximal length of a workflow stage name
+  val MAX_NUM_FILES_MOVE_LIMIT = 1000
+  val UBUNTU_VERSION = "16.04"
+  val VERSION_PROP = "dxWDL_version"
+  val REORG_CONFIG = "reorg_conf___"
+  val REORG_STATUS = "reorg_status___"
+  val REORG_STATUS_COMPLETE = "completed"
 
   var traceLevel = 0
 
@@ -54,10 +54,10 @@ object Utils {
 
   // the regions live in dxWDL.conf
   def getRegions(): Map[String, String] = {
-    val config          = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
+    val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
     val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
     val region2project: Map[String, String] = l.map { pair =>
-      val r        = pair.getString("region")
+      val r = pair.getString("region")
       val projName = pair.getString("path")
       r -> projName
     }.toMap
@@ -94,7 +94,7 @@ object Utils {
   def readFileContent(path: Path): String = {
     // Java 8 Example - Uses UTF-8 character encoding
     val lines = Files.readAllLines(path, StandardCharsets.UTF_8).asScala.toList
-    val sb    = new StringBuilder(1024)
+    val sb = new StringBuilder(1024)
     lines.foreach { line =>
       sb.append(line)
       sb.append("\n")
@@ -161,7 +161,7 @@ object Utils {
 // By: owainlewis
 //
   def gzipCompress(input: Array[Byte]): Array[Byte] = {
-    val bos  = new ByteArrayOutputStream(input.length)
+    val bos = new ByteArrayOutputStream(input.length)
     val gzip = new GZIPOutputStream(bos)
     gzip.write(input)
     gzip.close()
@@ -176,7 +176,7 @@ object Utils {
   }
 
   def gzipAndBase64Encode(buf: String): String = {
-    val bytes   = buf.getBytes
+    val bytes = buf.getBytes
     val gzBytes = gzipCompress(bytes)
     Base64.getEncoder.encodeToString(gzBytes)
   }
@@ -189,10 +189,10 @@ object Utils {
   // Job input, output,  error, and info files are located relative to the home
   // directory
   def jobFilesOfHomeDir(homeDir: Path): (Path, Path, Path, Path) = {
-    val jobInputPath  = homeDir.resolve("job_input.json")
+    val jobInputPath = homeDir.resolve("job_input.json")
     val jobOutputPath = homeDir.resolve("job_output.json")
-    val jobErrorPath  = homeDir.resolve("job_error.json")
-    val jobInfoPath   = homeDir.resolve("dnanexus-job.json")
+    val jobErrorPath = homeDir.resolve("job_error.json")
+    val jobInfoPath = homeDir.resolve("dnanexus-job.json")
     (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
   }
 
@@ -202,7 +202,7 @@ object Utils {
       timeout: Option[Int] = None,
       quiet: Boolean = false
   ): (String, String) = {
-    val cmds      = Seq("/bin/sh", "-c", cmdLine)
+    val cmds = Seq("/bin/sh", "-c", cmdLine)
     val outStream = new StringBuilder()
     val errStream = new StringBuilder()
     val logger = ProcessLogger(

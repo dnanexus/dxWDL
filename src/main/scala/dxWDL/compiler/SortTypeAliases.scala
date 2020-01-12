@@ -93,7 +93,7 @@ case class SortTypeAliases(verbose: Verbose) {
   }
 
   def apply(typeAliases: Vector[(String, WomType)]): Vector[(String, WomType)] = {
-    val justTypes   = typeAliases.map { case (_, x) => x }
+    val justTypes = typeAliases.map { case (_, x) => x }
     val sortedTypes = apply2(justTypes)
 
     sortedTypes.map {

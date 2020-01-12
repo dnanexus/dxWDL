@@ -62,8 +62,8 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
           JsString(k)
         }.toVector
         val valuesJs = jsValue.asJsObject.fields.values.toVector
-        val kFiles   = keysJs.flatMap(findDxFiles(keyType, _))
-        val vFiles   = valuesJs.flatMap(findDxFiles(valueType, _))
+        val kFiles = keysJs.flatMap(findDxFiles(keyType, _))
+        val vFiles = valuesJs.flatMap(findDxFiles(valueType, _))
         kFiles.toVector ++ vFiles.toVector
 
       // Two ways of writing pairs: an object with left/right fields, or an array
@@ -140,7 +140,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
 
   def apply(inputPath: Path): InputFileScanResults = {
     // Read the JSON values from the file
-    val content                      = Utils.readFileContent(inputPath).parseJson
+    val content = Utils.readFileContent(inputPath).parseJson
     val inputs: Map[String, JsValue] = content.asJsObject.fields
 
     val allCallables: Vector[IR.Callable] =
@@ -188,7 +188,7 @@ case class InputFile(
     typeAliases: Map[String, WomType],
     verbose: Verbose
 ) {
-  val verbose2: Boolean            = verbose.containsKey("InputFile")
+  val verbose2: Boolean = verbose.containsKey("InputFile")
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
   // Convert a job input to a WomValue. Do not download any files, convert them
@@ -205,7 +205,7 @@ case class InputFile(
       case (WomSingleFileType, JsObject(_)) =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
-        val dxFile          = DxUtils.dxFileFromJsValue(jsValue)
+        val dxFile = DxUtils.dxFileFromJsValue(jsValue)
         val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
         WomSingleFile(s)
 
@@ -224,12 +224,12 @@ case class InputFile(
       // a few ways of writing a pair: an object, or an array
       case (WomPairType(lType, rType), JsObject(fields))
           if (List("left", "right").forall(fields contains _)) =>
-        val left  = womValueFromCromwellJSON(lType, fields("left"))
+        val left = womValueFromCromwellJSON(lType, fields("left"))
         val right = womValueFromCromwellJSON(rType, fields("right"))
         WomPair(left, right)
 
       case (WomPairType(lType, rType), JsArray(Vector(l, r))) =>
-        val left  = womValueFromCromwellJSON(lType, l)
+        val left = womValueFromCromwellJSON(lType, l)
         val right = womValueFromCromwellJSON(rType, r)
         WomPair(left, right)
 
@@ -255,7 +255,7 @@ case class InputFile(
         // convert each field
         val m = fields.map {
           case (key, value) =>
-            val t: WomType     = typeMap(key)
+            val t: WomType = typeMap(key)
             val elem: WomValue = womValueFromCromwellJSON(t, value)
             key -> elem
         }.toMap
@@ -393,7 +393,7 @@ case class InputFile(
       }
 
     // check that the stage order hasn't changed
-    val allStageNames      = wf.stages.map { _.id }.toVector
+    val allStageNames = wf.stages.map { _.id }.toVector
     val embedAllStageNames = wfWithDefaults.stages.map { _.id }.toVector
     assert(allStageNames == embedAllStageNames)
 
@@ -408,7 +408,7 @@ case class InputFile(
     Utils.trace(verbose.on, s"Embedding defaults into the IR")
 
     // read the default inputs file (xxxx.json)
-    val wdlDefaults: JsObject                   = Utils.readFileContent(defaultInputs).parseJson.asJsObject
+    val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
     val defaultFields: HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
 
     val callablesWithDefaults = bundle.allCallables.map {
@@ -479,13 +479,13 @@ case class InputFile(
     Utils.traceLevelInc()
 
     // read the input file xxxx.json
-    val wdlInputs: JsObject                   = Utils.readFileContent(inputPath).parseJson.asJsObject
+    val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
     val inputFields: HashMap[String, JsValue] = preprocessInputs(wdlInputs)
-    val cif                                   = CromwellInputFileState(inputFields, HashMap.empty)
+    val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
     def handleTask(applet: IR.Applet): Unit = {
       applet.inputs.foreach { cVar =>
-        val fqn    = s"${applet.name}.${cVar.name}"
+        val fqn = s"${applet.name}.${cVar.name}"
         val dxName = s"${cVar.name}"
         cif.checkAndBind(fqn, dxName, cVar)
       }
@@ -512,7 +512,7 @@ case class InputFile(
         // inputs; nothing else.
         wf.inputs.foreach {
           case (cVar, sArg) =>
-            val fqn    = s"${wf.name}.${cVar.name}"
+            val fqn = s"${wf.name}.${cVar.name}"
             val dxName = s"${cVar.name}"
             cif.checkAndBind(fqn, dxName, cVar)
         }
@@ -526,7 +526,7 @@ case class InputFile(
         val commonStage = wf.stages.head.id.getId
         wf.inputs.foreach {
           case (cVar, _) =>
-            val fqn    = s"${wf.name}.${cVar.name}"
+            val fqn = s"${wf.name}.${cVar.name}"
             val dxName = s"${commonStage}.${cVar.name}"
             cif.checkAndBind(fqn, dxName, cVar)
         }
@@ -545,7 +545,7 @@ case class InputFile(
             case Some(x) => x
           }
           callee.inputVars.foreach { cVar =>
-            val fqn    = s"${wf.name}.${stg.description}.${cVar.name}"
+            val fqn = s"${wf.name}.${stg.description}.${cVar.name}"
             val dxName = s"${stg.description}.${cVar.name}"
             cif.checkAndBind(fqn, dxName, cVar)
           }

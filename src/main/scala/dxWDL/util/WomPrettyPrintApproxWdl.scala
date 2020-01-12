@@ -30,10 +30,10 @@ object WomPrettyPrintApproxWdl {
           svn.identifier.localName.value
         }
         assert(varNames.size == 1)
-        val varName                     = varNames.head
+        val varName = varNames.head
         val svNode: ScatterVariableNode = sct.scatterVariableNodes.head
-        val collection                  = svNode.scatterExpressionNode.womExpression.sourceString
-        val orderedNodes                = Block.partialSortByDep(sct.innerGraph.nodes)
+        val collection = svNode.scatterExpressionNode.womExpression.sourceString
+        val orderedNodes = Block.partialSortByDep(sct.innerGraph.nodes)
         val innerBlock = orderedNodes
           .flatMap { node =>
             applyGNode(node, indent + "  ")
@@ -66,7 +66,7 @@ object WomPrettyPrintApproxWdl {
           }
           .mkString(",")
         val calleeName = getUnqualifiedName(call.callable.name)
-        val callName   = call.identifier.localName.value
+        val callName = call.identifier.localName.value
         val inputs =
           if (inputNames.isEmpty) ""
           else s"{ input: ${inputNames} }"

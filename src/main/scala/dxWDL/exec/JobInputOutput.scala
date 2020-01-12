@@ -20,7 +20,7 @@ case class JobInputOutput(
     runtimeDebugLevel: Int,
     typeAliases: Map[String, WomType]
 ) {
-  private val verbose    = (runtimeDebugLevel >= 1)
+  private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
@@ -182,7 +182,7 @@ case class JobInputOutput(
 
     for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
       val dir: Path = inputsDir.resolve(dirNum.toString)
-      val longPath  = dir.resolve(basename)
+      val longPath = dir.resolve(basename)
       if (!(existingFiles contains longPath))
         return longPath
     }
@@ -220,7 +220,7 @@ case class JobInputOutput(
         WomMap(t, m1)
 
       case (WomPair(l, r)) =>
-        val left  = translateFiles(l, translation)
+        val left = translateFiles(l, translation)
         val right = translateFiles(r, translation)
         WomPair(left, right)
 
@@ -266,7 +266,7 @@ case class JobInputOutput(
   ): WomValue = {
     val translation: Map[String, String] = localizationPlan.map {
       case (FurlDx(value, _, _), path) => value -> path.toString
-      case (FurlLocal(p1), p2)         => p1    -> p2.toString
+      case (FurlLocal(p1), p2)         => p1 -> p2.toString
     }.toMap
     translateFiles(womValue, translation)
   }
@@ -336,7 +336,7 @@ case class JobInputOutput(
       inputs: Map[InputDefinition, WomValue],
       inputsDir: Path
   ): (Map[InputDefinition, WomValue], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
-    val fileURLs: Vector[Furl]    = inputs.values.map(findFiles).flatten.toVector
+    val fileURLs: Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
     Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
 
@@ -359,7 +359,7 @@ case class JobInputOutput(
             case dxUrl: FurlDx if streamingFiles contains dxUrl =>
               // file should be streamed
               val existingFiles = accu.values.toSet
-              val (_, desc)     = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
               val path = createUniqueDownloadPath(
                 desc.name,
                 dxUrl.dxFile,
@@ -371,8 +371,8 @@ case class JobInputOutput(
             case dxUrl: FurlDx =>
               // The file needs to be localized
               val existingFiles = accu.values.toSet
-              val (_, desc)     = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
-              val path          = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
+              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
               accu + (dxUrl -> path)
           }
       }

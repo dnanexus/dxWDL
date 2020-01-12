@@ -44,13 +44,13 @@ object DxdaManifest {
         i.toString -> JsObject("size" -> JsNumber(part.size), "md5" -> JsString(part.md5))
     }
     val destinationFile: java.io.File = destination.toFile()
-    val name                          = destinationFile.getName()
-    val folder                        = destinationFile.getParent().toString
+    val name = destinationFile.getName()
+    val folder = destinationFile.getParent().toString
     JsObject(
-      "id"     -> JsString(desc.id),
-      "name"   -> JsString(name),
+      "id" -> JsString(desc.id),
+      "name" -> JsString(name),
       "folder" -> JsString(folder),
-      "parts"  -> JsObject(parts)
+      "parts" -> JsObject(parts)
     )
   }
 

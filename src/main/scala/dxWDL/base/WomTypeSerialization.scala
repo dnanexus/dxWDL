@@ -79,7 +79,7 @@ case class WomTypeSerialization(typeAliases: Map[String, WomType]) {
     }
     val centralCommaPos = find(0, 0)
 
-    val firstType  = s.substring(0, centralCommaPos)
+    val firstType = s.substring(0, centralCommaPos)
     val secondType = s.substring(centralCommaPos + 1)
     (firstType.trim, secondType.trim)
   }
@@ -94,24 +94,24 @@ case class WomTypeSerialization(typeAliases: Map[String, WomType]) {
       case "String"     => WomStringType
       case "SingleFile" => WomSingleFileType
       case _ if str.contains("[") && str.contains("]") =>
-        val openParen  = str.indexOf("[")
+        val openParen = str.indexOf("[")
         val closeParen = str.lastIndexOf("]")
-        val outer      = str.substring(0, openParen)
-        val inner      = str.substring(openParen + 1, closeParen)
+        val outer = str.substring(0, openParen)
+        val inner = str.substring(openParen + 1, closeParen)
         outer match {
           case "MaybeEmptyArray" => WomMaybeEmptyArrayType(fromString(inner))
           case "Map"             =>
             // split a string like "KK, VV" into (KK, VV)
             val (ks, vs) = splitInTwo(inner)
-            val kt       = fromString(ks)
-            val vt       = fromString(vs)
+            val kt = fromString(ks)
+            val vt = fromString(vs)
             WomMapType(kt, vt)
           case "NonEmptyArray" => WomNonEmptyArrayType(fromString(inner))
           case "Option"        => WomOptionalType(fromString(inner))
           case "Pair" =>
             val (ls, rs) = splitInTwo(inner)
-            val lt       = fromString(ls)
-            val rt       = fromString(rs)
+            val lt = fromString(ls)
+            val rt = fromString(rs)
             WomPairType(lt, rt)
         }
       case name if typeAliases contains name =>

@@ -19,7 +19,7 @@ class DxUtilsTest extends FlatSpec with Matchers {
   it should "download files as strings" in {
     val results = DxPath.resolveBulk(List(s"dx://${TEST_PROJECT}:/test_data/fileA"), dxTestProject)
     results.size shouldBe (1)
-    val dxobj          = results.values.head
+    val dxobj = results.values.head
     val dxFile: DxFile = dxobj.asInstanceOf[DxFile]
 
     val value = DxUtils.downloadString(dxFile, false)

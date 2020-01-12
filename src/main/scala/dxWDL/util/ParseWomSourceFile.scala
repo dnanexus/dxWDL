@@ -49,7 +49,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     override def resolver: CheckedAtoB[ImportResolutionRequest, ResolvedImportBundle] = {
       CheckedAtoB.fromErrorOr {
         case request: ImportResolutionRequest =>
-          val path                                     = request.toResolve
+          val path = request.toResolve
           val bundleChk: Checked[ResolvedImportBundle] = lower.resolver(request)
           bundleChk match {
             case Left(errors) =>
@@ -103,7 +103,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // - Where the file is
     val allSources = HashMap.empty[String, WorkflowSource]
 
-    val absPath          = Paths.get(mainFile.toAbsolutePath.toString)
+    val absPath = Paths.get(mainFile.toAbsolutePath.toString)
     val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
 
     // We need to get all the WDL sources, so we could analyze them
@@ -159,7 +159,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     //
     // We need to do this iteratively, because we may discover new
     // imports every time we access a WDL file.
-    var subBundles           = Map.empty[String, WomBundle]
+    var subBundles = Map.empty[String, WomBundle]
     var discoveredNewSources = true
     while (discoveredNewSources) {
       val newSubBundles = allSources.flatMap {
@@ -237,9 +237,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
       elemStartLine: Regex,
       elemEndLine: Regex
   ): Option[(List[String], String, String)] = {
-    var remaining: List[String]   = lines
+    var remaining: List[String] = lines
     var taskLines: Vector[String] = Vector.empty[String]
-    var taskName: Option[String]  = None
+    var taskName: Option[String] = None
 
     while (!remaining.isEmpty) {
       // pop the first line
@@ -276,13 +276,13 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   private def findNextTask(lines: List[String]): Option[(List[String], String, String)] = {
     val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s*)\\{".r
-    val taskEndLine: Regex   = "^}(\\s)*$".r
+    val taskEndLine: Regex = "^}(\\s)*$".r
     findWdlElement(lines, taskStartLine, taskEndLine)
   }
 
   private def findNextWorkflow(lines: List[String]): Option[(List[String], String, String)] = {
     val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s*)\\{".r
-    val workflowEndLine: Regex   = "^}(\\s)*$".r
+    val workflowEndLine: Regex = "^}(\\s)*$".r
     findWdlElement(lines, workflowStartLine, workflowEndLine)
   }
 
@@ -290,7 +290,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // to its source code. Return an empty map if there are no tasks
   // in this file.
   def scanForTasks(sourceCode: String): Map[String, String] = {
-    var lines   = sourceCode.split("\n").toList
+    var lines = sourceCode.split("\n").toList
     val taskDir = HashMap.empty[String, String]
 
     while (!lines.isEmpty) {

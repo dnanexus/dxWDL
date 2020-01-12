@@ -52,7 +52,7 @@ object DxFindExecutions {
   }
 
   def apply(parentJob: Option[DxJob]): Vector[DxExecution] = {
-    var allResults              = Vector.empty[DxExecution]
+    var allResults = Vector.empty[DxExecution]
     var cursor: Option[JsValue] = None
     do {
       val (results, next) = submitRequest(parentJob, cursor)

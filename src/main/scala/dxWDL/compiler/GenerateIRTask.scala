@@ -58,10 +58,10 @@ case class GenerateIRTask(
 
     try {
       val dxInstanceType = evalAttr("dx_instance_type")
-      val memory         = evalAttr("memory")
-      val diskSpace      = evalAttr("disks")
-      val cores          = evalAttr("cpu")
-      val gpu            = evalAttr("gpu")
+      val memory = evalAttr("memory")
+      val diskSpace = evalAttr("disks")
+      val cores = evalAttr("cpu")
+      val gpu = evalAttr("gpu")
       val iTypeDesc =
         InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
       IR.InstanceTypeConst(

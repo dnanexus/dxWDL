@@ -20,7 +20,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   private val unicornInstance =
     DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
   private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
-  private val verbose        = false
+  private val verbose = false
 
   // Note: if the file doesn't exist, this throws a null pointer exception
   private def pathFromBasename(basename: String): Path = {
@@ -68,7 +68,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         WomMap(t, m1)
 
       case (WomPair(l, r)) =>
-        val left  = addBaseDir(l)
+        val left = addBaseDir(l)
         val right = addBaseDir(r)
         WomPair(left, right)
 
@@ -140,7 +140,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
-    val dxIoFunctions  = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
+    val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
     val taskRunner = TaskRunner(
       task,

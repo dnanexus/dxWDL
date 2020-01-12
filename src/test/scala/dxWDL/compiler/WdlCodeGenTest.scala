@@ -6,7 +6,7 @@ import wom.types._
 import dxWDL.base._
 
 class WdlCodeGenTest extends FlatSpec with Matchers {
-  private val verbose    = Verbose(false, true, Set.empty)
+  private val verbose = Verbose(false, true, Set.empty)
   private val wdlCodeGen = WdlCodeGen(verbose, Map.empty, Language.WDLv1_0)
 
   private def genDefaultValue(t: WomType): String = {
@@ -36,10 +36,10 @@ class WdlCodeGenTest extends FlatSpec with Matchers {
   it should "handle structs" in {
     val houseType = WomCompositeType(
       Map(
-        "height"     -> WomIntegerType,
+        "height" -> WomIntegerType,
         "num_floors" -> WomIntegerType,
-        "street"     -> WomStringType,
-        "city"       -> WomStringType
+        "street" -> WomStringType,
+        "city" -> WomStringType
       ),
       Some("House")
     )

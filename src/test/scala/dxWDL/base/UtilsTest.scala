@@ -22,7 +22,7 @@ class UtilsTest extends FlatSpec with Matchers {
     Utils.makeDeterministic(x) should be(Utils.makeDeterministic(y))
 
     val x2 = JsObject("a" -> JsNumber(10), "b" -> JsNumber(2))
-    val y2 = JsObject("b" -> JsNumber(2), "a"  -> JsNumber(1))
+    val y2 = JsObject("b" -> JsNumber(2), "a" -> JsNumber(1))
     assert(Utils.makeDeterministic(x2) != Utils.makeDeterministic(y2))
   }
 

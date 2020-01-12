@@ -29,11 +29,11 @@ object DxfuseManifest {
         JsObject(
           "proj_id" -> JsString(fDesc.project),
           "file_id" -> JsString(dxFile.id),
-          "parent"  -> JsString(relParentDir),
-          "fname"   -> JsString(fDesc.name),
-          "size"    -> JsNumber(fDesc.size),
-          "ctime"   -> JsNumber(fDesc.created),
-          "mtime"   -> JsNumber(fDesc.modified)
+          "parent" -> JsString(relParentDir),
+          "fname" -> JsString(fDesc.name),
+          "size" -> JsNumber(fDesc.size),
+          "ctime" -> JsNumber(fDesc.created),
+          "mtime" -> JsNumber(fDesc.modified)
         )
     }.toVector
 

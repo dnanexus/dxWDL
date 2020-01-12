@@ -37,7 +37,7 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
       Field.Size
     )
     val allFields = fields ++ defaultFields
-    val request   = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val response =
       DXAPI.fileDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
@@ -73,8 +73,8 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
       case other       => throw new Exception(s"size ${other} is not a number")
     }
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    val parts   = descJs.asJsObject.fields.get("parts").map(DxFile.parseFileParts)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val parts = descJs.asJsObject.fields.get("parts").map(DxFile.parseFileParts)
     desc.copy(size = size, details = details, properties = props, parts = parts)
   }
 
@@ -86,7 +86,7 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
         JsObject(
           "$dnanexus_link" -> JsObject(
             "project" -> JsString(p.id),
-            "id"      -> JsString(id)
+            "id" -> JsString(id)
           )
         )
     }
@@ -198,7 +198,7 @@ object DxFile {
                     ) =>
                   // This could be a container, not a project.
                   val dxContainer = DxProject.getInstance(projectId)
-                  val dxFile      = DxFile.getInstance(oid, dxContainer)
+                  val dxFile = DxFile.getInstance(oid, dxContainer)
                   val desc = DxFileDescribe(
                     projectId,
                     oid,
@@ -217,8 +217,8 @@ object DxFile {
               }
 
             // The parts may be empty, only files have it, and we don't always ask for it.
-            val parts      = descJs.asJsObject.fields.get("parts").map(parseFileParts)
-            val details    = descJs.asJsObject.fields.get("details")
+            val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
+            val details = descJs.asJsObject.fields.get("details")
             val dxDescFull = dxDesc.copy(parts = parts, details = details)
             (dxFile, dxDescFull)
         }

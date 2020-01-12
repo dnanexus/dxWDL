@@ -21,7 +21,7 @@ case class DxRecord(id: String, project: Option[DxProject]) extends DxDataObject
     val defaultFields =
       Set(Field.Project, Field.Id, Field.Name, Field.Folder, Field.Created, Field.Modified)
     val allFields = fields ++ defaultFields
-    val request   = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val response =
       DXAPI.recordDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
@@ -39,7 +39,7 @@ case class DxRecord(id: String, project: Option[DxProject]) extends DxDataObject
       }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 }
