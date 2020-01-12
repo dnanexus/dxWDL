@@ -20,7 +20,7 @@ case class DxApp(id: String) extends DxExecutable {
     val defaultFields =
       Set(Field.Id, Field.Name, Field.Created, Field.Modified, Field.InputSpec, Field.OutputSpec)
     val allFields = fields ++ defaultFields
-    val request   = JsObject("fields" -> DxObject.requestFields(allFields))
+    val request = JsObject("fields" -> DxObject.requestFields(allFields))
     val response =
       DXAPI.appDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
@@ -55,7 +55,7 @@ case class DxApp(id: String) extends DxExecutable {
     }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 }

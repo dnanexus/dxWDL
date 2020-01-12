@@ -96,13 +96,13 @@ case class WfOutputs(
         }
         val name = id.workflowLocalName
         envFull += (name -> value)
-        name             -> value
+        name -> value
 
       case expr: ExpressionBasedGraphOutputNode =>
         val value = evaluateWomExpression(expr.womExpression, expr.womType, envFull)
-        val name  = expr.graphOutputPort.name
+        val name = expr.graphOutputPort.name
         envFull += (name -> value)
-        name             -> value
+        name -> value
 
       case other =>
         throw new Exception(s"unhandled output ${other}")

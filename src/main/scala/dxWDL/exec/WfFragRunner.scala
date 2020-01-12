@@ -69,7 +69,7 @@ case class WfFragRunner(
     runtimeDebugLevel: Int
 ) {
   private val MAX_JOB_NAME = 50
-  private val verbose      = runtimeDebugLevel >= 1
+  private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
@@ -191,7 +191,7 @@ case class WfFragRunner(
             case (accu, m) =>
               accu.map {
                 case (key, (elemType, arValues)) =>
-                  val v: WomValue     = m(key)
+                  val v: WomValue = m(key)
                   val vCorrectlyTyped = elemType.coerceRawValue(v).get
                   key -> (elemType, (arValues :+ vCorrectlyTyped))
               }.toMap
@@ -427,8 +427,8 @@ case class WfFragRunner(
     val dxExec =
       if (dxExecId.startsWith("app-")) {
         val fields = Map(
-          "name"       -> JsString(dbgName),
-          "input"      -> callInputs,
+          "name" -> JsString(dbgName),
+          "input" -> callInputs,
           "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
         )
         val req = JsObject(fields ++ instanceFields)
@@ -444,8 +444,8 @@ case class WfFragRunner(
       } else if (dxExecId.startsWith("applet-")) {
         val applet = DxApplet.getInstance(dxExecId)
         val fields = Map(
-          "name"       -> JsString(dbgName),
-          "input"      -> callInputs,
+          "name" -> JsString(dbgName),
+          "input" -> callInputs,
           "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
         )
         val req = JsObject(fields ++ instanceFields)
@@ -459,9 +459,9 @@ case class WfFragRunner(
         }
         DxJob.getInstance(id)
       } else if (dxExecId.startsWith("workflow-")) {
-        val workflow               = DxWorkflow.getInstance(dxExecId)
+        val workflow = DxWorkflow.getInstance(dxExecId)
         val dxAnalysis: DxAnalysis = workflow.newRun(input = callInputs, name = dbgName)
-        val props                  = Map("seq_number" -> seqNum.toString)
+        val props = Map("seq_number" -> seqNum.toString)
         dxAnalysis.setProperties(props)
         dxAnalysis
       } else {
@@ -475,9 +475,9 @@ case class WfFragRunner(
       callInputs: Map[String, WomValue],
       callNameHint: Option[String]
   ): (Int, DxExecution) = {
-    val linkInfo                = getCallLinkInfo(call)
-    val callName                = call.identifier.localName.value
-    val calleeName              = call.callable.name
+    val linkInfo = getCallLinkInfo(call)
+    val callName = call.identifier.localName.value
+    val calleeName = call.callable.name
     val callInputsJSON: JsValue = buildCallInputs(callName, linkInfo, callInputs)
     /*        Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
@@ -535,9 +535,9 @@ case class WfFragRunner(
     }
     call.upstream.collect {
       case exprNode: ExpressionNode =>
-        val paramName  = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
+        val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
         val expression = exprNode.womExpression
-        val womType    = findWomType(paramName)
+        val womType = findWomType(paramName)
         paramName -> evaluateWomExpression(expression, womType, env)
     }.toMap
   }
@@ -570,8 +570,8 @@ case class WfFragRunner(
       Map.empty
     } else {
       // evaluate the call inputs, and add to the environment
-      val callInputs                            = evalCallInputs(call, env)
-      val (_, dxExec)                           = execCall(call, callInputs, None)
+      val callInputs = evalCallInputs(call, env)
+      val (_, dxExec) = execCall(call, callInputs, None)
       val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
 
       // Add optional modifier to the return types.
@@ -612,7 +612,7 @@ case class WfFragRunner(
 
       // The subblock is complex, and requires a fragment, or a subworkflow
       val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-      val (_, dxExec)         = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, callInputs, None)
+      val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, callInputs, None)
 
       // create promises for results
       linkInfo.outputs.map {
@@ -651,7 +651,7 @@ case class WfFragRunner(
         // Create a name by concatenating the initial elements of the array.
         // Limit the total size of the name.
         val arrBeginning = arrValues.slice(0, 3)
-        val elements     = arrBeginning.flatMap(readableNameForScatterItem(_))
+        val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
         Some(Utils.buildLimitedSizeName(elements, MAX_JOB_NAME))
       case _ =>
         None
@@ -689,7 +689,7 @@ case class WfFragRunner(
       case scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
     }.toMap
-    val promises    = collectSubJobs.launch(childJobs, resultTypes)
+    val promises = collectSubJobs.launch(childJobs, resultTypes)
     val promisesStr = promises.mkString("\n")
 
     Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
@@ -707,9 +707,9 @@ case class WfFragRunner(
     // loop on the collection, call the applet in the inner loop
     val childJobs: Vector[DxExecution] =
       collection.map { item =>
-        val innerEnv   = env + (svNode.identifier.localName.value -> item)
+        val innerEnv = env + (svNode.identifier.localName.value -> item)
         val callInputs = evalCallInputs(call, innerEnv)
-        val callHint   = readableNameForScatterItem(item)
+        val callHint = readableNameForScatterItem(item)
         val (_, dxJob) = execCall(call, callInputs, callHint)
         dxJob
       }.toVector
@@ -739,7 +739,7 @@ case class WfFragRunner(
 
         // The subblock is complex, and requires a fragment, or a subworkflow
         val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-        val (_, dxJob)          = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
+        val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
         dxJob
       }.toVector
 
@@ -792,7 +792,7 @@ case class WfFragRunner(
     }.toMap
 
     val catg = Block.categorize(block)
-    val env  = evalExpressions(catg.nodes, envInitialFilled)
+    val env = evalExpressions(catg.nodes, envInitialFilled)
 
     val fragResults: Map[String, WdlVarLinks] = runMode match {
       case RunnerWfFragmentMode.Launch =>
@@ -807,14 +807,14 @@ case class WfFragRunner(
 
           // A single call at the end of the block
           case Block.CallWithSubexpressions(_, call: CallNode) =>
-            val callInputs  = evalCallInputs(call, env)
+            val callInputs = evalCallInputs(call, env)
             val (_, dxExec) = execCall(call, callInputs, None)
             genPromisesForCall(call, dxExec)
 
           // The block contains a call and a bunch of expressions
           // that will be part of the output.
           case Block.CallFragment(_, call: CallNode) =>
-            val callInputs  = evalCallInputs(call, env)
+            val callInputs = evalCallInputs(call, env)
             val (_, dxExec) = execCall(call, callInputs, None)
             genPromisesForCall(call, dxExec)
 
@@ -862,10 +862,10 @@ case class WfFragRunner(
 
     // figure out what outputs need to be exported
     val blockOutputs: Map[String, WomType] = Block.outputs(block)
-    val exportedVars: Set[String]          = blockOutputs.keys.toSet
+    val exportedVars: Set[String] = blockOutputs.keys.toSet
 
     val jsOutputs: Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
-    val jsOutputsDbgStr                 = jsOutputs.mkString("\n")
+    val jsOutputsDbgStr = jsOutputs.mkString("\n")
     Utils.appletLog(verbose, s"""|JSON outputs:
                                      |${jsOutputsDbgStr}""".stripMargin)
     jsOutputs

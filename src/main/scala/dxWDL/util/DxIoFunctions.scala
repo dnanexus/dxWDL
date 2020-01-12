@@ -83,7 +83,7 @@ case class DxIoFunctions(
     config: DxPathConfig,
     runtimeDebugLevel: Int
 ) extends IoFunctionSet {
-  private val verbose        = runtimeDebugLevel >= 1
+  private val verbose = runtimeDebugLevel >= 1
   override def pathFunctions = new DxPathFunctions(fileInfoDir, config, runtimeDebugLevel)
 
   // Functions that (possibly) necessitate I/O operation (on local, network, or cloud filesystems)

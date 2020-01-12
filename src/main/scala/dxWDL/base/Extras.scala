@@ -134,9 +134,9 @@ case class DxAccess(
       case Vector(x, y) => Some((x.toSet ++ y.toSet).toVector)
       case _            => None
     }
-    val projectMrg         = mergeAccessLevels(project, dxa.project)
-    val allProjectsMrg     = mergeAccessLevels(allProjects, dxa.allProjects)
-    val developerMrg       = mergeBooleans(developer, dxa.developer)
+    val projectMrg = mergeAccessLevels(project, dxa.project)
+    val allProjectsMrg = mergeAccessLevels(allProjects, dxa.allProjects)
+    val developerMrg = mergeBooleans(developer, dxa.developer)
     val projectCreationMrg = mergeBooleans(projectCreation, dxa.projectCreation)
 
     DxAccess(networkMrg, projectMrg, allProjectsMrg, developerMrg, projectCreationMrg)
@@ -213,12 +213,12 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
       case Some(x) =>
         x.map { dxLicense: DxLicense =>
           JsObject(
-            "name"       -> JsString(dxLicense.name),
-            "repoUrl"    -> JsString(dxLicense.repoUrl),
-            "version"    -> JsString(dxLicense.version),
-            "license"    -> JsString(dxLicense.license),
+            "name" -> JsString(dxLicense.name),
+            "repoUrl" -> JsString(dxLicense.repoUrl),
+            "version" -> JsString(dxLicense.version),
+            "license" -> JsString(dxLicense.license),
             "licenseUrl" -> JsString(dxLicense.licenseUrl),
-            "author"     -> JsString(dxLicense.author)
+            "author" -> JsString(dxLicense.author)
           )
         }
     }
@@ -310,7 +310,7 @@ case class Extras(
 
 object Extras {
   val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
-  val CUSTOM_REORG_ATTRS    = Set("app_id", "conf")
+  val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
   val EXTRA_ATTRS = Set(
     "default_runtime_attributes",
     "default_task_dx_attributes",
@@ -323,7 +323,7 @@ object Extras {
   val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
   val RUN_SPEC_ACCESS_ATTRS =
     Set("network", "project", "allProjects", "developer", "projectCreation")
-  val RUN_SPEC_TIMEOUT_ATTRS     = Set("days", "hours", "minutes")
+  val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
   val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
   val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set(
     "ExecutionError",
@@ -333,7 +333,7 @@ object Extras {
     "JobTimeoutExceeded",
     "*"
   )
-  val TASK_DX_ATTRS    = Set("runSpec", "details")
+  val TASK_DX_ATTRS = Set("runSpec", "details")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
   private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
@@ -631,8 +631,8 @@ object Extras {
         case Some(x) => x
       }
     }
-    val registry    = getSome("registry")
-    val username    = getSome("username")
+    val registry = getSome("registry")
+    val username = getSome("username")
     val credentials = getSome("credentials")
     Some(DockerRegistry(registry, username, credentials))
   }
@@ -667,7 +667,7 @@ object Extras {
 
   private def veryifyReorgApp(reorgAppId: String): Unit = {
 
-    val app_regex    = "app-[0-9a-zA-Z]{24}"
+    val app_regex = "app-[0-9a-zA-Z]{24}"
     val applet_regex = "applet-[0-9a-zA-Z]{24}"
 
     val isValidID: Boolean = reorgAppId.matches(app_regex) || reorgAppId.matches(applet_regex)
@@ -714,7 +714,7 @@ object Extras {
     if (jsv == JsNull)
       return None
 
-    val fields                  = jsv.asJsObject.fields
+    val fields = jsv.asJsObject.fields
     val (reorgAppId, reorgConf) = checkAttrs(fields)
     veryifyReorgApp(reorgAppId)
     verifyInputs(reorgConf)

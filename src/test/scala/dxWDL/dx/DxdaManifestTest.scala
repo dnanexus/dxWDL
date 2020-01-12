@@ -37,9 +37,9 @@ class DxdaManifestTest extends FlatSpec with Matchers {
   // it to what we get from our DxdaManifest code.
   //
   private def describeWithParts(dxFile: DxFile): JsValue = {
-    val cmd              = s"""dx api ${dxFile.getId} describe '{"fields": { "parts" : true } }'"""
+    val cmd = s"""dx api ${dxFile.getId} describe '{"fields": { "parts" : true } }'"""
     val (stdout, stderr) = Utils.execCommand(cmd)
-    val jsv              = stdout.parseJson
+    val jsv = stdout.parseJson
 
     // remove the "state" field from all the parts
     val fields = jsv.asJsObject.fields.map {
@@ -66,7 +66,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
       DxPath.resolveBulk(fileDir.keys.toVector, dxTestProject)
     val filesInManifest: Map[String, (DxFile, Path)] = resolvedObjects.map {
       case (dxPath, dataObj) =>
-        val dxFile      = dataObj.asInstanceOf[DxFile]
+        val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile.id -> (dxFile, local)
     }.toMap
@@ -77,13 +77,13 @@ class DxdaManifestTest extends FlatSpec with Matchers {
     // compare to data obtained with dx-toolkit
     val expected: Vector[JsValue] = resolvedObjects.map {
       case (dxPath, dataObj) =>
-        val dxFile      = dataObj.asInstanceOf[DxFile]
+        val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
-        val jsv         = describeWithParts(dxFile)
+        val jsv = describeWithParts(dxFile)
 
         // add the target folder and name
         val fields = jsv.asJsObject.fields ++ Map(
-          "name"   -> JsString(local.toFile().getName()),
+          "name" -> JsString(local.toFile().getName()),
           "folder" -> JsString(local.toFile().getParent())
         )
         JsObject(fields)

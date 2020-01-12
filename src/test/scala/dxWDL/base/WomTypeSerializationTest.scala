@@ -49,7 +49,7 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
 
   it should "work for structs" in {
     val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize                     = WomTypeSerialization(typeAliases)
+    val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (t <- structTestCases) {
       typeSerialize.fromString(typeSerialize.toString(t)) should be(t)
@@ -65,7 +65,7 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
 
   it should "detect bad type descriptions" in {
     val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize                     = WomTypeSerialization(typeAliases)
+    val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (typeDesc <- badTypeNames) {
       assertThrows[Exception] {

@@ -21,7 +21,7 @@ import dxWDL.dx._
 
 sealed trait Furl
 
-case class FurlLocal(path: String)                                          extends Furl
+case class FurlLocal(path: String) extends Furl
 case class FurlDx(value: String, dxProj: Option[DxProject], dxFile: DxFile) extends Furl
 
 object Furl {
@@ -31,9 +31,9 @@ object Furl {
   //
   // Get the project and file.
   private def parseDxFurl(buf: String): FurlDx = {
-    val s         = buf.substring(DX_URL_PREFIX.length)
+    val s = buf.substring(DX_URL_PREFIX.length)
     val proj_file = s.split("::")(0)
-    val dxFile    = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
+    val dxFile = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
     dxFile.project match {
       case None =>
         FurlDx(buf, None, dxFile)
@@ -83,7 +83,7 @@ object Furl {
         (miniDesc.folder, miniDesc.name)
     }
     val logicalName = s"${folder}/${name}"
-    val fid         = dxFile.getId
+    val fid = dxFile.getId
     dxFile.project match {
       case None =>
         FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}", None, dxFile)

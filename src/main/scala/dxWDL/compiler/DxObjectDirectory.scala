@@ -78,7 +78,7 @@ case class DxObjectDirectory(
         allExecutableNames.toVector,
         false
       )
-    val t1       = System.nanoTime()
+    val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
       verbose.on,
@@ -163,8 +163,8 @@ case class DxObjectDirectory(
         false
       )
     val nrApplets = dxAppletsInProject.size
-    val t1        = System.nanoTime()
-    val diffMSec  = (t1 - t0) / (1000 * 1000)
+    val t1 = System.nanoTime()
+    val diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
       verbose.on,
       s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)"
@@ -245,7 +245,7 @@ case class DxObjectDirectory(
   def archiveDxObject(objInfo: DxObjectInfo): Unit = {
     Utils.trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
     val dxClass: String = objInfo.dxClass
-    val destFolder      = folder ++ "/." ++ dxClass + "_archive"
+    val destFolder = folder ++ "/." ++ dxClass + "_archive"
 
     // move the object to the new location
     newFolder(destFolder)
@@ -256,7 +256,7 @@ case class DxObjectDirectory(
     val crDateStr = objInfo.crDate.format(formatter)
     val req = JsObject(
       "project" -> JsString(dxProject.getId),
-      "name"    -> JsString(s"${objInfo.name} ${crDateStr}")
+      "name" -> JsString(s"${objInfo.name} ${crDateStr}")
     )
 
     dxClass match {

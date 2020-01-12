@@ -71,25 +71,25 @@ case class DxPathConfig(
 
 object DxPathConfig {
   def apply(homeDir: Path, streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
-    val metaDir: Path        = homeDir.resolve("meta")
-    val inputFilesDir: Path  = homeDir.resolve("inputs")
+    val metaDir: Path = homeDir.resolve("meta")
+    val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")
-    val tmpDir: Path         = homeDir.resolve("job_scratch_space")
+    val tmpDir: Path = homeDir.resolve("job_scratch_space")
 
-    val instanceTypeDB       = homeDir.resolve("instance_type_db.json")
+    val instanceTypeDB = homeDir.resolve("instance_type_db.json")
     val womSourceCodeEncoded = homeDir.resolve("source.wdl.uu64")
 
-    val stdout             = metaDir.resolve("stdout")
-    val stderr             = metaDir.resolve("stderr")
-    val script             = metaDir.resolve("script")
+    val stdout = metaDir.resolve("stdout")
+    val stderr = metaDir.resolve("stderr")
+    val script = metaDir.resolve("script")
     val dockerSubmitScript = metaDir.resolve("docker.submit")
-    val setupStreams       = metaDir.resolve("setup_streams")
-    val dxdaManifest       = metaDir.resolve("dxdaManifest.json")
-    val dxfuseManifest     = metaDir.resolve("dxfuseManifest.json")
-    val dxfuseMountpoint   = homeDir.resolve("mnt")
-    val rcPath             = metaDir.resolve("rc")
-    val dockerCid          = metaDir.resolve("dockerCid")
-    val runnerTaskEnv      = metaDir.resolve("taskEnv.json")
+    val setupStreams = metaDir.resolve("setup_streams")
+    val dxdaManifest = metaDir.resolve("dxdaManifest.json")
+    val dxfuseManifest = metaDir.resolve("dxfuseManifest.json")
+    val dxfuseMountpoint = homeDir.resolve("mnt")
+    val rcPath = metaDir.resolve("rc")
+    val dockerCid = metaDir.resolve("dockerCid")
+    val runnerTaskEnv = metaDir.resolve("taskEnv.json")
 
     DxPathConfig(
       homeDir,

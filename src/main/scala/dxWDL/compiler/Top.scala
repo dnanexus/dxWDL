@@ -48,13 +48,13 @@ case class Top(cOpt: CompilerOptions) {
   // Find the runtime dxWDL asset with the correct version. Look inside the
   // project configured for this region.
   private def getAssetId(region: String): String = {
-    val region2project       = Utils.getRegions()
+    val region2project = Utils.getRegions()
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
-    val dxProjRt             = DxPath.resolveProject(projNameRt)
+    val dxProjRt = DxPath.resolveProject(projNameRt)
     Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
     val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
-    val dxObj       = DxPath.resolveOnePath(assetDxPath, dxProjRt)
+    val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
     if (!dxObj.isInstanceOf[DxRecord])
       throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
     dxObj.getId
@@ -67,9 +67,9 @@ case class Top(cOpt: CompilerOptions) {
       dxWDLrtId: String,
       dxProject: DxProject
   ): Unit = {
-    val region2project       = Utils.getRegions()
+    val region2project = Utils.getRegions()
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
-    val dxProjRt             = DxPath.resolveProject(projNameRt)
+    val dxProjRt = DxPath.resolveProject(projNameRt)
     DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)
   }
 
@@ -92,7 +92,7 @@ case class Top(cOpt: CompilerOptions) {
         // get billTo and region from the project, then find the runtime asset
         // in the current region.
         val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
-        val lrtId            = getAssetId(region)
+        val lrtId = getAssetId(region)
         cloneRtLibraryToProject(region, lrtId, dxProject)
         Some(lrtId)
     }
@@ -158,7 +158,7 @@ case class Top(cOpt: CompilerOptions) {
       mainBundle: WomBundle,
       subBundles: Vector[WomBundle]
   ): WomBundle = {
-    var allCallables   = mainBundle.allCallables
+    var allCallables = mainBundle.allCallables
     var allTypeAliases = mainBundle.typeAliases
 
     subBundles.foreach { subBund =>
@@ -292,7 +292,7 @@ case class Top(cOpt: CompilerOptions) {
         .dxFromCromwell(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = Utils.replaceFileSuffix(path, ".dx.json")
-      val parent   = path.getParent
+      val parent = path.getParent
       val dxInputFile =
         if (parent != null) parent.resolve(filename)
         else Paths.get(filename)

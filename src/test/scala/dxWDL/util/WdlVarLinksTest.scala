@@ -17,8 +17,8 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     Element("A", womValue.womType, womValue)
 
   def check(elem: Element, wvlConverter: WdlVarLinksConverter): Unit = {
-    val prefix                                = "XXX_"
-    val wvl: WdlVarLinks                      = wvlConverter.importFromWDL(elem.womType, elem.womValue)
+    val prefix = "XXX_"
+    val wvl: WdlVarLinks = wvlConverter.importFromWDL(elem.womType, elem.womValue)
     val allDxFields1: List[(String, JsValue)] = wvlConverter.genFields(wvl, prefix + elem.name)
     val allDxFields2 = allDxFields1.filter {
       case (key, v) => !key.endsWith(Utils.FLAT_FILES_SUFFIX)
@@ -91,8 +91,8 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     val personType =
       WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), Some("Person"))
 
-    val jeff   = WomObject(Map("name" -> WomString("Jeoffrey"), "age" -> WomInteger(16)), personType)
-    val janice = WomObject(Map("name" -> WomString("Janice"), "age"   -> WomInteger(25)), personType)
+    val jeff = WomObject(Map("name" -> WomString("Jeoffrey"), "age" -> WomInteger(16)), personType)
+    val janice = WomObject(Map("name" -> WomString("Janice"), "age" -> WomInteger(25)), personType)
 
     val testCases = List(makeElement(jeff), makeElement(janice))
 
@@ -105,7 +105,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
 //        }
 
     val typeAliases: Map[String, WomType] = Map("Person" -> personType)
-    val wvlConverter                      = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }
@@ -116,7 +116,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     val personType =
       WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), Some("Person"))
 
-    val lucy = WomObject(Map("name" -> WomString("Lucy"), "age"      -> WomInteger(37)), personType)
+    val lucy = WomObject(Map("name" -> WomString("Lucy"), "age" -> WomInteger(37)), personType)
     val lear = WomObject(Map("name" -> WomString("King Lear"), "age" -> WomInteger(41)), personType)
 
     // Houses
@@ -138,7 +138,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     val testCases = List(makeElement(learCastle), makeElement(lucyHouse))
 
     val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
-    val wvlConverter                      = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }

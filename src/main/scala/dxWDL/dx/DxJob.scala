@@ -31,7 +31,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
       Field.Analysis
     )
     val allFields = fields ++ defaultFields
-    val request   = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val response = DXAPI.analysisDescribe(
       id,
       DxUtils.jsonNodeOfJsValue(request),
@@ -66,7 +66,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
       }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     val parentJob: Option[DxJob] = descJs.asJsObject.fields.get("parentJob") match {
       case None              => None
       case Some(JsNull)      => None

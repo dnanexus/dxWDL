@@ -125,7 +125,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
     val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
     task.meta shouldBe (Map(
       "type" -> MetaValueElementString("native"),
-      "id"   -> MetaValueElementString("applet-xxxx")
+      "id" -> MetaValueElementString("applet-xxxx")
     ))
   }
 
@@ -153,7 +153,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
     val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
     task.meta shouldBe (Map(
       "type" -> MetaValueElementString("native"),
-      "id"   -> MetaValueElementString("applet-xxxx")
+      "id" -> MetaValueElementString("applet-xxxx")
     ))
   }
 
@@ -205,7 +205,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
     val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
     task.meta shouldBe (Map(
       "type" -> MetaValueElementString("native"),
-      "id"   -> MetaValueElementString("applet-xxxx")
+      "id" -> MetaValueElementString("applet-xxxx")
     ))
   }
 }

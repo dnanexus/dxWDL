@@ -29,21 +29,21 @@ class DxPathTest extends FlatSpec with Matchers {
   }
 
   it should "handle files in a root directory" in {
-    val path           = s"${TEST_PROJECT}:/Readme.md"
-    val expectedId     = describeDxFilePath(path)
+    val path = s"${TEST_PROJECT}:/Readme.md"
+    val expectedId = describeDxFilePath(path)
     val dxFile: DxFile = DxPath.resolveDxURLFile(s"dx://${path}")
     dxFile.getId shouldBe (expectedId)
   }
 
   it should "handle files in a subdirectory directory" in {
-    val path           = s"${TEST_PROJECT}:/test_data/fileA"
-    val expectedId     = describeDxFilePath(path)
+    val path = s"${TEST_PROJECT}:/test_data/fileA"
+    val expectedId = describeDxFilePath(path)
     val dxFile: DxFile = DxPath.resolveDxURLFile(s"dx://${path}")
     dxFile.getId shouldBe (expectedId)
   }
 
   it should "handle files with a colon" in {
-    val expectedId     = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
+    val expectedId = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
     val dxFile: DxFile = DxPath.resolveDxURLFile(s"dx://${TEST_PROJECT}:/x:x.txt")
     dxFile.getId shouldBe (expectedId)
   }

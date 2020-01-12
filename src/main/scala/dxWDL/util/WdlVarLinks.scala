@@ -26,10 +26,10 @@ import dxWDL.dx._
 // A complex value is implemented as a json structure, and an array of
 // all the files it references.
 sealed trait DxLink
-case class DxlValue(jsn: JsValue)                                                  extends DxLink // This may contain dx-files
+case class DxlValue(jsn: JsValue) extends DxLink // This may contain dx-files
 case class DxlStage(dxStage: DxWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
-case class DxlWorkflowInput(varName: String)                                       extends DxLink
-case class DxlExec(dxExec: DxExecution, varName: String)                           extends DxLink
+case class DxlWorkflowInput(varName: String) extends DxLink
+case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
@@ -103,10 +103,10 @@ case class WdlVarLinksConverter(
       // an array of values.
       case (WomMapType(keyType, valueType), WomMap(_, m)) =>
         // general case
-        val keys: WomValue   = WomArray(WomArrayType(keyType), m.keys.toVector)
-        val kJs              = jsFromWomValue(keys.womType, keys)
+        val keys: WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
+        val kJs = jsFromWomValue(keys.womType, keys)
         val values: WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
-        val vJs              = jsFromWomValue(values.womType, values)
+        val vJs = jsFromWomValue(values.womType, values)
         JsObject("keys" -> kJs, "values" -> vJs)
 
       // Arrays: these come after maps, because there is an automatic coercion from
@@ -195,7 +195,7 @@ case class WdlVarLinksConverter(
       case (WomSingleFileType, JsObject(_)) =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
-        val dxFile          = DxUtils.dxFileFromJsValue(jsValue)
+        val dxFile = DxUtils.dxFileFromJsValue(jsValue)
         val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
         WomSingleFile(s)
 
@@ -225,7 +225,7 @@ case class WdlVarLinksConverter(
 
       case (WomPairType(lType, rType), JsObject(fields))
           if (List("left", "right").forall(fields contains _)) =>
-        val left  = jobInputToWomValue(name, lType, fields("left"))
+        val left = jobInputToWomValue(name, lType, fields("left"))
         val right = jobInputToWomValue(name, rType, fields("right"))
         WomPair(left, right)
 
@@ -284,7 +284,7 @@ case class WdlVarLinksConverter(
         case _ => jsv
       }
     val womValue = jobInputToWomValue(name, womType, jsv1)
-    val dxFiles  = DxUtils.findDxFiles(jsv)
+    val dxFiles = DxUtils.findDxFiles(jsv)
     (womValue, dxFiles)
   }
 
@@ -333,12 +333,12 @@ case class WdlVarLinksConverter(
           ioRef match {
             case IORef.Input =>
               Map(
-                bindEncName   -> dxStage.getInputReference(varEncName),
+                bindEncName -> dxStage.getInputReference(varEncName),
                 bindEncName_F -> dxStage.getInputReference(varEncName_F)
               )
             case IORef.Output =>
               Map(
-                bindEncName   -> dxStage.getOutputReference(varEncName),
+                bindEncName -> dxStage.getOutputReference(varEncName),
                 bindEncName_F -> dxStage.getOutputReference(varEncName_F)
               )
           }
@@ -353,7 +353,7 @@ case class WdlVarLinksConverter(
         case DxlExec(dxJob, varEncName) =>
           val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           Map(
-            bindEncName   -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
+            bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
             bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F))
           )
       }

@@ -88,9 +88,9 @@ case class TaskRunner(
     defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
     runtimeDebugLevel: Int
 ) {
-  private val verbose         = (runtimeDebugLevel >= 1)
+  private val verbose = (runtimeDebugLevel >= 1)
   private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose      = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
@@ -132,7 +132,7 @@ case class TaskRunner(
   }
 
   def readEnvFromDisk(): (Map[String, WomValue], Map[Furl, Path]) = {
-    val buf           = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
+    val buf = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
     val (locInputsM, dxUrlM) = json match {
       case JsObject(m) =>
@@ -223,8 +223,8 @@ case class TaskRunner(
         // 2. load into the local docker cache
         // 3. figure out the image name
         Utils.appletLog(verbose, s"looking up dx:url ${url}")
-        val dxFile     = DxPath.resolveDxURLFile(url)
-        val fileName   = dxFile.describe().name
+        val dxFile = DxPath.resolveDxURLFile(url)
+        val fileName = dxFile.describe().name
         val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
         Utils.safeMkdir(tarballDir)
         val localTar: Path = tarballDir.resolve(fileName)
@@ -276,7 +276,7 @@ case class TaskRunner(
 
   private def getRuntimeEnvironment(): RuntimeEnvironment = {
     val physicalMemorySize = availableMemory()
-    val numCores           = Runtime.getRuntime().availableProcessors()
+    val numCores = Runtime.getRuntime().availableProcessors()
 
     import eu.timepit.refined._
     import eu.timepit.refined.numeric._
@@ -536,7 +536,7 @@ case class TaskRunner(
         // requires casting from string to float
         val value = outDef.womType.coerceRawValue(valueRaw).get
         envFull += (outDef.name -> value)
-        outDef.name             -> value
+        outDef.name -> value
     }.toMap
 
     val outputs: Map[String, WomValue] =
@@ -589,12 +589,12 @@ case class TaskRunner(
     }
 
     val dxInstanceType = evalAttr("dx_instance_type")
-    val memory         = evalAttr("memory")
-    val diskSpace      = evalAttr("disks")
-    val cores          = evalAttr("cpu")
-    val gpu            = evalAttr("gpu")
-    val iTypeRaw       = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
-    val iType          = instanceTypeDB.apply(iTypeRaw)
+    val memory = evalAttr("memory")
+    val diskSpace = evalAttr("disks")
+    val cores = evalAttr("cpu")
+    val gpu = evalAttr("gpu")
+    val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
+    val iType = instanceTypeDB.apply(iTypeRaw)
     Utils.appletLog(
       verbose,
       s"""|calcInstanceType memory=${memory} disk=${diskSpace}

@@ -79,7 +79,7 @@ object DxPath {
     // A project name, resolve it
     val req =
       JsObject("name" -> JsString(projName), "level" -> JsString("VIEW"), "limit" -> JsNumber(2))
-    val rep            = DXAPI.systemFindProjects(jsonNodeOfJsValue(req), classOf[JsonNode], DxUtils.dxEnv)
+    val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req), classOf[JsonNode], DxUtils.dxEnv)
     val repJs: JsValue = jsValueOfJsonNode(rep)
 
     val results = repJs.asJsObject.fields.get("results") match {
@@ -124,7 +124,7 @@ object DxPath {
       dxProject: DxProject
   ): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map { makeResolutionReq(_) }
-    val request                     = JsObject("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
+    val request = JsObject("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
 
     val response = DXAPI.systemResolveDataObjects(
       DxUtils.jsonNodeOfJsValue(request),
@@ -174,12 +174,12 @@ object DxPath {
       allDxPaths: Seq[String]
   ): (Map[String, DxDataObject], Vector[DxPathComponents]) = {
     var alreadyResolved = Map.empty[String, DxDataObject]
-    var rest            = Vector.empty[DxPathComponents]
+    var rest = Vector.empty[DxPathComponents]
 
     for (p <- allDxPaths) {
       val components = parse(p)
       if (DxObject.isDataObject(components.name)) {
-        val o         = DxObject.getInstance(components.name, None)
+        val o = DxObject.getInstance(components.name, None)
         val dxDataObj = o.asInstanceOf[DxDataObject]
         val dxobjWithProj = components.projName match {
           case None => dxDataObj

@@ -28,7 +28,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "handle one task and two inputs" in {
     val wdlCode = pathFromBasename("input_file", "add.wdl")
-    val inputs  = pathFromBasename("input_file", "add_inputs.json")
+    val inputs = pathFromBasename("input_file", "add_inputs.json")
     Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
         ++ cFlags
@@ -37,7 +37,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "deal with a locked workflow" in {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
-    val inputs  = pathFromBasename("input_file", "math_inputs.json")
+    val inputs = pathFromBasename("input_file", "math_inputs.json")
     Main.compile(
       List(
         wdlCode.toString,
@@ -51,7 +51,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "not compile for several applets without a workflow" in {
     val wdlCode = pathFromBasename("input_file", "several_tasks.wdl")
-    val inputs  = pathFromBasename("input_file", "several_tasks_inputs.json")
+    val inputs = pathFromBasename("input_file", "several_tasks_inputs.json")
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
         ++ cFlags
@@ -64,7 +64,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "one input too many" in {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
-    val inputs  = pathFromBasename("input_file", "math_inputs2.json")
+    val inputs = pathFromBasename("input_file", "math_inputs2.json")
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
         ++ cFlags
@@ -77,7 +77,7 @@ class InputFileTest extends FlatSpec with Matchers {
   }
 
   it should "build defaults into applet underneath workflow" in {
-    val wdlCode  = pathFromBasename("input_file", "population.wdl")
+    val wdlCode = pathFromBasename("input_file", "population.wdl")
     val defaults = pathFromBasename("input_file", "population_inputs.json")
     val retval = Main.compile(
       List(wdlCode.toString, "-defaults", defaults.toString)
@@ -88,7 +88,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "handle inputs specified in the json file, but missing in the workflow" in {
     val wdlCode = pathFromBasename("input_file", "missing_args.wdl")
-    val inputs  = pathFromBasename("input_file", "missing_args_inputs.json")
+    val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
     Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -122,7 +122,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "support struct inputs" in {
     val wdlCode = pathFromBasename("struct", "Person.wdl")
-    val inputs  = pathFromBasename("struct", "Person_input.json")
+    val inputs = pathFromBasename("struct", "Person_input.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -133,7 +133,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "support array of pairs" in {
     val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
-    val inputs  = pathFromBasename("input_file", "echo_pairs.json")
+    val inputs = pathFromBasename("input_file", "echo_pairs.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -144,7 +144,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "array of structs" in {
     val wdlCode = pathFromBasename("struct", "array_of_structs.wdl")
-    val inputs  = pathFromBasename("struct", "array_of_structs_input.json")
+    val inputs = pathFromBasename("struct", "array_of_structs_input.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -155,7 +155,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "override default values in input file" in {
     val wdlCode = pathFromBasename("input_file", "override.wdl")
-    val inputs  = pathFromBasename("input_file", "override_input.json")
+    val inputs = pathFromBasename("input_file", "override_input.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -166,7 +166,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "WDL map input" taggedAs (EdgeTest) in {
     val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
-    val inputs  = pathFromBasename("input_file", "map_argument_input.json")
+    val inputs = pathFromBasename("input_file", "map_argument_input.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)
@@ -177,7 +177,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
   it should "allow file as WDL map key" in {
     val wdlCode = pathFromBasename("input_file", "no_file_key.wdl")
-    val inputs  = pathFromBasename("input_file", "no_file_key_input.json")
+    val inputs = pathFromBasename("input_file", "no_file_key_input.json")
 
     val retval = Main.compile(
       List(wdlCode.toString, "-inputs", inputs.toString)

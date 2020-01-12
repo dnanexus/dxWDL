@@ -27,10 +27,10 @@ object ExecLinkInfo {
       case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
     }.toMap
     JsObject(
-      "name"    -> JsString(ali.name),
-      "inputs"  -> JsObject(TreeMap(appInputDefs.toArray: _*)),
+      "name" -> JsString(ali.name),
+      "inputs" -> JsObject(TreeMap(appInputDefs.toArray: _*)),
       "outputs" -> JsObject(TreeMap(appOutputDefs.toArray: _*)),
-      "id"      -> JsString(ali.dxExec.getId)
+      "id" -> JsString(ali.dxExec.getId)
     )
   }
 

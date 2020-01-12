@@ -129,7 +129,7 @@ object DxObject {
     val parts = id.split("-")
     if (parts.length != 2)
       throw new IllegalArgumentException(s"${id} is not of the form class-alphnumeric{24}")
-    val klass      = parts(0)
+    val klass = parts(0)
     val numLetters = parts(1)
     if (!numLetters.matches("[A-Za-z0-9]{24}"))
       throw new IllegalArgumentException(s"${numLetters} does not match [A-Za-z0-9]{24}")

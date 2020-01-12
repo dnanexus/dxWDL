@@ -92,7 +92,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "second block in a linear workflow" in {
-    val source: Path                  = pathFromBasename("frag_runner", "wf_linear.wdl")
+    val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, dxIoFunctions) = setup()
 
     val (language, womBundle: WomBundle, allSources, subBundles) =
@@ -104,7 +104,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
       case Some(wf: WorkflowDefinition) => wf
       case _                            => throw new Exception("sanity")
     }
-    val graph                                   = wf.innerGraph
+    val graph = wf.innerGraph
     val (inputNodes, _, subBlocks, outputNodes) = Block.split(graph, wfSource)
 
     val block = subBlocks(1)
@@ -116,20 +116,20 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
       case eNode: ExposedExpressionNode => eNode
     }
     val expr: WomExpression = eNodes(0).womExpression
-    val value: WomValue     = evaluateWomExpression(expr, env, dxIoFunctions)
+    val value: WomValue = evaluateWomExpression(expr, env, dxIoFunctions)
     value should be(WomInteger(9))
   }
 
   it should "evaluate a scatter without a call" in {
-    val path         = pathFromBasename("frag_runner", "scatter_no_call.wdl")
+    val path = pathFromBasename("frag_runner", "scatter_no_call.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
-    val block                         = subBlocks(0)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+    val block = subBlocks(0)
 
-    val env                            = Map.empty[String, WomValue]
+    val env = Map.empty[String, WomValue]
     val results: Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
     results.keys should be(Set("names", "full_name"))
     results should be(
@@ -159,15 +159,15 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "evaluate a conditional without a call" in {
-    val path         = pathFromBasename("frag_runner", "conditional_no_call.wdl")
+    val path = pathFromBasename("frag_runner", "conditional_no_call.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
-    val block                         = subBlocks(0)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+    val block = subBlocks(0)
 
-    val env                            = Map.empty[String, WomValue]
+    val env = Map.empty[String, WomValue]
     val results: Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
     results should be(
       Map(
@@ -181,23 +181,23 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "evaluate a nested conditional/scatter without a call" in {
-    val path         = pathFromBasename("frag_runner", "nested_no_call.wdl")
+    val path = pathFromBasename("frag_runner", "nested_no_call.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     val results = fragRunner.evalExpressions(subBlocks(0).nodes, Map.empty[String, WomValue])
     results should be(Map("z" -> WomOptionalValue(WomMaybeEmptyArrayType(WomIntegerType), None)))
   }
 
   it should "create proper names for scatter results" in {
-    val path                           = pathFromBasename("frag_runner", "strings.wdl")
-    val wfSourceCode                   = Utils.readFileContent(path)
+    val path = pathFromBasename("frag_runner", "strings.wdl")
+    val wfSourceCode = Utils.readFileContent(path)
     val (wf: WorkflowDefinition, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
-    val sctNode                     = wf.innerGraph.scatters.head
+    val sctNode = wf.innerGraph.scatters.head
     val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
     /*System.out.println(s"""|name = ${svNode.identifier.localName.value}
                                |       ${svNode.identifier.workflowLocalName}
@@ -209,12 +209,12 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "Make sure calls cannot be handled by evalExpressions" in {
-    val path         = pathFromBasename("draft2", "shapes.wdl")
+    val path = pathFromBasename("draft2", "shapes.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     // Make sure an exception is thrown if eval-expressions is called with
     // a wdl-call.
@@ -224,12 +224,12 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "handles draft2" in {
-    val path         = pathFromBasename("draft2", "conditionals2.wdl")
+    val path = pathFromBasename("draft2", "conditionals2.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
     /*
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])
@@ -238,12 +238,12 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "evaluate expressions that define variables" in {
-    val path         = pathFromBasename("draft2", "conditionals3.wdl")
+    val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     val results = fragRunner.evalExpressions(subBlocks(0).nodes, Map.empty[String, WomValue])
     results.keys should be(Set("powers10", "i1", "i2", "i3"))
@@ -279,10 +279,10 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "evaluate call inputs properly" in {
-    val path                          = pathFromBasename("draft2", "various_calls.wdl")
-    val wfSourceCode                  = Utils.readFileContent(path)
+    val path = pathFromBasename("draft2", "various_calls.wdl")
+    val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
     val call1 = findCallByName("MaybeInt", wf.innerGraph)
     val callInputs1: Map[String, WomValue] =
@@ -306,10 +306,10 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "evaluate call constant inputs" in {
-    val path                          = pathFromBasename("nested", "two_levels.wdl")
-    val wfSourceCode                  = Utils.readFileContent(path)
+    val path = pathFromBasename("nested", "two_levels.wdl")
+    val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
     val inc4Call = findCallByName("inc5", wf.innerGraph)
 
@@ -318,12 +318,12 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "expressions with structs" in {
-    val path         = pathFromBasename("frag_runner", "House.wdl")
+    val path = pathFromBasename("frag_runner", "House.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _)          = Block.split(wf.innerGraph, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     val results = fragRunner.evalExpressions(subBlocks(0).nodes, Map.empty[String, WomValue])
     results.keys should be(
@@ -332,17 +332,17 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     results("tot") should be(
       WomObject(
         Map(
-          "height"     -> WomInteger(32),
+          "height" -> WomInteger(32),
           "num_floors" -> WomInteger(4),
-          "street"     -> WomString("Alda_Mary"),
-          "city"       -> WomString("Sunnyvale_Santa Clara")
+          "street" -> WomString("Alda_Mary"),
+          "city" -> WomString("Sunnyvale_Santa Clara")
         ),
         WomCompositeType(
           Map(
-            "height"     -> WomIntegerType,
+            "height" -> WomIntegerType,
             "num_floors" -> WomIntegerType,
-            "street"     -> WomStringType,
-            "city"       -> WomStringType
+            "street" -> WomStringType,
+            "city" -> WomStringType
           ),
           Some("House")
         )
@@ -351,22 +351,22 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "fill in missing optionals" in {
-    val path         = pathFromBasename("frag_runner", "missing_args.wdl")
+    val path = pathFromBasename("frag_runner", "missing_args.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map("y" -> WomInteger(5)), RunnerWfFragmentMode.Launch)
     results shouldBe (Map("retval" -> JsNumber(5)))
   }
 
   it should "evaluate expressions in correct order" taggedAs (EdgeTest) in {
-    val path         = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
+    val path = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner)              = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
     results.keys should contain("bam_lane1")

@@ -160,9 +160,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
             val (inputSpec, outputSpec) = wdlTypesOfDxApplet(aplName, desc)
             // DNAx applets allow the same variable name to be used for inputs and outputs.
             // This is illegal in WDL.
-            val allInputNames  = inputSpec.keys.toSet
+            val allInputNames = inputSpec.keys.toSet
             val allOutputNames = outputSpec.keys.toSet
-            val both           = allInputNames.intersect(allOutputNames)
+            val both = allInputNames.intersect(allOutputNames)
             if (!both.isEmpty) {
               val bothStr = "[" + both.mkString(", ") + "]"
               throw new Exception(
@@ -259,11 +259,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   }
 
   private def checkedGetApp(jsv: JsValue): DxAppDescribe = {
-    val id: String     = checkedGetJsString(jsv, "id")
+    val id: String = checkedGetJsString(jsv, "id")
     val desc: JsObject = checkedGetJsObject(jsv, "describe")
-    val name: String   = checkedGetJsString(desc, "name")
-    val inputSpecJs    = checkedGetJsArray(desc, "inputSpec")
-    val outputSpecJs   = checkedGetJsArray(desc, "outputSpec")
+    val name: String = checkedGetJsString(desc, "name")
+    val inputSpecJs = checkedGetJsArray(desc, "inputSpec")
+    val outputSpecJs = checkedGetJsArray(desc, "outputSpec")
 
     val inputSpec = inputSpecJs.map { x =>
       checkedGetIoSpec(name, x)
@@ -287,9 +287,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
     // DNAx applets allow the same variable name to be used for inputs and outputs.
     // This is illegal in WDL.
-    val allInputNames  = inputSpec.keys.toSet
+    val allInputNames = inputSpec.keys.toSet
     val allOutputNames = outputSpec.keys.toSet
-    val both           = allInputNames.intersect(allOutputNames)
+    val both = allInputNames.intersect(allOutputNames)
     if (!both.isEmpty) {
       val bothStr = "[" + both.mkString(", ") + "]"
       throw new Exception(
@@ -312,10 +312,10 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   def searchApps: Vector[String] = {
     val req = JsObject(
       "published" -> JsBoolean(true),
-      "describe"  -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true)),
-      "limit"     -> JsNumber(1000)
+      "describe" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true)),
+      "limit" -> JsNumber(1000)
     )
-    val rep            = DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep = DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val appsJs = repJs.asJsObject.fields.get("results") match {
       case Some(JsArray(apps)) => apps
@@ -328,7 +328,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
     val taskHeaders = appsJs.flatMap { jsv =>
       val desc: JsObject = checkedGetJsObject(jsv, "describe")
-      val appName        = checkedGetJsString(desc, "name")
+      val appName = checkedGetJsString(desc, "name")
       try {
         val dxApp = checkedGetApp(jsv)
         Some(appToWdlInterface(dxApp))
@@ -362,7 +362,7 @@ object DxNI {
     }
 
     // pretty print into a buffer
-    val lines    = tasks.mkString("\n\n")
+    val lines = tasks.mkString("\n\n")
     val allLines = header + "\n" + lines
     Utils.writeFileContent(outputPath, allLines)
   }
@@ -378,7 +378,7 @@ object DxNI {
       language: Language.Value,
       verbose: Verbose
   ): Unit = {
-    val dxni                          = new DxNI(verbose, language)
+    val dxni = new DxNI(verbose, language)
     val dxNativeTasks: Vector[String] = dxni.search(dxProject, folder, recursive)
     if (dxNativeTasks.isEmpty) {
       Utils.warning(verbose, s"Found no DX native applets in ${folder}")
@@ -401,7 +401,7 @@ object DxNI {
   }
 
   def applyApps(output: Path, force: Boolean, language: Language.Value, verbose: Verbose): Unit = {
-    val dxni                          = new DxNI(verbose, language)
+    val dxni = new DxNI(verbose, language)
     val dxAppsAsTasks: Vector[String] = dxni.searchApps
     if (dxAppsAsTasks.isEmpty) {
       Utils.warning(verbose, s"Found no DX global apps")

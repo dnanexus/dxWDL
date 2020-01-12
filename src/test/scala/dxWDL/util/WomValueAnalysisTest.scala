@@ -20,9 +20,9 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
   it should "evalConst" in {
     val allExpectedResults = Map(
       "flag" -> Some(WomBoolean(true)),
-      "i"    -> Some(WomInteger(8)),
-      "x"    -> Some(WomFloat(2.718)),
-      "s"    -> Some(WomString("hello world")),
+      "i" -> Some(WomInteger(8)),
+      "x" -> Some(WomFloat(2.718)),
+      "s" -> Some(WomString("hello world")),
       "ar1" -> Some(
         WomArray(
           WomArrayType(WomStringType),
@@ -35,9 +35,9 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
           Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10))
         )
       ),
-      "p"      -> Some(WomPair(WomInteger(1), WomInteger(12))),
-      "file2"  -> None,
-      "k"      -> None,
+      "p" -> Some(WomPair(WomInteger(1), WomInteger(12))),
+      "file2" -> None,
+      "k" -> None,
       "readme" -> None
     )
 
@@ -68,10 +68,10 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
 
     val expressions = parseExpressions(wdlCode)
     for (node <- expressions) {
-      val id: String                 = node.identifier.localName.value
+      val id: String = node.identifier.localName.value
       val expected: Option[WomValue] = allExpectedResults(id)
-      val expr: WomExpression        = node.womExpression
-      val womType: WomType           = node.womType
+      val expr: WomExpression = node.womExpression
+      val womType: WomType = node.womType
 
       val retval = WomValueAnalysis.ifConstEval(womType, expr)
       retval shouldBe (expected)
@@ -100,7 +100,7 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
                |""".stripMargin
 
     val expressions = parseExpressions(wdlCode)
-    val node        = expressions.head
+    val node = expressions.head
     assertThrows[Exception] {
       WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
     }
@@ -119,7 +119,7 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
                |""".stripMargin
 
     val expressions = parseExpressions(wdlCode)
-    val nodes       = expressions.toList
+    val nodes = expressions.toList
     for (node <- nodes)
       WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
   }

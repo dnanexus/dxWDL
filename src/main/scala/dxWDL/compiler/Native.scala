@@ -40,9 +40,9 @@ case class Native(
 ) {
   case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
 
-  private val verbose2: Boolean       = verbose.containsKey("Native")
-  private val rtDebugLvl              = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-  private val wdlVarLinksConverter    = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
+  private val verbose2: Boolean = verbose.containsKey("Native")
+  private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
 
   // Are we setting up a private docker registry?
@@ -61,19 +61,19 @@ case class Native(
       case Some(id) =>
         // Open the archive
         // Extract the archive from the details field
-        val record  = DxRecord.getInstance(id)
-        val desc    = record.describe(Set(Field.Details))
+        val record = DxRecord.getInstance(id)
+        val desc = record.describe(Set(Field.Details))
         val details = desc.details.get
         val dxLink = details.asJsObject.fields.get("archiveFileId") match {
           case Some(x) => x
           case None    => throw new Exception(s"record does not have an archive field ${details}")
         }
         val dxFile = DxUtils.dxFileFromJsValue(dxLink)
-        val name   = dxFile.describe().name
+        val name = dxFile.describe().name
         Some(
           JsObject(
             "name" -> JsString(name),
-            "id"   -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
+            "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
           )
         )
     }
@@ -140,8 +140,8 @@ case class Native(
         ),
         JsObject(
           Map(
-            "name"     -> JsString(name + Utils.FLAT_FILES_SUFFIX),
-            "class"    -> JsString("array:file"),
+            "name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
+            "class" -> JsString("array:file"),
             "optional" -> JsBoolean(true)
           )
             ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)
@@ -414,7 +414,7 @@ case class Native(
 
     // We need to sort the hash-tables. They are natually unsorted,
     // causing the same object to have different checksums.
-    val jsDet  = Utils.makeDeterministic(JsObject(fields))
+    val jsDet = Utils.makeDeterministic(JsObject(fields))
     val digest = chksum(jsDet.prettyPrint)
 
     // Add the checksum to the properies
@@ -425,7 +425,7 @@ case class Native(
         case other                 => throw new Exception(s"Bad properties json value ${other}")
       }
     val props = preExistingProps ++ Map(
-      Utils.VERSION_PROP  -> JsString(Utils.getVersion()),
+      Utils.VERSION_PROP -> JsString(Utils.getVersion()),
       Utils.CHECKSUM_PROP -> JsString(digest)
     )
 
@@ -434,9 +434,9 @@ case class Native(
     // still being able to reuse it.
     val req = JsObject(
       fields ++ Map(
-        "project"    -> JsString(dxProject.id),
-        "folder"     -> JsString(folder),
-        "parents"    -> JsBoolean(true),
+        "project" -> JsString(dxProject.id),
+        "folder" -> JsString(folder),
+        "parents" -> JsBoolean(true),
         "properties" -> JsObject(props)
       )
     )
@@ -576,7 +576,7 @@ case class Native(
     }
     //System.out.println(s"Native: instanceType chosen = ${instanceType}")
     val runSpec: Map[String, JsValue] = Map(
-      "code"        -> JsString(bashScript),
+      "code" -> JsString(bashScript),
       "interpreter" -> JsString("bash"),
       "systemRequirements" ->
         JsObject(
@@ -584,7 +584,7 @@ case class Native(
             JsObject("instanceType" -> JsString(instanceType))
         ),
       "distribution" -> JsString("Ubuntu"),
-      "release"      -> JsString(Utils.UBUNTU_VERSION)
+      "release" -> JsString(Utils.UBUNTU_VERSION)
     )
 
     // Add default timeout
@@ -726,7 +726,7 @@ case class Native(
           // meta information used for running workflow fragments
           Map(
             "execLinkInfo" -> JsObject(linkInfo),
-            "blockPath"    -> JsArray(blockPath.map(JsNumber(_))),
+            "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
             "fqnDictTypes" -> JsObject(fqnDictTypes.map {
               case (k, t) =>
                 val tStr = WomTypeSerialization(typeAliases).toString(t)
@@ -756,17 +756,17 @@ case class Native(
 
     // put the wom source code into the details field.
     // Add the pricing model, and make the prices opaque.
-    val womSourceCode    = Utils.gzipAndBase64Encode(applet.womSourceCode)
-    val dbOpaque         = InstanceTypeDB.opaquePrices(instanceTypeDB)
+    val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
+    val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
     val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
     }
     val auxInfo = Map(
-      "womSourceCode"  -> JsString(womSourceCode),
+      "womSourceCode" -> JsString(womSourceCode),
       "instanceTypeDB" -> JsString(dbOpaqueInstance),
-      "runtimeAttrs"   -> runtimeAttrs
+      "runtimeAttrs" -> runtimeAttrs
     )
 
     // Links to applets that could get called at runtime. If
@@ -778,8 +778,8 @@ case class Native(
     val (runSpec: JsValue, details: Map[String, JsValue]) =
       calcRunSpec(applet, auxInfo ++ dxLinks ++ metaInfo, bashScript)
     val detailsWithLicense: Map[String, JsValue] = addLicences(applet)
-    val jsDetails: JsValue                       = JsObject(details ++ detailsWithLicense)
-    val access: JsValue                          = calcAccess(applet)
+    val jsDetails: JsValue = JsObject(details ++ detailsWithLicense)
+    val access: JsValue = calcAccess(applet)
 
     // A fragemnt is hidden, not visible under default settings. This
     // allows the workflow copying code to traverse it, and link to
@@ -792,14 +792,14 @@ case class Native(
 
     // pack all the core arguments into a single request
     val reqCore = Map(
-      "name"       -> JsString(applet.name),
-      "inputSpec"  -> JsArray(inputSpec),
+      "name" -> JsString(applet.name),
+      "inputSpec" -> JsArray(inputSpec),
       "outputSpec" -> JsArray(outputSpec),
-      "runSpec"    -> runSpec,
-      "dxapi"      -> JsString("1.0.0"),
-      "tags"       -> JsArray(JsString("dxWDL")),
-      "details"    -> jsDetails,
-      "hidden"     -> JsBoolean(hidden)
+      "runSpec" -> runSpec,
+      "dxapi" -> JsString("1.0.0"),
+      "tags" -> JsArray(JsString("dxWDL")),
+      "details" -> jsDetails,
+      "hidden" -> JsBoolean(hidden)
     )
     val accessField =
       if (access == JsNull) Map.empty
@@ -837,7 +837,7 @@ case class Native(
     // making of the applet.
     val (digest, appletApiRequest) = appletNewReq(applet, bashScript, folder, aplLinks)
     if (verbose2) {
-      val fName   = s"${applet.name}_req.json"
+      val fName = s"${applet.name}_req.json"
       val trgPath = Utils.appCompileDirPath.resolve(fName)
       Utils.writeFileContent(trgPath, appletApiRequest.prettyPrint)
     }
@@ -846,8 +846,8 @@ case class Native(
     val dxApplet = buildRequired match {
       case None =>
         // Compile a WDL snippet into an applet.
-        val rep      = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
-        val id       = apiParseReplyID(rep)
+        val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+        val id = apiParseReplyID(rep)
         val dxApplet = DxApplet.getInstance(id)
         dxObjDir.insert(applet.name, dxApplet, digest)
         dxApplet
@@ -873,15 +873,15 @@ case class Native(
             // in a value at runtime.
             m
           case IR.SArgConst(wValue) =>
-            val wvl    = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+            val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgLink(dxStage, argName) =>
-            val wvl    = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgWorkflowInput(argName) =>
-            val wvl    = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
         }
@@ -965,16 +965,16 @@ case class Native(
     val stagesReq =
       wf.stages.foldLeft(Vector.empty[JsValue]) {
         case (stagesReq, stg) =>
-          val ExecRecord(irApplet, dxExec, _)    = execDict(stg.calleeName)
+          val ExecRecord(irApplet, dxExec, _) = execDict(stg.calleeName)
           val linkedInputs: Vector[(CVar, SArg)] = irApplet.inputVars zip stg.inputs
-          val inputs                             = genStageInputs(linkedInputs)
+          val inputs = genStageInputs(linkedInputs)
           // convert the per-stage metadata into JSON
           val stageReqDesc = JsObject(
             Map(
-              "id"         -> JsString(stg.id.getId),
+              "id" -> JsString(stg.id.getId),
               "executable" -> JsString(dxExec.getId),
-              "name"       -> JsString(stg.description),
-              "input"      -> inputs
+              "name" -> JsString(stg.description),
+              "input" -> inputs
             )
           )
           stagesReq :+ stageReqDesc
@@ -993,9 +993,9 @@ case class Native(
 
     // pack all the arguments into a single API call
     val reqFields = Map(
-      "name"   -> JsString(wf.name),
+      "name" -> JsString(wf.name),
       "stages" -> JsArray(stagesReq),
-      "tags"   -> JsArray(JsString("dxWDL")),
+      "tags" -> JsArray(JsString("dxWDL")),
       "hidden" -> JsBoolean(hidden)
     )
 
@@ -1046,7 +1046,7 @@ case class Native(
       JsObject(
         reqWithChecksum.asJsObject.fields ++ Map(
           "project" -> JsString(dxProject.id),
-          "folder"  -> JsString(folder),
+          "folder" -> JsString(folder),
           "parents" -> JsBoolean(true)
         )
       )
@@ -1054,8 +1054,8 @@ case class Native(
   }
 
   private def buildWorkflow(req: JsValue): DxWorkflow = {
-    val rep  = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-    val id   = apiParseReplyID(rep)
+    val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+    val id = apiParseReplyID(rep)
     val dxwf = DxWorkflow.getInstance(id)
 
     // Close the workflow
@@ -1073,7 +1073,7 @@ case class Native(
       execDict: Map[String, ExecRecord]
   ): DxWorkflow = {
     val (digest, wfNewReq) = workflowNewReq(wf, execDict)
-    val buildRequired      = isBuildRequired(wf.name, digest)
+    val buildRequired = isBuildRequired(wf.name, digest)
     buildRequired match {
       case None =>
         val dxWorkflow = buildWorkflow(wfNewReq)

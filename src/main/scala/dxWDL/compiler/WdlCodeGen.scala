@@ -254,7 +254,7 @@ task Add {
   //   call Hello
   // }
   //
-  private val callLibrary: Regex       = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+  private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
   private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
   private def flattenWorkflow(wdlWfSource: String): String = {
     val originalLines = wdlWfSource.split("\n").toList
@@ -265,9 +265,9 @@ task Add {
         if (allMatches.isEmpty) {
           line
         } else {
-          val m              = allMatches(0)
+          val m = allMatches(0)
           val callee: String = m.group(4)
-          val rest           = m.group(6)
+          val rest = m.group(6)
           s"call ${callee} ${rest}"
         }
 
@@ -277,7 +277,7 @@ task Add {
       if (allMatches2.isEmpty) {
         newLine
       } else {
-        val m              = allMatches2(0)
+        val m = allMatches2(0)
         val callee: String = m.group(4)
         s"call ${callee}"
       }

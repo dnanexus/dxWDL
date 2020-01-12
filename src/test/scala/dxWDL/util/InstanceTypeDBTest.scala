@@ -134,10 +134,10 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         val price: Float =
           if (pricingInfo) awsOnDemandHourlyPriceTable(internalName)
           else 0
-        val traits   = fields("traits").asJsObject.fields
+        val traits = fields("traits").asJsObject.fields
         val memoryMB = intOfJs(traits("totalMemoryMB"))
-        val diskGB   = intOfJs(traits("ephemeralStorageGB"))
-        val cpu      = intOfJs(traits("numCores"))
+        val diskGB = intOfJs(traits("ephemeralStorageGB"))
+        val cpu = intOfJs(traits("numCores"))
         DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, false)
     }.toVector
     InstanceTypeDB(pricingInfo, db)
@@ -203,8 +203,8 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     )
   }
 
-  val dbFull     = genTestDB(true)
-  val dbOpaque   = InstanceTypeDB.opaquePrices(dbFull)
+  val dbFull = genTestDB(true)
+  val dbOpaque = InstanceTypeDB.opaquePrices(dbFull)
   val dbNoPrices = genTestDB(false)
 
   it should "Work even without access to pricing information" in {
@@ -219,7 +219,7 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
   }
 
   it should "perform JSON serialization" in {
-    val js  = dbFull.toJson
+    val js = dbFull.toJson
     val db2 = js.asJsObject.convertTo[InstanceTypeDB]
     dbFull should equal(db2)
   }

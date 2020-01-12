@@ -147,8 +147,8 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
   private def parseOneResult(jsv: JsValue): (DxDataObject, DxObjectDescribe) = {
     jsv.asJsObject.getFields("project", "id", "describe") match {
       case Seq(JsString(projectId), JsString(dxid), desc) =>
-        val dxProj    = DxProject.getInstance(projectId)
-        val dxObj     = DxObject.getInstance(dxid, dxProj)
+        val dxProj = DxProject.getInstance(projectId)
+        val dxObj = DxObject.getInstance(dxid, dxProj)
         val dxDataObj = dxObj.asInstanceOf[DxDataObject]
         (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
       case _ =>
@@ -187,9 +187,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       withInputOutputSpec: Boolean
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     val describeFields = Map(
-      "name"       -> JsBoolean(true),
-      "folder"     -> JsBoolean(true),
-      "size"       -> JsBoolean(true),
+      "name" -> JsBoolean(true),
+      "folder" -> JsBoolean(true),
+      "size" -> JsBoolean(true),
       "properties" -> JsBoolean(true)
     )
     val ioSpec =
@@ -200,9 +200,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
     val reqFields = Map(
       "visibility" -> JsString("either"),
-      "project"    -> JsString(dxProject.getId),
-      "describe"   -> JsObject(describeFields ++ ioSpec),
-      "scope"      -> scope
+      "project" -> JsString(dxProject.getId),
+      "describe" -> JsObject(describeFields ++ ioSpec),
+      "scope" -> scope
     )
     val limitField = limit match {
       case None      => Map.empty
@@ -279,9 +279,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       folder: Option[String],
       recurse: Boolean,
       klassRestriction: Option[String],
-      withProperties: Vector[String],  // object must have these properties
+      withProperties: Vector[String], // object must have these properties
       nameConstraints: Vector[String], // the object name has to be one of these strings
-      withInputOutputSpec: Boolean     // should the IO spec be described?
+      withInputOutputSpec: Boolean // should the IO spec be described?
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
@@ -289,7 +289,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     }
     val scope = buildScope(dxProject, folder, recurse)
 
-    var allResults              = Map.empty[DxDataObject, DxObjectDescribe]
+    var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
       val (results, next) = submitRequest(

@@ -85,8 +85,8 @@ case class CollectSubJobs(
     typeAliases: Map[String, WomType]
 ) {
   //private val verbose = runtimeDebugLevel >= 1
-  private val maxVerboseLevel      = (runtimeDebugLevel == 2)
-  private val verbose              = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val maxVerboseLevel = (runtimeDebugLevel == 2)
+  private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
@@ -116,7 +116,7 @@ case class CollectSubJobs(
 
   private def findChildExecs(): Vector[DxExecution] = {
     // get the parent job
-    val dxJob            = DxJob(DxUtils.dxEnv.getJob())
+    val dxJob = DxJob(DxUtils.dxEnv.getJob())
     val parentJob: DxJob = dxJob.describe().parentJob.get
 
     val childExecs: Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
@@ -135,9 +135,9 @@ case class CollectSubJobs(
       JsObject(
         "id" -> JsString(job.getId),
         "describe" -> JsObject(
-          "outputs"        -> JsBoolean(true),
+          "outputs" -> JsBoolean(true),
           "executableName" -> JsBoolean(true),
-          "properties"     -> JsBoolean(true)
+          "properties" -> JsBoolean(true)
         )
       )
     }
@@ -205,7 +205,7 @@ case class CollectSubJobs(
     val vec: Vector[WomValue] =
       childJobsComplete.flatMap {
         case childExec =>
-          val dxName     = Utils.transformVarName(name)
+          val dxName = Utils.transformVarName(name)
           val fieldValue = childExec.outputs.get(dxName)
           (womType, fieldValue) match {
             case (WomOptionalType(_), None) =>
@@ -229,10 +229,10 @@ case class CollectSubJobs(
       childJobsComplete: Vector[ChildExecDesc]
   ): Map[String, WdlVarLinks] = {
     call.callable.outputs.map { cot: OutputDefinition =>
-      val fullName        = s"${call.identifier.workflowLocalName}.${cot.name}"
-      val womType         = cot.womType
+      val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
+      val womType = cot.womType
       val value: WomValue = collectCallField(cot.name, womType, childJobsComplete)
-      val wvl             = wdlVarLinksConverter.importFromWDL(value.womType, value)
+      val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
       fullName -> wvl
     }.toMap
   }
@@ -246,7 +246,7 @@ case class CollectSubJobs(
     execLinkInfo.outputs.map {
       case (name, womType) =>
         val value: WomValue = collectCallField(name, womType, childJobsComplete)
-        val wvl             = wdlVarLinksConverter.importFromWDL(value.womType, value)
+        val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
         name -> wvl
     }.toMap
   }

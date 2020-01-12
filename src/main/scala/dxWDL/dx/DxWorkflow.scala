@@ -51,7 +51,7 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
       Field.OutputSpec
     )
     val allFields = fields ++ defaultFields
-    val request   = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val response = DXAPI.workflowDescribe(
       id,
       DxUtils.jsonNodeOfJsValue(request),
@@ -97,8 +97,8 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props   = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    val stages  = descJs.asJsObject.fields.get("stages").map(parseStages)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val stages = descJs.asJsObject.fields.get("stages").map(parseStages)
     desc.copy(details = details, properties = props, stages = stages)
   }
 
