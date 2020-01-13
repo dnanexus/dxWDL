@@ -53,7 +53,7 @@ object WomPrettyPrintApproxWdl {
             }
             .mkString("\n")
         Some(
-          s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
+            s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
                          |${innerBlock}
                          |${indent}}
                          |""".stripMargin
@@ -81,12 +81,12 @@ object WomPrettyPrintApproxWdl {
       case expr: ExpressionBasedGraphOutputNode =>
         val exprSource = expr.womExpression.sourceString
         Some(
-          s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} = ${exprSource}"
+            s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} = ${exprSource}"
         )
 
       case expr: ExposedExpressionNode =>
         Some(
-          s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}"
+            s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}"
         )
 
       case expr: ExpressionNode =>

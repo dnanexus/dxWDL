@@ -6,24 +6,24 @@ import wom.types._
 class WomTypeSerializationTest extends FlatSpec with Matchers {
 
   val testCases: List[WomType] = List(
-    // Primitive types
-    WomNothingType,
-    WomBooleanType,
-    WomIntegerType,
-    WomLongType,
-    WomFloatType,
-    WomStringType,
-    WomSingleFileType,
-    // array
-    WomMaybeEmptyArrayType(WomStringType),
-    WomNonEmptyArrayType(WomSingleFileType),
-    // maps
-    WomMapType(WomStringType, WomSingleFileType),
-    WomMapType(WomStringType, WomMapType(WomFloatType, WomIntegerType)),
-    // optionals
-    WomOptionalType(WomLongType),
-    WomOptionalType(WomMaybeEmptyArrayType(WomBooleanType)),
-    WomPairType(WomIntegerType, WomStringType)
+      // Primitive types
+      WomNothingType,
+      WomBooleanType,
+      WomIntegerType,
+      WomLongType,
+      WomFloatType,
+      WomStringType,
+      WomSingleFileType,
+      // array
+      WomMaybeEmptyArrayType(WomStringType),
+      WomNonEmptyArrayType(WomSingleFileType),
+      // maps
+      WomMapType(WomStringType, WomSingleFileType),
+      WomMapType(WomStringType, WomMapType(WomFloatType, WomIntegerType)),
+      // optionals
+      WomOptionalType(WomLongType),
+      WomOptionalType(WomMaybeEmptyArrayType(WomBooleanType)),
+      WomPairType(WomIntegerType, WomStringType)
   )
 
   it should "work for various WDL types" in {
@@ -36,22 +36,22 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
 
   val personType =
     WomCompositeType(
-      Map("name" -> WomStringType, "age" -> WomIntegerType),
-      Some("Person")
+        Map("name" -> WomStringType, "age" -> WomIntegerType),
+        Some("Person")
     )
   val houseType = WomCompositeType(
-    Map(
-      "street" -> WomStringType,
-      "zip code" -> WomIntegerType,
-      "owner" -> personType
-    ),
-    Some("House")
+      Map(
+          "street" -> WomStringType,
+          "zip code" -> WomIntegerType,
+          "owner" -> personType
+      ),
+      Some("House")
   )
 
   val structTestCases: List[WomType] = List(
-    personType,
-    WomPairType(personType, houseType),
-    WomOptionalType(houseType)
+      personType,
+      WomPairType(personType, houseType),
+      WomOptionalType(houseType)
   )
 
   it should "work for structs" in {
@@ -65,10 +65,10 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   }
 
   val badTypeNames: List[String] = List(
-    "A bad type",
-    "dummy",
-    "Map[Int, UnrealFile]",
-    "Pair[Int, Map[Int, X__String]]"
+      "A bad type",
+      "dummy",
+      "Map[Int, UnrealFile]",
+      "Pair[Int, Map[Int, X__String]]"
   )
 
   it should "detect bad type descriptions" in {
@@ -87,8 +87,8 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
     val typeSerialize = WomTypeSerialization(Map.empty)
     val objectWithoutName =
       WomCompositeType(
-        Map("name" -> WomStringType, "age" -> WomIntegerType),
-        None
+          Map("name" -> WomStringType, "age" -> WomIntegerType),
+          None
       )
     assertThrows[Exception] {
       typeSerialize.toString(objectWithoutName)

@@ -21,36 +21,36 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
   def describe(fields: Set[Field.Value] = Set.empty): DxAppletDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(
-      Field.Project,
-      Field.Id,
-      Field.Name,
-      Field.Folder,
-      Field.Created,
-      Field.Modified,
-      Field.InputSpec,
-      Field.OutputSpec
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Folder,
+        Field.Created,
+        Field.Modified,
+        Field.InputSpec,
+        Field.OutputSpec
     )
     val allFields = fields ++ defaultFields
     val request = JsObject(
-      projSpec + ("fields" -> DxObject.requestFields(allFields))
+        projSpec + ("fields" -> DxObject.requestFields(allFields))
     )
     val response =
       DXAPI.appletDescribe(
-        id,
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
+          id,
+          DxUtils.jsonNodeOfJsValue(request),
+          classOf[JsonNode],
+          DxUtils.dxEnv
       )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc = descJs.asJsObject.getFields(
-      "project",
-      "id",
-      "name",
-      "folder",
-      "created",
-      "modified",
-      "inputSpec",
-      "outputSpec"
+        "project",
+        "id",
+        "name",
+        "folder",
+        "created",
+        "modified",
+        "inputSpec",
+        "outputSpec"
     ) match {
       case Seq(
           JsString(project),
@@ -63,16 +63,16 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
           JsArray(outputSpec)
           ) =>
         DxAppletDescribe(
-          project,
-          id,
-          name,
-          folder,
-          created.toLong,
-          modified.toLong,
-          None,
-          None,
-          Some(DxObject.parseIOSpec(inputSpec.toVector)),
-          Some(DxObject.parseIOSpec(outputSpec.toVector))
+            project,
+            id,
+            name,
+            folder,
+            created.toLong,
+            modified.toLong,
+            None,
+            None,
+            Some(DxObject.parseIOSpec(inputSpec.toVector)),
+            Some(DxObject.parseIOSpec(outputSpec.toVector))
         )
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")

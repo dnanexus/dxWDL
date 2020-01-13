@@ -62,7 +62,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
                   allSources(path) = fileContent
                 case Some(oldContent) if oldContent != fileContent =>
                   Invalid(
-                    s"${path} has been imported twice, with different content"
+                      s"${path} has been imported twice, with different content"
                   )
                 case _ => ()
               }
@@ -86,9 +86,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // which version.
   private def getLanguageFactory(wfSource: String): LanguageFactory = {
     val langPossibilties = List(
-      new WdlDraft3LanguageFactory(ConfigFactory.empty()),
-      new WdlBiscayneLanguageFactory(ConfigFactory.empty()),
-      new CwlV1_0LanguageFactory(ConfigFactory.empty())
+        new WdlDraft3LanguageFactory(ConfigFactory.empty()),
+        new WdlBiscayneLanguageFactory(ConfigFactory.empty()),
+        new CwlV1_0LanguageFactory(ConfigFactory.empty())
     )
 
     langPossibilties
@@ -117,7 +117,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // We need to get all the WDL sources, so we could analyze them
     val mainFileResolvers =
       DirectoryResolver.localFilesystemResolvers(
-        Some(DefaultPathBuilder.build(mainFile))
+          Some(DefaultPathBuilder.build(mainFile))
       )
 
     // look for source files in each of the import directories
@@ -125,10 +125,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
       val p2: cromwell.core.path.Path =
         DefaultPathBuilder.build(p.toAbsolutePath)
       DirectoryResolver(
-        p2,
-        customName = None,
-        deleteOnClose = false,
-        directoryHash = None
+          p2,
+          customName = None,
+          deleteOnClose = false,
+          directoryHash = None
       )
     }
     val importResolvers: List[ImportResolver] =
@@ -143,12 +143,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val languageFactory = getLanguageFactory(mainFileContents)
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(
-        mainFileContents,
-        None,
-        "{}",
-        importResolversRecorded,
-        List(languageFactory),
-        convertNestedScatterToSubworkflow = false
+          mainFileContents,
+          None,
+          "{}",
+          importResolversRecorded,
+          List(languageFactory),
+          convertNestedScatterToSubworkflow = false
       )
 
     val bundle = bundleChk match {
@@ -162,8 +162,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
     val lang =
       (
-        languageFactory.languageName.toLowerCase,
-        languageFactory.languageVersionName
+          languageFactory.languageName.toLowerCase,
+          languageFactory.languageVersionName
       ) match {
         case ("wdl", "draft-2")     => Language.WDLvDraft2
         case ("wdl", "draft-3")     => Language.WDLv1_0
@@ -190,16 +190,16 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // A new path, not seen before
           val bundle =
             languageFactory.getWomBundle(
-              wfSource,
-              None,
-              "{}",
-              importResolversRecorded,
-              List(languageFactory),
-              convertNestedScatterToSubworkflow = false
+                wfSource,
+                None,
+                "{}",
+                importResolversRecorded,
+                List(languageFactory),
+                convertNestedScatterToSubworkflow = false
             ) match {
               case Left(errors) =>
                 throw new Exception(
-                  s"""|WOM validation errors:
+                    s"""|WOM validation errors:
                                                                          | ${errors}
                                                                          |""".stripMargin
                 )
@@ -233,7 +233,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     lang match {
       case Language.CWLv1_0 =>
         throw new Exception(
-          "CWL is not handled at the moment, only WDL is supported"
+            "CWL is not handled at the moment, only WDL is supported"
         )
       case _ => ()
     }
@@ -416,12 +416,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(
-        wdlWfSource,
-        None,
-        "{}",
-        List.empty,
-        List.empty,
-        false
+          wdlWfSource,
+          None,
+          "{}",
+          List.empty,
+          List.empty,
+          false
       )
     bundleChk match {
       case Left(errors) =>
@@ -450,12 +450,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val languageFactory = getLanguageFactory(wfSource)
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(
-        wfSource,
-        None,
-        "{}",
-        List.empty,
-        List(languageFactory),
-        convertNestedScatterToSubworkflow = false
+          wfSource,
+          None,
+          "{}",
+          List.empty,
+          List(languageFactory),
+          convertNestedScatterToSubworkflow = false
       )
     val womBundle = bundleChk match {
       case Left(errors)  => throw new Exception(s"""|WOM validation errors:
@@ -509,12 +509,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val languageFactory = getLanguageFactory(wfSource)
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(
-        wfSource,
-        None,
-        "{}",
-        List.empty,
-        List(languageFactory),
-        false
+          wfSource,
+          None,
+          "{}",
+          List.empty,
+          List(languageFactory),
+          false
       )
     val womBundle = bundleChk match {
       case Left(errors)  => throw new Exception(s"""|WOM validation errors:

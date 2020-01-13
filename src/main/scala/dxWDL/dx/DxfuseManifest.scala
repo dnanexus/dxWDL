@@ -30,21 +30,21 @@ object DxfuseManifest {
 
         val (_, fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
         JsObject(
-          "proj_id" -> JsString(fDesc.project),
-          "file_id" -> JsString(dxFile.id),
-          "parent" -> JsString(relParentDir),
-          "fname" -> JsString(fDesc.name),
-          "size" -> JsNumber(fDesc.size),
-          "ctime" -> JsNumber(fDesc.created),
-          "mtime" -> JsNumber(fDesc.modified)
+            "proj_id" -> JsString(fDesc.project),
+            "file_id" -> JsString(dxFile.id),
+            "parent" -> JsString(relParentDir),
+            "fname" -> JsString(fDesc.name),
+            "size" -> JsNumber(fDesc.size),
+            "ctime" -> JsNumber(fDesc.created),
+            "mtime" -> JsNumber(fDesc.modified)
         )
     }.toVector
 
     DxfuseManifest(
-      JsObject(
-        "files" -> JsArray(files),
-        "directories" -> JsArray(Vector.empty)
-      )
+        JsObject(
+            "files" -> JsArray(files),
+            "directories" -> JsArray(Vector.empty)
+        )
     )
   }
 }

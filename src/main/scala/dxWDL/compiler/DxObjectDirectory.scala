@@ -70,42 +70,42 @@ case class DxObjectDirectory(
     val t0 = System.nanoTime()
     val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose).apply(
-        dxProject,
-        Some(folder),
-        false,
-        Some("applet"),
-        Vector(CHECKSUM_PROP),
-        allExecutableNames.toVector,
-        false
+          dxProject,
+          Some(folder),
+          false,
+          Some("applet"),
+          Vector(CHECKSUM_PROP),
+          allExecutableNames.toVector,
+          false
       )
     val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
-      verbose.on,
-      s"""|Found ${dxAppletsInFolder.size} applets
+        verbose.on,
+        s"""|Found ${dxAppletsInFolder.size} applets
                         |in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
-        .replaceAll("\n", " ")
+          .replaceAll("\n", " ")
     )
 
     // find workflows
     val t2 = System.nanoTime()
     val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose).apply(
-        dxProject,
-        Some(folder),
-        false,
-        Some("workflow"),
-        Vector(CHECKSUM_PROP),
-        allExecutableNames.toVector,
-        false
+          dxProject,
+          Some(folder),
+          false,
+          Some("workflow"),
+          Vector(CHECKSUM_PROP),
+          allExecutableNames.toVector,
+          false
       )
     val t3 = System.nanoTime()
     diffMSec = (t3 - t2) / (1000 * 1000)
     Utils.trace(
-      verbose.on,
-      s"""|Found ${dxWorkflowsInFolder.size} workflows
+        verbose.on,
+        s"""|Found ${dxWorkflowsInFolder.size} workflows
                         | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
-        .replaceAll("\n", " ")
+          .replaceAll("\n", " ")
     )
 
     val dxObjects = dxAppletsInFolder ++ dxWorkflowsInFolder
@@ -115,8 +115,8 @@ case class DxObjectDirectory(
         val creationDate = new java.util.Date(desc.created)
         val crLdt: LocalDateTime =
           LocalDateTime.ofInstant(
-            creationDate.toInstant(),
-            ZoneId.systemDefault()
+              creationDate.toInstant(),
+              ZoneId.systemDefault()
           )
         val chksum = desc.properties.flatMap { p =>
           p.get(CHECKSUM_PROP)
@@ -157,20 +157,20 @@ case class DxObjectDirectory(
     val t0 = System.nanoTime()
     val dxAppletsInProject: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose).apply(
-        dxProject,
-        None,
-        true,
-        Some("applet"),
-        Vector(CHECKSUM_PROP),
-        allExecutableNames.toVector,
-        false
+          dxProject,
+          None,
+          true,
+          Some("applet"),
+          Vector(CHECKSUM_PROP),
+          allExecutableNames.toVector,
+          false
       )
     val nrApplets = dxAppletsInProject.size
     val t1 = System.nanoTime()
     val diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
-      verbose.on,
-      s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)"
+        verbose.on,
+        s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)"
     )
 
     val hm = HashMap.empty[String, Vector[(DxDataObject, DxObjectDescribe)]]
@@ -258,22 +258,22 @@ case class DxObjectDirectory(
     val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")
     val crDateStr = objInfo.crDate.format(formatter)
     val req = JsObject(
-      "project" -> JsString(dxProject.getId),
-      "name" -> JsString(s"${objInfo.name} ${crDateStr}")
+        "project" -> JsString(dxProject.getId),
+        "name" -> JsString(s"${objInfo.name} ${crDateStr}")
     )
 
     dxClass match {
       case "Workflow" =>
         DXAPI.workflowRename(
-          objInfo.dxObj.getId,
-          DxUtils.jsonNodeOfJsValue(req),
-          classOf[JsonNode]
+            objInfo.dxObj.getId,
+            DxUtils.jsonNodeOfJsValue(req),
+            classOf[JsonNode]
         )
       case "Applet" =>
         DXAPI.appletRename(
-          objInfo.dxObj.getId,
-          DxUtils.jsonNodeOfJsValue(req),
-          classOf[JsonNode]
+            objInfo.dxObj.getId,
+            DxUtils.jsonNodeOfJsValue(req),
+            classOf[JsonNode]
         )
       case other => throw new Exception(s"Unkown class ${other}")
     }

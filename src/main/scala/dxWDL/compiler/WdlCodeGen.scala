@@ -141,7 +141,7 @@ task Add {
       case Language.WDLvDraft2 =>
         // Draft-2 does not support the input block.
         WdlCodeSnippet(
-          s"""|task ${callable.name} {
+            s"""|task ${callable.name} {
                         |${inputs}
                         |
                         |  command {}
@@ -152,7 +152,7 @@ task Add {
         )
       case Language.WDLv1_0 | Language.WDLv2_0 =>
         WdlCodeSnippet(
-          s"""|task ${callable.name} {
+            s"""|task ${callable.name} {
                         |  input {
                         |${inputs}
                         |  }
@@ -312,11 +312,11 @@ task Add {
   def standAloneTask(originalTaskSource: String): WdlCodeSnippet = {
     val wdlWfSource =
       List(
-        versionString() + "\n",
-        "# struct definitions",
-        typeAliasDefinitions,
-        "# Task",
-        originalTaskSource
+          versionString() + "\n",
+          "# struct definitions",
+          typeAliasDefinitions,
+          "# Task",
+          originalTaskSource
       ).mkString("\n")
 
     // Make sure this is actually valid WDL
@@ -375,13 +375,13 @@ task Add {
     val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
     val wdlWfSource =
       List(
-        versionString() + "\n",
-        "# struct definitions",
-        typeAliasDefinitions,
-        "# Task headers",
-        tasksStr,
-        "# Workflow with imports made local",
-        wfWithoutImportCalls
+          versionString() + "\n",
+          "# struct definitions",
+          typeAliasDefinitions,
+          "# Task headers",
+          tasksStr,
+          "# Workflow with imports made local",
+          wfWithoutImportCalls
       ).mkString("\n")
 
     // Make sure this is actually valid WDL

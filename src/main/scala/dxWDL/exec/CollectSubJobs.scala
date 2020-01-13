@@ -100,11 +100,11 @@ case class CollectSubJobs(
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
     val dxSubJob: DxJob = DxUtils.runSubJob(
-      "collect",
-      Some(instanceTypeDB.defaultInstanceType),
-      inputsRaw,
-      childJobs,
-      maxVerboseLevel
+        "collect",
+        Some(instanceTypeDB.defaultInstanceType),
+        inputsRaw,
+        childJobs,
+        maxVerboseLevel
     )
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
@@ -137,22 +137,22 @@ case class CollectSubJobs(
   ): Vector[ChildExecDesc] = {
     val jobInfoReq: Vector[JsValue] = execs.map { job =>
       JsObject(
-        "id" -> JsString(job.getId),
-        "describe" -> JsObject(
-          "outputs" -> JsBoolean(true),
-          "executableName" -> JsBoolean(true),
-          "properties" -> JsBoolean(true)
-        )
+          "id" -> JsString(job.getId),
+          "describe" -> JsObject(
+              "outputs" -> JsBoolean(true),
+              "executableName" -> JsBoolean(true),
+              "properties" -> JsBoolean(true)
+          )
       )
     }
     val req = JsObject("executions" -> JsArray(jobInfoReq))
     System.err.println(s"bulk-describe request=${req}")
     val retval: JsValue =
       DxUtils.jsValueOfJsonNode(
-        DXAPI.systemDescribeExecutions(
-          DxUtils.jsonNodeOfJsValue(req),
-          classOf[JsonNode]
-        )
+          DXAPI.systemDescribeExecutions(
+              DxUtils.jsonNodeOfJsValue(req),
+              classOf[JsonNode]
+          )
       )
     val results: Vector[JsValue] =
       retval.asJsObject.fields.get("results") match {
@@ -166,7 +166,7 @@ case class CollectSubJobs(
           case Some(JsObject(fields)) => fields
           case _ =>
             throw new Exception(
-              s"result does not contains a describe field ${desc}"
+                s"result does not contains a describe field ${desc}"
             )
         }
         val execName = fields.get("executableName") match {
@@ -180,7 +180,7 @@ case class CollectSubJobs(
               case Seq(JsString(seqNum)) => seqNum.toInt
               case _ =>
                 throw new Exception(
-                  s"wrong value for properties ${desc}, ${obj}"
+                    s"wrong value for properties ${desc}, ${obj}"
                 )
             }
           case _ => throw new Exception(s"wrong type for properties ${desc}")
@@ -233,7 +233,7 @@ case class CollectSubJobs(
             case (_, None) =>
               // Required output that is missing
               throw new Exception(
-                s"Could not find compulsory field <${name}> in results"
+                  s"Could not find compulsory field <${name}> in results"
               )
             case (_, Some(jsv)) =>
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))

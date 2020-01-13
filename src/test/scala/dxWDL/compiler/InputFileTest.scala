@@ -30,8 +30,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "add.wdl")
     val inputs = pathFromBasename("input_file", "add_inputs.json")
     Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
@@ -39,13 +39,13 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
     val inputs = pathFromBasename("input_file", "math_inputs.json")
     Main.compile(
-      List(
-        wdlCode.toString,
-        "-inputs",
-        inputs.toString,
-        "--locked"
-        //, "--verbose", "--verboseKey", "GenerateIR"
-      ) ++ cFlags
+        List(
+            wdlCode.toString,
+            "-inputs",
+            inputs.toString,
+            "--locked"
+            //, "--verbose", "--verboseKey", "GenerateIR"
+        ) ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
@@ -53,8 +53,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "several_tasks.wdl")
     val inputs = pathFromBasename("input_file", "several_tasks_inputs.json")
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
@@ -66,8 +66,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
     val inputs = pathFromBasename("input_file", "math_inputs2.json")
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
+          ++ cFlags
     )
 
     inside(retval) {
@@ -80,8 +80,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "population.wdl")
     val defaults = pathFromBasename("input_file", "population_inputs.json")
     val retval = Main.compile(
-      List(wdlCode.toString, "-defaults", defaults.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-defaults", defaults.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -91,21 +91,21 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
     Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
 
     // inputs as defaults
     Main.compile(
-      List(wdlCode.toString, "-defaults", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-defaults", inputs.toString)
+          ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
 
     // Input to an applet.
     // Missing argument in a locked workflow should throw an exception.
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
+          ++ cFlags
     )
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
@@ -115,8 +115,8 @@ class InputFileTest extends FlatSpec with Matchers {
 
     // Missing arguments are legal in an unlocked workflow
     Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
@@ -125,8 +125,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("struct", "Person_input.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -136,8 +136,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "echo_pairs.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -147,8 +147,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("struct", "array_of_structs_input.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -158,8 +158,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "override_input.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -169,8 +169,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "map_argument_input.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
@@ -180,8 +180,8 @@ class InputFileTest extends FlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "no_file_key_input.json")
 
     val retval = Main.compile(
-      List(wdlCode.toString, "-inputs", inputs.toString)
-        ++ cFlags
+        List(wdlCode.toString, "-inputs", inputs.toString)
+          ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }

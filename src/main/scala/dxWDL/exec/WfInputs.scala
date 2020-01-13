@@ -29,11 +29,11 @@ case class WfInputs(
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${inputs}")
     Utils.appletLog(
-      verbose,
-      s"""|Artificial applet for unlocked workflow inputs
+        verbose,
+        s"""|Artificial applet for unlocked workflow inputs
                                      |${WomPrettyPrintApproxWdl.graphInputs(
-           wf.inputs.toSeq
-         )}
+               wf.inputs.toSeq
+           )}
                                      |""".stripMargin
     )
 

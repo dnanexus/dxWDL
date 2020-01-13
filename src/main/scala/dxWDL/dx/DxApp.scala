@@ -19,30 +19,30 @@ case class DxApp(id: String) extends DxExecutable {
   def describe(fields: Set[Field.Value] = Set.empty): DxAppDescribe = {
     val defaultFields =
       Set(
-        Field.Id,
-        Field.Name,
-        Field.Created,
-        Field.Modified,
-        Field.InputSpec,
-        Field.OutputSpec
+          Field.Id,
+          Field.Name,
+          Field.Created,
+          Field.Modified,
+          Field.InputSpec,
+          Field.OutputSpec
       )
     val allFields = fields ++ defaultFields
     val request = JsObject("fields" -> DxObject.requestFields(allFields))
     val response =
       DXAPI.appDescribe(
-        id,
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
+          id,
+          DxUtils.jsonNodeOfJsValue(request),
+          classOf[JsonNode],
+          DxUtils.dxEnv
       )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc = descJs.asJsObject.getFields(
-      "id",
-      "name",
-      "created",
-      "modified",
-      "inputSpec",
-      "outputSpec"
+        "id",
+        "name",
+        "created",
+        "modified",
+        "inputSpec",
+        "outputSpec"
     ) match {
       case Seq(
           JsString(id),
@@ -53,14 +53,14 @@ case class DxApp(id: String) extends DxExecutable {
           JsArray(outputSpec)
           ) =>
         DxAppDescribe(
-          id,
-          name,
-          created.toLong,
-          modified.toLong,
-          None,
-          None,
-          Some(DxObject.parseIOSpec(inputSpec.toVector)),
-          Some(DxObject.parseIOSpec(outputSpec.toVector))
+            id,
+            name,
+            created.toLong,
+            modified.toLong,
+            None,
+            None,
+            Some(DxObject.parseIOSpec(inputSpec.toVector)),
+            Some(DxObject.parseIOSpec(outputSpec.toVector))
         )
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")

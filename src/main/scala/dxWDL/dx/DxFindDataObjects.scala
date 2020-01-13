@@ -98,53 +98,53 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     dxobj match {
       case _: DxApp =>
         DxAppDescribe(
-          dxobj.id,
-          name,
-          created,
-          modified,
-          Some(properties),
-          details,
-          inputSpec,
-          outputSpec
+            dxobj.id,
+            name,
+            created,
+            modified,
+            Some(properties),
+            details,
+            inputSpec,
+            outputSpec
         )
       case _: DxApplet =>
         DxAppletDescribe(
-          dxProject.id,
-          dxobj.id,
-          name,
-          folder,
-          created,
-          modified,
-          Some(properties),
-          details,
-          inputSpec,
-          outputSpec
+            dxProject.id,
+            dxobj.id,
+            name,
+            folder,
+            created,
+            modified,
+            Some(properties),
+            details,
+            inputSpec,
+            outputSpec
         )
       case _: DxWorkflow =>
         DxAppletDescribe(
-          dxProject.id,
-          dxobj.id,
-          name,
-          folder,
-          created,
-          modified,
-          Some(properties),
-          details,
-          inputSpec,
-          outputSpec
+            dxProject.id,
+            dxobj.id,
+            name,
+            folder,
+            created,
+            modified,
+            Some(properties),
+            details,
+            inputSpec,
+            outputSpec
         )
       case _: DxFile =>
         DxFileDescribe(
-          dxProject.id,
-          dxobj.id,
-          name,
-          folder,
-          created,
-          modified,
-          size.get,
-          Some(properties),
-          details,
-          None
+            dxProject.id,
+            dxobj.id,
+            name,
+            folder,
+            created,
+            modified,
+            size.get,
+            Some(properties),
+            details,
+            None
         )
       case other =>
         throw new Exception(s"unsupported object ${other}")
@@ -160,7 +160,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
       case _ =>
         throw new Exception(
-          s"""|malformed result: expecting {project, id, describe} fields, got:
+            s"""|malformed result: expecting {project, id, describe} fields, got:
                     |${jsv.prettyPrint}
                     |""".stripMargin
         )
@@ -196,10 +196,10 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       withInputOutputSpec: Boolean
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     val describeFields = Map(
-      "name" -> JsBoolean(true),
-      "folder" -> JsBoolean(true),
-      "size" -> JsBoolean(true),
-      "properties" -> JsBoolean(true)
+        "name" -> JsBoolean(true),
+        "folder" -> JsBoolean(true),
+        "size" -> JsBoolean(true),
+        "properties" -> JsBoolean(true)
     )
     val ioSpec =
       if (withInputOutputSpec)
@@ -208,10 +208,10 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         Map.empty
 
     val reqFields = Map(
-      "visibility" -> JsString("either"),
-      "project" -> JsString(dxProject.getId),
-      "describe" -> JsObject(describeFields ++ ioSpec),
-      "scope" -> scope
+        "visibility" -> JsString("either"),
+        "project" -> JsString(dxProject.getId),
+        "describe" -> JsObject(describeFields ++ ioSpec),
+        "scope" -> scope
     )
     val limitField = limit match {
       case None      => Map.empty
@@ -253,17 +253,17 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       }
 
     val request = JsObject(
-      reqFields ++ cursorField ++ limitField
-        ++ classField ++ propertiesField
-        ++ namePcreField
+        reqFields ++ cursorField ++ limitField
+          ++ classField ++ propertiesField
+          ++ namePcreField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
 
     val response = DXAPI.systemFindDataObjects(
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
@@ -296,7 +296,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception(
-          "class limitation must be one of {record, file, applet, workflow}"
+            "class limitation must be one of {record, file, applet, workflow}"
         )
     }
     val scope = buildScope(dxProject, folder, recurse)
@@ -305,13 +305,13 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     var cursor: Option[JsValue] = None
     do {
       val (results, next) = submitRequest(
-        scope,
-        dxProject,
-        cursor,
-        klassRestriction,
-        withProperties,
-        nameConstraints,
-        withInputOutputSpec
+          scope,
+          dxProject,
+          cursor,
+          klassRestriction,
+          withProperties,
+          nameConstraints,
+          withInputOutputSpec
       )
       allResults = allResults ++ results
       cursor = next

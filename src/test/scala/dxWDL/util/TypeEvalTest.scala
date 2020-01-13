@@ -19,12 +19,12 @@ class TypeEvalTest extends FlatSpec with Matchers {
     val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
     val bundle =
       languageFactory.getWomBundle(
-        sourceCode,
-        None,
-        "{}",
-        List.empty,
-        List(languageFactory),
-        false
+          sourceCode,
+          None,
+          "{}",
+          List.empty,
+          List(languageFactory),
+          false
       )
     bundle match {
       case Right(bn) =>
@@ -91,7 +91,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
       case Some(call) => call
     }
     call.getClass.toString should equal(
-      "class wom.callable.CallableTaskDefinition"
+        "class wom.callable.CallableTaskDefinition"
     )
 
     call.inputs.foreach {

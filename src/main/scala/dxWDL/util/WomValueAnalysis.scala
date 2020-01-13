@@ -89,9 +89,9 @@ object WomValueAnalysis {
 
       case (_, _) =>
         throw new Exception(
-          s"""|Unsupported combination type=(${womType.stableName},${womType})
+            s"""|Unsupported combination type=(${womType.stableName},${womType})
                     |value=(${value.toWomString}, ${value})""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
   }

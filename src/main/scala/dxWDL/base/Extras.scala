@@ -153,11 +153,11 @@ case class DxAccess(
     val projectCreationMrg = mergeBooleans(projectCreation, dxa.projectCreation)
 
     DxAccess(
-      networkMrg,
-      projectMrg,
-      allProjectsMrg,
-      developerMrg,
-      projectCreationMrg
+        networkMrg,
+        projectMrg,
+        allProjectsMrg,
+        developerMrg,
+        projectCreationMrg
     )
   }
 }
@@ -233,12 +233,12 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
       case Some(x) =>
         x.map { dxLicense: DxLicense =>
           JsObject(
-            "name" -> JsString(dxLicense.name),
-            "repoUrl" -> JsString(dxLicense.repoUrl),
-            "version" -> JsString(dxLicense.version),
-            "license" -> JsString(dxLicense.license),
-            "licenseUrl" -> JsString(dxLicense.licenseUrl),
-            "author" -> JsString(dxLicense.author)
+              "name" -> JsString(dxLicense.name),
+              "repoUrl" -> JsString(dxLicense.repoUrl),
+              "version" -> JsString(dxLicense.version),
+              "license" -> JsString(dxLicense.license),
+              "licenseUrl" -> JsString(dxLicense.licenseUrl),
+              "author" -> JsString(dxLicense.author)
           )
         }
     }
@@ -336,21 +336,21 @@ object Extras {
   val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
   val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
   val EXTRA_ATTRS = Set(
-    "default_runtime_attributes",
-    "default_task_dx_attributes",
-    "per_task_dx_attributes",
-    "docker_registry",
-    "custom_reorg"
+      "default_runtime_attributes",
+      "default_task_dx_attributes",
+      "per_task_dx_attributes",
+      "docker_registry",
+      "custom_reorg"
   )
   val RUNTIME_ATTRS =
     Set(
-      "dx_instance_type",
-      "memory",
-      "disks",
-      "cpu",
-      "docker",
-      "docker_registry",
-      "custom_reorg"
+        "dx_instance_type",
+        "memory",
+        "disks",
+        "cpu",
+        "docker",
+        "docker_registry",
+        "custom_reorg"
     )
   val RUN_SPEC_ATTRS =
     Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
@@ -359,12 +359,12 @@ object Extras {
   val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
   val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
   val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set(
-    "ExecutionError",
-    "UnresponsiveWorker",
-    "JMInternalError",
-    "AppInternalError",
-    "JobTimeoutExceeded",
-    "*"
+      "ExecutionError",
+      "UnresponsiveWorker",
+      "JMInternalError",
+      "AppInternalError",
+      "JobTimeoutExceeded",
+      "*"
   )
   val TASK_DX_ATTRS = Set("runSpec", "details")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
@@ -489,8 +489,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(RUNTIME_ATTRS contains k))
         Utils.warning(
-          verbose,
-          s"""|Unsupported runtime attribute ${k},
+            verbose,
+            s"""|Unsupported runtime attribute ${k},
                                            |we currently support ${RUNTIME_ATTRS}
                                            |""".stripMargin.replaceAll("\n", "")
         )
@@ -552,13 +552,13 @@ object Extras {
     }
 
     return Some(
-      DxAccess(
-        checkedParseStringArrayField(fields, "network"),
-        checkedParseAccessLevelField(fields, "project"),
-        checkedParseAccessLevelField(fields, "allProjects"),
-        checkedParseBooleanField(fields, "developer"),
-        checkedParseBooleanField(fields, "projectCreation")
-      )
+        DxAccess(
+            checkedParseStringArrayField(fields, "network"),
+            checkedParseAccessLevelField(fields, "project"),
+            checkedParseAccessLevelField(fields, "allProjects"),
+            checkedParseBooleanField(fields, "developer"),
+            checkedParseBooleanField(fields, "projectCreation")
+        )
     )
   }
 
@@ -578,7 +578,7 @@ object Extras {
     val key = fields.keys.head
     if (key != "*")
       throw new Exception(
-        """Only a general timeout for all entry points is supported ("*")"""
+          """Only a general timeout for all entry points is supported ("*")"""
       )
     val subObj = checkedParseObjectField(fields, "*")
     if (subObj == JsNull)
@@ -587,18 +587,18 @@ object Extras {
     for (k <- subFields.keys) {
       if (!(RUN_SPEC_TIMEOUT_ATTRS contains k))
         throw new Exception(
-          s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
+            s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
                                         |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
                                         |""".stripMargin.replaceAll("\n", "")
         )
 
     }
     return Some(
-      DxTimeout(
-        checkedParseIntField(subFields, "days"),
-        checkedParseIntField(subFields, "hours"),
-        checkedParseIntField(subFields, "minutes")
-      )
+        DxTimeout(
+            checkedParseIntField(subFields, "days"),
+            checkedParseIntField(subFields, "hours"),
+            checkedParseIntField(subFields, "minutes")
+        )
     )
   }
 
@@ -620,18 +620,18 @@ object Extras {
         case Some(str) if List("all", "master") contains str => Some(str)
         case Some(str) =>
           throw new Exception(
-            s"Unsupported restartableEntryPoints value ${str}"
+              s"Unsupported restartableEntryPoints value ${str}"
           )
       }
     return Some(
-      DxRunSpec(
-        parseAccess(checkedParseObjectField(fields, "access")),
-        parseExecutionPolicy(
-          checkedParseObjectField(fields, "executionPolicy")
-        ),
-        restartable,
-        parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy"))
-      )
+        DxRunSpec(
+            parseAccess(checkedParseObjectField(fields, "access")),
+            parseExecutionPolicy(
+                checkedParseObjectField(fields, "executionPolicy")
+            ),
+            restartable,
+            parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy"))
+        )
     )
 
   }
@@ -696,7 +696,7 @@ object Extras {
       checkedParseStringField(fields, fieldName) match {
         case None =>
           throw new Exception(
-            s"${fieldName} must be specified in the docker section"
+              s"${fieldName} must be specified in the docker section"
           )
         case Some(x) => x
       }
@@ -712,7 +712,7 @@ object Extras {
     for (k <- fields.keys) {
       if (!(CUSTOM_REORG_ATTRS contains k))
         throw new IllegalArgumentException(
-          s"""|Unsupported custom reorg attribute ${k},
+            s"""|Unsupported custom reorg attribute ${k},
                         |we currently support ${CUSTOM_REORG_ATTRS}
                         |""".stripMargin.replaceAll("\n", "")
         )
@@ -721,7 +721,7 @@ object Extras {
     val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
       case None =>
         throw new IllegalArgumentException(
-          "app_id must be specified in the custom_reorg section."
+            "app_id must be specified in the custom_reorg section."
         )
       case Some(x) => x
     }
@@ -730,8 +730,8 @@ object Extras {
       checkedParseStringFieldReplaceNull(fields, "conf") match {
         case None =>
           throw new IllegalArgumentException(
-            "conf must be specified in the custom_reorg section. " +
-              "Please set the value to null if there is no conf file."
+              "conf must be specified in the custom_reorg section. " +
+                "Please set the value to null if there is no conf file."
           )
         case Some(x) => x
       }
@@ -750,7 +750,7 @@ object Extras {
 
     if (!isValidID) {
       throw new IllegalArgumentException(
-        "dxId must match applet-[A-Za-z0-9]{24}"
+          "dxId must match applet-[A-Za-z0-9]{24}"
       )
     }
 
@@ -801,8 +801,8 @@ object Extras {
     verifyInputs(reorgConf)
 
     Utils.trace(
-      verbose.on,
-      s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
+        verbose.on,
+        s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
                 |it may misplace or outright delete files.
                 |The applet: ${reorgAppId} requires CONTRIBUTE project access,
                 |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
@@ -848,23 +848,23 @@ object Extras {
       }
 
     Extras(
-      parseWdlRuntimeAttrs(
-        checkedParseObjectField(fields, "default_runtime_attributes"),
-        verbose
-      ),
-      parseTaskDxAttrs(
-        checkedParseObjectField(fields, "default_task_dx_attributes"),
-        verbose
-      ),
-      perTaskDxAttrs,
-      parseDockerRegistry(
-        checkedParseObjectField(fields, "docker_registry"),
-        verbose
-      ),
-      parseCustomReorgAttrs(
-        checkedParseObjectField(fields, fieldName = "custom_reorg"),
-        verbose
-      )
+        parseWdlRuntimeAttrs(
+            checkedParseObjectField(fields, "default_runtime_attributes"),
+            verbose
+        ),
+        parseTaskDxAttrs(
+            checkedParseObjectField(fields, "default_task_dx_attributes"),
+            verbose
+        ),
+        perTaskDxAttrs,
+        parseDockerRegistry(
+            checkedParseObjectField(fields, "docker_registry"),
+            verbose
+        ),
+        parseCustomReorgAttrs(
+            checkedParseObjectField(fields, fieldName = "custom_reorg"),
+            verbose
+        )
     )
 
   }

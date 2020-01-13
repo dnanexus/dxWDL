@@ -76,7 +76,7 @@ case class WfFragInputOutput(
     // Extract the meta information needed to setup the closure
     // for the subblock
     val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(
-      metaInfo.asJsObject.fields
+        metaInfo.asJsObject.fields
     )
 
     // What remains are inputs from other stages. Convert from JSON
@@ -87,7 +87,7 @@ case class WfFragInputOutput(
         val womType = fqnDictTypes.get(fqn) match {
           case None =>
             throw new Exception(
-              s"Did not find variable ${fqn} (${name}) in the block environment"
+                s"Did not find variable ${fqn} (${name}) in the block environment"
             )
           case Some(x) => x
         }
@@ -114,7 +114,7 @@ case class WfFragInputOutput(
           val womType = fqnDictTypes.get(fqn) match {
             case None =>
               throw new Exception(
-                s"Did not find variable ${fqn} (${name}) in the block environment"
+                  s"Did not find variable ${fqn} (${name}) in the block environment"
               )
             case Some(x) => x
           }

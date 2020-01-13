@@ -45,8 +45,8 @@ case class GenerateIRTask(
         case Some(expr) =>
           val result: ErrorOr[WomValue] =
             expr.evaluateValue(
-              Map.empty[String, WomValue],
-              wom.expression.NoIoFunctionSet
+                Map.empty[String, WomValue],
+                wom.expression.NoIoFunctionSet
             )
           result match {
             case Invalid(_)         => throw new DynamicInstanceTypesException()
@@ -64,11 +64,11 @@ case class GenerateIRTask(
       val iTypeDesc =
         InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
       IR.InstanceTypeConst(
-        iTypeDesc.dxInstanceType,
-        iTypeDesc.memoryMB,
-        iTypeDesc.diskGB,
-        iTypeDesc.cpu,
-        iTypeDesc.gpu
+          iTypeDesc.dxInstanceType,
+          iTypeDesc.memoryMB,
+          iTypeDesc.diskGB,
+          iTypeDesc.cpu,
+          iTypeDesc.gpu
       )
     } catch {
       case e: DynamicInstanceTypesException =>
@@ -165,7 +165,7 @@ case class GenerateIRTask(
           // make sure the runtime block is empty
           if (!task.runtimeAttributes.attributes.isEmpty)
             throw new Exception(
-              s"Native task ${task.name} should have an empty runtime block"
+                s"Native task ${task.name} should have an empty runtime block"
             )
           IR.AppletKindNative(id)
         case (_, _) =>
@@ -175,7 +175,7 @@ case class GenerateIRTask(
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(
-      task.runtimeAttributes.attributes.get("docker")
+        task.runtimeAttributes.attributes.get("docker")
     )
 
     val taskCleanedSourceCode = docker match {
@@ -191,7 +191,7 @@ case class GenerateIRTask(
     }
     val WdlCodeSnippet(selfContainedSourceCode) =
       WdlCodeGen(verbose, typeAliases, language).standAloneTask(
-        taskCleanedSourceCode
+          taskCleanedSourceCode
       )
 
     val dockerFinal = docker match {
@@ -206,13 +206,13 @@ case class GenerateIRTask(
       case other => other
     }
     IR.Applet(
-      task.name,
-      inputs,
-      outputs,
-      instanceType,
-      dockerFinal,
-      kind,
-      selfContainedSourceCode
+        task.name,
+        inputs,
+        outputs,
+        instanceType,
+        dockerFinal,
+        kind,
+        selfContainedSourceCode
     )
   }
 }

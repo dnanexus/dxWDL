@@ -25,11 +25,11 @@ class SortTypeAliasesTest extends FlatSpec with Matchers {
       SortTypeAliases(verbose).apply(typeAliases.toVector)
     val defNames = defs.map { case (name, _) => name }.toVector
     defNames shouldBe (Vector(
-      "Coord",
-      "Bunk",
-      "Foo",
-      "SampleReports",
-      "SampleReportsArray"
+        "Coord",
+        "Bunk",
+        "Foo",
+        "SampleReports",
+        "SampleReportsArray"
     ))
   }
 }

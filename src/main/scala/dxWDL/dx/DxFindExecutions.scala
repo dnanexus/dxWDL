@@ -32,9 +32,9 @@ object DxFindExecutions {
     }
     val request = JsObject(parentField ++ cursorField)
     val response = DXAPI.systemFindExecutions(
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 

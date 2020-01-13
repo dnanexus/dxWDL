@@ -47,7 +47,7 @@ case class DxPathFunctions(
     */
   override def relativeToHostCallRoot(path: String): String =
     throw new AppInternalException(
-      "relativeToHostCallRoot: not implemented in DxIoFunctions"
+        "relativeToHostCallRoot: not implemented in DxIoFunctions"
     )
 
   /**
@@ -135,7 +135,7 @@ case class DxIoFunctions(
         Future(WomSingleFile(localPath))
       case fdx: FurlDx =>
         throw new AppInternalException(
-          s"writeFile: not implemented in DxIoFunctions for cloud files (${fdx})"
+            s"writeFile: not implemented in DxIoFunctions for cloud files (${fdx})"
         )
     }
   }
@@ -146,7 +146,7 @@ case class DxIoFunctions(
     */
   override def createTemporaryDirectory(name: Option[String]): Future[String] =
     throw new AppInternalException(
-      "createTemporaryDirectory: not implemented in DxIoFunctions"
+        "createTemporaryDirectory: not implemented in DxIoFunctions"
     )
 
   /**
@@ -197,7 +197,7 @@ case class DxIoFunctions(
       dirPath: String
   ): Future[Seq[String]] =
     throw new AppInternalException(
-      "listAllFilesUnderDirectory: not implemented in DxIoFunctions"
+        "listAllFilesUnderDirectory: not implemented in DxIoFunctions"
     )
 
   /**
@@ -207,7 +207,7 @@ case class DxIoFunctions(
       path: String
   )(visited: Vector[String] = Vector.empty): Future[Iterator[IoElement]] =
     throw new AppInternalException(
-      "listDirectory: not implemented in DxIoFunctions"
+        "listDirectory: not implemented in DxIoFunctions"
     )
 
   /**
@@ -220,7 +220,7 @@ case class DxIoFunctions(
         Future(p.toFile.isDirectory)
       case fdx: FurlDx =>
         throw new AppInternalException(
-          s"isDirectory: cannot be applied to non local file (${path})"
+            s"isDirectory: cannot be applied to non local file (${path})"
         )
     }
   }

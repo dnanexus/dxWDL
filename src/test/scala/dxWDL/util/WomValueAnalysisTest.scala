@@ -20,26 +20,26 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
 
   it should "evalConst" in {
     val allExpectedResults = Map(
-      "flag" -> Some(WomBoolean(true)),
-      "i" -> Some(WomInteger(8)),
-      "x" -> Some(WomFloat(2.718)),
-      "s" -> Some(WomString("hello world")),
-      "ar1" -> Some(
-        WomArray(
-          WomArrayType(WomStringType),
-          Vector(WomString("A"), WomString("B"), WomString("C"))
-        )
-      ),
-      "m1" -> Some(
-        WomMap(
-          WomMapType(WomStringType, WomIntegerType),
-          Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10))
-        )
-      ),
-      "p" -> Some(WomPair(WomInteger(1), WomInteger(12))),
-      "file2" -> None,
-      "k" -> None,
-      "readme" -> None
+        "flag" -> Some(WomBoolean(true)),
+        "i" -> Some(WomInteger(8)),
+        "x" -> Some(WomFloat(2.718)),
+        "s" -> Some(WomString("hello world")),
+        "ar1" -> Some(
+            WomArray(
+                WomArrayType(WomStringType),
+                Vector(WomString("A"), WomString("B"), WomString("C"))
+            )
+        ),
+        "m1" -> Some(
+            WomMap(
+                WomMapType(WomStringType, WomIntegerType),
+                Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10))
+            )
+        ),
+        "p" -> Some(WomPair(WomInteger(1), WomInteger(12))),
+        "file2" -> None,
+        "k" -> None,
+        "readme" -> None
     )
 
     // The workflow is a convenient packaging around WOM

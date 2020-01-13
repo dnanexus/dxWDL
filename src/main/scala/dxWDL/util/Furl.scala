@@ -93,9 +93,9 @@ object Furl {
       case Some(proj) =>
         val projId = proj.getId
         FurlDx(
-          s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
-          Some(DxProject.getInstance(projId)),
-          dxFile
+            s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
+            Some(DxProject.getInstance(projId)),
+            dxFile
         )
     }
   }

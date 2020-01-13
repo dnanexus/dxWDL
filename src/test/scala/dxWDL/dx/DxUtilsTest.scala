@@ -11,15 +11,15 @@ class DxUtilsTest extends FlatSpec with Matchers {
     } catch {
       case e: Exception =>
         throw new Exception(
-          s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform on staging.""".stripMargin
         )
     }
 
   it should "download files as strings" in {
     val results = DxPath.resolveBulk(
-      List(s"dx://${TEST_PROJECT}:/test_data/fileA"),
-      dxTestProject
+        List(s"dx://${TEST_PROJECT}:/test_data/fileA"),
+        dxTestProject
     )
     results.size shouldBe (1)
     val dxobj = results.values.head

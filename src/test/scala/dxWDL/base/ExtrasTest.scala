@@ -31,7 +31,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runtimeAttrs, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None))
+        Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None))
     )
   }
 
@@ -124,27 +124,27 @@ class ExtrasTest extends FlatSpec with Matchers {
     val js = runSpecValid.parseJson
     val extras = Extras.parse(js, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(
-        DxAttrs(
-          Some(
-            DxRunSpec(
-              Some(
-                DxAccess(
-                  Some(Vector("*")),
-                  Some(AccessLevel.CONTRIBUTE),
-                  Some(AccessLevel.VIEW),
-                  Some(true),
-                  None
-                )
-              ),
-              Some(DxExecPolicy(Some(Map("*" -> 3)), None)),
-              None,
-              Some(DxTimeout(None, Some(12), None))
+        Some(
+            DxAttrs(
+                Some(
+                    DxRunSpec(
+                        Some(
+                            DxAccess(
+                                Some(Vector("*")),
+                                Some(AccessLevel.CONTRIBUTE),
+                                Some(AccessLevel.VIEW),
+                                Some(true),
+                                None
+                            )
+                        ),
+                        Some(DxExecPolicy(Some(Map("*" -> 3)), None)),
+                        None,
+                        Some(DxTimeout(None, Some(12), None))
+                    )
+                ),
+                None
             )
-          ),
-          None
         )
-      )
     )
   }
 
@@ -171,24 +171,24 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val restartPolicy =
       Map(
-        "UnresponsiveWorker" -> 2,
-        "JMInternalError" -> 0,
-        "ExecutionError" -> 4
+          "UnresponsiveWorker" -> 2,
+          "JMInternalError" -> 0,
+          "ExecutionError" -> 4
       )
     extras.defaultTaskDxAttributes should be(
-      Some(
-        DxAttrs(
-          Some(
-            DxRunSpec(
-              None,
-              Some(DxExecPolicy(Some(restartPolicy), Some(5))),
-              None,
-              None
+        Some(
+            DxAttrs(
+                Some(
+                    DxRunSpec(
+                        None,
+                        Some(DxExecPolicy(Some(restartPolicy), Some(5))),
+                        None,
+                        None
+                    )
+                ),
+                None
             )
-          ),
-          None
         )
-      )
     )
   }
 
@@ -234,7 +234,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(reorg, verbose2)
     extras.customReorgAttributes should be(
-      Some(ReorgAttrs(appId, fileId))
+        Some(ReorgAttrs(appId, fileId))
     )
   }
 
@@ -254,7 +254,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be(
-      "app_id must be specified in the custom_reorg section."
+        "app_id must be specified in the custom_reorg section."
     )
   }
 
@@ -276,7 +276,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
     thrown.getMessage should be(
-      "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
+        "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
     )
   }
 
@@ -295,7 +295,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(reorg, verbose2)
     extras.customReorgAttributes should be(
-      Some(ReorgAttrs(appId, ""))
+        Some(ReorgAttrs(appId, ""))
     )
   }
 
@@ -317,7 +317,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be(
-      s"dxId must match applet-[A-Za-z0-9]{24}"
+        s"dxId must match applet-[A-Za-z0-9]{24}"
     )
   }
 
@@ -339,7 +339,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be(
-      s"""Error running command dx describe $appId --json"""
+        s"""Error running command dx describe $appId --json"""
     )
 
   }
@@ -361,7 +361,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       Extras.parse(reorg, verbose2)
     }
     thrown.getMessage should include(
-      "does not match [A-Za-z0-9]{24}"
+        "does not match [A-Za-z0-9]{24}"
     )
   }
   it should "throw ResourceNotFoundException due to non-existant file" in {
@@ -406,8 +406,8 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be(
-      s"ERROR: App(let) for custom reorg stage ${appId} does not " +
-        s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
+        s"ERROR: App(let) for custom reorg stage ${appId} does not " +
+          s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
     )
   }
 
@@ -425,7 +425,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(reorg, verbose2)
     extras.customReorgAttributes should be(
-      Some(ReorgAttrs(appId, ""))
+        Some(ReorgAttrs(appId, ""))
     )
   }
 
@@ -483,7 +483,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         throw new Exception("Wrong type for dockerOpt")
       case Some(docker) =>
         docker should equal(
-          WomString("quay.io/encode-dcc/atac-seq-pipeline:v1")
+            WomString("quay.io/encode-dcc/atac-seq-pipeline:v1")
         )
     }
   }
@@ -499,7 +499,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extrasEmpty = Extras.parse(rtEmpty, verbose)
     extrasEmpty.defaultRuntimeAttributes should equal(
-      WdlRuntimeAttrs(Map.empty)
+        WdlRuntimeAttrs(Map.empty)
     )
   }
 
@@ -543,40 +543,40 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runSpec, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(
-        DxAttrs(
-          Some(
-            DxRunSpec(
-              None,
-              None,
-              None,
-              Some(DxTimeout(None, Some(12), None))
+        Some(
+            DxAttrs(
+                Some(
+                    DxRunSpec(
+                        None,
+                        None,
+                        None,
+                        Some(DxTimeout(None, Some(12), None))
+                    )
+                ),
+                None
             )
-          ),
-          None
         )
-      )
     )
     extras.perTaskDxAttributes should be(
-      Map(
-        "Multiply" -> DxAttrs(
-          Some(
-            DxRunSpec(
-              Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
-              None,
-              None,
-              Some(DxTimeout(None, None, Some(30)))
+        Map(
+            "Multiply" -> DxAttrs(
+                Some(
+                    DxRunSpec(
+                        Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                        None,
+                        None,
+                        Some(DxTimeout(None, None, Some(30)))
+                    )
+                ),
+                None
+            ),
+            "Add" -> DxAttrs(
+                Some(
+                    DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
+                ),
+                None
             )
-          ),
-          None
-        ),
-        "Add" -> DxAttrs(
-          Some(
-            DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
-          ),
-          None
         )
-      )
     )
   }
 
@@ -632,56 +632,56 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runSpec, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(
-        DxAttrs(
-          Some(
-            DxRunSpec(
-              None,
-              None,
-              None,
-              Some(DxTimeout(None, Some(12), None))
+        Some(
+            DxAttrs(
+                Some(
+                    DxRunSpec(
+                        None,
+                        None,
+                        None,
+                        Some(DxTimeout(None, Some(12), None))
+                    )
+                ),
+                None
             )
-          ),
-          None
         )
-      )
     )
 
     extras.perTaskDxAttributes should be(
-      Map(
-        "Add" -> DxAttrs(
-          Some(
-            DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
-          ),
-          Some(
-            DxDetails(
-              Some(
-                List(
-                  DxLicense(
-                    "GATK4",
-                    "https://github.com/broadinstitute/gatk",
-                    "GATK-4.0.1.2",
-                    "BSD-3-Clause",
-                    "https://github.com/broadinstitute/LICENSE.TXT",
-                    "Broad Institute"
-                  )
+        Map(
+            "Add" -> DxAttrs(
+                Some(
+                    DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))
+                ),
+                Some(
+                    DxDetails(
+                        Some(
+                            List(
+                                DxLicense(
+                                    "GATK4",
+                                    "https://github.com/broadinstitute/gatk",
+                                    "GATK-4.0.1.2",
+                                    "BSD-3-Clause",
+                                    "https://github.com/broadinstitute/LICENSE.TXT",
+                                    "Broad Institute"
+                                )
+                            )
+                        )
+                    )
                 )
-              )
+            ),
+            "Multiply" -> DxAttrs(
+                Some(
+                    DxRunSpec(
+                        Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                        None,
+                        None,
+                        Some(DxTimeout(None, None, Some(30)))
+                    )
+                ),
+                None
             )
-          )
-        ),
-        "Multiply" -> DxAttrs(
-          Some(
-            DxRunSpec(
-              Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
-              None,
-              None,
-              Some(DxTimeout(None, None, Some(30)))
-            )
-          ),
-          None
         )
-      )
     )
   }
 
@@ -718,37 +718,37 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runSpec, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(
-        DxAttrs(
-          Some(
-            DxRunSpec(None, None, None, Some(DxTimeout(None, Some(12), None)))
-          ),
-          None
+        Some(
+            DxAttrs(
+                Some(
+                    DxRunSpec(None, None, None, Some(DxTimeout(None, Some(12), None)))
+                ),
+                None
+            )
         )
-      )
     )
     extras.perTaskDxAttributes should be(
-      Map(
-        "Add" -> DxAttrs(
-          None,
-          Some(
-            DxDetails(
-              Some(
-                List(
-                  DxLicense(
-                    "GATK4",
-                    "https://github.com/broadinstitute/gatk",
-                    "GATK-4.0.1.2",
-                    "BSD-3-Clause",
-                    "https://github.com/broadinstitute/LICENSE.TXT",
-                    "Broad Institute"
-                  )
+        Map(
+            "Add" -> DxAttrs(
+                None,
+                Some(
+                    DxDetails(
+                        Some(
+                            List(
+                                DxLicense(
+                                    "GATK4",
+                                    "https://github.com/broadinstitute/gatk",
+                                    "GATK-4.0.1.2",
+                                    "BSD-3-Clause",
+                                    "https://github.com/broadinstitute/LICENSE.TXT",
+                                    "Broad Institute"
+                                )
+                            )
+                        )
+                    )
                 )
-              )
             )
-          )
         )
-      )
     )
   }
 
@@ -765,13 +765,13 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(data, verbose)
     extras.dockerRegistry should be(
-      Some(
-        DockerRegistry(
-          "foo.bar.dnanexus.com",
-          "perkins",
-          "The Bandersnatch has gotten loose"
+        Some(
+            DockerRegistry(
+                "foo.bar.dnanexus.com",
+                "perkins",
+                "The Bandersnatch has gotten loose"
+            )
         )
-      )
     )
   }
 
@@ -841,22 +841,22 @@ class ExtrasTest extends FlatSpec with Matchers {
              |""".stripMargin.parseJson
 
     val upstreamProjects = List(
-      DxLicense(
-        "name",
-        "repoURL",
-        "version1",
-        "license1",
-        "licenseURL",
-        "author1"
-      ),
-      DxLicense(
-        "name2",
-        "repoURL",
-        "version2",
-        "license2",
-        "licenseURL",
-        "author2"
-      )
+        DxLicense(
+            "name",
+            "repoURL",
+            "version1",
+            "license1",
+            "licenseURL",
+            "author1"
+        ),
+        DxLicense(
+            "name2",
+            "repoURL",
+            "version2",
+            "license2",
+            "licenseURL",
+            "author2"
+        )
     )
 
     val dxDetails = DxDetails(Some(upstreamProjects))
@@ -878,8 +878,8 @@ class ExtrasTest extends FlatSpec with Matchers {
     val expected: Map[String, JsValue] = Map("timeoutPolicy" -> expectedPolicy)
 
     val dxAttrs: DxAttrs = DxAttrs(
-      Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
-      None
+        Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
+        None
     )
 
     val runSpecJson: Map[String, JsValue] = dxAttrs.getRunSpecJson
@@ -920,23 +920,23 @@ class ExtrasTest extends FlatSpec with Matchers {
       Map("upstreamProjects" -> expectedContent)
 
     val dxAttrs: DxAttrs = DxAttrs(
-      None,
-      Some(
-        DxDetails(
-          Some(
-            List(
-              DxLicense(
-                "GATK4",
-                "https://github.com/broadinstitute/gatk",
-                "GATK-4.0.1.2",
-                "BSD-3-Clause",
-                "https://github.com/broadinstitute/LICENSE.TXT",
-                "Broad Institute"
-              )
+        None,
+        Some(
+            DxDetails(
+                Some(
+                    List(
+                        DxLicense(
+                            "GATK4",
+                            "https://github.com/broadinstitute/gatk",
+                            "GATK-4.0.1.2",
+                            "BSD-3-Clause",
+                            "https://github.com/broadinstitute/LICENSE.TXT",
+                            "Broad Institute"
+                        )
+                    )
+                )
             )
-          )
         )
-      )
     )
 
     val detailsJson = dxAttrs.getDetailsJson

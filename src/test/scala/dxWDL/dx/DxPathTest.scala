@@ -13,7 +13,7 @@ class DxPathTest extends FlatSpec with Matchers {
     } catch {
       case e: Exception =>
         throw new Exception(
-          s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform on staging.""".stripMargin
         )
     }

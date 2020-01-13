@@ -35,13 +35,13 @@ class WdlCodeGenTest extends FlatSpec with Matchers {
 
   it should "handle structs" in {
     val houseType = WomCompositeType(
-      Map(
-        "height" -> WomIntegerType,
-        "num_floors" -> WomIntegerType,
-        "street" -> WomStringType,
-        "city" -> WomStringType
-      ),
-      Some("House")
+        Map(
+            "height" -> WomIntegerType,
+            "num_floors" -> WomIntegerType,
+            "street" -> WomStringType,
+            "city" -> WomStringType
+        ),
+        Some("House")
     )
     genDefaultValue(houseType) shouldBe ("""object {height: 0, num_floors: 0, street: "", city: ""}""")
   }
