@@ -119,9 +119,9 @@ case class Native(
         case Some(attributes) => {
           attributes.flatMap {
             case IR.IOAttrHelp(text) =>
-              Some("help" -> JsString(text))
+              Some(IR.PARAM_META_HELP -> JsString(text))
             case IR.IOAttrPatterns(patterns) =>
-              Some("patterns" -> JsArray(patterns.map(JsString(_))))
+              Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
             case _ => None
           }.toMap
         }

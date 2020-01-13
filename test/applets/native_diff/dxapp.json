@@ -6,11 +6,15 @@
   "inputSpec": [
     {
       "name": "a",
-      "class": "file"
+      "class": "file",
+      "help": "Lefthand file to compare",
+      "patterns": ["*.txt", "*.tsv"]
     },
     {
       "name": "b",
-      "class": "file"
+      "class": "file",
+      "help": "Righthand file to compare",
+      "patterns": ["*.txt", "*.tsv"]
     }
   ],
   "outputSpec": [

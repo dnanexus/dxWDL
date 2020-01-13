@@ -78,6 +78,28 @@ case class GenerateIRTask(
     }
   }
 
+  // Extract the parameter_meta info from the WOM structure
+  private def unwrapParamMeta(
+      paramMeta: Option[MetaValueElement]
+  ): Option[Vector[IR.IOAttr]] = paramMeta match {
+    case None => None
+    case Some(MetaValueElementObject(obj)) => {
+      // Use flatmap to get the "help" and "pattern" keys if they exist
+      Some(obj.flatMap {
+        case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
+        case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
+          Some(IR.IOAttrPatterns(array.flatMap {
+            case MetaValueElementString(pattern) => Some(pattern)
+            case _                               => None
+
+          }.toVector))
+        case _ => None
+
+      }.toVector)
+    }
+    case _ => None // TODO: or throw exception?
+  }
+
   // Process a docker image, if there is one
   def triageDockerImage(dockerExpr: Option[WomExpression]): IR.DockerImage = {
     dockerExpr match {
@@ -106,37 +128,6 @@ case class GenerateIRTask(
   // native applet.
   def apply(task: CallableTaskDefinition, taskSourceCode: String): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")
-
-    def unwrapParamMeta(
-        paramMeta: Option[MetaValueElement]
-    ): Option[Vector[IR.IOAttr]] = paramMeta match {
-      case None => None
-      case Some(MetaValueElementObject(obj)) => {
-        // Use flatmap to get the "help" and "pattern" keys if they exist
-        Some(obj.flatMap {
-          case ("help", value) => {
-            value match {
-              case MetaValueElementString(text) =>
-                Some(IR.IOAttrHelp(text))
-              case _ => None
-            }
-          }
-          case ("patterns", value) =>
-            value match {
-              case MetaValueElementArray(array) =>
-                Some(IR.IOAttrPatterns(array.flatMap {
-                  case MetaValueElementString(pattern) => Some(pattern)
-                  case _                               => None
-
-                }.toVector))
-              case _ => None
-            }
-          case _ => None
-
-        }.toVector)
-      }
-      case _ => None // TODO: or throw exception?
-    }
 
     // create dx:applet input definitions. Note, some "inputs" are
     // actually expressions.

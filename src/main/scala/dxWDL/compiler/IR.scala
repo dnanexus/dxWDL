@@ -22,6 +22,10 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
+  // Keywords for string pattern matching
+  val PARAM_META_HELP = "help"
+  val PARAM_META_PATTERNS = "patterns"
+
   // Compile time representaiton of supported parameter_meta section
   // information.
   sealed abstract class IOAttr
