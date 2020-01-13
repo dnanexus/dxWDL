@@ -22,44 +22,31 @@ case class FolderContents(
 
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
+
   def describe(fields: Set[Field.Value] = Set.empty): DxProjectDescribe = {
     val defaultFields = Set(Field.Id, Field.Name, Field.Created, Field.Modified)
     val request = JsObject("fields" -> DxObject.requestFields(defaultFields))
     val response =
       if (id.startsWith("project-"))
         DXAPI.projectDescribe(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       else
         DXAPI.containerDescribe(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val desc =
-      descJs.asJsObject.getFields("id", "name", "created", "modified") match {
-        case Seq(
-            JsString(id),
-            JsString(name),
-            JsNumber(created),
-            JsNumber(modified)
-            ) =>
-          DxProjectDescribe(
-            id,
-            name,
-            created.toLong,
-            modified.toLong,
-            None,
-            None
-          )
-        case _ =>
-          throw new Exception(s"malformed JSON ${descJs}")
-      }
+    val desc = descJs.asJsObject.getFields("id", "name", "created", "modified") match {
+      case Seq(JsString(id), JsString(name), JsNumber(created), JsNumber(modified)) =>
+        DxProjectDescribe(id, name, created.toLong, modified.toLong, None, None)
+      case _ => throw new Exception(s"malformed JSON ${descJs}")
+    }
     val details = descJs.asJsObject.fields.get("details")
     val props = descJs.asJsObject.fields
       .get("properties")
@@ -72,17 +59,17 @@ case class DxProject(id: String) extends DxDataObject {
     val response = id match {
       case _ if (id.startsWith("container-")) =>
         DXAPI.containerListFolder(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ if (id.startsWith("project-")) =>
         DXAPI.projectListFolder(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -123,24 +110,24 @@ case class DxProject(id: String) extends DxDataObject {
 
   def newFolder(folderPath: String, parents: Boolean): Unit = {
     val request = JsObject(
-      "project" -> JsString(id),
-      "folder" -> JsString(folderPath),
-      "parents" -> (if (parents) JsTrue else JsFalse)
+        "project" -> JsString(id),
+        "folder" -> JsString(folderPath),
+        "parents" -> (if (parents) JsTrue else JsFalse)
     )
     val response = id match {
       case _ if (id.startsWith("container-")) =>
         DXAPI.containerNewFolder(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ if (id.startsWith("project-")) =>
         DXAPI.projectNewFolder(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -154,26 +141,26 @@ case class DxProject(id: String) extends DxDataObject {
       destinationFolder: String
   ): Unit = {
     val request = JsObject(
-      "objects" -> JsArray(objs.map { x =>
-        JsString(x.id)
-      }.toVector),
-      "folders" -> JsArray(Vector.empty[JsString]),
-      "destination" -> JsString(destinationFolder)
+        "objects" -> JsArray(objs.map { x =>
+          JsString(x.id)
+        }.toVector),
+        "folders" -> JsArray(Vector.empty[JsString]),
+        "destination" -> JsString(destinationFolder)
     )
     val response = id match {
       case _ if (id.startsWith("container-")) =>
         DXAPI.containerMove(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ if (id.startsWith("project-")) =>
         DXAPI.projectMove(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -189,17 +176,17 @@ case class DxProject(id: String) extends DxDataObject {
     val response = id match {
       case _ if (id.startsWith("container-")) =>
         DXAPI.containerRemoveObjects(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ if (id.startsWith("project-")) =>
         DXAPI.projectRemoveObjects(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
+            id,
+            DxUtils.jsonNodeOfJsValue(request),
+            classOf[JsonNode],
+            DxUtils.dxEnv
         )
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -210,6 +197,7 @@ case class DxProject(id: String) extends DxDataObject {
 }
 
 object DxProject {
+
   def getInstance(id: String): DxProject = {
     DxObject.getInstance(id) match {
       case p: DxProject => p
