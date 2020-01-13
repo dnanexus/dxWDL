@@ -74,16 +74,16 @@ case class Native(
           case Some(x) => x
           case None =>
             throw new Exception(
-              s"record does not have an archive field ${details}"
+                s"record does not have an archive field ${details}"
             )
         }
         val dxFile = DxUtils.dxFileFromJsValue(dxLink)
         val name = dxFile.describe().name
         Some(
-          JsObject(
-            "name" -> JsString(name),
-            "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
-          )
+            JsObject(
+                "name" -> JsString(name),
+                "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
+            )
         )
     }
 
@@ -144,43 +144,43 @@ case class Native(
     }
     def mkPrimitive(dxType: String, optional: Boolean): Vector[JsValue] = {
       Vector(
-        JsObject(
-          Map("name" -> JsString(name), "class" -> JsString(dxType))
-            ++ jsMapFromOptional(optional)
-            ++ jsMapFromDefault(name)
-            ++ jsMapFromAttrs(attrs)
-        )
+          JsObject(
+              Map("name" -> JsString(name), "class" -> JsString(dxType))
+                ++ jsMapFromOptional(optional)
+                ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
+          )
       )
     }
     def mkPrimitiveArray(dxType: String, optional: Boolean): Vector[JsValue] = {
       Vector(
-        JsObject(
-          Map("name" -> JsString(name), "class" -> JsString("array:" ++ dxType))
-            ++ jsMapFromOptional(optional)
-            ++ jsMapFromDefault(name)
-            ++ jsMapFromAttrs(attrs)
-        )
+          JsObject(
+              Map("name" -> JsString(name), "class" -> JsString("array:" ++ dxType))
+                ++ jsMapFromOptional(optional)
+                ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
+          )
       )
     }
     def mkComplex(optional: Boolean): Vector[JsValue] = {
       // A large JSON structure passed as a hash, and a
       // vector of platform files.
       Vector(
-        JsObject(
-          Map("name" -> JsString(name), "class" -> JsString("hash"))
-            ++ jsMapFromOptional(optional)
-            ++ jsMapFromDefault(name)
-            ++ jsMapFromAttrs(attrs)
-        ),
-        JsObject(
-          Map(
-            "name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
-            "class" -> JsString("array:file"),
-            "optional" -> JsBoolean(true)
+          JsObject(
+              Map("name" -> JsString(name), "class" -> JsString("hash"))
+                ++ jsMapFromOptional(optional)
+                ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
+          ),
+          JsObject(
+              Map(
+                  "name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
+                  "class" -> JsString("array:file"),
+                  "optional" -> JsBoolean(true)
+              )
+                ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)
+                ++ jsMapFromAttrs(attrs)
           )
-            ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)
-            ++ jsMapFromAttrs(attrs)
-        )
       )
     }
     def handleType(wdlType: WomType, optional: Boolean): Vector[JsValue] = {
@@ -237,7 +237,7 @@ case class Native(
         } catch {
           case e: Throwable =>
             throw new Exception(
-              s"""|credentials has to point to a platform file.
+                s"""|credentials has to point to a platform file.
                                                 |It is now:
                                                 |   ${credentials}
                                                 |Error:
@@ -399,11 +399,11 @@ case class Native(
     val body: String = applet.kind match {
       case IR.AppletKindNative(_) =>
         throw new Exception(
-          "Sanity: generating a bash script for a native applet"
+            "Sanity: generating a bash script for a native applet"
         )
       case IR.AppletKindWorkflowCustomReorg(_) =>
         throw new Exception(
-          "Sanity: generating a bash script for a custom reorg applet"
+            "Sanity: generating a bash script for a custom reorg applet"
         )
       case IR.AppletKindWfFragment(_, _, _) =>
         genBashScriptWfFragment()
@@ -463,8 +463,8 @@ case class Native(
       fields: Map[String, JsValue]
   ): (String, JsValue) = {
     Utils.trace(
-      verbose2,
-      s"""|${name} -> checksum request
+        verbose2,
+        s"""|${name} -> checksum request
                                   |fields = ${JsObject(fields).prettyPrint}
                                   |
                                   |""".stripMargin
@@ -483,20 +483,20 @@ case class Native(
         case other                 => throw new Exception(s"Bad properties json value ${other}")
       }
     val props = preExistingProps ++ Map(
-      Utils.VERSION_PROP -> JsString(Utils.getVersion()),
-      Utils.CHECKSUM_PROP -> JsString(digest)
+        Utils.VERSION_PROP -> JsString(Utils.getVersion()),
+        Utils.CHECKSUM_PROP -> JsString(digest)
     )
 
     // Add properties and attributes we don't want to fall under the checksum
     // This allows, for example, moving the dx:executable, while
     // still being able to reuse it.
     val req = JsObject(
-      fields ++ Map(
-        "project" -> JsString(dxProject.id),
-        "folder" -> JsString(folder),
-        "parents" -> JsBoolean(true),
-        "properties" -> JsObject(props)
-      )
+        fields ++ Map(
+            "project" -> JsString(dxProject.id),
+            "folder" -> JsString(folder),
+            "parents" -> JsBoolean(true),
+            "properties" -> JsObject(props)
+        )
     )
     (digest, req)
   }
@@ -519,13 +519,13 @@ case class Native(
             Utils.trace(verbose.on, s"Found existing version of app ${name}")
           case apl: DxAppletDescribe =>
             Utils.trace(
-              verbose.on,
-              s"Found existing version of applet ${name} in folder ${apl.folder}"
+                verbose.on,
+                s"Found existing version of applet ${name} in folder ${apl.folder}"
             )
           case wf: DxWorkflowDescribe =>
             Utils.trace(
-              verbose.on,
-              s"Found existing version of workflow ${name} in folder ${wf.folder}"
+                verbose.on,
+                s"Found existing version of workflow ${name} in folder ${wf.folder}"
             )
           case other =>
             throw new Exception(s"bad object ${other}")
@@ -542,26 +542,26 @@ case class Native(
         dxObjInfo.digest match {
           case None =>
             throw new Exception(
-              s"There is an existing non-dxWDL applet ${name}"
+                s"There is an existing non-dxWDL applet ${name}"
             )
           case Some(digest2) if digest != digest2 =>
             Utils.trace(
-              verbose.on,
-              s"${dxObjInfo.dxClass} ${name} has changed, rebuild required"
+                verbose.on,
+                s"${dxObjInfo.dxClass} ${name} has changed, rebuild required"
             )
             true
           case Some(_) =>
             Utils.trace(
-              verbose.on,
-              s"${dxObjInfo.dxClass} ${name} has not changed"
+                verbose.on,
+                s"${dxObjInfo.dxClass} ${name} has not changed"
             )
             false
         }
       case _ =>
         val dxClass = existingDxObjs.head.dxClass
         Utils.warning(
-          verbose,
-          s"""|More than one ${dxClass} ${name} found in
+            verbose,
+            s"""|More than one ${dxClass} ${name} found in
                                            |path ${dxProject.id}:${folder}""".stripMargin
         )
         true
@@ -581,7 +581,7 @@ case class Native(
         } else {
           val dxClass = existingDxObjs.head.dxClass
           throw new Exception(
-            s"""|${dxClass} ${name} already exists in
+              s"""|${dxClass} ${name} already exists in
                                             | ${dxProject.id}:${folder}""".stripMargin
           )
         }
@@ -655,30 +655,30 @@ case class Native(
     }
     //System.out.println(s"Native: instanceType chosen = ${instanceType}")
     val runSpec: Map[String, JsValue] = Map(
-      "code" -> JsString(bashScript),
-      "interpreter" -> JsString("bash"),
-      "systemRequirements" ->
-        JsObject(
-          "main" ->
-            JsObject("instanceType" -> JsString(instanceType))
-        ),
-      "distribution" -> JsString("Ubuntu"),
-      "release" -> JsString(Utils.UBUNTU_VERSION)
+        "code" -> JsString(bashScript),
+        "interpreter" -> JsString("bash"),
+        "systemRequirements" ->
+          JsObject(
+              "main" ->
+                JsObject("instanceType" -> JsString(instanceType))
+          ),
+        "distribution" -> JsString("Ubuntu"),
+        "release" -> JsString(Utils.UBUNTU_VERSION)
     )
 
     // Add default timeout
     val defaultTimeout: Map[String, JsValue] =
       DxRunSpec(
-        None,
-        None,
-        None,
-        Some(
-          DxTimeout(
-            Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS),
-            Some(0),
-            Some(0)
+          None,
+          None,
+          None,
+          Some(
+              DxTimeout(
+                  Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS),
+                  Some(0),
+                  Some(0)
+              )
           )
-        )
       ).toRunSpecJson
 
     // Start with the default dx-attribute section, and override
@@ -811,13 +811,13 @@ case class Native(
         case IR.AppletKindWfFragment(calls, blockPath, fqnDictTypes) =>
           // meta information used for running workflow fragments
           Map(
-            "execLinkInfo" -> JsObject(linkInfo),
-            "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
-            "fqnDictTypes" -> JsObject(fqnDictTypes.map {
-              case (k, t) =>
-                val tStr = WomTypeSerialization(typeAliases).toString(t)
-                k -> JsString(tStr)
-            }.toMap)
+              "execLinkInfo" -> JsObject(linkInfo),
+              "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
+              "fqnDictTypes" -> JsObject(fqnDictTypes.map {
+                case (k, t) =>
+                  val tStr = WomTypeSerialization(typeAliases).toString(t)
+                  k -> JsString(tStr)
+              }.toMap)
           )
 
         case IR.AppletKindWfInputs | IR.AppletKindWfOutputs | IR.AppletKindWfCustomReorgOutputs |
@@ -852,9 +852,9 @@ case class Native(
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
     }
     val auxInfo = Map(
-      "womSourceCode" -> JsString(womSourceCode),
-      "instanceTypeDB" -> JsString(dbOpaqueInstance),
-      "runtimeAttrs" -> runtimeAttrs
+        "womSourceCode" -> JsString(womSourceCode),
+        "instanceTypeDB" -> JsString(dbOpaqueInstance),
+        "runtimeAttrs" -> runtimeAttrs
     )
 
     // Links to applets that could get called at runtime. If
@@ -862,7 +862,7 @@ case class Native(
     val dxLinks = aplLinks.map {
       case (name, execLinkInfo) =>
         ("link_" + name) -> JsObject(
-          "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
+            "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
         )
     }.toMap
     val (runSpec: JsValue, details: Map[String, JsValue]) =
@@ -882,14 +882,14 @@ case class Native(
 
     // pack all the core arguments into a single request
     val reqCore = Map(
-      "name" -> JsString(applet.name),
-      "inputSpec" -> JsArray(inputSpec),
-      "outputSpec" -> JsArray(outputSpec),
-      "runSpec" -> runSpec,
-      "dxapi" -> JsString("1.0.0"),
-      "tags" -> JsArray(JsString("dxWDL")),
-      "details" -> jsDetails,
-      "hidden" -> JsBoolean(hidden)
+        "name" -> JsString(applet.name),
+        "inputSpec" -> JsArray(inputSpec),
+        "outputSpec" -> JsArray(outputSpec),
+        "runSpec" -> runSpec,
+        "dxapi" -> JsString("1.0.0"),
+        "tags" -> JsArray(JsString("dxWDL")),
+        "details" -> jsDetails,
+        "hidden" -> JsBoolean(hidden)
     )
     val accessField =
       if (access == JsNull) Map.empty
@@ -938,8 +938,8 @@ case class Native(
       case None =>
         // Compile a WDL snippet into an applet.
         val rep = DXAPI.appletNew(
-          DxUtils.jsonNodeOfJsValue(appletApiRequest),
-          classOf[JsonNode]
+            DxUtils.jsonNodeOfJsValue(appletApiRequest),
+            classOf[JsonNode]
         )
         val id = apiParseReplyID(rep)
         val dxApplet = DxApplet.getInstance(id)
@@ -973,8 +973,8 @@ case class Native(
               m ++ fields.toMap
             case IR.SArgLink(dxStage, argName) =>
               val wvl = WdlVarLinks(
-                cVar.womType,
-                DxlStage(dxStage, IORef.Output, argName.dxVarName)
+                  cVar.womType,
+                  DxlStage(dxStage, IORef.Output, argName.dxVarName)
               )
               val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
               m ++ fields.toMap
@@ -1036,12 +1036,12 @@ case class Native(
       case IR.SArgConst(wdlValue) =>
         // constant
         throw new Exception(
-          s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
+            s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
         )
       case IR.SArgLink(dxStage, argName: CVar) =>
         val wvl = WdlVarLinks(
-          cVar.womType,
-          DxlStage(dxStage, IORef.Output, argName.dxVarName)
+            cVar.womType,
+            DxlStage(dxStage, IORef.Output, argName.dxVarName)
         )
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar) =>
@@ -1056,8 +1056,8 @@ case class Native(
       case (fieldName, outputJs) =>
         val specJs: JsValue = oSpecMap(fieldName)
         JsObject(
-          specJs.asJsObject.fields ++
-            Map("outputSource" -> outputJs)
+            specJs.asJsObject.fields ++
+              Map("outputSource" -> outputJs)
         )
     }.toVector
   }
@@ -1078,12 +1078,12 @@ case class Native(
           val inputs = genStageInputs(linkedInputs)
           // convert the per-stage metadata into JSON
           val stageReqDesc = JsObject(
-            Map(
-              "id" -> JsString(stg.id.getId),
-              "executable" -> JsString(dxExec.getId),
-              "name" -> JsString(stg.description),
-              "input" -> inputs
-            )
+              Map(
+                  "id" -> JsString(stg.id.getId),
+                  "executable" -> JsString(dxExec.getId),
+                  "name" -> JsString(stg.description),
+                  "input" -> inputs
+              )
           )
           stagesReq :+ stageReqDesc
       }
@@ -1101,10 +1101,10 @@ case class Native(
 
     // pack all the arguments into a single API call
     val reqFields = Map(
-      "name" -> JsString(wf.name),
-      "stages" -> JsArray(stagesReq),
-      "tags" -> JsArray(JsString("dxWDL")),
-      "hidden" -> JsBoolean(hidden)
+        "name" -> JsString(wf.name),
+        "stages" -> JsArray(stagesReq),
+        "tags" -> JsArray(JsString("dxWDL")),
+        "hidden" -> JsBoolean(hidden)
     )
 
     val wfInputOutput: Map[String, JsValue] =
@@ -1119,8 +1119,8 @@ case class Native(
           .map { case (cVar, sArg) => buildWorkflowOutputSpec(cVar, sArg) }
           .flatten
         Map(
-          "inputs" -> JsArray(wfInputSpec),
-          "outputs" -> JsArray(wfOutputSpec)
+            "inputs" -> JsArray(wfInputSpec),
+            "outputs" -> JsArray(wfOutputSpec)
         )
       } else {
         Map.empty
@@ -1138,7 +1138,7 @@ case class Native(
     val dxLinks: Map[String, JsValue] = transitiveDependencies.map {
       case execLinkInfo =>
         ("link_" + execLinkInfo.name) -> JsObject(
-          "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
+            "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
         )
     }.toMap
 
@@ -1155,11 +1155,11 @@ case class Native(
     // still being able to reuse it.
     val reqWithEverything =
       JsObject(
-        reqWithChecksum.asJsObject.fields ++ Map(
-          "project" -> JsString(dxProject.id),
-          "folder" -> JsString(folder),
-          "parents" -> JsBoolean(true)
-        )
+          reqWithChecksum.asJsObject.fields ++ Map(
+              "project" -> JsString(dxProject.id),
+              "folder" -> JsString(folder),
+              "parents" -> JsBoolean(true)
+          )
       )
     (digest, reqWithEverything)
   }

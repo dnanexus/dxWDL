@@ -21,34 +21,34 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
   def describe(fields: Set[Field.Value] = Set.empty): DxJobDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(
-      Field.Project,
-      Field.Id,
-      Field.Name,
-      Field.Created,
-      Field.Modified,
-      Field.Applet,
-      Field.ParentJob,
-      Field.Analysis
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Created,
+        Field.Modified,
+        Field.Applet,
+        Field.ParentJob,
+        Field.Analysis
     )
     val allFields = fields ++ defaultFields
     val request = JsObject(
-      projSpec + ("fields" -> DxObject.requestFields(allFields))
+        projSpec + ("fields" -> DxObject.requestFields(allFields))
     )
     val response = DXAPI.analysisDescribe(
-      id,
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
       descJs.asJsObject.getFields(
-        "project",
-        "id",
-        "name",
-        "created",
-        "modified",
-        "applet"
+          "project",
+          "id",
+          "name",
+          "created",
+          "modified",
+          "applet"
       ) match {
         case Seq(
             JsString(project),
@@ -59,16 +59,16 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
             JsString(applet)
             ) =>
           DxJobDescribe(
-            project,
-            id,
-            name,
-            created.toLong,
-            modified.toLong,
-            None,
-            None,
-            DxApplet.getInstance(applet),
-            None,
-            None
+              project,
+              id,
+              name,
+              created.toLong,
+              modified.toLong,
+              None,
+              None,
+              DxApplet.getInstance(applet),
+              None,
+              None
           )
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -92,10 +92,10 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
       case Some(other)       => throw new Exception(s"should be an analysis ${other}")
     }
     desc.copy(
-      details = details,
-      properties = props,
-      parentJob = parentJob,
-      analysis = analysis
+        details = details,
+        properties = props,
+        parentJob = parentJob,
+        analysis = analysis
     )
   }
 }

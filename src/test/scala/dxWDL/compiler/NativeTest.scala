@@ -33,54 +33,54 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     } catch {
       case e: Exception =>
         throw new Exception(
-          s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform""".stripMargin
         )
     }
   lazy val cFlags = List(
-    "-compileMode",
-    "NativeWithoutRuntimeAsset",
-    "-project",
-    dxTestProject.getId,
-    "-folder",
-    "/unit_tests",
-    "-force",
-    "-locked",
-    "-quiet"
+      "-compileMode",
+      "NativeWithoutRuntimeAsset",
+      "-project",
+      dxTestProject.getId,
+      "-folder",
+      "/unit_tests",
+      "-force",
+      "-locked",
+      "-quiet"
   )
 
   lazy private val cFlagsReorg = List(
-    "-compileMode",
-    "NativeWithoutRuntimeAsset",
-    "--project",
-    dxTestProject.getId,
-    "-quiet",
-    "--folder",
-    "/reorg_tests"
+      "-compileMode",
+      "NativeWithoutRuntimeAsset",
+      "--project",
+      dxTestProject.getId,
+      "-quiet",
+      "--folder",
+      "/reorg_tests"
   )
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(
-      s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
-      quiet = true
+        s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
+        quiet = true
     )
 
     // building necessary applets before starting the tests
     val native_applets = Vector(
-      "native_concat",
-      "native_diff",
-      "native_mk_list",
-      "native_sum",
-      "native_sum_012",
-      "functional_reorg_test"
+        "native_concat",
+        "native_diff",
+        "native_mk_list",
+        "native_sum",
+        "native_sum_012",
+        "functional_reorg_test"
     )
     val topDir = Paths.get(System.getProperty("user.dir"))
     native_applets.foreach { app =>
       try {
         val (stdout, stderr) = Utils.execCommand(
-          s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/unit_tests/applets/",
-          quiet = true
+            s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/unit_tests/applets/",
+            quiet = true
         )
       } catch {
         case _: Throwable =>
@@ -93,13 +93,13 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val basename = Paths.get(path).getFileName().toString()
     val verbose = Verbose(false, true, Set.empty)
     val results = DxFindDataObjects(Some(10), verbose).apply(
-      dxTestProject,
-      Some(folder),
-      recurse = false,
-      klassRestriction = None,
-      withProperties = Vector.empty,
-      nameConstraints = Vector(basename),
-      withInputOutputSpec = false
+        dxTestProject,
+        Some(folder),
+        recurse = false,
+        klassRestriction = None,
+        withProperties = Vector.empty,
+        nameConstraints = Vector(basename),
+        withInputOutputSpec = false
     )
     results.size shouldBe (1)
     val desc = results.values.head
@@ -121,9 +121,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a single WDL task" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
-      path.toString
+        path.toString
 //                                      :: "--verbose"
-        :: cFlags
+          :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTermination]
   }
@@ -138,8 +138,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
     val retval = Main.compile(
-      path.toString
-        :: cFlags
+        path.toString
+          :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTermination]
   }
@@ -147,50 +147,50 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a workflow with a scatter without a call" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "scatter_no_call.wdl")
     Main.compile(
-      path.toString :: cFlags
+        path.toString :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
   it should "Native compile a draft2 workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("draft2", "shapes.wdl")
     Main.compile(
-      path.toString :: "--force" :: cFlags
+        path.toString :: "--force" :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
   it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     Main.compile(
-      path.toString :: "--force" :: cFlags
+        path.toString :: "--force" :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
   it should "handle various conditionals" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
     Main.compile(
-      path.toString
-      /*                :: "--verbose"
+        path.toString
+        /*                :: "--verbose"
                 :: "--verboseKey" :: "Native"
                 :: "--verboseKey" :: "GenerateIR"*/
-        :: cFlags
+          :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
   it should "be able to build interfaces to native applets" taggedAs (NativeTestXX, EdgeTest) in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
-      List(
-        "--force",
-        "--quiet",
-        "--folder",
-        "/unit_tests/applets",
-        "--project",
-        dxTestProject.getId,
-        "--language",
-        "wdl_draft2",
-        "--output",
-        outputPath
-      )
+        List(
+            "--force",
+            "--quiet",
+            "--folder",
+            "/unit_tests/applets",
+            "--project",
+            dxTestProject.getId,
+            "--language",
+            "wdl_draft2",
+            "--output",
+            outputPath
+        )
     ) shouldBe a[Main.SuccessfulTermination]
 
     // check that the generated file contains the correct tasks
@@ -200,12 +200,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       ParseWomSourceFile(false).scanForTasks(content)
 
     tasks.keys shouldBe (Set(
-      "native_sum",
-      "native_sum_012",
-      "functional_reorg_test",
-      "native_mk_list",
-      "native_diff",
-      "native_concat"
+        "native_sum",
+        "native_sum_012",
+        "functional_reorg_test",
+        "native_mk_list",
+        "native_diff",
+        "native_concat"
     ))
   }
 
@@ -213,7 +213,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
 
     val appId = Main.compile(
-      path.toString :: cFlags
+        path.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
       case _                        => throw new Exception("sanity")
@@ -237,7 +237,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "add_help.wdl")
 
     val appId = Main.compile(
-      path.toString :: cFlags
+        path.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
       case _                        => throw new Exception("sanity")
@@ -273,9 +273,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val extraPath = pathFromBasename("compiler/extras", "extras_license.json")
 
     val appId = Main.compile(
-      path.toString
-      /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
-        :: "--extras" :: extraPath.toString :: cFlags
+        path.toString
+        /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
+          :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
       case _                        => throw new Exception("sanity")
@@ -301,18 +301,18 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path =
       pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(
-      path.toString
-      /*                :: "--verbose"
+        path.toString
+        /*                :: "--verbose"
                 :: "--verboseKey" :: "Native"
                 :: "--verboseKey" :: "GenerateIR"*/
-        :: cFlags
+          :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
   it should "make default task timeout 48 hours" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val appId = Main.compile(
-      path.toString :: "--force" :: cFlags
+        path.toString :: "--force" :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
       case _                        => throw new Exception("sanity")
@@ -331,11 +331,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other => throw new Exception(s"Unexpected result ${other}")
     }
     timeout shouldBe JsObject(
-      "*" -> JsObject(
-        "days" -> JsNumber(2),
-        "hours" -> JsNumber(0),
-        "minutes" -> JsNumber(0)
-      )
+        "*" -> JsObject(
+            "days" -> JsNumber(2),
+            "hours" -> JsNumber(0),
+            "minutes" -> JsNumber(0)
+        )
     )
   }
 
@@ -343,8 +343,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "add_timeout_override.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
     val appId = Main.compile(
-      path.toString
-        :: "--extras" :: extraPath.toString :: cFlags
+        path.toString
+          :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
       case _                        => throw new Exception("sanity")
@@ -405,7 +405,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val tmpFile = createExtras(extrasContent)
     // remove locked workflow flag
     val retval = Main.compile(
-      path.toString :: "-extras" :: tmpFile :: cFlagsReorg
+        path.toString :: "-extras" :: tmpFile :: cFlagsReorg
     )
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
@@ -442,7 +442,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
     // upload random file
     val (uploadOut, uploadErr) = Utils.execCommand(
-      s"dx upload ${path.toString} --destination /reorg_tests --brief"
+        s"dx upload ${path.toString} --destination /reorg_tests --brief"
     )
     val fileId = uploadOut.trim
     val extrasContent =
@@ -457,7 +457,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val tmpFile = createExtras(extrasContent)
     // remove locked workflow flag
     val retval = Main.compile(
-      path.toString :: "-extras" :: tmpFile :: cFlagsReorg
+        path.toString :: "-extras" :: tmpFile :: cFlagsReorg
     )
 
     retval shouldBe a[Main.SuccessfulTermination]
@@ -498,8 +498,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     // remove compile mode
     val retval = Main.compile(
-      path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg
-        .drop(2)
+        path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg
+          .drop(2)
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
 

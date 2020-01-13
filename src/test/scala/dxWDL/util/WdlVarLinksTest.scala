@@ -38,12 +38,12 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, Map.empty)
 
     val testCases = List(
-      // primitives
-      makeElement(WomBoolean(true)),
-      makeElement(WomInteger(19)),
-      makeElement(WomFloat(2.718)),
-      makeElement(WomString("water and ice")),
-      makeElement(WomSingleFile("/usr/var/local/bin/gcc"))
+        // primitives
+        makeElement(WomBoolean(true)),
+        makeElement(WomInteger(19)),
+        makeElement(WomFloat(2.718)),
+        makeElement(WomString("water and ice")),
+        makeElement(WomSingleFile("/usr/var/local/bin/gcc"))
     )
 
     testCases.foreach { elem =>
@@ -59,38 +59,38 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     }
 
     val testCases = List(
-      // pairs
-      makeElement(makePair(24.1, "Fiji is an island in the pacific ocean")),
-      makeElement(
-        WomArray(
-          WomArrayType(WomBooleanType),
-          Vector(WomBoolean(true), WomBoolean(false))
+        // pairs
+        makeElement(makePair(24.1, "Fiji is an island in the pacific ocean")),
+        makeElement(
+            WomArray(
+                WomArrayType(WomBooleanType),
+                Vector(WomBoolean(true), WomBoolean(false))
+            )
+        ),
+        makeElement(
+            WomOptionalValue(WomSingleFileType, Some(WomSingleFile("ddd")))
+        ),
+        // maps
+        makeElement(
+            WomMap(
+                WomMapType(WomStringType, WomBooleanType),
+                Map(
+                    WomString("A") -> WomBoolean(true),
+                    WomString("C") -> WomBoolean(false),
+                    WomString("G") -> WomBoolean(true),
+                    WomString("H") -> WomBoolean(false)
+                )
+            )
+        ),
+        makeElement(
+            WomMap(
+                WomMapType(WomIntegerType, WomPairType(WomFloatType, WomStringType)),
+                Map(
+                    WomInteger(1) -> makePair(1.3, "triangle"),
+                    WomInteger(11) -> makePair(3.14, "pi")
+                )
+            )
         )
-      ),
-      makeElement(
-        WomOptionalValue(WomSingleFileType, Some(WomSingleFile("ddd")))
-      ),
-      // maps
-      makeElement(
-        WomMap(
-          WomMapType(WomStringType, WomBooleanType),
-          Map(
-            WomString("A") -> WomBoolean(true),
-            WomString("C") -> WomBoolean(false),
-            WomString("G") -> WomBoolean(true),
-            WomString("H") -> WomBoolean(false)
-          )
-        )
-      ),
-      makeElement(
-        WomMap(
-          WomMapType(WomIntegerType, WomPairType(WomFloatType, WomStringType)),
-          Map(
-            WomInteger(1) -> makePair(1.3, "triangle"),
-            WomInteger(11) -> makePair(3.14, "pi")
-          )
-        )
-      )
     )
 
     testCases.foreach { elem =>
@@ -101,17 +101,17 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
   it should "handle structs" in {
     val personType =
       WomCompositeType(
-        Map("name" -> WomStringType, "age" -> WomIntegerType),
-        Some("Person")
+          Map("name" -> WomStringType, "age" -> WomIntegerType),
+          Some("Person")
       )
 
     val jeff = WomObject(
-      Map("name" -> WomString("Jeoffrey"), "age" -> WomInteger(16)),
-      personType
+        Map("name" -> WomString("Jeoffrey"), "age" -> WomInteger(16)),
+        personType
     )
     val janice = WomObject(
-      Map("name" -> WomString("Janice"), "age" -> WomInteger(25)),
-      personType
+        Map("name" -> WomString("Janice"), "age" -> WomInteger(25)),
+        personType
     )
 
     val testCases = List(makeElement(jeff), makeElement(janice))
@@ -135,45 +135,45 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     // People
     val personType =
       WomCompositeType(
-        Map("name" -> WomStringType, "age" -> WomIntegerType),
-        Some("Person")
+          Map("name" -> WomStringType, "age" -> WomIntegerType),
+          Some("Person")
       )
 
     val lucy = WomObject(
-      Map("name" -> WomString("Lucy"), "age" -> WomInteger(37)),
-      personType
+        Map("name" -> WomString("Lucy"), "age" -> WomInteger(37)),
+        personType
     )
     val lear = WomObject(
-      Map("name" -> WomString("King Lear"), "age" -> WomInteger(41)),
-      personType
+        Map("name" -> WomString("King Lear"), "age" -> WomInteger(41)),
+        personType
     )
 
     // Houses
     val houseType = WomCompositeType(
-      Map(
-        "person" -> personType,
-        "zipcode" -> WomIntegerType,
-        "type" -> WomStringType
-      ),
-      Some("House")
+        Map(
+            "person" -> personType,
+            "zipcode" -> WomIntegerType,
+            "type" -> WomStringType
+        ),
+        Some("House")
     )
 
     val learCastle = WomObject(
-      Map(
-        "person" -> lear,
-        "zipcode" -> WomInteger(1),
-        "type" -> WomString("Castle")
-      ),
-      houseType
+        Map(
+            "person" -> lear,
+            "zipcode" -> WomInteger(1),
+            "type" -> WomString("Castle")
+        ),
+        houseType
     )
 
     val lucyHouse = WomObject(
-      Map(
-        "person" -> lucy,
-        "zipcode" -> WomInteger(94043),
-        "type" -> WomString("town house")
-      ),
-      houseType
+        Map(
+            "person" -> lucy,
+            "zipcode" -> WomInteger(94043),
+            "type" -> WomString("town house")
+        ),
+        houseType
     )
 
     val testCases = List(makeElement(learCastle), makeElement(lucyHouse))

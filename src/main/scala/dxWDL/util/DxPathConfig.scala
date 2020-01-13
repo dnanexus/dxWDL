@@ -96,26 +96,26 @@ object DxPathConfig {
     val runnerTaskEnv = metaDir.resolve("taskEnv.json")
 
     DxPathConfig(
-      homeDir,
-      metaDir,
-      inputFilesDir,
-      outputFilesDir,
-      tmpDir,
-      instanceTypeDB,
-      womSourceCodeEncoded,
-      stdout,
-      stderr,
-      dockerSubmitScript,
-      script,
-      rcPath,
-      dockerCid,
-      setupStreams,
-      dxdaManifest,
-      dxfuseManifest,
-      dxfuseMountpoint,
-      runnerTaskEnv,
-      streamAllFiles,
-      verbose
+        homeDir,
+        metaDir,
+        inputFilesDir,
+        outputFilesDir,
+        tmpDir,
+        instanceTypeDB,
+        womSourceCodeEncoded,
+        stdout,
+        stderr,
+        dockerSubmitScript,
+        script,
+        rcPath,
+        dockerCid,
+        setupStreams,
+        dxdaManifest,
+        dxfuseManifest,
+        dxfuseMountpoint,
+        runnerTaskEnv,
+        streamAllFiles,
+        verbose
     )
   }
 }

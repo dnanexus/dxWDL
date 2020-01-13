@@ -39,7 +39,7 @@ case class WfOutputs(
     val value = result match {
       case Invalid(errors) =>
         throw new Exception(
-          s"Failed to evaluate expression ${expr} with ${errors}"
+            s"Failed to evaluate expression ${expr} with ${errors}"
         )
       case Valid(x: WomValue) => x
     }
@@ -60,11 +60,11 @@ case class WfOutputs(
     val outputNodes: Vector[GraphOutputNode] =
       wf.innerGraph.outputNodes.toVector
     Utils.appletLog(
-      verbose,
-      s"""|Evaluating workflow outputs
+        verbose,
+        s"""|Evaluating workflow outputs
                                      |${WomPrettyPrintApproxWdl.graphOutputs(
-           outputNodes
-         )}
+               outputNodes
+           )}
                                      |""".stripMargin
     )
 
@@ -81,8 +81,8 @@ case class WfOutputs(
           case (None, _) =>
             // input is missing, and there is no default at the callee,
             Utils.warning(
-              utlVerbose,
-              s"input is missing for ${name}, and there is no default at the callee"
+                utlVerbose,
+                s"input is missing for ${name}, and there is no default at the callee"
             )
             None
           case (Some(x), _) =>
@@ -131,7 +131,7 @@ case class WfOutputs(
 
     if (addStatus) {
       outputFields + (Utils.REORG_STATUS -> JsString(
-        Utils.REORG_STATUS_COMPLETE
+          Utils.REORG_STATUS_COMPLETE
       ))
     } else {
       outputFields

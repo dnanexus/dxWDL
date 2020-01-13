@@ -45,7 +45,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           }.toSet
         case other =>
           throw new Exception(
-            s"Don't know how to deal with class ${other.getClass.getSimpleName}"
+              s"Don't know how to deal with class ${other.getClass.getSimpleName}"
           )
       }
       Utils.getUnqualifiedName(callable.name) -> deps
@@ -70,7 +70,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }.toMap
         val explanationLines = stuckWaitingOn.mkString("\n")
         throw new Exception(
-          s"""|Sanity: cannot find the next callable to compile.
+            s"""|Sanity: cannot find the next callable to compile.
                                         |ready = ${readyNames}
                                         |stuck = ${stuck}
                                         |stuckWaitingOn =
@@ -120,10 +120,10 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           val localName = Utils.getUnqualifiedName(cNode.callable.name)
           if (localName.startsWith("Scatter"))
             throw new Exception(
-              """|The workflow contains a nested scatter, it is not
+                """|The workflow contains a nested scatter, it is not
                                                |handled currently due to a cromwell WOM library issue
                                                |""".stripMargin
-                .replaceAll("\n", " ")
+                  .replaceAll("\n", " ")
             )
           callables(localName)
         case cNode: CallNode =>
@@ -136,15 +136,15 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         .standAloneWorkflow(wfSource, callablesUsedInWorkflow)
 
     val gir = new GenerateIRWorkflow(
-      wf,
-      wfSource,
-      wfSourceStandAlone,
-      callsLoToHi,
-      callables,
-      language,
-      verbose,
-      locked,
-      reorg
+        wf,
+        wfSource,
+        wfSourceStandAlone,
+        callsLoToHi,
+        callables,
+        language,
+        verbose,
+        locked,
+        reorg
     )
     gir.apply()
   }
@@ -180,18 +180,18 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
             throw new Exception(s"Did not find sources for workflow ${wf.name}")
           case Some(wfSource) =>
             compileWorkflow(
-              wf,
-              typeAliases,
-              wfSource,
-              callables,
-              language,
-              locked,
-              reorg
+                wf,
+                typeAliases,
+                wfSource,
+                callables,
+                language,
+                locked,
+                reorg
             )
         }
       case x =>
         throw new Exception(
-          s"""|Can't compile: ${callable.name}, class=${callable.getClass}
+            s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                         |${x}
                                         |""".stripMargin.replaceAll("\n", " ")
         )
@@ -230,12 +230,12 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }
     }
     Utils.trace(
-      verbose.on,
-      s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}"
+        verbose.on,
+        s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}"
     )
     Utils.traceLevelInc()
     val depOrder: Vector[Callable] = sortByDependencies(
-      womBundle.allCallables.values.toVector
+        womBundle.allCallables.values.toVector
     )
     Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
     Utils.traceLevelDec()
@@ -260,14 +260,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
     for (callable <- depOrder) {
       val (exec, auxCallables) = compileCallable(
-        callable,
-        womBundle.typeAliases,
-        taskDir,
-        workflowDir,
-        allCallables,
-        language,
-        isLocked(callable),
-        reorg
+          callable,
+          womBundle.typeAliases,
+          taskDir,
+          workflowDir,
+          allCallables,
+          language,
+          isLocked(callable),
+          reorg
       )
       allCallables = allCallables ++ (auxCallables.map { apl =>
         apl.name -> apl
@@ -293,10 +293,10 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
     Utils.traceLevelDec()
     IR.Bundle(
-      primary,
-      allCallables,
-      allCallablesSortedNames,
-      womBundle.typeAliases
+        primary,
+        allCallables,
+        allCallablesSortedNames,
+        womBundle.typeAliases
     )
   }
 }

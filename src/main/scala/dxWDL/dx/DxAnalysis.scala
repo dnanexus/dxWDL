@@ -22,33 +22,33 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields =
       Set(
-        Field.Project,
-        Field.Id,
-        Field.Name,
-        Field.Folder,
-        Field.Created,
-        Field.Modified
+          Field.Project,
+          Field.Id,
+          Field.Name,
+          Field.Folder,
+          Field.Created,
+          Field.Modified
       )
     val allFields = fields ++ defaultFields
     val request = JsObject(
-      projSpec +
-        ("fields" -> DxObject.requestFields(allFields))
+        projSpec +
+          ("fields" -> DxObject.requestFields(allFields))
     )
     val response = DXAPI.analysisDescribe(
-      id,
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
       descJs.asJsObject.getFields(
-        "project",
-        "id",
-        "name",
-        "folder",
-        "created",
-        "modified"
+          "project",
+          "id",
+          "name",
+          "folder",
+          "created",
+          "modified"
       ) match {
         case Seq(
             JsString(project),
@@ -59,14 +59,14 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
             JsNumber(modified)
             ) =>
           DxAnalysisDescribe(
-            project,
-            id,
-            name,
-            folder,
-            created.toLong,
-            modified.toLong,
-            None,
-            None
+              project,
+              id,
+              name,
+              folder,
+              created.toLong,
+              modified.toLong,
+              None,
+              None
           )
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -81,16 +81,16 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
 
   def setProperties(props: Map[String, String]): Unit = {
     val request = JsObject(
-      "properties" -> JsObject(props.map {
-        case (k, v) =>
-          k -> JsString(v)
-      })
+        "properties" -> JsObject(props.map {
+          case (k, v) =>
+            k -> JsString(v)
+        })
     )
     val response = DXAPI.analysisSetProperties(
-      id,
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     Utils.ignore(repJs)

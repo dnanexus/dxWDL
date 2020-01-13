@@ -36,11 +36,11 @@ class UtilsTest extends FlatSpec with Matchers {
     retval2 should be("[100, 200]")
 
     Utils.buildLimitedSizeName(Vector("A", "B", "hel", "nope"), 10) should be(
-      "[A, B, hel]"
+        "[A, B, hel]"
     )
 
     Utils.buildLimitedSizeName(Vector("A", "B", "C", "D", "neverland"), 13) should be(
-      "[A, B, C, D]"
+        "[A, B, C, D]"
     )
 
     Utils.buildLimitedSizeName(Vector.empty, 4) should be("[]")

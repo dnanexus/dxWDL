@@ -42,18 +42,18 @@ object DxdaManifest {
     val parts: Map[String, JsValue] = partsRaw.map {
       case (i, part) =>
         i.toString -> JsObject(
-          "size" -> JsNumber(part.size),
-          "md5" -> JsString(part.md5)
+            "size" -> JsNumber(part.size),
+            "md5" -> JsString(part.md5)
         )
     }
     val destinationFile: java.io.File = destination.toFile()
     val name = destinationFile.getName()
     val folder = destinationFile.getParent().toString
     JsObject(
-      "id" -> JsString(desc.id),
-      "name" -> JsString(name),
-      "folder" -> JsString(folder),
-      "parts" -> JsObject(parts)
+        "id" -> JsString(desc.id),
+        "name" -> JsString(name),
+        "folder" -> JsString(folder),
+        "parts" -> JsObject(parts)
     )
   }
 
@@ -72,7 +72,7 @@ object DxdaManifest {
     // create a sub-map per container
     val fileDescsByContainer: Map[DxProject, Map[String, (DxFile, DxFileDescribe)]] =
       fileDescs.foldLeft(
-        Map.empty[DxProject, Map[String, (DxFile, DxFileDescribe)]]
+          Map.empty[DxProject, Map[String, (DxFile, DxFileDescribe)]]
       ) {
         case (accu, (fid, (dxFile, dxDesc))) =>
           val container = DxProject.getInstance(dxDesc.project)

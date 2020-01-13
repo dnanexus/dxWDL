@@ -19,13 +19,13 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
     DxInstanceType(
-      "mem_ssd_unicorn",
-      100,
-      100,
-      4,
-      1.00f,
-      Vector(("Ubuntu", "16.04")),
-      false
+        "mem_ssd_unicorn",
+        100,
+        100,
+        4,
+        1.00f,
+        Vector(("Ubuntu", "16.04")),
+        false
     )
   private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
   private val verbose = false
@@ -154,20 +154,20 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     val dxIoFunctions =
       DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     val jobInputOutput = new JobInputOutput(
-      dxIoFunctions,
-      runtimeDebugLevel,
-      womBundle.typeAliases
+        dxIoFunctions,
+        runtimeDebugLevel,
+        womBundle.typeAliases
     )
     val taskRunner = TaskRunner(
-      task,
-      taskSourceCode,
-      womBundle.typeAliases,
-      instanceTypeDB,
-      dxPathConfig,
-      dxIoFunctions,
-      jobInputOutput,
-      Some(WdlRuntimeAttrs(Map.empty)),
-      0
+        task,
+        taskSourceCode,
+        womBundle.typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        dxIoFunctions,
+        jobInputOutput,
+        Some(WdlRuntimeAttrs(Map.empty)),
+        0
     )
     val inputsRelPaths =
       taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)

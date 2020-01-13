@@ -148,13 +148,13 @@ object DxObject {
     val parts = id.split("-")
     if (parts.length != 2)
       throw new IllegalArgumentException(
-        s"${id} is not of the form class-alphnumeric{24}"
+          s"${id} is not of the form class-alphnumeric{24}"
       )
     val klass = parts(0)
     val numLetters = parts(1)
     if (!numLetters.matches("[A-Za-z0-9]{24}"))
       throw new IllegalArgumentException(
-        s"${numLetters} does not match [A-Za-z0-9]{24}"
+          s"${numLetters} does not match [A-Za-z0-9]{24}"
       )
 
     klass match {
@@ -169,7 +169,7 @@ object DxObject {
       case "analysis"  => DxAnalysis(id, container)
       case _ =>
         throw new IllegalArgumentException(
-          s"${id} does not belong to a know class"
+            s"${id} does not belong to a know class"
         )
     }
   }
@@ -204,18 +204,18 @@ case class DxWorkflowStage(id: String) {
 
   def getInputReference(inputName: String): JsValue = {
     JsObject(
-      "$dnanexus_link" -> JsObject(
-        "stage" -> JsString(id),
-        "inputField" -> JsString(inputName)
-      )
+        "$dnanexus_link" -> JsObject(
+            "stage" -> JsString(id),
+            "inputField" -> JsString(inputName)
+        )
     )
   }
   def getOutputReference(outputName: String): JsValue = {
     JsObject(
-      "$dnanexus_link" -> JsObject(
-        "stage" -> JsString(id),
-        "outputField" -> JsString(outputName)
-      )
+        "$dnanexus_link" -> JsObject(
+            "stage" -> JsString(id),
+            "outputField" -> JsString(outputName)
+        )
     )
   }
 }

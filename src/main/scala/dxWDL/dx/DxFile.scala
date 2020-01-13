@@ -28,34 +28,34 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
   def describe(fields: Set[Field.Value] = Set.empty): DxFileDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(
-      Field.Project,
-      Field.Id,
-      Field.Name,
-      Field.Folder,
-      Field.Created,
-      Field.Modified,
-      Field.Size
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Folder,
+        Field.Created,
+        Field.Modified,
+        Field.Size
     )
     val allFields = fields ++ defaultFields
     val request = JsObject(
-      projSpec + ("fields" -> DxObject.requestFields(allFields))
+        projSpec + ("fields" -> DxObject.requestFields(allFields))
     )
     val response =
       DXAPI.fileDescribe(
-        id,
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
+          id,
+          DxUtils.jsonNodeOfJsValue(request),
+          classOf[JsonNode],
+          DxUtils.dxEnv
       )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
       descJs.asJsObject.getFields(
-        "project",
-        "id",
-        "name",
-        "folder",
-        "created",
-        "modified"
+          "project",
+          "id",
+          "name",
+          "folder",
+          "created",
+          "modified"
       ) match {
         case Seq(
             JsString(project),
@@ -66,16 +66,16 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
             JsNumber(modified)
             ) =>
           DxFileDescribe(
-            project,
-            id,
-            name,
-            folder,
-            created.toLong,
-            modified.toLong,
-            0,
-            None,
-            None,
-            None
+              project,
+              id,
+              name,
+              folder,
+              created.toLong,
+              modified.toLong,
+              0,
+              None,
+              None,
+              None
           )
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -100,10 +100,10 @@ case class DxFile(id: String, project: Option[DxProject]) extends DxDataObject {
         JsObject("$dnanexus_link" -> JsString(id))
       case Some(p) =>
         JsObject(
-          "$dnanexus_link" -> JsObject(
-            "project" -> JsString(p.id),
-            "id" -> JsString(id)
-          )
+            "$dnanexus_link" -> JsObject(
+                "project" -> JsString(p.id),
+                "id" -> JsString(id)
+            )
         )
     }
   }
@@ -146,7 +146,7 @@ object DxFile {
               DxFilePart(state, size.toLong, md5)
             case _ =>
               throw new Exception(
-                s"malformed part description ${partDesc.prettyPrint}"
+                  s"malformed part description ${partDesc.prettyPrint}"
               )
           }
         partNumber.toInt -> dxPart
@@ -159,10 +159,10 @@ object DxFile {
       extraFields: Vector[String]
   ): Map[DxFile, DxFileDescribe] = {
     val requestFields = Map(
-      "objects" ->
-        JsArray(objs.map { x: DxObject =>
-          JsString(x.id)
-        })
+        "objects" ->
+          JsArray(objs.map { x: DxObject =>
+            JsString(x.id)
+          })
     )
 
     // extra describe options, if specified
@@ -174,17 +174,17 @@ object DxFile {
           fieldName -> JsBoolean(true)
         }.toMap
         Map(
-          "classDescribeOptions" -> JsObject(
-            "*" -> JsObject(m)
-          )
+            "classDescribeOptions" -> JsObject(
+                "*" -> JsObject(m)
+            )
         )
       }
     val request = JsObject(requestFields ++ extraDescribeFields)
 
     val response = DXAPI.systemDescribeDataObjects(
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val resultsPerObj: Vector[JsValue] =
@@ -198,19 +198,19 @@ object DxFile {
         val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
           case None =>
             throw new ResourceNotFoundException(
-              s""""${objs(i).id}" is not a recognized ID""",
-              404
+                s""""${objs(i).id}" is not a recognized ID""",
+                404
             )
           case Some(descJs) =>
             val (dxFile, dxDesc) =
               descJs.asJsObject.getFields(
-                "name",
-                "folder",
-                "size",
-                "id",
-                "project",
-                "created",
-                "modified"
+                  "name",
+                  "folder",
+                  "size",
+                  "id",
+                  "project",
+                  "created",
+                  "modified"
               ) match {
                 case Seq(
                     JsString(name),
@@ -225,16 +225,16 @@ object DxFile {
                   val dxContainer = DxProject.getInstance(projectId)
                   val dxFile = DxFile.getInstance(oid, dxContainer)
                   val desc = DxFileDescribe(
-                    projectId,
-                    oid,
-                    name,
-                    folder,
-                    created.toLong,
-                    modified.toLong,
-                    size.toLong,
-                    None,
-                    None,
-                    None
+                      projectId,
+                      oid,
+                      name,
+                      folder,
+                      created.toLong,
+                      modified.toLong,
+                      size.toLong,
+                      None,
+                      None,
+                      None
                   )
                   (dxFile, desc)
                 case _ =>

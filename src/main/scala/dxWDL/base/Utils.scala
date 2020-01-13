@@ -123,7 +123,7 @@ object Utils {
   def encodeAppletVarName(varName: String): String = {
     if (varName contains ".")
       throw new Exception(
-        s"Variable ${varName} includes the illegal symbol \\."
+          s"Variable ${varName} includes the illegal symbol \\."
       )
     varName
   }
@@ -212,8 +212,8 @@ object Utils {
     val outStream = new StringBuilder()
     val errStream = new StringBuilder()
     val logger = ProcessLogger(
-      (o: String) => { outStream.append(o ++ "\n") },
-      (e: String) => { errStream.append(e ++ "\n") }
+        (o: String) => { outStream.append(o ++ "\n") },
+        (e: String) => { errStream.append(e ++ "\n") }
     )
 
     val p: Process = Process(cmds).run(logger, false)

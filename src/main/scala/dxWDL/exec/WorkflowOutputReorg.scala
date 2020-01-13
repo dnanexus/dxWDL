@@ -55,10 +55,10 @@ case class WorkflowOutputReorg(
       dxAnalysis: DxAnalysis
   ): Vector[DxFile] = {
     val req = JsObject(
-      "fields" -> JsObject(
-        "input" -> JsBoolean(true),
-        "output" -> JsBoolean(true)
-      )
+        "fields" -> JsObject(
+            "input" -> JsBoolean(true),
+            "output" -> JsBoolean(true)
+        )
     )
     val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
@@ -81,8 +81,8 @@ case class WorkflowOutputReorg(
     Utils.appletLog(verbose, "Checking timestamps")
     if (realOutputs.size > Utils.MAX_NUM_FILES_MOVE_LIMIT) {
       Utils.appletLog(
-        verbose,
-        s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects"
+          verbose,
+          s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects"
       )
       return Vector.empty
     }
@@ -100,8 +100,8 @@ case class WorkflowOutputReorg(
           None
     }.toVector
     Utils.appletLog(
-      verbose,
-      s"analysis has ${outputFiles.length} verified output files"
+        verbose,
+        s"analysis has ${outputFiles.length} verified output files"
     )
 
     outputFiles
@@ -140,14 +140,14 @@ case class WorkflowOutputReorg(
     Utils.appletLog(verbose, s"subfolders=${folderContents.subFolders}")
     if (!(folderContents.subFolders contains intermFolder)) {
       Utils.appletLog(
-        verbose,
-        s"Creating intermediate results sub-folder ${intermFolder}"
+          verbose,
+          s"Creating intermediate results sub-folder ${intermFolder}"
       )
       dxProject.newFolder(intermFolder, true)
     } else {
       Utils.appletLog(
-        verbose,
-        s"Intermediate results sub-folder ${intermFolder} already exists"
+          verbose,
+          s"Intermediate results sub-folder ${intermFolder} already exists"
       )
     }
     dxProject.moveObjects(intermediateFiles, intermFolder)

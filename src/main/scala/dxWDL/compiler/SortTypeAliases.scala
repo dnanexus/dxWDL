@@ -39,7 +39,7 @@ case class SortTypeAliases(verbose: Verbose) {
       // catch-all for other types not currently supported
       case other =>
         throw new Exception(
-          s"Unsupported WOM type ${other}, ${other.stableName}"
+            s"Unsupported WOM type ${other}, ${other.stableName}"
         )
     }
   }

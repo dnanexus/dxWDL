@@ -185,9 +185,9 @@ case class InstanceTypeDB(
       instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu))
     if (sufficient.length == 0)
       throw new Exception(
-        s"""|No instances found that match the requirements
+          s"""|No instances found that match the requirements
                                     |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu""".stripMargin
-          .replaceAll("\n", " ")
+            .replaceAll("\n", " ")
       )
     val initialGuess = sufficient.head
     val bestInstance = sufficient.tail.foldLeft(initialGuess) {
@@ -208,9 +208,9 @@ case class InstanceTypeDB(
       case None =>
         // Probably a bad instance name
         throw new Exception(
-          s"""|Instance type ${iType} is unavailable
+            s"""|Instance type ${iType} is unavailable
                                         |or badly named""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
   }
@@ -297,9 +297,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return InstanceTypeReq(Some(iType), None, None, None, None)
       case Some(x) =>
         throw new Exception(
-          s"""|dxInstaceType has to evaluate to a
+            s"""|dxInstaceType has to evaluate to a
                                         |WomString type ${x.toWomString}""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
 
@@ -351,7 +351,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         Some(memMib.toInt)
       case Some(x) =>
         throw new Exception(
-          s"Memory has to evaluate to a WomString type ${x.toWomString}"
+            s"Memory has to evaluate to a WomString type ${x.toWomString}"
         )
     }
 
@@ -374,7 +374,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         Some(i)
       case Some(x) =>
         throw new Exception(
-          s"Disk space has to evaluate to a WomString type ${x.toWomString}"
+            s"Disk space has to evaluate to a WomString type ${x.toWomString}"
         )
     }
 
@@ -412,7 +412,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case Some(JsString(x)) => x.toInt
       case _ =>
         throw new Exception(
-          s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
+            s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
         )
     }
   }
@@ -423,7 +423,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case Some(JsString(x)) => x
       case _ =>
         throw new Exception(
-          s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
+            s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
         )
     }
   }
@@ -459,11 +459,11 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val req: ObjectNode = DXJSON
       .getObjectBuilder()
       .put(
-        "fields",
-        DXJSON
-          .getObjectBuilder()
-          .put(availableField, true)
-          .build()
+          "fields",
+          DXJSON
+            .getObjectBuilder()
+            .put(availableField, true)
+            .build()
       )
       .build()
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
@@ -473,7 +473,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         case Some(x) => x
         case None =>
           throw new Exception(
-            s"Field ${availableField} is missing ${repJs.prettyPrint}"
+              s"Field ${availableField} is missing ${repJs.prettyPrint}"
           )
       }
 
@@ -502,11 +502,11 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val req: ObjectNode = DXJSON
       .getObjectBuilder()
       .put(
-        "fields",
-        DXJSON
-          .getObjectBuilder()
-          .put("pricingModelsByRegion", true)
-          .build()
+          "fields",
+          DXJSON
+            .getObjectBuilder()
+            .put("pricingModelsByRegion", true)
+            .build()
       )
       .build()
 
@@ -531,7 +531,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           case JsString(x) => x.toFloat
           case _ =>
             throw new Exception(
-              s"compute rate is not a number ${jsValue.prettyPrint}"
+                s"compute rate is not a number ${jsValue.prettyPrint}"
             )
         }
         key -> hourlyRate
@@ -548,15 +548,15 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case None => None
             case Some(iType) =>
               Some(
-                DxInstanceType(
-                  iName,
-                  iType.memoryMB,
-                  iType.diskGB,
-                  iType.cpu,
-                  hourlyRate,
-                  iType.os,
-                  iType.gpu
-                )
+                  DxInstanceType(
+                      iName,
+                      iType.memoryMB,
+                      iType.diskGB,
+                      iType.cpu,
+                      hourlyRate,
+                      iType.os,
+                      iType.gpu
+                  )
               )
           }
       }
@@ -625,8 +625,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       // Insufficient permissions to describe the user, we cannot get the price list.
       case e: Throwable =>
         Utils.warning(
-          verbose,
-          """|Warning: insufficient permissions to retrieve the
+            verbose,
+            """|Warning: insufficient permissions to retrieve the
                                           |instance price list. This will result in suboptimal machine choices,
                                           |incurring higher costs when running workflows.
                                           |""".stripMargin.replaceAll("\n", " ")

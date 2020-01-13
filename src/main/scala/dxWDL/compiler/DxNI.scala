@@ -77,9 +77,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           WomMaybeEmptyArrayType(WomSingleFileType)
         case _ =>
           throw new Exception(
-            s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
+              s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin
-              .replaceAll("\n", " ")
+                .replaceAll("\n", " ")
           )
       }
     } else {
@@ -96,9 +96,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WomSingleFileType)
         case _ =>
           throw new Exception(
-            s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
+              s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                         |has IO class ${ioClass}""".stripMargin
-              .replaceAll("\n", " ")
+                .replaceAll("\n", " ")
           )
       }
     }
@@ -116,19 +116,19 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val inputSpec: Map[String, WomType] =
       desc.inputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(
-          aplName,
-          iSpec.name,
-          iSpec.ioClass,
-          iSpec.optional
+            aplName,
+            iSpec.name,
+            iSpec.ioClass,
+            iSpec.optional
         )
       }.toMap
     val outputSpec: Map[String, WomType] =
       desc.outputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(
-          aplName,
-          iSpec.name,
-          iSpec.ioClass,
-          iSpec.optional
+            aplName,
+            iSpec.name,
+            iSpec.ioClass,
+            iSpec.optional
         )
       }.toMap
     (inputSpec, outputSpec)
@@ -146,13 +146,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   ): Vector[String] = {
     val dxObjectsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose).apply(
-        dxProject,
-        Some(folder),
-        recursive,
-        None,
-        Vector.empty,
-        Vector.empty,
-        true
+          dxProject,
+          Some(folder),
+          recursive,
+          None,
+          Vector.empty,
+          Vector.empty,
+          true
       )
 
     // we just want the applets
@@ -190,22 +190,22 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
             if (!both.isEmpty) {
               val bothStr = "[" + both.mkString(", ") + "]"
               throw new Exception(
-                s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
+                  s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
               )
             }
             val WdlCodeSnippet(taskCode) =
               WdlCodeGen(verbose, Map.empty, language).genDnanexusAppletStub(
-                apl.getId,
-                aplName,
-                inputSpec,
-                outputSpec
+                  apl.getId,
+                  aplName,
+                  inputSpec,
+                  outputSpec
               )
             Some(taskCode)
           } catch {
             case e: Throwable =>
               Utils.warning(
-                verbose,
-                s"Unable to construct a WDL interface for applet ${aplName}"
+                  verbose,
+                  s"Unable to construct a WDL interface for applet ${aplName}"
               )
               Utils.warning(verbose, e.getMessage)
               None
@@ -249,9 +249,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val ioParam = DxObject.parseIoParam(jsv)
     if (ioParam.ioClass == DxIOClass.HASH)
       throw new Exception(
-        s"""|app ${appName} has field ${ioParam.name}
+          s"""|app ${appName} has field ${ioParam.name}
                                     |with non WDL-native io class HASH""".stripMargin
-          .replaceAll("\n", " ")
+            .replaceAll("\n", " ")
       )
     ioParam
   }
@@ -282,10 +282,10 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         }
         if (!prefix.isEmpty)
           Utils.warning(
-            verbose,
-            s"""|app ${nameClean} does not start
+              verbose,
+              s"""|app ${nameClean} does not start
                                                |with a letter, adding the prefix '${prefix}'""".stripMargin
-              .replaceAll("\n", " ")
+                .replaceAll("\n", " ")
           )
         s"${prefix}${nameClean}"
     }
@@ -306,14 +306,14 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     }.toVector
     val normName = normalizeAppName(name)
     DxAppDescribe(
-      id,
-      normName,
-      0,
-      0,
-      None,
-      None,
-      Some(inputSpec),
-      Some(outputSpec)
+        id,
+        normName,
+        0,
+        0,
+        None,
+        None,
+        Some(inputSpec),
+        Some(outputSpec)
     )
   }
 
@@ -321,19 +321,19 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val inputSpec: Map[String, WomType] =
       dxApp.inputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(
-          dxApp.name,
-          ioSpec.name,
-          ioSpec.ioClass,
-          ioSpec.optional
+            dxApp.name,
+            ioSpec.name,
+            ioSpec.ioClass,
+            ioSpec.optional
         )
       }.toMap
     val outputSpec: Map[String, WomType] =
       dxApp.outputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(
-          dxApp.name,
-          ioSpec.name,
-          ioSpec.ioClass,
-          ioSpec.optional
+            dxApp.name,
+            ioSpec.name,
+            ioSpec.ioClass,
+            ioSpec.optional
         )
       }.toMap
 
@@ -345,17 +345,17 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     if (!both.isEmpty) {
       val bothStr = "[" + both.mkString(", ") + "]"
       throw new Exception(
-        s"""|Parameters ${bothStr} used as both input and
+          s"""|Parameters ${bothStr} used as both input and
                                     |output in applet ${dxApp.name}""".stripMargin
-          .replaceAll("\n", " ")
+            .replaceAll("\n", " ")
       )
     }
     val WdlCodeSnippet(taskCode) =
       WdlCodeGen(verbose, Map.empty, language).genDnanexusAppletStub(
-        dxApp.id,
-        dxApp.name,
-        inputSpec,
-        outputSpec
+          dxApp.id,
+          dxApp.name,
+          inputSpec,
+          outputSpec
       )
     taskCode
   }
@@ -363,12 +363,12 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   // Search for global apps
   def searchApps: Vector[String] = {
     val req = JsObject(
-      "published" -> JsBoolean(true),
-      "describe" -> JsObject(
-        "inputSpec" -> JsBoolean(true),
-        "outputSpec" -> JsBoolean(true)
-      ),
-      "limit" -> JsNumber(1000)
+        "published" -> JsBoolean(true),
+        "describe" -> JsObject(
+            "inputSpec" -> JsBoolean(true),
+            "outputSpec" -> JsBoolean(true)
+        ),
+        "limit" -> JsNumber(1000)
     )
     val rep =
       DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
@@ -391,8 +391,8 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       } catch {
         case e: Throwable =>
           Utils.warning(
-            verbose,
-            s"Unable to construct a WDL interface for applet ${appName}"
+              verbose,
+              s"Unable to construct a WDL interface for applet ${appName}"
           )
           Utils.warning(verbose, e.getMessage)
           None
@@ -412,9 +412,9 @@ object DxNI {
     if (Files.exists(outputPath)) {
       if (!force) {
         throw new Exception(
-          s"""|Output file ${outputPath.toString} already exists,
+            s"""|Output file ${outputPath.toString} already exists,
                                         |use -force to overwrite it""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
       }
       outputPath.toFile().delete

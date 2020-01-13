@@ -113,17 +113,17 @@ object DxUtils {
   def makeEBOR(dxExec: DxExecution, fieldName: String): JsValue = {
     if (dxExec.isInstanceOf[DxJob]) {
       JsObject(
-        "$dnanexus_link" -> JsObject(
-          "field" -> JsString(fieldName),
-          "job" -> JsString(dxExec.id)
-        )
+          "$dnanexus_link" -> JsObject(
+              "field" -> JsString(fieldName),
+              "job" -> JsString(dxExec.id)
+          )
       )
     } else if (dxExec.isInstanceOf[DxAnalysis]) {
       JsObject(
-        "$dnanexus_link" -> JsObject(
-          "field" -> JsString(fieldName),
-          "analysis" -> JsString(dxExec.id)
-        )
+          "$dnanexus_link" -> JsObject(
+              "field" -> JsString(fieldName),
+              "analysis" -> JsString(dxExec.id)
+          )
       )
     } else {
       throw new Exception(s"makeEBOR can't work with ${dxExec.id}")
@@ -138,16 +138,16 @@ object DxUtils {
       verbose: Boolean
   ): DxJob = {
     val fields = Map(
-      "function" -> JsString(entryPoint),
-      "input" -> inputs
+        "function" -> JsString(entryPoint),
+        "input" -> inputs
     )
     val instanceFields = instanceType match {
       case None => Map.empty
       case Some(iType) =>
         Map(
-          "systemRequirements" -> JsObject(
-            entryPoint -> JsObject("instanceType" -> JsString(iType))
-          )
+            "systemRequirements" -> JsObject(
+                entryPoint -> JsObject("instanceType" -> JsString(iType))
+            )
         )
     }
     val dependsFields =
@@ -169,7 +169,7 @@ object DxUtils {
       case Some(JsString(x)) => x
       case _ =>
         throw new AppInternalException(
-          s"Bad format returned from jobNew ${info.prettyPrint}"
+            s"Bad format returned from jobNew ${info.prettyPrint}"
         )
     }
     DxJob(id)
@@ -185,14 +185,14 @@ object DxUtils {
       case Some(JsString(x)) => x
       case _ =>
         throw new Exception(
-          s"Failed to get billTo from project ${dxProject.id}"
+            s"Failed to get billTo from project ${dxProject.id}"
         )
     }
     val region = jso.fields.get("region") match {
       case Some(JsString(x)) => x
       case _ =>
         throw new Exception(
-          s"Failed to get region from project ${dxProject.id}"
+            s"Failed to get region from project ${dxProject.id}"
         )
     }
     (billTo, region)
@@ -237,7 +237,7 @@ object DxUtils {
         }
       case _ =>
         throw new AppInternalException(
-          s"Could not parse a dxlink from $innerObj"
+            s"Could not parse a dxlink from $innerObj"
         )
     }
 
@@ -261,26 +261,26 @@ object DxUtils {
   ): Unit = {
     if (dxProject == rmtProject) {
       Utils.trace(
-        verbose.on,
-        s"The asset ${pkgName} is from this project ${rmtProject.id}, no need to clone"
+          verbose.on,
+          s"The asset ${pkgName} is from this project ${rmtProject.id}, no need to clone"
       )
       return
     }
     Utils.trace(
-      verbose.on,
-      s"The asset ${pkgName} is from a different project ${rmtProject.id}"
+        verbose.on,
+        s"The asset ${pkgName} is from a different project ${rmtProject.id}"
     )
 
     // clone
     val req = JsObject(
-      "objects" -> JsArray(JsString(assetRecord.id)),
-      "project" -> JsString(dxProject.id),
-      "destination" -> JsString("/")
+        "objects" -> JsArray(JsString(assetRecord.id)),
+        "project" -> JsString(dxProject.id),
+        "destination" -> JsString("/")
     )
     val rep = DXAPI.projectClone(
-      rmtProject.id,
-      jsonNodeOfJsValue(req),
-      classOf[JsonNode]
+        rmtProject.id,
+        jsonNodeOfJsValue(req),
+        classOf[JsonNode]
     )
     val repJs: JsValue = jsValueOfJsonNode(rep)
 
@@ -300,17 +300,17 @@ object DxUtils {
       case 0 =>
         val localAssetRecord = DxRecord(assetRecord.id, None)
         Utils.trace(
-          verbose.on,
-          s"Created ${localAssetRecord.id} pointing to asset ${pkgName}"
+            verbose.on,
+            s"Created ${localAssetRecord.id} pointing to asset ${pkgName}"
         )
       case 1 =>
         Utils.trace(
-          verbose.on,
-          s"The project already has a record pointing to asset ${pkgName}"
+            verbose.on,
+            s"The project already has a record pointing to asset ${pkgName}"
         )
       case _ =>
         throw new Exception(
-          s"clone returned too many existing records ${exists}"
+            s"clone returned too many existing records ${exists}"
         )
     }
   }
@@ -343,8 +343,8 @@ object DxUtils {
     var counter = 0
     while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
       Utils.appletLog(
-        verbose,
-        s"downloading file ${path.toString} (try=${counter})"
+          verbose,
+          s"downloading file ${path.toString} (try=${counter})"
       )
       rc = downloadOneFile(path, dxfile, counter)
       counter = counter + 1

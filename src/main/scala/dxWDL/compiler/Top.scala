@@ -60,7 +60,7 @@ case class Top(cOpt: CompilerOptions) {
     val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
     if (!dxObj.isInstanceOf[DxRecord])
       throw new Exception(
-        s"Found dx object of wrong type ${dxObj} at ${assetDxPath}"
+          s"Found dx object of wrong type ${dxObj} at ${assetDxPath}"
       )
     dxObj.getId
   }
@@ -77,11 +77,11 @@ case class Top(cOpt: CompilerOptions) {
       getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     DxUtils.cloneAsset(
-      DxRecord.getInstance(dxWDLrtId),
-      dxProject,
-      DX_WDL_ASSET,
-      dxProjRt,
-      verbose
+        DxRecord.getInstance(dxWDLrtId),
+        dxProject,
+        DX_WDL_ASSET,
+        dxProjRt,
+        verbose
     )
   }
 
@@ -114,30 +114,30 @@ case class Top(cOpt: CompilerOptions) {
     // Efficiently build a directory of the currently existing applets.
     // We don't want to build them if we don't have to.
     val dxObjDir = DxObjectDirectory(
-      bundle,
-      dxProject,
-      folder,
-      cOpt.projectWideReuse,
-      verbose
+        bundle,
+        dxProject,
+        folder,
+        cOpt.projectWideReuse,
+        verbose
     )
 
     // Generate dx:applets and dx:workflow from the IR
     new Native(
-      dxWDLrtId,
-      folder,
-      dxProject,
-      dxObjDir,
-      instanceTypeDB,
-      runtimePathConfig,
-      fileInfoDir,
-      bundle.typeAliases,
-      cOpt.extras,
-      cOpt.runtimeDebugLevel,
-      cOpt.leaveWorkflowsOpen,
-      cOpt.force,
-      cOpt.archive,
-      cOpt.locked,
-      cOpt.verbose
+        dxWDLrtId,
+        folder,
+        dxProject,
+        dxObjDir,
+        instanceTypeDB,
+        runtimePathConfig,
+        fileInfoDir,
+        bundle.typeAliases,
+        cOpt.extras,
+        cOpt.runtimeDebugLevel,
+        cOpt.leaveWorkflowsOpen,
+        cOpt.force,
+        cOpt.archive,
+        cOpt.locked,
+        cOpt.verbose
     ).apply(bundle)
   }
 
@@ -147,7 +147,7 @@ case class Top(cOpt: CompilerOptions) {
     for (varName <- varNames)
       if (varName contains "___")
         throw new Exception(
-          s"Variable ${varName} is using the reserved substring ___"
+            s"Variable ${varName} is using the reserved substring ___"
         )
   }
 
@@ -157,8 +157,8 @@ case class Top(cOpt: CompilerOptions) {
       case wf: WorkflowDefinition =>
         if (wf.parameterMeta.size > 0)
           Utils.warning(
-            verbose,
-            "dxWDL workflows ignore their parameter meta section"
+              verbose,
+              "dxWDL workflows ignore their parameter meta section"
           )
         val g = wf.innerGraph
         checkDeclarations(g.inputNodes.map(_.localName).toSeq)
@@ -166,7 +166,7 @@ case class Top(cOpt: CompilerOptions) {
         val allDeclarations =
           g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
         checkDeclarations(
-          allDeclarations.map(_.identifier.localName.value).toSeq
+            allDeclarations.map(_.identifier.localName.value).toSeq
         )
 
       case task: CallableTaskDefinition =>
@@ -199,7 +199,7 @@ case class Top(cOpt: CompilerOptions) {
             // unequal.
             case Some(existing) if (existing.toString != callable.toString) =>
               Utils.error(
-                s"""|${key} appears with two different callable definitions
+                  s"""|${key} appears with two different callable definitions
                                         |1)
                                         |${callable}
                                         |
@@ -208,7 +208,7 @@ case class Top(cOpt: CompilerOptions) {
                                         |""".stripMargin
               )
               throw new Exception(
-                s"${key} appears twice, with two different definitions"
+                  s"${key} appears twice, with two different definitions"
               )
             case _ => ()
           }
@@ -220,7 +220,7 @@ case class Top(cOpt: CompilerOptions) {
               allTypeAliases = allTypeAliases + (key -> definition)
             case Some(existing) if (existing != definition) =>
               Utils.error(
-                s"""|${key} appears twice, with two different definitions
+                  s"""|${key} appears twice, with two different definitions
                                         |1)
                                         |${definition}
                                         |
@@ -236,10 +236,10 @@ case class Top(cOpt: CompilerOptions) {
 
     // Merge all the bundles together
     WomBundle(
-      mainBundle.primaryCallable,
-      allCallables,
-      allTypeAliases,
-      Set.empty
+        mainBundle.primaryCallable,
+        allCallables,
+        allTypeAliases,
+        Set.empty
     )
   }
 
@@ -259,8 +259,8 @@ case class Top(cOpt: CompilerOptions) {
       case (accu: InputFileScanResults, inputFilePath) =>
         val res = InputFileScan(bundle, dxProject, verbose).apply(inputFilePath)
         InputFileScanResults(
-          accu.path2file ++ res.path2file,
-          accu.dxFiles ++ res.dxFiles
+            accu.path2file ++ res.path2file,
+            accu.dxFiles ++ res.dxFiles
         )
     }
 
@@ -305,11 +305,11 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     new GenerateIR(cOpt.verbose, defaultRuntimeAttrs).apply(
-      everythingBundle,
-      allSources,
-      language,
-      cOpt.locked,
-      reorgApp
+        everythingBundle,
+        allSources,
+        language,
+        cOpt.locked,
+        reorgApp
     )
   }
 

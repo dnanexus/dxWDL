@@ -79,14 +79,14 @@ object DxPath {
     // A project name, resolve it
     val req =
       JsObject(
-        "name" -> JsString(projName),
-        "level" -> JsString("VIEW"),
-        "limit" -> JsNumber(2)
+          "name" -> JsString(projName),
+          "level" -> JsString("VIEW"),
+          "limit" -> JsNumber(2)
       )
     val rep = DXAPI.systemFindProjects(
-      jsonNodeOfJsValue(req),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        jsonNodeOfJsValue(req),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = jsValueOfJsonNode(rep)
 
@@ -94,7 +94,7 @@ object DxPath {
       case Some(JsArray(x)) => x
       case _ =>
         throw new Exception(
-          s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}."
+            s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}."
         )
     }
     if (results.length > 1)
@@ -105,7 +105,7 @@ object DxPath {
       case Some(JsString(id)) => DxProject.getInstance(id)
       case _ =>
         throw new Exception(
-          s"Bad response from SystemFindProject API call ${repJs.prettyPrint}"
+            s"Bad response from SystemFindProject API call ${repJs.prettyPrint}"
         )
     }
     projectDict(projName) = dxProject
@@ -116,7 +116,7 @@ object DxPath {
   //   "dx://dxWDL_playground:/test_data/fileB",
   private def makeResolutionReq(components: DxPathComponents): JsValue = {
     val reqFields: Map[String, JsValue] = Map(
-      "name" -> JsString(components.name)
+        "name" -> JsString(components.name)
     )
     val folderField: Map[String, JsValue] = components.folder match {
       case None    => Map.empty
@@ -137,14 +137,14 @@ object DxPath {
   ): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map { makeResolutionReq(_) }
     val request = JsObject(
-      "objects" -> JsArray(objectReqs),
-      "project" -> JsString(dxProject.getId)
+        "objects" -> JsArray(objectReqs),
+        "project" -> JsString(dxProject.getId)
     )
 
     val response = DXAPI.systemResolveDataObjects(
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val resultsPerObj: Vector[JsValue] =
@@ -159,12 +159,12 @@ object DxPath {
         val o = descJs match {
           case JsArray(x) if x.isEmpty =>
             throw new Exception(
-              s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
+                s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
             )
           case JsArray(x) if x.length == 1 => x(0)
           case JsArray(x) =>
             throw new Exception(
-              s"Found more than one dx object in path ${path}"
+                s"Found more than one dx object in path ${path}"
             )
           case obj: JsObject => obj
           case other         => throw new Exception(s"malformed json ${other}")
@@ -251,11 +251,11 @@ object DxPath {
 
     if (found.size == 0)
       throw new Exception(
-        s"Could not find ${dxPath} in project ${dxProject.getId}"
+          s"Could not find ${dxPath} in project ${dxProject.getId}"
       )
     if (found.size > 1)
       throw new Exception(
-        s"Found more than one dx:object in path ${dxPath}, project=${dxProject.getId}"
+          s"Found more than one dx:object in path ${dxPath}, project=${dxProject.getId}"
       )
 
     found.values.head

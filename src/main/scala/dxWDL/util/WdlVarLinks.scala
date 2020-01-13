@@ -81,7 +81,7 @@ case class WdlVarLinksConverter(
       case (WomStringType, WomString(buf)) =>
         if (buf.length > Utils.MAX_STRING_LEN)
           throw new AppInternalException(
-            s"string is longer than ${Utils.MAX_STRING_LEN}"
+              s"string is longer than ${Utils.MAX_STRING_LEN}"
           )
         JsString(buf)
       case (WomBooleanType, WomBoolean(b))      => JsBoolean(b)
@@ -180,7 +180,7 @@ case class WdlVarLinksConverter(
           else
             s"(${womValue.toWomString}, ${womValue.womType})"
         throw new Exception(
-          s"""|Unsupported combination:
+            s"""|Unsupported combination:
                                         |    womType:  ${womTypeStr}
                                         |    womValue: ${womValueStr}""".stripMargin
         )
@@ -330,9 +330,9 @@ case class WdlVarLinksConverter(
           }
         case DxlWorkflowInput(varEncName) =>
           JsObject(
-            "$dnanexus_link" -> JsObject(
-              "workflowInputField" -> JsString(nodots(varEncName))
-            )
+              "$dnanexus_link" -> JsObject(
+                  "workflowInputField" -> JsString(nodots(varEncName))
+              )
           )
         case DxlExec(dxJob, varEncName) =>
           DxUtils.makeEBOR(dxJob, nodots(varEncName))
@@ -355,36 +355,36 @@ case class WdlVarLinksConverter(
           ioRef match {
             case IORef.Input =>
               Map(
-                bindEncName -> dxStage.getInputReference(varEncName),
-                bindEncName_F -> dxStage.getInputReference(varEncName_F)
+                  bindEncName -> dxStage.getInputReference(varEncName),
+                  bindEncName_F -> dxStage.getInputReference(varEncName_F)
               )
             case IORef.Output =>
               Map(
-                bindEncName -> dxStage.getOutputReference(varEncName),
-                bindEncName_F -> dxStage.getOutputReference(varEncName_F)
+                  bindEncName -> dxStage.getOutputReference(varEncName),
+                  bindEncName_F -> dxStage.getOutputReference(varEncName_F)
               )
           }
         case DxlWorkflowInput(varEncName) =>
           val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           Map(
-            bindEncName ->
-              JsObject(
-                "$dnanexus_link" -> JsObject(
-                  "workflowInputField" -> JsString(varEncName)
+              bindEncName ->
+                JsObject(
+                    "$dnanexus_link" -> JsObject(
+                        "workflowInputField" -> JsString(varEncName)
+                    )
+                ),
+              bindEncName_F ->
+                JsObject(
+                    "$dnanexus_link" -> JsObject(
+                        "workflowInputField" -> JsString(varEncName_F)
+                    )
                 )
-              ),
-            bindEncName_F ->
-              JsObject(
-                "$dnanexus_link" -> JsObject(
-                  "workflowInputField" -> JsString(varEncName_F)
-                )
-              )
           )
         case DxlExec(dxJob, varEncName) =>
           val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           Map(
-            bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
-            bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F))
+              bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
+              bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F))
           )
       }
     }

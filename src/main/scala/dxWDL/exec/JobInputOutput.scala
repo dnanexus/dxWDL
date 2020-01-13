@@ -50,7 +50,7 @@ case class JobInputOutput(
     val value = result match {
       case Invalid(errors) =>
         throw new Exception(
-          s"Failed to evaluate expression ${expr} with ${errors}"
+            s"Failed to evaluate expression ${expr} with ${errors}"
         )
       case Valid(x: WomValue) => x
     }
@@ -86,7 +86,7 @@ case class JobInputOutput(
             fields.get(iName.value) match {
               case None =>
                 throw new Exception(
-                  s"Input ${iName} is required but not provided"
+                    s"Input ${iName} is required but not provided"
                 )
               case Some(x: JsValue) =>
                 // Conversion from JSON to WomValue
@@ -206,9 +206,9 @@ case class JobInputOutput(
         return longPath
     }
     throw new Exception(
-      s"""|Tried to download ${dxFile.getId} ${basename} to local filesystem
+        s"""|Tried to download ${dxFile.getId} ${basename} to local filesystem
                                 |at ${inputsDir}/*/${basename}, all are taken""".stripMargin
-        .replaceAll("\n", " ")
+          .replaceAll("\n", " ")
     )
   }
 
@@ -394,10 +394,10 @@ case class JobInputOutput(
               val existingFiles = accu.values.toSet
               val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
               val path = createUniqueDownloadPath(
-                desc.name,
-                dxUrl.dxFile,
-                existingFiles,
-                dxIoFunctions.config.dxfuseMountpoint
+                  desc.name,
+                  dxUrl.dxFile,
+                  existingFiles,
+                  dxIoFunctions.config.dxfuseMountpoint
               )
               accu + (dxUrl -> path)
 
@@ -406,10 +406,10 @@ case class JobInputOutput(
               val existingFiles = accu.values.toSet
               val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
               val path = createUniqueDownloadPath(
-                desc.name,
-                dxUrl.dxFile,
-                existingFiles,
-                inputsDir
+                  desc.name,
+                  dxUrl.dxFile,
+                  existingFiles,
+                  inputsDir
               )
               accu + (dxUrl -> path)
           }
@@ -465,7 +465,7 @@ case class JobInputOutput(
         case FurlLocal(p) => Paths.get(p)
         case dxUrl: FurlDx =>
           throw new Exception(
-            s"Should not find cloud file on local machine (${dxUrl})"
+              s"Should not find cloud file on local machine (${dxUrl})"
           )
       }
       .toVector

@@ -39,7 +39,7 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
             k -> womToJSON(valueType, v)
           case (k, _) =>
             throw new Exception(
-              s"key ${k.toWomString} should be a WomStringType"
+                s"key ${k.toWomString} should be a WomStringType"
             )
         }.toMap)
 
@@ -79,9 +79,9 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
 
       case (_, _) =>
         throw new Exception(
-          s"""|Unsupported combination type=(${t.stableName},${t})
+            s"""|Unsupported combination type=(${t.stableName},${t})
                     |value=(${w.toWomString}, ${w})""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
   }
@@ -150,7 +150,7 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
 
       case _ =>
         throw new Exception(
-          s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}"
+            s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}"
         )
     }
   }
@@ -158,10 +158,10 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
   // serialization routines
   def toJSON(w: WomValue): JsValue = {
     JsObject(
-      "womType" -> JsString(
-        WomTypeSerialization(typeAliases).toString(w.womType)
-      ),
-      "womValue" -> womToJSON(w.womType, w)
+        "womType" -> JsString(
+            WomTypeSerialization(typeAliases).toString(w.womType)
+        ),
+        "womValue" -> womToJSON(w.womType, w)
     )
   }
 

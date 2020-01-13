@@ -148,13 +148,13 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
   private def useDB(db: InstanceTypeDB): Unit = {
     db.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
     db.chooseAttrs(Some(3 * 1024), Some(100), Some(5), None) should equal(
-      "mem1_ssd1_x8"
+        "mem1_ssd1_x8"
     )
     db.chooseAttrs(Some(2 * 1024), Some(20), None, None) should equal(
-      "mem1_ssd1_x2"
+        "mem1_ssd1_x2"
     )
     db.chooseAttrs(Some(30 * 1024), Some(128), Some(8), None) should equal(
-      "mem3_ssd1_x8"
+        "mem3_ssd1_x8"
     )
 
     assertThrows[Exception] {
@@ -163,69 +163,69 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     }
 
     db.apply(
-      InstanceTypeDB.parse(
-        None,
-        Some(WomString("3 GB")),
-        Some(WomString("local-disk 10 HDD")),
-        Some(WomString("1")),
-        None
-      )
+        InstanceTypeDB.parse(
+            None,
+            Some(WomString("3 GB")),
+            Some(WomString("local-disk 10 HDD")),
+            Some(WomString("1")),
+            None
+        )
     ) should equal("mem1_ssd1_x2")
     db.apply(
-      InstanceTypeDB.parse(
-        None,
-        Some(WomString("37 GB")),
-        Some(WomString("local-disk 10 HDD")),
-        Some(WomString("6")),
-        None
-      )
+        InstanceTypeDB.parse(
+            None,
+            Some(WomString("37 GB")),
+            Some(WomString("local-disk 10 HDD")),
+            Some(WomString("6")),
+            None
+        )
     ) should equal("mem3_ssd1_x8")
     db.apply(
-      InstanceTypeDB
-        .parse(
-          None,
-          Some(WomString("2 GB")),
-          Some(WomString("local-disk 100 HDD")),
-          None,
-          None
-        )
+        InstanceTypeDB
+          .parse(
+              None,
+              Some(WomString("2 GB")),
+              Some(WomString("local-disk 100 HDD")),
+              None,
+              None
+          )
     ) should equal("mem1_ssd1_x8")
     db.apply(
-      InstanceTypeDB
-        .parse(
-          None,
-          Some(WomString("2.1GB")),
-          Some(WomString("local-disk 100 HDD")),
-          None,
-          None
-        )
+        InstanceTypeDB
+          .parse(
+              None,
+              Some(WomString("2.1GB")),
+              Some(WomString("local-disk 100 HDD")),
+              None,
+              None
+          )
     ) should equal("mem1_ssd1_x8")
 
     db.apply(
-      InstanceTypeDB
-        .parse(Some(WomString("mem3_ssd1_x8")), None, None, None, None)
+        InstanceTypeDB
+          .parse(Some(WomString("mem3_ssd1_x8")), None, None, None, None)
     ) should equal(
-      "mem3_ssd1_x8"
+        "mem3_ssd1_x8"
     )
 
     db.apply(
-      InstanceTypeDB.parse(
-        None,
-        Some(WomString("235 GB")),
-        Some(WomString("local-disk 550 HDD")),
-        Some(WomString("32")),
-        None
-      )
+        InstanceTypeDB.parse(
+            None,
+            Some(WomString("235 GB")),
+            Some(WomString("local-disk 550 HDD")),
+            Some(WomString("32")),
+            None
+        )
     ) should equal("mem3_ssd1_x32")
     db.apply(
-      InstanceTypeDB
-        .parse(Some(WomString("mem3_ssd1_x32")), None, None, None, None)
+        InstanceTypeDB
+          .parse(Some(WomString("mem3_ssd1_x32")), None, None, None, None)
     ) should equal(
-      "mem3_ssd1_x32"
+        "mem3_ssd1_x32"
     )
 
     db.apply(InstanceTypeDB.parse(None, None, None, Some(WomString("8")), None)) should equal(
-      "mem1_ssd1_x8"
+        "mem1_ssd1_x8"
     )
   }
 
@@ -238,7 +238,7 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     dbNoPrices.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
 
     dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None) should equal(
-      "mem1_ssd1_x4"
+        "mem1_ssd1_x4"
     )
   }
 
@@ -278,11 +278,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     // memory specification
     InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None, None) shouldBe
       InstanceTypeReq(
-        None,
-        Some((230 * 1000 * 1000) / (1024 * 1024).toInt),
-        None,
-        None,
-        None
+          None,
+          Some((230 * 1000 * 1000) / (1024 * 1024).toInt),
+          None,
+          None,
+          None
       )
 
     InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None, None) shouldBe
@@ -290,11 +290,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None, None) shouldBe
       InstanceTypeReq(
-        None,
-        Some(((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
-        None,
-        None,
-        None
+          None,
+          Some(((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
+          None,
+          None,
+          None
       )
 
     InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None, None) shouldBe
@@ -302,11 +302,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None, None) shouldBe
       InstanceTypeReq(
-        None,
-        Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
-        None,
-        None,
-        None
+          None,
+          Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
+          None,
+          None,
+          None
       )
 
     InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, None) shouldBe
@@ -314,11 +314,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     assertThrows[Exception] {
       InstanceTypeDB.parse(
-        None,
-        Some(WomString("230 44 34 GB")),
-        None,
-        None,
-        None
+          None,
+          Some(WomString("230 44 34 GB")),
+          None,
+          None,
+          None
       )
     }
     assertThrows[Exception] {
@@ -337,20 +337,20 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     // disk spec
     assertThrows[Exception] {
       InstanceTypeDB.parse(
-        None,
-        None,
-        Some(WomString("just give me a disk")),
-        None,
-        None
+          None,
+          None,
+          Some(WomString("just give me a disk")),
+          None,
+          None
       )
     }
     assertThrows[Exception] {
       InstanceTypeDB.parse(
-        None,
-        None,
-        Some(WomString("local-disk xxxx")),
-        None,
-        None
+          None,
+          None,
+          Some(WomString("local-disk xxxx")),
+          None,
+          None
       )
     }
     assertThrows[Exception] {
@@ -362,18 +362,18 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
       InstanceTypeDB.parse(None, None, None, Some(WomString("xxyy")), None)
     }
     InstanceTypeDB.parse(None, None, None, Some(WomInteger(1)), None) shouldBe InstanceTypeReq(
-      None,
-      None,
-      None,
-      Some(1),
-      None
+        None,
+        None,
+        None,
+        Some(1),
+        None
     )
     InstanceTypeDB.parse(None, None, None, Some(WomFloat(1.2)), None) shouldBe InstanceTypeReq(
-      None,
-      None,
-      None,
-      Some(1),
-      None
+        None,
+        None,
+        None,
+        Some(1),
+        None
     )
 
     assertThrows[Exception] {
@@ -382,11 +382,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     // gpu
     InstanceTypeDB.parse(
-      None,
-      Some(WomString("1000 TiB")),
-      None,
-      None,
-      Some(WomBoolean(true))
+        None,
+        Some(WomString("1000 TiB")),
+        None,
+        None,
+        Some(WomBoolean(true))
     ) shouldBe
       InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, Some(true))
 
@@ -396,60 +396,60 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
   it should "work on large instances (JIRA-1258)" in {
     val db = InstanceTypeDB(
-      true,
-      Vector(
-        DxInstanceType(
-          "mem3_ssd1_x32",
-          245751,
-          32,
-          597,
-          13.0.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
-        ),
-        DxInstanceType(
-          "mem4_ssd1_x128",
-          1967522,
-          128,
-          3573,
-          14.0.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
+        true,
+        Vector(
+            DxInstanceType(
+                "mem3_ssd1_x32",
+                245751,
+                32,
+                597,
+                13.0.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            ),
+            DxInstanceType(
+                "mem4_ssd1_x128",
+                1967522,
+                128,
+                3573,
+                14.0.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            )
         )
-      )
     )
 
     db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None) should equal(
-      "mem3_ssd1_x32"
+        "mem3_ssd1_x32"
     )
     db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None) should equal(
-      "mem4_ssd1_x128"
+        "mem4_ssd1_x128"
     )
   }
 
   it should "prefer v2 instances over v1's" in {
     val db = InstanceTypeDB(
-      true,
-      Vector(
-        DxInstanceType(
-          "mem1_ssd1_v2_x4",
-          8000,
-          80,
-          4,
-          0.2.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
-        ),
-        DxInstanceType(
-          "mem1_ssd1_x4",
-          8000,
-          80,
-          4,
-          0.2.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
+        true,
+        Vector(
+            DxInstanceType(
+                "mem1_ssd1_v2_x4",
+                8000,
+                80,
+                4,
+                0.2.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            ),
+            DxInstanceType(
+                "mem1_ssd1_x4",
+                8000,
+                80,
+                4,
+                0.2.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            )
         )
-      )
     )
 
     db.chooseAttrs(None, None, Some(4), None) should equal("mem1_ssd1_v2_x4")
@@ -457,40 +457,40 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
   it should "respect requests for GPU instances" taggedAs (EdgeTest) in {
     val db = InstanceTypeDB(
-      true,
-      Vector(
-        DxInstanceType(
-          "mem1_ssd1_v2_x4",
-          8000,
-          80,
-          4,
-          0.2.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
-        ),
-        DxInstanceType(
-          "mem1_ssd1_x4",
-          8000,
-          80,
-          4,
-          0.2.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          false
-        ),
-        DxInstanceType(
-          "mem3_ssd1_gpu_x8",
-          30000,
-          100,
-          8,
-          1.0.toFloat,
-          Vector(("Ubuntu", "16.04")),
-          true
+        true,
+        Vector(
+            DxInstanceType(
+                "mem1_ssd1_v2_x4",
+                8000,
+                80,
+                4,
+                0.2.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            ),
+            DxInstanceType(
+                "mem1_ssd1_x4",
+                8000,
+                80,
+                4,
+                0.2.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                false
+            ),
+            DxInstanceType(
+                "mem3_ssd1_gpu_x8",
+                30000,
+                100,
+                8,
+                1.0.toFloat,
+                Vector(("Ubuntu", "16.04")),
+                true
+            )
         )
-      )
     )
 
     db.chooseAttrs(None, None, Some(4), Some(true)) should equal(
-      "mem3_ssd1_gpu_x8"
+        "mem3_ssd1_gpu_x8"
     )
 
     assertThrows[Exception] {

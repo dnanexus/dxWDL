@@ -39,7 +39,7 @@ class BlockTest extends FlatSpec with Matchers {
     closureAll(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
     closureAll(subBlocks(3)).keys.toSet should be(Set("rain"))
     closureAll(subBlocks(4)).keys.toSet should be(
-      Set("rain", "inc1.result", "flag")
+        Set("rain", "inc1.result", "flag")
     )
   }
 
@@ -51,19 +51,19 @@ class BlockTest extends FlatSpec with Matchers {
     val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     Block.outputs(subBlocks(1)) should be(
-      Map("inc2.result" -> WomOptionalType(WomIntegerType))
+        Map("inc2.result" -> WomOptionalType(WomIntegerType))
     )
     Block.outputs(subBlocks(2)) should be(
-      Map("inc3.result" -> WomOptionalType(WomIntegerType))
+        Map("inc3.result" -> WomOptionalType(WomIntegerType))
     )
     Block.outputs(subBlocks(3)) should be(
-      Map("inc4.result" -> WomArrayType(WomIntegerType))
+        Map("inc4.result" -> WomArrayType(WomIntegerType))
     )
     Block.outputs(subBlocks(4)) should be(
-      Map(
-        "x" -> WomArrayType(WomIntegerType),
-        "inc5.result" -> WomArrayType(WomOptionalType(WomIntegerType))
-      )
+        Map(
+            "x" -> WomArrayType(WomIntegerType),
+            "inc5.result" -> WomArrayType(WomOptionalType(WomIntegerType))
+        )
     )
   }
 
@@ -75,7 +75,7 @@ class BlockTest extends FlatSpec with Matchers {
     val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
     Block.outputs(subBlocks(1)) should be(
-      Map("z" -> WomIntegerType, "mul.result" -> WomIntegerType)
+        Map("z" -> WomIntegerType, "mul.result" -> WomIntegerType)
     )
     closureAll(subBlocks(1)).keys.toSet should be(Set("add.result"))
   }
@@ -89,10 +89,10 @@ class BlockTest extends FlatSpec with Matchers {
       Block.split(wf.innerGraph, wfSourceCode)
 
     Block.outputs(subBlocks(0)) should be(
-      Map(
-        "rain" -> WomIntegerType,
-        "inc.result" -> WomOptionalType(WomIntegerType)
-      )
+        Map(
+            "rain" -> WomIntegerType,
+            "inc.result" -> WomOptionalType(WomIntegerType)
+        )
     )
   }
 
@@ -125,7 +125,7 @@ class BlockTest extends FlatSpec with Matchers {
     closureAll(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
     closureAll(subBlocks(3)).keys.toSet should be(Set("rain"))
     closureAll(subBlocks(4)).keys.toSet should be(
-      Set("rain", "inc1.result", "flag")
+        Set("rain", "inc1.result", "flag")
     )
   }
 
@@ -163,12 +163,12 @@ class BlockTest extends FlatSpec with Matchers {
       parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
     val outputNodes = wf.innerGraph.outputNodes.toVector
     Block.outputClosure(outputNodes) should be(
-      Set(
-        "Add.result",
-        "SumArray.result",
-        "SumArray2.result",
-        "JoinMisc.result"
-      )
+        Set(
+            "Add.result",
+            "SumArray.result",
+            "SumArray2.result",
+            "JoinMisc.result"
+        )
     )
   }
 

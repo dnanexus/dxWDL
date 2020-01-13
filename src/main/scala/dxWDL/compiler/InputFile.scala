@@ -108,7 +108,7 @@ case class InputFileScan(
 
       case _ =>
         throw new AppInternalException(
-          s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
+            s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
         )
     }
   }
@@ -187,7 +187,7 @@ case class InputFileScan(
           key -> dxobj.asInstanceOf[DxFile]
         case (key, dxobj) =>
           throw new Exception(
-            s"Scanning the input file produced ${dxobj} which is not a file"
+              s"Scanning the input file produced ${dxobj} which is not a file"
           )
       }
       .toMap
@@ -281,7 +281,7 @@ case class InputFile(
 
       case _ =>
         throw new AppInternalException(
-          s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
+            s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
         )
     }
   }
@@ -327,8 +327,8 @@ case class InputFile(
       defaultFields: HashMap[String, JsValue]
   ): IR.Stage = {
     Utils.trace(
-      verbose2,
-      s"addDefaultToStage ${stg.id.getId}, ${stg.description}"
+        verbose2,
+        s"addDefaultToStage ${stg.id.getId}, ${stg.description}"
     )
     val inputsFull: Vector[(SArg, CVar)] = stg.inputs.zipWithIndex.map {
       case (sArg, idx) =>
@@ -412,10 +412,10 @@ case class InputFile(
             addDefaultsToStage(stg, wf.name, callee, defaultFields)
           } else {
             addDefaultsToStage(
-              stg,
-              s"${wf.name}.${stg.description}",
-              callee,
-              defaultFields
+                stg,
+                s"${wf.name}.${stg.description}",
+                callee,
+                defaultFields
             )
           }
         }
@@ -461,13 +461,13 @@ case class InputFile(
     }
     if (!defaultFields.isEmpty) {
       throw new Exception(
-        s"""|Could not map all default fields.
+          s"""|Could not map all default fields.
                                     |These were left: ${defaultFields}""".stripMargin
       )
     }
     bundle.copy(
-      primaryCallable = primaryCallable,
-      allCallables = callablesWithDefaults
+        primaryCallable = primaryCallable,
+        allCallables = callablesWithDefaults
     )
   }
 
@@ -500,7 +500,7 @@ case class InputFile(
       if (inputFields.isEmpty)
         return
       throw new Exception(
-        s"""|Could not map all default fields.
+          s"""|Could not map all default fields.
                                     |These were left: ${inputFields}""".stripMargin
       )
     }
@@ -543,7 +543,7 @@ case class InputFile(
         handleTask(tasks.head)
       case None =>
         throw new Exception(
-          s"Cannot generate one input file for ${tasks.size} tasks"
+            s"Cannot generate one input file for ${tasks.size} tasks"
         )
       case Some(task: IR.Applet) =>
         handleTask(task)

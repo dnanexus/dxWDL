@@ -15,7 +15,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
     } catch {
       case e: Exception =>
         throw new Exception(
-          s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform on staging.""".stripMargin
         )
     }
@@ -57,9 +57,9 @@ class DxdaManifestTest extends FlatSpec with Matchers {
   it should "create manifests for dxda" in {
 
     val fileDir: Map[String, Path] = Map(
-      s"dx://${TEST_PROJECT}:/test_data/fileA" -> Paths.get("inputs/A"),
-      s"dx://${TEST_PROJECT}:/test_data/fileB" -> Paths.get("inputs/B"),
-      s"dx://${TEST_PROJECT}:/test_data/fileC" -> Paths.get("inputs/C")
+        s"dx://${TEST_PROJECT}:/test_data/fileA" -> Paths.get("inputs/A"),
+        s"dx://${TEST_PROJECT}:/test_data/fileB" -> Paths.get("inputs/B"),
+        s"dx://${TEST_PROJECT}:/test_data/fileC" -> Paths.get("inputs/C")
     )
 
     // resolve the paths
@@ -84,14 +84,14 @@ class DxdaManifestTest extends FlatSpec with Matchers {
 
         // add the target folder and name
         val fields = jsv.asJsObject.fields ++ Map(
-          "name" -> JsString(local.toFile().getName()),
-          "folder" -> JsString(local.toFile().getParent())
+            "name" -> JsString(local.toFile().getName()),
+            "folder" -> JsString(local.toFile().getParent())
         )
         JsObject(fields)
     }.toVector
 
     manifest shouldBe (DxdaManifest(
-      JsObject(dxTestProject.getId -> JsArray(expected))
+        JsObject(dxTestProject.getId -> JsArray(expected))
     ))
   }
 }

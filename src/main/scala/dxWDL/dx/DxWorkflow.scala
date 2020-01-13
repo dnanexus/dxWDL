@@ -47,35 +47,35 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
   def describe(fields: Set[Field.Value] = Set.empty): DxWorkflowDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(
-      Field.Project,
-      Field.Id,
-      Field.Name,
-      Field.Folder,
-      Field.Created,
-      Field.Modified,
-      Field.InputSpec,
-      Field.OutputSpec
+        Field.Project,
+        Field.Id,
+        Field.Name,
+        Field.Folder,
+        Field.Created,
+        Field.Modified,
+        Field.InputSpec,
+        Field.OutputSpec
     )
     val allFields = fields ++ defaultFields
     val request = JsObject(
-      projSpec + ("fields" -> DxObject.requestFields(allFields))
+        projSpec + ("fields" -> DxObject.requestFields(allFields))
     )
     val response = DXAPI.workflowDescribe(
-      id,
-      DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv
+        id,
+        DxUtils.jsonNodeOfJsValue(request),
+        classOf[JsonNode],
+        DxUtils.dxEnv
     )
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc = descJs.asJsObject.getFields(
-      "project",
-      "id",
-      "name",
-      "folder",
-      "created",
-      "modified",
-      "inputSpec",
-      "outputSpec"
+        "project",
+        "id",
+        "name",
+        "folder",
+        "created",
+        "modified",
+        "inputSpec",
+        "outputSpec"
     ) match {
       case Seq(
           JsString(projectId),
@@ -88,17 +88,17 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
           JsArray(outputSpec)
           ) =>
         DxWorkflowDescribe(
-          projectId,
-          id,
-          name,
-          folder,
-          created.toLong,
-          modified.toLong,
-          None,
-          None,
-          Some(DxObject.parseIOSpec(inputSpec.toVector)),
-          Some(DxObject.parseIOSpec(outputSpec.toVector)),
-          None
+            projectId,
+            id,
+            name,
+            folder,
+            created.toLong,
+            modified.toLong,
+            None,
+            None,
+            Some(DxObject.parseIOSpec(inputSpec.toVector)),
+            Some(DxObject.parseIOSpec(outputSpec.toVector)),
+            None
         )
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")
@@ -121,10 +121,10 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
       JsObject("name" -> JsString(name), "input" -> input.asJsObject)
     val response =
       DXAPI.workflowRun(
-        id,
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
+          id,
+          DxUtils.jsonNodeOfJsValue(request),
+          classOf[JsonNode],
+          DxUtils.dxEnv
       )
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     repJs.asJsObject.fields.get("id") match {

@@ -96,10 +96,10 @@ object Main extends App {
     ): Unit = {
       if (expectedNumArgs != subargs.length)
         throw new Exception(
-          s"""|Wrong number of arguments for ${keyword}.
+            s"""|Wrong number of arguments for ${keyword}.
                                         |Expected ${expectedNumArgs}, input is
                                         |${subargs}""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
     val cmdLineOpts = splitCmdLine(arglist)
@@ -186,7 +186,7 @@ object Main extends App {
             (keyword, subargs.head)
           case _ =>
             throw new IllegalArgumentException(
-              s"Unregonized keyword ${keyword}"
+                s"Unregonized keyword ${keyword}"
             )
         }
         options.get(nKeyword) match {
@@ -219,10 +219,10 @@ object Main extends App {
     // Note: we sanitize this string, to be absolutely sure that
     // it does not contain problematic JSON characters.
     val errMsg = JsObject(
-      "error" -> JsObject(
-        "type" -> JsString(errType),
-        "message" -> JsString(Utils.sanitize(e.getMessage))
-      )
+        "error" -> JsObject(
+            "type" -> JsString(errType),
+            "message" -> JsString(Utils.sanitize(e.getMessage))
+        )
     ).prettyPrint
     Utils.writeFileContent(jobErrorPath, errMsg)
 
@@ -291,7 +291,7 @@ object Main extends App {
         case e: Exception =>
           Utils.error(e.getMessage)
           throw new Exception(
-            s"""|Could not find project ${projectRaw}, you probably need to be logged into
+              s"""|Could not find project ${projectRaw}, you probably need to be logged into
                                             |the platform""".stripMargin
           )
       }
@@ -307,16 +307,16 @@ object Main extends App {
       } catch {
         case e: java.lang.NumberFormatException =>
           throw new Exception(
-            s"""|the runtimeDebugLevel flag takes an integer input,
+              s"""|the runtimeDebugLevel flag takes an integer input,
                                             |${numberStr} is not of type int""".stripMargin
-              .replaceAll("\n", " ")
+                .replaceAll("\n", " ")
           )
       }
     if (rtDebugLvl < 0 || rtDebugLvl > 2)
       throw new Exception(
-        s"""|the runtimeDebugLevel flag must be one of {0, 1, 2}.
+          s"""|the runtimeDebugLevel flag must be one of {0, 1, 2}.
                                     |Value ${rtDebugLvl} is out of bounds.""".stripMargin
-          .replaceAll("\n", " ")
+            .replaceAll("\n", " ")
       )
     rtDebugLvl
   }
@@ -327,9 +327,9 @@ object Main extends App {
       case "false" => false
       case other =>
         throw new Exception(
-          s"""|the streamAllFiles flag must be a boolean (true,false).
+            s"""|the streamAllFiles flag must be a boolean (true,false).
                                         |Value ${other} is illegal.""".stripMargin
-            .replaceAll("\n", " ")
+              .replaceAll("\n", " ")
         )
     }
   }
@@ -386,7 +386,7 @@ object Main extends App {
       if (extras.contains("reorg") && (options contains "reorg")) {
 
         throw new InvalidInputException(
-          "ERROR: cannot provide --reorg option when reorg is specified in extras."
+            "ERROR: cannot provide --reorg option when reorg is specified in extras."
         )
 
       }
@@ -394,7 +394,7 @@ object Main extends App {
       if (extras.contains("reorg") && (options contains "locked")) {
 
         throw new InvalidInputException(
-          "ERROR: cannot provide --locked option when reorg is specified in extras."
+            "ERROR: cannot provide --locked option when reorg is specified in extras."
         )
 
       }
@@ -402,21 +402,21 @@ object Main extends App {
     }
 
     CompilerOptions(
-      options contains "archive",
-      compileMode,
-      defaults,
-      extras,
-      options contains "fatalValidationWarnings",
-      options contains "force",
-      imports,
-      inputs,
-      options contains "leaveWorkflowsOpen",
-      options contains "locked",
-      options contains "projectWideReuse",
-      options contains "reorg",
-      options contains "streamAllFiles",
-      runtimeDebugLevel,
-      verbose
+        options contains "archive",
+        compileMode,
+        defaults,
+        extras,
+        options contains "fatalValidationWarnings",
+        options contains "force",
+        imports,
+        inputs,
+        options contains "leaveWorkflowsOpen",
+        options contains "locked",
+        options contains "projectWideReuse",
+        options contains "reorg",
+        options contains "streamAllFiles",
+        runtimeDebugLevel,
+        verbose
     )
   }
 
@@ -439,7 +439,7 @@ object Main extends App {
           .replaceAll("-", "")
         if (!bufNorm.startsWith("wdl"))
           throw new Exception(
-            s"unknown language ${bufNorm}. Only WDL is supported"
+              s"unknown language ${bufNorm}. Only WDL is supported"
           )
         val suffix = bufNorm.substring("wdl".length)
         if (suffix contains "draft2")
@@ -448,19 +448,19 @@ object Main extends App {
           Language.WDLv1_0
         else
           throw new Exception(
-            s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1"
+              s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1"
           )
       case _ => throw new Exception("only one language can be specified")
     }
     val verbose =
       Verbose(options contains "verbose", options contains "quiet", verboseKeys)
     DxniOptions(
-      options contains "apps",
-      options contains "force",
-      outputFile,
-      options contains "recursive",
-      language,
-      verbose
+        options contains "apps",
+        options contains "force",
+        outputFile,
+        options contains "recursive",
+        language,
+        verbose
     )
   }
 
@@ -489,9 +489,9 @@ object Main extends App {
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(
-            baseDNAxDir,
-            cOpt.streamAllFiles,
-            cOpt.verbose.on
+              baseDNAxDir,
+              cOpt.streamAllFiles,
+              cOpt.verbose.on
           )
           val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
           val desc = retval.getOrElse("")
@@ -529,13 +529,13 @@ object Main extends App {
 
     try {
       compiler.DxNI.apply(
-        dxProject,
-        folder,
-        outputFile,
-        dOpt.recursive,
-        dOpt.force,
-        dOpt.language,
-        dOpt.verbose
+          dxProject,
+          folder,
+          outputFile,
+          dOpt.recursive,
+          dOpt.force,
+          dOpt.language,
+          dOpt.verbose
       )
       SuccessfulTermination("")
     } catch {
@@ -551,10 +551,10 @@ object Main extends App {
   ): Termination = {
     try {
       compiler.DxNI.applyApps(
-        outputFile,
-        dOpt.force,
-        dOpt.language,
-        dOpt.verbose
+          outputFile,
+          dOpt.force,
+          dOpt.language,
+          dOpt.verbose
       )
       SuccessfulTermination("")
     } catch {
@@ -612,15 +612,15 @@ object Main extends App {
       new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     val taskRunner = exec.TaskRunner(
-      task,
-      taskSourceCode,
-      typeAliases,
-      instanceTypeDB,
-      dxPathConfig,
-      dxIoFunctions,
-      jobInputOutput,
-      defaultRuntimeAttributes,
-      rtDebugLvl
+        task,
+        taskSourceCode,
+        typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        dxIoFunctions,
+        jobInputOutput,
+        defaultRuntimeAttributes,
+        rtDebugLvl
     )
 
     // Running tasks
@@ -692,10 +692,10 @@ object Main extends App {
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
       new exec.WfFragInputOutput(
-        dxIoFunctions,
-        dxProject,
-        rtDebugLvl,
-        typeAliases
+          dxIoFunctions,
+          dxProject,
+          rtDebugLvl,
+          typeAliases
       )
 
     // process the inputs
@@ -704,85 +704,85 @@ object Main extends App {
       op match {
         case InternalOp.WfFragment =>
           val fragRunner = new exec.WfFragRunner(
-            wf,
-            taskDir,
-            typeAliases,
-            womSourceCode,
-            instanceTypeDB,
-            fragInputs.execLinkInfo,
-            dxPathConfig,
-            dxIoFunctions,
-            inputsRaw,
-            fragInputOutput,
-            defaultRuntimeAttributes,
-            rtDebugLvl
+              wf,
+              taskDir,
+              typeAliases,
+              womSourceCode,
+              instanceTypeDB,
+              fragInputs.execLinkInfo,
+              dxPathConfig,
+              dxIoFunctions,
+              inputsRaw,
+              fragInputOutput,
+              defaultRuntimeAttributes,
+              rtDebugLvl
           )
           fragRunner.apply(
-            fragInputs.blockPath,
-            fragInputs.env,
-            RunnerWfFragmentMode.Launch
+              fragInputs.blockPath,
+              fragInputs.env,
+              RunnerWfFragmentMode.Launch
           )
         case InternalOp.Collect =>
           val fragRunner = new exec.WfFragRunner(
-            wf,
-            taskDir,
-            typeAliases,
-            womSourceCode,
-            instanceTypeDB,
-            fragInputs.execLinkInfo,
-            dxPathConfig,
-            dxIoFunctions,
-            inputsRaw,
-            fragInputOutput,
-            defaultRuntimeAttributes,
-            rtDebugLvl
+              wf,
+              taskDir,
+              typeAliases,
+              womSourceCode,
+              instanceTypeDB,
+              fragInputs.execLinkInfo,
+              dxPathConfig,
+              dxIoFunctions,
+              inputsRaw,
+              fragInputOutput,
+              defaultRuntimeAttributes,
+              rtDebugLvl
           )
           fragRunner.apply(
-            fragInputs.blockPath,
-            fragInputs.env,
-            RunnerWfFragmentMode.Collect
+              fragInputs.blockPath,
+              fragInputs.env,
+              RunnerWfFragmentMode.Collect
           )
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(
-            wf,
-            womSourceCode,
-            typeAliases,
-            dxPathConfig,
-            dxIoFunctions,
-            rtDebugLvl
+              wf,
+              womSourceCode,
+              typeAliases,
+              dxPathConfig,
+              dxIoFunctions,
+              rtDebugLvl
           )
           wfInputs.apply(fragInputs.env)
         case InternalOp.WfOutputs =>
           val wfOutputs = new exec.WfOutputs(
-            wf,
-            womSourceCode,
-            typeAliases,
-            dxPathConfig,
-            dxIoFunctions,
-            rtDebugLvl
+              wf,
+              womSourceCode,
+              typeAliases,
+              dxPathConfig,
+              dxIoFunctions,
+              rtDebugLvl
           )
           wfOutputs.apply(fragInputs.env)
 
         case InternalOp.WfCustomReorgOutputs =>
           val wfCustomReorgOutputs = new exec.WfOutputs(
-            wf,
-            womSourceCode,
-            typeAliases,
-            dxPathConfig,
-            dxIoFunctions,
-            rtDebugLvl
+              wf,
+              womSourceCode,
+              typeAliases,
+              dxPathConfig,
+              dxIoFunctions,
+              rtDebugLvl
           )
           // add ___reconf_status as output.
           wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
         case InternalOp.WorkflowOutputReorg =>
           val wfReorg = new exec.WorkflowOutputReorg(
-            wf,
-            womSourceCode,
-            typeAliases,
-            dxPathConfig,
-            dxIoFunctions,
-            rtDebugLvl
+              wf,
+              womSourceCode,
+              typeAliases,
+              dxPathConfig,
+              dxIoFunctions,
+              rtDebugLvl
           )
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
@@ -888,29 +888,29 @@ object Main extends App {
                 InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
                 InternalOp.WfCustomReorgOutputs =>
               workflowFragAction(
-                op,
-                womSourceCode,
-                instanceTypeDB,
-                metaInfo,
-                jobInputPath,
-                jobOutputPath,
-                dxPathConfig,
-                dxIoFunctions,
-                defaultRuntimeAttrs,
-                rtDebugLvl
+                  op,
+                  womSourceCode,
+                  instanceTypeDB,
+                  metaInfo,
+                  jobInputPath,
+                  jobOutputPath,
+                  dxPathConfig,
+                  dxIoFunctions,
+                  defaultRuntimeAttrs,
+                  rtDebugLvl
               )
             case InternalOp.TaskCheckInstanceType | InternalOp.TaskEpilog | InternalOp.TaskProlog |
                 InternalOp.TaskRelaunch =>
               taskAction(
-                op,
-                womSourceCode,
-                instanceTypeDB,
-                jobInputPath,
-                jobOutputPath,
-                dxPathConfig,
-                dxIoFunctions,
-                defaultRuntimeAttrs,
-                rtDebugLvl
+                  op,
+                  womSourceCode,
+                  instanceTypeDB,
+                  jobInputPath,
+                  jobOutputPath,
+                  dxPathConfig,
+                  dxIoFunctions,
+                  defaultRuntimeAttrs,
+                  rtDebugLvl
               )
           }
         } catch {

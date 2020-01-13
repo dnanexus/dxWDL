@@ -318,7 +318,7 @@ object Block {
 
     // separate out the inputs
     val (inputBlock, innerInputs) = distinguishTopLevelInputs(
-      graph.inputNodes.toSeq
+        graph.inputNodes.toSeq
     )
     rest --= graph.inputNodes.toSet
 
@@ -524,7 +524,7 @@ object Block {
         case sct: ScatterFullBlock => sct.value.innerGraph
         case other =>
           throw new UnsupportedOperationException(
-            s"${other.getClass.toString} does not have an inner graph"
+              s"${other.getClass.toString} does not have an inner graph"
           )
       }
     }

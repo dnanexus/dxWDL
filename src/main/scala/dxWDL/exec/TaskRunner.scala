@@ -55,7 +55,7 @@ object TaskRunnerUtils {
       case JsArray(elements) if elements.size >= 1 => elements.head
       case other =>
         throw new Exception(
-          s"bad value ${other} for manifest, expecting non empty array"
+            s"bad value ${other} for manifest, expecting non empty array"
         )
     }
     val repo: String = elem.asJsObject.fields.get("RepoTags") match {
@@ -70,7 +70,7 @@ object TaskRunnerUtils {
           case JsString(repo) => repo
           case other =>
             throw new Exception(
-              s"bad value ${other} in RepoTags manifest field"
+                s"bad value ${other} in RepoTags manifest field"
             )
         }
       case other =>
@@ -137,8 +137,8 @@ case class TaskRunner(
 
     // marshal into json, and then to a string
     val json = JsObject(
-      "localizedInputs" -> JsObject(locInputsM),
-      "dxUrl2path" -> JsObject(dxUrlM)
+        "localizedInputs" -> JsObject(locInputsM),
+        "dxUrl2path" -> JsObject(dxUrlM)
     )
     Utils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
@@ -195,7 +195,7 @@ case class TaskRunner(
       case Some(WomString(s)) => Some(s)
       case Some(other) =>
         throw new AppInternalException(
-          s"docker is not a string expression ${other}"
+            s"docker is not a string expression ${other}"
         )
     }
   }
@@ -208,8 +208,8 @@ case class TaskRunner(
         val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
 
         Utils.appletLog(
-          verbose,
-          s"""|output:
+            verbose,
+            s"""|output:
                                              |${outstr}
                                              |stderr:
                                              |${errstr}""".stripMargin
@@ -226,7 +226,7 @@ case class TaskRunner(
       }
     }
     throw new RuntimeException(
-      s"Unable to pull docker image: ${dImg} after 5 tries"
+        s"Unable to pull docker image: ${dImg} after 5 tries"
     )
   }
 
@@ -253,8 +253,8 @@ case class TaskRunner(
         val (mContent, _) =
           Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
         Utils.appletLog(
-          verbose,
-          s"""|manifest content:
+            verbose,
+            s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin
         )
@@ -265,8 +265,8 @@ case class TaskRunner(
         val (outstr, errstr) =
           Utils.execCommand(s"docker load --input ${localTar}")
         Utils.appletLog(
-          verbose,
-          s"""|output:
+            verbose,
+            s"""|output:
                                              |${outstr}
                                              |stderr:
                                              |${errstr}""".stripMargin
@@ -302,13 +302,13 @@ case class TaskRunner(
     val numCoresPositiveInt = refineV[Positive](numCores).right.get
 
     RuntimeEnvironment(
-      dxPathConfig.outputFilesDir.toAbsolutePath().toString,
-      dxPathConfig.tmpDir.toAbsolutePath().toString,
-      numCoresPositiveInt,
-      physicalMemorySize,
-      // TODO
-      1000, //outputPathSize: Long,
-      1000
+        dxPathConfig.outputFilesDir.toAbsolutePath().toString,
+        dxPathConfig.tmpDir.toAbsolutePath().toString,
+        numCoresPositiveInt,
+        physicalMemorySize,
+        // TODO
+        1000, //outputPathSize: Long,
+        1000
     ) //tempPathSize: Long)
   }
 
@@ -415,8 +415,8 @@ case class TaskRunner(
                 |""".stripMargin
 
     Utils.appletLog(
-      verbose,
-      s"writing docker run script to ${dxPathConfig.dockerSubmitScript}"
+        verbose,
+        s"writing docker run script to ${dxPathConfig.dockerSubmitScript}"
     )
     Utils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
@@ -490,9 +490,9 @@ case class TaskRunner(
     // because some of the files may not actually be accessed.
     val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
       jobInputOutput.localizeFiles(
-        task.parameterMeta,
-        taskInputs,
-        dxPathConfig.inputFilesDir
+          task.parameterMeta,
+          taskInputs,
+          dxPathConfig.inputFilesDir
       )
 
     // build a manifest for dxda, if there are files to download
@@ -505,8 +505,8 @@ case class TaskRunner(
     val DxfuseManifest(manifest2Js) = dxfuseManifest
     if (manifest2Js != JsNull) {
       Utils.writeFileContent(
-        dxPathConfig.dxfuseManifest,
-        manifest2Js.prettyPrint
+          dxPathConfig.dxfuseManifest,
+          manifest2Js.prettyPrint
       )
     }
 
@@ -519,12 +519,12 @@ case class TaskRunner(
     // instantiate the command
     val runtimeEnvironment = getRuntimeEnvironment()
     val womInstantiation = getErrorOr(
-      task.instantiateCommand(
-        localizedInputs,
-        dxIoFunctions,
-        identity,
-        runtimeEnvironment
-      )
+        task.instantiateCommand(
+            localizedInputs,
+            dxIoFunctions,
+            identity,
+            runtimeEnvironment
+        )
     )
     val command = womInstantiation.commandString
 
@@ -563,7 +563,7 @@ case class TaskRunner(
           case Invalid(errors) =>
             Utils.error(errors.toList.mkString)
             throw new AppInternalException(
-              s"Error evaluating output expression ${outDef.expression}"
+                s"Error evaluating output expression ${outDef.expression}"
             )
         }
 
@@ -635,10 +635,10 @@ case class TaskRunner(
       InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
     val iType = instanceTypeDB.apply(iTypeRaw)
     Utils.appletLog(
-      verbose,
-      s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+        verbose,
+        s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}""".stripMargin
-        .replaceAll("\n", " ")
+          .replaceAll("\n", " ")
     )
     iType
   }
@@ -658,15 +658,15 @@ case class TaskRunner(
     val dxJob = DxJob(DxUtils.dxEnv.getJob())
 
     val descFieldReq = JsObject(
-      "fields" -> JsObject("instanceType" -> JsBoolean(true))
+        "fields" -> JsObject("instanceType" -> JsBoolean(true))
     )
     val retval: JsValue =
       DxUtils.jsValueOfJsonNode(
-        DXAPI.jobDescribe(
-          dxJob.id,
-          DxUtils.jsonNodeOfJsValue(descFieldReq),
-          classOf[JsonNode]
-        )
+          DXAPI.jobDescribe(
+              dxJob.id,
+              DxUtils.jsonNodeOfJsValue(descFieldReq),
+              classOf[JsonNode]
+          )
       )
     val crntInstanceType: String =
       retval.asJsObject.fields.get("instanceType") match {
@@ -697,11 +697,11 @@ case class TaskRunner(
     // Run a sub-job with the "body" entry point, and the required instance type
     val dxSubJob: DxJob =
       DxUtils.runSubJob(
-        "body",
-        Some(instanceType),
-        originalInputs,
-        Vector.empty,
-        maxVerboseLevel
+          "body",
+          Some(instanceType),
+          originalInputs,
+          Vector.empty,
+          maxVerboseLevel
       )
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
