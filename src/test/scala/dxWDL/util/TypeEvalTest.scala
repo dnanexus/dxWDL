@@ -15,19 +15,20 @@ import dxWDL.base.AppInternalException
 
 class TypeEvalTest extends FlatSpec with Matchers {
 
-    def parseWdlCode(sourceCode: String) : WomBundle = {
-        val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
-        val bundle = languageFactory.getWomBundle(sourceCode, None, "{}", List.empty, List(languageFactory), false)
-        bundle match {
-            case Right(bn) =>
-                bn
-            case Left(errors) =>
-                throw new Exception(errors.toString)
-        }
+  def parseWdlCode(sourceCode: String): WomBundle = {
+    val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
+    val bundle =
+      languageFactory.getWomBundle(sourceCode, None, "{}", List.empty, List(languageFactory), false)
+    bundle match {
+      case Right(bn) =>
+        bn
+      case Left(errors) =>
+        throw new Exception(errors.toString)
     }
+  }
 
-    val wdlCode =
-        """|version 1.0
+  val wdlCode =
+    """|version 1.0
            |
            |task Add {
            |  input {
@@ -56,38 +57,37 @@ class TypeEvalTest extends FlatSpec with Matchers {
            |}
            |""".stripMargin
 
-
-    // Figure out the type of an expression
-    def evalType(expr: WomExpression,
-                 inputTypes: Map[String, WomType]) : WomType = {
-        val result: ErrorOr[WomType] = expr.evaluateType(inputTypes)
-        result match {
-            case Invalid(_) =>
-                throw new Exception(s"could not evaluate type of expression ${expr}")
-            case Valid(t: WomType) => t
-        }
+  // Figure out the type of an expression
+  def evalType(expr: WomExpression, inputTypes: Map[String, WomType]): WomType = {
+    val result: ErrorOr[WomType] = expr.evaluateType(inputTypes)
+    result match {
+      case Invalid(_) =>
+        throw new Exception(s"could not evaluate type of expression ${expr}")
+      case Valid(t: WomType) => t
     }
+  }
 
-    it should "correctly evaluate expression types in call" in {
-        val bundle = parseWdlCode(wdlCode)
-        val wf: WorkflowDefinition = bundle.primaryCallable match {
-            case Some(w : WorkflowDefinition) => w
-            case _ => throw new Exception("not a workflow")
-        }
-        wf.name should equal("foo")
+  it should "correctly evaluate expression types in call" in {
+    val bundle = parseWdlCode(wdlCode)
+    val wf: WorkflowDefinition = bundle.primaryCallable match {
+      case Some(w: WorkflowDefinition) => w
+      case _                           => throw new Exception("not a workflow")
+    }
+    wf.name should equal("foo")
 
-        val call:Callable = bundle.allCallables.get("Add") match {
-            case None => throw new AppInternalException(s"Call Add not found in WDL file")
-            case Some(call) => call
-        }
-        call.getClass.toString should equal("class wom.callable.CallableTaskDefinition")
+    val call: Callable = bundle.allCallables.get("Add") match {
+      case None       => throw new AppInternalException(s"Call Add not found in WDL file")
+      case Some(call) => call
+    }
+    call.getClass.toString should equal("class wom.callable.CallableTaskDefinition")
 
-        call.inputs.foreach { case inputDef =>
-            /*val t:WomType = evalType(expr, typeEnv)
+    call.inputs.foreach {
+      case inputDef =>
+      /*val t:WomType = evalType(expr, typeEnv)
              t should equal(WomIntegerType)*/
-            //System.out.println(s"inputDef=${inputDef}")
-        }
-/*        System.out.println()
+      //System.out.println(s"inputDef=${inputDef}")
+    }
+    /*        System.out.println()
 
         wf.graph.nodes.foreach{
             case node =>
@@ -95,23 +95,21 @@ class TypeEvalTest extends FlatSpec with Matchers {
         }
         System.out.println() */
 
-        val addCallNode : CallNode = wf.graph.calls.head
-        addCallNode match {
-            case cn : CommandCallNode =>
-                ()
-                /*System.out.println(
+    val addCallNode: CallNode = wf.graph.calls.head
+    addCallNode match {
+      case cn: CommandCallNode =>
+        ()
+      /*System.out.println(
                     s"""|CommandCallNode
                         |  identifier = ${cn.identifier}
                         |  inputPorts = ${cn.inputPorts}
                         |  inputDefMap = ${cn.inputDefinitionMappings}
                         |""".stripMargin)*/
-            case _ =>
-                throw new Exception("sanity")
-        }
+      case _ =>
+        throw new Exception("sanity")
     }
-
-
-/*
+  }
+  /*
     val wdlCode2 =
         """|task Copy {
            |  File src

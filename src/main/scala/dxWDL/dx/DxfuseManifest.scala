@@ -8,38 +8,37 @@ import spray.json._
 
 import dxWDL.util.DxIoFunctions
 
-case class DxfuseManifest(value : JsValue)
+case class DxfuseManifest(value: JsValue)
 
 object DxfuseManifest {
-    def apply(file2LocalMapping: Map[DxFile, Path],
-              dxIoFunctions : DxIoFunctions) : DxfuseManifest = {
-        if (file2LocalMapping.isEmpty)
-            return DxfuseManifest(JsNull)
+  def apply(file2LocalMapping: Map[DxFile, Path], dxIoFunctions: DxIoFunctions): DxfuseManifest = {
+    if (file2LocalMapping.isEmpty)
+      return DxfuseManifest(JsNull)
 
-        val files = file2LocalMapping.map{
-            case (dxFile, path) =>
-                val parentDir = path.getParent().toString
+    val files = file2LocalMapping.map {
+      case (dxFile, path) =>
+        val parentDir = path.getParent().toString
 
-                // remove the mountpoint from the directory. We need
-                // paths that are relative to the mount point.
-                val mountDir = dxIoFunctions.config.dxfuseMountpoint.toString
-                assert(parentDir.startsWith(mountDir))
-                val relParentDir = "/" + parentDir.stripPrefix(mountDir)
+        // remove the mountpoint from the directory. We need
+        // paths that are relative to the mount point.
+        val mountDir = dxIoFunctions.config.dxfuseMountpoint.toString
+        assert(parentDir.startsWith(mountDir))
+        val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
-                val (_,fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
-                JsObject(
-                    "proj_id" -> JsString(fDesc.project),
-                    "file_id" -> JsString(dxFile.id),
-                    "parent" -> JsString(relParentDir),
-                    "fname" -> JsString(fDesc.name),
-                    "size" -> JsNumber(fDesc.size),
-                    "ctime" -> JsNumber(fDesc.created),
-                    "mtime" -> JsNumber(fDesc.modified))
-        }.toVector
-
-        DxfuseManifest(
-            JsObject("files" -> JsArray(files),
-                     "directories" -> JsArray(Vector.empty))
+        val (_, fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
+        JsObject(
+            "proj_id" -> JsString(fDesc.project),
+            "file_id" -> JsString(dxFile.id),
+            "parent" -> JsString(relParentDir),
+            "fname" -> JsString(fDesc.name),
+            "size" -> JsNumber(fDesc.size),
+            "ctime" -> JsNumber(fDesc.created),
+            "mtime" -> JsNumber(fDesc.modified)
         )
-    }
+    }.toVector
+
+    DxfuseManifest(
+        JsObject("files" -> JsArray(files), "directories" -> JsArray(Vector.empty))
+    )
+  }
 }
