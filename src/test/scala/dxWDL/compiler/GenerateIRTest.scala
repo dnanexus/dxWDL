@@ -271,16 +271,236 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  private def getTaskByName(name: String, bundle: IR.Bundle): CallableTaskDefinition = {
-    val applet = bundle.allCallables(name) match {
+  private def getAppletByName(name: String, bundle: IR.Bundle): IR.Applet =
+    bundle.allCallables(name) match {
       case a: IR.Applet => a
       case _            => throw new Exception(s"${name} is not an applet")
     }
+
+  private def getTaskByName(
+      name: String,
+      bundle: IR.Bundle
+  ): CallableTaskDefinition = {
+    val applet = getAppletByName(name, bundle)
     val task: CallableTaskDefinition = applet.kind match {
       case IR.AppletKindTask(x) => x
       case _                    => throw new Exception(s"${name} is not a task")
     }
     task
+  }
+
+  // Check parameter_meta `pattern` keyword
+  it should "recognize pattern in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "pattern_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("pattern_params_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrHelp("The input file to be searched"),
+                    IR.IOAttrPatterns(Vector("*.txt", "*.tsv"))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+        )
+    )
+    cgrepApplet.outputs shouldBe Vector(
+        IR.CVar("count", WomIntegerType, None, None),
+        IR.CVar(
+            "out_file",
+            WomSingleFileType,
+            None,
+            None
+        )
+    )
+  }
+
+  // Check parameter_meta `help` keyword
+  it should "recognize pattern in parameters_meta via WOM" in {
+    val path = pathFromBasename("compiler", "pattern_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
+    cgrepTask.parameterMeta shouldBe (
+        Map(
+            "in_file" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The input file to be searched"),
+                    "patterns" -> MetaValueElement.MetaValueElementArray(
+                        Vector(
+                            MetaValueElement.MetaValueElementString("*.txt"),
+                            MetaValueElement.MetaValueElementString("*.tsv")
+                        )
+                    )
+                )
+            ),
+            "pattern" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The pattern to use to search in_file")
+                )
+            ),
+            "out_file" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "patterns" -> MetaValueElement.MetaValueElementArray(
+                        Vector(
+                            MetaValueElement.MetaValueElementString("*.txt"),
+                            MetaValueElement.MetaValueElementString("*.tsv")
+                        )
+                    )
+                )
+            )
+        )
+    )
+    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+    iDef.parameterMeta shouldBe (Some(
+        MetaValueElement.MetaValueElementObject(
+            Map(
+                "help" -> MetaValueElement
+                  .MetaValueElementString("The input file to be searched"),
+                "patterns" -> MetaValueElement.MetaValueElementArray(
+                    Vector(
+                        MetaValueElement.MetaValueElementString("*.txt"),
+                        MetaValueElement.MetaValueElementString("*.tsv")
+                    )
+                )
+            )
+        )
+    ))
+  }
+
+  it should "recognize help in parameters_meta via WOM" in {
+    val path = pathFromBasename("compiler", "help_input_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
+    cgrepTask.parameterMeta shouldBe (
+        Map(
+            "in_file" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The input file to be searched")
+                )
+            ),
+            "pattern" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The pattern to use to search in_file")
+                )
+            )
+        )
+    )
+    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+    iDef.parameterMeta shouldBe (Some(
+        MetaValueElement.MetaValueElementObject(
+            Map(
+                "help" -> MetaValueElement
+                  .MetaValueElementString("The input file to be searched")
+            )
+        )
+    ))
+
+    val diffTask = getTaskByName("help_input_params_diff", bundle)
+    diffTask.parameterMeta shouldBe (
+        Map(
+            "a" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement.MetaValueElementString("lefthand file")
+                )
+            ),
+            "b" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement.MetaValueElementString("righthand file")
+                )
+            )
+        )
+    )
+  }
+
+  it should "recognize help in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "help_input_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
+    println(cgrepApplet.inputs)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(Vector(IR.IOAttrHelp("The input file to be searched")))
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+        )
+    )
+  }
+
+  // This is actually more of a test to confirm that symbols that are not input
+  // variables are ignored. WOM doesn't include a paramMeta member for the output
+  // var class anyways, so it's basically impossible for this to happen
+  it should "ignore help in parameters_meta via CVar for output CVars" in {
+    val path = pathFromBasename("compiler", "help_output_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("help_output_params_cgrep", bundle)
+    cgrepApplet.outputs shouldBe Vector(
+        IR.CVar(
+            "count",
+            WomIntegerType,
+            None,
+            None
+        )
+    )
   }
 
   it should "handle streaming files" in {
@@ -299,11 +519,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
         "in_file" -> MetaValueElement.MetaValueElementString("stream")
     ))
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+    iDef.parameterMeta shouldBe (Some(
+        MetaValueElement.MetaValueElementString("stream")
+    ))
 
     val diffTask = getTaskByName("diff", bundle)
-    diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementString("stream"),
-                                         "b" -> MetaValueElement.MetaValueElementString("stream")))
+    diffTask.parameterMeta shouldBe (Map(
+        "a" -> MetaValueElement.MetaValueElementString("stream"),
+        "b" -> MetaValueElement.MetaValueElementString("stream")
+    ))
   }
 
   it should "recognize the streaming object annotation" in {
@@ -319,13 +543,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val cgrepTask = getTaskByName("cgrep", bundle)
     cgrepTask.parameterMeta shouldBe (Map(
-        "in_file" -> MetaValueElement
-          .MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))
+        "in_file" -> MetaValueElement.MetaValueElementObject(
+            Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))
+        )
     ))
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     iDef.parameterMeta shouldBe (Some(
-        MetaValueElement
-          .MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))
+        MetaValueElement.MetaValueElementObject(
+            Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))
+        )
     ))
 
     val diffTask = getTaskByName("diff", bundle)

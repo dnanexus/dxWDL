@@ -31,3 +31,10 @@ src/main/resources/dxWDL_runtime.conf
 
 # IntelliJ
 .idea
+
+# Metals
+.metals
+metals.sbt
+
+# Bloop
+.bloop

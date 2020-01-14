@@ -510,7 +510,8 @@ object Extras {
       if (!(RUN_SPEC_TIMEOUT_ATTRS contains k))
         throw new Exception(s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
                                         |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                        |""".stripMargin.replaceAll("\n", "")
+        )
 
     }
     return Some(

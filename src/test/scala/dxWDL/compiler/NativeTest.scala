@@ -183,14 +183,62 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     // check that the generated file contains the correct tasks
     val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
-    val tasks: Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
+    val tasks: Map[String, String] =
+      ParseWomSourceFile(false).scanForTasks(content)
 
-    tasks.keys shouldBe (Set("native_sum",
-                             "native_sum_012",
-                             "functional_reorg_test",
-                             "native_mk_list",
-                             "native_diff",
-                             "native_concat"))
+    tasks.keys shouldBe (Set(
+        "native_sum",
+        "native_sum_012",
+        "functional_reorg_test",
+        "native_mk_list",
+        "native_diff",
+        "native_concat"
+    ))
+  }
+
+  it should "be able to include pattern information in inputSpec" in {
+    val path = pathFromBasename("compiler", "pattern_params.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (in_file, pattern) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    pattern.help shouldBe Some("The pattern to use to search in_file")
+    in_file.patterns shouldBe Some(Vector("*.txt", "*.tsv"))
+    // out_file would be part of the outputSpec, but wom currently doesn't
+    // support parameter_meta for output vars
+    //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
+  }
+
+  it should "be able to include help information in inputSpec" in {
+    val path = pathFromBasename("compiler", "add_help.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (a, b) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    a.help shouldBe Some("lefthand side")
+    b.help shouldBe Some("righthand side")
   }
 
   it should "be able to include license information in details" in {

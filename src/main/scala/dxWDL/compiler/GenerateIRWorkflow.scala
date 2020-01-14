@@ -328,9 +328,9 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       Utils.trace(
           verbose.on,
           s"""|compileNestedBlock
-                                        |    inputNodes = ${inputNodes.map(_.singleOutputPort)}
-                                        |    closureInputs= ${closureInputs}
-                                        |""".stripMargin
+              |    inputNodes = ${inputNodes.map(_.singleOutputPort)}
+              |    closureInputs= ${closureInputs}
+              |""".stripMargin
       )
       val (subwf, auxCallables, _) = compileWorkflowLocked(wfName + "_block_" + pathStr,
                                                            inputNodes,

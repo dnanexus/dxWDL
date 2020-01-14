@@ -31,7 +31,13 @@ object DxIOClass extends Enumeration {
   }
 }
 
-case class IOParameter(name: String, ioClass: DxIOClass.Value, optional: Boolean)
+case class IOParameter(
+    name: String,
+    ioClass: DxIOClass.Value,
+    optional: Boolean,
+    help: Option[String] = None,
+    patterns: Option[Vector[String]] = None
+)
 
 // Extra fields for describe
 object Field extends Enumeration {
@@ -78,7 +84,20 @@ object DxObject {
       case Some(JsBoolean(b)) => b
       case None               => false
     }
-    ioParam.copy(optional = optFlag)
+
+    val help = jsv.asJsObject.fields.get("help") match {
+      case Some(JsString(s)) => Some(s)
+      case _                 => None
+    }
+    val patterns = jsv.asJsObject.fields.get("patterns") match {
+      case Some(JsArray(a)) =>
+        Some(a.flatMap {
+          case JsString(s) => Some(s)
+          case _           => None
+        })
+      case _ => None
+    }
+    ioParam.copy(optional = optFlag, patterns = patterns, help = help)
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {
@@ -128,11 +147,15 @@ object DxObject {
   def getInstance(id: String, container: Option[DxProject] = None): DxObject = {
     val parts = id.split("-")
     if (parts.length != 2)
-      throw new IllegalArgumentException(s"${id} is not of the form class-alphnumeric{24}")
+      throw new IllegalArgumentException(
+          s"${id} is not of the form class-alphnumeric{24}"
+      )
     val klass = parts(0)
     val numLetters = parts(1)
     if (!numLetters.matches("[A-Za-z0-9]{24}"))
-      throw new IllegalArgumentException(s"${numLetters} does not match [A-Za-z0-9]{24}")
+      throw new IllegalArgumentException(
+          s"${numLetters} does not match [A-Za-z0-9]{24}"
+      )
 
     klass match {
       case "project"   => DxProject(id)
@@ -145,7 +168,9 @@ object DxObject {
       case "job"       => DxJob(id, container)
       case "analysis"  => DxAnalysis(id, container)
       case _ =>
-        throw new IllegalArgumentException(s"${id} does not belong to a know class")
+        throw new IllegalArgumentException(
+            s"${id} does not belong to a know class"
+        )
     }
   }
 

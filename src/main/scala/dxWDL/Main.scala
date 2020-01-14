@@ -355,11 +355,12 @@ object Main extends App {
       case None     => List.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
-    val runtimeDebugLevel: Option[Int] = options.get("runtimeDebugLevel") match {
-      case None                  => None
-      case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
-      case _                     => throw new Exception("debug level specified twice")
-    }
+    val runtimeDebugLevel: Option[Int] =
+      options.get("runtimeDebugLevel") match {
+        case None                  => None
+        case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
+        case _                     => throw new Exception("debug level specified twice")
+      }
 
     if (extras != None) {
 

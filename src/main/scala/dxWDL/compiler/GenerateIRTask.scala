@@ -5,6 +5,7 @@ import common.validation.ErrorOr.ErrorOr
 import wom.callable.CallableTaskDefinition
 import wom.callable.Callable._
 import wom.callable.MetaValueElement._
+import wom.callable.MetaValueElement
 import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.types._
 import wom.values._
@@ -66,6 +67,28 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  // Extract the parameter_meta info from the WOM structure
+  private def unwrapParamMeta(
+      paramMeta: Option[MetaValueElement]
+  ): Option[Vector[IR.IOAttr]] = paramMeta match {
+    case None => None
+    case Some(MetaValueElementObject(obj)) => {
+      // Use flatmap to get the "help" and "pattern" keys if they exist
+      Some(obj.flatMap {
+        case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
+        case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
+          Some(IR.IOAttrPatterns(array.flatMap {
+            case MetaValueElementString(pattern) => Some(pattern)
+            case _                               => None
+
+          }.toVector))
+        case _ => None
+
+      }.toVector)
+    }
+    case _ => None // TODO: or throw exception?
+  }
+
   // Process a docker image, if there is one
   def triageDockerImage(dockerExpr: Option[WomExpression]): IR.DockerImage = {
     dockerExpr match {
@@ -98,10 +121,12 @@ case class GenerateIRTask(verbose: Verbose,
     // create dx:applet input definitions. Note, some "inputs" are
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
-      case RequiredInputDefinition(iName, womType, _, _) =>
-        Some(CVar(iName.value, womType, None))
+      case RequiredInputDefinition(iName, womType, _, paramMeta) => {
+        val attr = unwrapParamMeta(paramMeta)
+        Some(CVar(iName.value, womType, None, attr))
+      }
 
-      case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+      case OverridableInputDefinitionWithDefault(iName,womType,defaultExpr,_,paramMeta) =>
         WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
             // This is a task "input" of the form:
@@ -110,7 +135,8 @@ case class GenerateIRTask(verbose: Verbose,
             // runtime system will evaluate it.
             None
           case Some(value) =>
-            Some(CVar(iName.value, womType, Some(value)))
+            val attr = unwrapParamMeta(paramMeta)
+            Some(CVar(iName.value, womType, Some(value), attr))
         }
 
       // An input whose value should always be calculated from the default, and is

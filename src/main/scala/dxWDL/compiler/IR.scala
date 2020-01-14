@@ -22,6 +22,16 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
+  // Keywords for string pattern matching
+  val PARAM_META_HELP = "help"
+  val PARAM_META_PATTERNS = "patterns"
+
+  // Compile time representaiton of supported parameter_meta section
+  // information.
+  sealed abstract class IOAttr
+  final case class IOAttrHelp(text: String) extends IOAttr
+  final case class IOAttrPatterns(patterns: Vector[String]) extends IOAttr
+
   // Compile time representation of a variable. Used also as
   // an applet argument.
   //
@@ -33,7 +43,12 @@ object IR {
   // The attributes are used to encode DNAx applet input/output
   // specification fields, such as {help, suggestions, patterns}.
   //
-  case class CVar(name: String, womType: WomType, default: Option[WomValue]) {
+  case class CVar(
+      name: String,
+      womType: WomType,
+      default: Option[WomValue],
+      attrs: Option[Vector[IOAttr]] = None
+  ) {
     // dx does not allow dots in variable names, so we
     // convert them to underscores.
     //

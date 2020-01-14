@@ -64,7 +64,10 @@ case class Native(dxWDLrtId: Option[String],
         val details = desc.details.get
         val dxLink = details.asJsObject.fields.get("archiveFileId") match {
           case Some(x) => x
-          case None    => throw new Exception(s"record does not have an archive field ${details}")
+          case None =>
+            throw new Exception(
+                s"record does not have an archive field ${details}"
+            )
         }
         val dxFile = DxUtils.dxFileFromJsValue(dxLink)
         val name = dxFile.describe().name
@@ -90,18 +93,40 @@ case class Native(dxWDLrtId: Option[String],
   // by passing a JSON structure and a vector of dx:files.
   private def cVarToSpec(cVar: CVar): Vector[JsValue] = {
     val name = cVar.dxVarName
+    val attrs = cVar.attrs
+
     val defaultVals: Map[String, JsValue] = cVar.default match {
       case None => Map.empty
       case Some(wdlValue) =>
         val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wdlValue)
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
+
+    def jsMapFromAttrs(
+        help: Option[Vector[IR.IOAttr]]
+    ): Map[String, JsValue] = {
+
+      help match {
+        case None => Map.empty
+        case Some(attributes) => {
+          attributes.flatMap {
+            case IR.IOAttrHelp(text) =>
+              Some(IR.PARAM_META_HELP -> JsString(text))
+            case IR.IOAttrPatterns(patterns) =>
+              Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+            case _ => None
+          }.toMap
+        }
+      }
+    }
+
     def jsMapFromDefault(name: String): Map[String, JsValue] = {
       defaultVals.get(name) match {
         case None      => Map.empty
         case Some(jsv) => Map("default" -> jsv)
       }
     }
+
     def jsMapFromOptional(optional: Boolean): Map[String, JsValue] = {
       if (optional) {
         Map("optional" -> JsBoolean(true))
@@ -115,6 +140,7 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString(dxType))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
           )
       )
     }
@@ -124,6 +150,7 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString("array:" ++ dxType))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
           )
       )
     }
@@ -135,12 +162,16 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString("hash"))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
+                ++ jsMapFromAttrs(attrs)
           ),
           JsObject(
-              Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
+              Map(
+                  "name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                   "class" -> JsString("array:file"),
-                  "optional" -> JsBoolean(true))
+                  "optional" -> JsBoolean(true)
+              )
                 ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)
+                ++ jsMapFromAttrs(attrs)
           )
       )
     }
@@ -188,156 +219,156 @@ case class Native(dxWDLrtId: Option[String],
         } catch {
           case e: Throwable =>
             throw new Exception(s"""|credentials has to point to a platform file.
-                                                |It is now:
-                                                |   ${credentials}
-                                                |Error:
-                                                |  ${e}
-                                                |""".stripMargin)
+                                    |It is now:
+                                    |   ${credentials}
+                                    |Error:
+                                    |  ${e}
+                                    |""".stripMargin)
         }
 
         // strip the URL from the dx:// prefix, so we can use dx-download directly
         val credentialsWithoutPrefix = credentials.substring(Utils.DX_URL_PREFIX.length)
         s"""|
-                    |# if we need to set up a private docker registry,
-                    |# download the credentials file and login. Do not expose the
-                    |# credentials to the logs or to stdout.
-                    |
-                    |export DOCKER_REGISTRY=${registry}
-                    |export DOCKER_USERNAME=${username}
-                    |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
-                    |
-                    |echo "Logging in to docker registry $${DOCKER_REGISTRY}, as user $${DOCKER_USERNAME}"
-                    |
-                    |# there has to be a single credentials file
-                    |num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
-                    |if [[ $$num_lines != 1 ]]; then
-                    |    echo "There has to be exactly one credentials file, found $$num_lines."
-                    |    dx ls -l $${DOCKER_CREDENTIALS}
-                    |    exit 1
-                    |fi
-                    |dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
-                    |cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
-                    |rm -f $${HOME}/docker_credentials
-                    |""".stripMargin
+            |# if we need to set up a private docker registry,
+            |# download the credentials file and login. Do not expose the
+            |# credentials to the logs or to stdout.
+            |
+            |export DOCKER_REGISTRY=${registry}
+            |export DOCKER_USERNAME=${username}
+            |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
+            |
+            |echo "Logging in to docker registry $${DOCKER_REGISTRY}, as user $${DOCKER_USERNAME}"
+            |
+            |# there has to be a single credentials file
+            |num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
+            |if [[ $$num_lines != 1 ]]; then
+            |    echo "There has to be exactly one credentials file, found $$num_lines."
+            |    dx ls -l $${DOCKER_CREDENTIALS}
+            |    exit 1
+            |fi
+            |dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
+            |cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
+            |rm -f $${HOME}/docker_credentials
+            |""".stripMargin
     }
   }
 
   private def genBashScriptTaskBody(): String = {
     s"""|    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |
-            |    # run the dx-download-agent (dxda) on a manifest of files
-            |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
-            |       head -n 20 ${dxPathConfig.dxdaManifest}
-            |       bzip2 ${dxPathConfig.dxdaManifest}
-            |
-            |       # run the download agent, and store the return code; do not exit on error.
-            |       # we need to run it from the root directory, because it uses relative paths.
-            |       cd /
-            |       rc=0
-            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
-            |
-            |       # if there was an error during download, print out the download log
-            |       if [[ $$rc != 0 ]]; then
-            |           echo "download agent failed rc=$$rc"
-            |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
-            |              echo "The download log is:"
-            |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log
-            |           fi
-            |           exit $$rc
-            |       fi
-            |
-            |       # The download was ok, check file integrity on disk
-            |       dx-download-agent inspect ${dxPathConfig.dxdaManifest.toString}.bz2
-            |
-            |       # go back to home directory
-            |       cd ${dxPathConfig.homeDir.toString}
-            |    fi
-            |
-            |    # run dxfuse on a manifest of files. It will provide remote access
-            |    # to DNAx files.
-            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
-            |       head -n 20 ${dxPathConfig.dxfuseManifest.toString}
-            |
-            |       # make sure the mountpoint exists
-            |       mkdir -p ${dxPathConfig.dxfuseMountpoint.toString}
-            |
-            |       # don't leak the token to stdout. We need the DNAx token to be accessible
-            |       # in the environment, so that dxfuse could get it.
-            |       source environment >& /dev/null
-            |
-            |       # run dxfuse so that it will not exit after the bash script exists.
-            |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-            |       dxfuse_log=/var/log/dxfuse.log
-            |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
-            |       dxfuse_err_code=$$?
-            |       if [[ $$dxfuse_err_code != 0 ]]; then
-            |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
-            |           if [[ -f $$dxfuse_log ]]; then
-            |               cat $$dxfuse_log
-            |           fi
-            |           exit 1
-            |       fi
-            |       disown %1
-            |
-            |       # wait for the mount to start.
-            |       cnt=0
-            |       while [[ ! -f $$dxfuse_log ]]; do
-            |           echo "Waiting for dxfuse to start"
-            |           sleep 1
-            |           cnt=$$((cnt + 1))
-            |           if [[ $$cnt == 30 ]]; then
-            |              echo "waited 30 seconds, but dxfuse didn't start"
-            |              exit 1
-            |           fi
-            |       done
-            |       cat $$dxfuse_log
-            |    fi
-            |
-            |    echo "bash command encapsulation script:"
-            |    cat ${dxPathConfig.script.toString}
-            |
-            |    # Run the shell script generated by the prolog.
-            |    # Capture the stderr/stdout in files
-            |    if [[ -e ${dxPathConfig.dockerSubmitScript.toString} ]]; then
-            |        echo "docker submit script:"
-            |        cat ${dxPathConfig.dockerSubmitScript.toString}
-            |        ${dxPathConfig.dockerSubmitScript.toString}
-            |    else
-            |        /bin/bash ${dxPathConfig.script.toString}
-            |    fi
-            |
-            |    #  check return code of the script
-            |    rc=`cat ${dxPathConfig.rcPath}`
-            |    if [[ $$rc != 0 ]]; then
-            |        exit $$rc
-            |    fi
-            |
-            |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |
-            |    # unmount dxfuse
-            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
-            |        echo "unmounting dxfuse"
-            |        sudo umount ${dxPathConfig.dxfuseMountpoint}
-            |    fi
-            |""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
+        |    # run the dx-download-agent (dxda) on a manifest of files
+        |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
+        |       head -n 20 ${dxPathConfig.dxdaManifest}
+        |       bzip2 ${dxPathConfig.dxdaManifest}
+        |
+        |       # run the download agent, and store the return code; do not exit on error.
+        |       # we need to run it from the root directory, because it uses relative paths.
+        |       cd /
+        |       rc=0
+        |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
+        |
+        |       # if there was an error during download, print out the download log
+        |       if [[ $$rc != 0 ]]; then
+        |           echo "download agent failed rc=$$rc"
+        |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
+        |              echo "The download log is:"
+        |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log
+        |           fi
+        |           exit $$rc
+        |       fi
+        |
+        |       # The download was ok, check file integrity on disk
+        |       dx-download-agent inspect ${dxPathConfig.dxdaManifest.toString}.bz2
+        |
+        |       # go back to home directory
+        |       cd ${dxPathConfig.homeDir.toString}
+        |    fi
+        |
+        |    # run dxfuse on a manifest of files. It will provide remote access
+        |    # to DNAx files.
+        |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+        |       head -n 20 ${dxPathConfig.dxfuseManifest.toString}
+        |
+        |       # make sure the mountpoint exists
+        |       mkdir -p ${dxPathConfig.dxfuseMountpoint.toString}
+        |
+        |       # don't leak the token to stdout. We need the DNAx token to be accessible
+        |       # in the environment, so that dxfuse could get it.
+        |       source environment >& /dev/null
+        |
+        |       # run dxfuse so that it will not exit after the bash script exists.
+        |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
+        |       dxfuse_log=/var/log/dxfuse.log
+        |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
+        |       dxfuse_err_code=$$?
+        |       if [[ $$dxfuse_err_code != 0 ]]; then
+        |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
+        |           if [[ -f $$dxfuse_log ]]; then
+        |               cat $$dxfuse_log
+        |           fi
+        |           exit 1
+        |       fi
+        |       disown %1
+        |
+        |       # wait for the mount to start.
+        |       cnt=0
+        |       while [[ ! -f $$dxfuse_log ]]; do
+        |           echo "Waiting for dxfuse to start"
+        |           sleep 1
+        |           cnt=$$((cnt + 1))
+        |           if [[ $$cnt == 30 ]]; then
+        |              echo "waited 30 seconds, but dxfuse didn't start"
+        |              exit 1
+        |           fi
+        |       done
+        |       cat $$dxfuse_log
+        |    fi
+        |
+        |    echo "bash command encapsulation script:"
+        |    cat ${dxPathConfig.script.toString}
+        |
+        |    # Run the shell script generated by the prolog.
+        |    # Capture the stderr/stdout in files
+        |    if [[ -e ${dxPathConfig.dockerSubmitScript.toString} ]]; then
+        |        echo "docker submit script:"
+        |        cat ${dxPathConfig.dockerSubmitScript.toString}
+        |        ${dxPathConfig.dockerSubmitScript.toString}
+        |    else
+        |        /bin/bash ${dxPathConfig.script.toString}
+        |    fi
+        |
+        |    #  check return code of the script
+        |    rc=`cat ${dxPathConfig.rcPath}`
+        |    if [[ $$rc != 0 ]]; then
+        |        exit $$rc
+        |    fi
+        |
+        |    # evaluate applet outputs, and upload result files
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
+        |    # unmount dxfuse
+        |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+        |        echo "unmounting dxfuse"
+        |        sudo umount ${dxPathConfig.dxfuseMountpoint}
+        |    fi
+        |""".stripMargin.trim
   }
 
   private def genBashScriptWfFragment(): String = {
     s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}
-            |
-            |collect() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}
+        |
+        |collect() {
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}""".stripMargin.trim
   }
 
   private def genBashScriptCmd(cmd: String): String = {
     s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}""".stripMargin.trim
   }
 
   private def genBashScript(applet: IR.Applet, instanceType: IR.InstanceType): String = {
@@ -360,36 +391,36 @@ case class Native(dxWDLrtId: Option[String],
         instanceType match {
           case IR.InstanceTypeDefault | IR.InstanceTypeConst(_, _, _, _, _) =>
             s"""|${dockerPreamble(applet.docker)}
-                            |
-                            |set -e -o pipefail
-                            |main() {
-                            |${genBashScriptTaskBody()}
-                            |}""".stripMargin
+                |
+                |set -e -o pipefail
+                |main() {
+                |${genBashScriptTaskBody()}
+                |}""".stripMargin
           case IR.InstanceTypeRuntime =>
             s"""|${dockerPreamble(applet.docker)}
-                            |
-                            |set -e -o pipefail
-                            |main() {
-                            |    # check if this is the correct instance type
-                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
-                            |    if [[ $$correctInstanceType == "true" ]]; then
-                            |        body
-                            |    else
-                            |       # evaluate the instance type, and launch a sub job on it
-                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-                            |    fi
-                            |}
-                            |
-                            |# We are on the correct instance type, run the task
-                            |body() {
-                            |${genBashScriptTaskBody()}
-                            |}""".stripMargin.trim
+                |
+                |set -e -o pipefail
+                |main() {
+                |    # check if this is the correct instance type
+                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
+                |    if [[ $$correctInstanceType == "true" ]]; then
+                |        body
+                |    else
+                |       # evaluate the instance type, and launch a sub job on it
+                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+                |    fi
+                |}
+                |
+                |# We are on the correct instance type, run the task
+                |body() {
+                |${genBashScriptTaskBody()}
+                |}""".stripMargin.trim
         }
     }
 
     s"""|#!/bin/bash -ex
-            |
-            |${body}""".stripMargin
+        |
+        |${body}""".stripMargin
   }
 
   // Calculate the MD5 checksum of a string
@@ -403,9 +434,9 @@ case class Native(dxWDLrtId: Option[String],
     Utils.trace(
         verbose2,
         s"""|${name} -> checksum request
-                                  |fields = ${JsObject(fields).prettyPrint}
-                                  |
-                                  |""".stripMargin
+            |fields = ${JsObject(fields).prettyPrint}
+            |
+            |""".stripMargin
     )
 
     // We need to sort the hash-tables. They are natually unsorted,
@@ -501,7 +532,7 @@ case class Native(dxWDLrtId: Option[String],
         } else {
           val dxClass = existingDxObjs.head.dxClass
           throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.id}:${folder}""".stripMargin)
+                                  | ${dxProject.id}:${folder}""".stripMargin)
         }
       }
       None
@@ -514,10 +545,10 @@ case class Native(dxWDLrtId: Option[String],
   // Create linking information for a dx:executable
   private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
     val callInputDefs: Map[String, WomType] = irCall.inputVars.map {
-      case CVar(name, wdlType, _) => (name -> wdlType)
+      case CVar(name, wdlType, _, _) => (name -> wdlType)
     }.toMap
     val callOutputDefs: Map[String, WomType] = irCall.outputVars.map {
-      case CVar(name, wdlType, _) => (name -> wdlType)
+      case CVar(name, wdlType, _, _) => (name -> wdlType)
     }.toMap
     ExecLinkInfo(irCall.name, callInputDefs, callOutputDefs, dxObj)
   }
