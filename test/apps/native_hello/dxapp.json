@@ -26,5 +26,11 @@
     "distribution": "Ubuntu",
     "release": "16.04"
   },
-  "authorizedUsers": []
+  "authorizedUsers": [],
+  "developers": [
+    "user-orodeh",
+    "user-sstadick",
+    "user-xquek_staging",
+    "user-jdidion"
+  ]
 }

@@ -32,7 +32,7 @@ test_failing=set(["bad_status",
 wdl_v1_list = [
      # calling native dx applets/apps
     "call_native_v1",
-    "call_native_app",
+    # "call_native_app",
 
     "cast",
     "dict",

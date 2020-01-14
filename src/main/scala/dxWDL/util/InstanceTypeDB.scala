@@ -36,13 +36,11 @@ import dxWDL.base.{Utils, Verbose}
 import dxWDL.dx._
 
 // Request for an instance type
-case class InstanceTypeReq(
-    dxInstanceType: Option[String],
-    memoryMB: Option[Int],
-    diskGB: Option[Int],
-    cpu: Option[Int],
-    gpu: Option[Boolean]
-)
+case class InstanceTypeReq(dxInstanceType: Option[String],
+                           memoryMB: Option[Int],
+                           diskGB: Option[Int],
+                           cpu: Option[Int],
+                           gpu: Option[Boolean])
 
 // Instance Type on the platform. For example:
 // name:   mem1_ssd1_x4
