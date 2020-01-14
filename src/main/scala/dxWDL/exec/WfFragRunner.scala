@@ -54,38 +54,30 @@ import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
 
-case class WfFragRunner(
-    wf: WorkflowDefinition,
-    taskDir: Map[String, CallableTaskDefinition],
-    typeAliases: Map[String, WomType],
-    wfSourceCode: String,
-    instanceTypeDB: InstanceTypeDB,
-    execLinkInfo: Map[String, ExecLinkInfo],
-    dxPathConfig: DxPathConfig,
-    dxIoFunctions: DxIoFunctions,
-    inputsRaw: JsValue,
-    fragInputOutput: WfFragInputOutput,
-    defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
-    runtimeDebugLevel: Int
-) {
+case class WfFragRunner(wf: WorkflowDefinition,
+                        taskDir: Map[String, CallableTaskDefinition],
+                        typeAliases: Map[String, WomType],
+                        wfSourceCode: String,
+                        instanceTypeDB: InstanceTypeDB,
+                        execLinkInfo: Map[String, ExecLinkInfo],
+                        dxPathConfig: DxPathConfig,
+                        dxIoFunctions: DxIoFunctions,
+                        inputsRaw: JsValue,
+                        fragInputOutput: WfFragInputOutput,
+                        defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                        runtimeDebugLevel: Int) {
   private val MAX_JOB_NAME = 50
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(
-        utlVerbose,
-        dxIoFunctions.fileInfoDir,
-        fragInputOutput.typeAliases
-    )
+    WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, fragInputOutput.typeAliases)
   private val jobInputOutput = fragInputOutput.jobInputOutput
-  private val collectSubJobs = CollectSubJobs(
-      jobInputOutput,
-      inputsRaw,
-      instanceTypeDB,
-      runtimeDebugLevel,
-      fragInputOutput.typeAliases
-  )
+  private val collectSubJobs = CollectSubJobs(jobInputOutput,
+                                              inputsRaw,
+                                              instanceTypeDB,
+                                              runtimeDebugLevel,
+                                              fragInputOutput.typeAliases)
   // The source code for all the tasks
   private val taskSourceDir: Map[String, String] =
     ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
@@ -96,11 +88,9 @@ case class WfFragRunner(
     gSeqNum
   }
 
-  private def evaluateWomExpression(
-      expr: WomExpression,
-      womType: WomType,
-      env: Map[String, WomValue]
-  ): WomValue = {
+  private def evaluateWomExpression(expr: WomExpression,
+                                    womType: WomType,
+                                    env: Map[String, WomValue]): WomValue = {
     val result: ErrorOr[WomValue] =
       expr.evaluateValue(env, dxIoFunctions)
     val value = result match {
@@ -110,15 +100,13 @@ case class WfFragRunner(
             case (key, value) => s"    ${key} -> ${value.toString}"
           }
           .mkString("\n")
-        throw new Exception(
-            s"""|Failed to evaluate expression ${expr.sourceString}
+        throw new Exception(s"""|Failed to evaluate expression ${expr.sourceString}
                         |Errors:
                         |${errors}
                         |
                         |Environment:
                         |${envDbg}
-                        |""".stripMargin
-        )
+                        |""".stripMargin)
       case Valid(x: WomValue) => x
     }
 
@@ -133,18 +121,13 @@ case class WfFragRunner(
     val calleeName = call.callable.name
     execLinkInfo.get(calleeName) match {
       case None =>
-        throw new AppInternalException(
-            s"Could not find linking information for ${calleeName}"
-        )
+        throw new AppInternalException(s"Could not find linking information for ${calleeName}")
       case Some(eInfo) => eInfo
     }
   }
 
   // This method is exposed so that we can unit-test it.
-  def evalExpressions(
-      nodes: Seq[GraphNode],
-      env: Map[String, WomValue]
-  ): Map[String, WomValue] = {
+  def evalExpressions(nodes: Seq[GraphNode], env: Map[String, WomValue]): Map[String, WomValue] = {
     val partialOrderNodes = Block.partialSortByDep(nodes.toSet)
     partialOrderNodes.foldLeft(env) {
       // simple expression
@@ -165,17 +148,13 @@ case class WfFragRunner(
         assert(sctNode.scatterVariableNodes.size == 1)
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
         val collectionRaw: WomValue =
-          evaluateWomExpression(
-              svNode.scatterExpressionNode.womExpression,
-              WomArrayType(svNode.womType),
-              env
-          )
+          evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
+                                WomArrayType(svNode.womType),
+                                env)
         val collection: Seq[WomValue] = collectionRaw match {
           case x: WomArray => x.value
           case other =>
-            throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}"
-            )
+            throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
         }
 
         // iterate on the collection
@@ -192,15 +171,11 @@ case class WfFragRunner(
         }.toMap
 
         // build a mapping from from result-key to its type
-        val initResults: Map[String, (WomType, Vector[WomValue])] =
-          resultTypes.map {
-            case (key, WomArrayType(elemType)) =>
-              key -> (elemType, Vector.empty[WomValue])
-            case (_, other) =>
-              throw new AppInternalException(
-                  s"Unexpected class ${other.getClass}, ${other}"
-              )
-          }.toMap
+        val initResults: Map[String, (WomType, Vector[WomValue])] = resultTypes.map {
+          case (key, WomArrayType(elemType)) => key -> (elemType, Vector.empty[WomValue])
+          case (_, other) =>
+            throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+        }.toMap
 
         // merge the vector of results, each of which is a map
         val results: Map[String, (WomType, Vector[WomValue])] =
@@ -224,24 +199,17 @@ case class WfFragRunner(
       case (env, cNode: ConditionalNode) =>
         // evaluate the condition
         val condValueRaw: WomValue =
-          evaluateWomExpression(
-              cNode.conditionExpression.womExpression,
-              WomBooleanType,
-              env
-          )
+          evaluateWomExpression(cNode.conditionExpression.womExpression, WomBooleanType, env)
         val condValue: Boolean = condValueRaw match {
           case b: WomBoolean => b.value
           case other =>
-            throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}"
-            )
+            throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
         }
         // build
-        val resultTypes: Map[String, WomType] =
-          cNode.conditionalOutputPorts.map {
-            case cop: ConditionalOutputPort =>
-              cop.identifier.localName.value -> Utils.stripOptional(cop.womType)
-          }.toMap
+        val resultTypes: Map[String, WomType] = cNode.conditionalOutputPorts.map {
+          case cop: ConditionalOutputPort =>
+            cop.identifier.localName.value -> Utils.stripOptional(cop.womType)
+        }.toMap
         val fullResults: Map[String, WomValue] =
           if (!condValue) {
             // condition is false, return None for all the values
@@ -271,9 +239,7 @@ case class WfFragRunner(
         env
 
       case (env, other: CallNode) =>
-        throw new Exception(
-            s"calls (${other}) cannot be evaluated as expressions"
-        )
+        throw new Exception(s"calls (${other}) cannot be evaluated as expressions")
 
       case (env, other) =>
         val dbgGraph = nodes
@@ -296,11 +262,9 @@ case class WfFragRunner(
     }
   }
 
-  private def processOutputs(
-      env: Map[String, WomValue],
-      fragResults: Map[String, WdlVarLinks],
-      exportedVars: Set[String]
-  ): Map[String, JsValue] = {
+  private def processOutputs(env: Map[String, WomValue],
+                             fragResults: Map[String, WdlVarLinks],
+                             exportedVars: Set[String]): Map[String, JsValue] = {
     Utils.appletLog(
         verbose,
         s"""|processOutputs
@@ -340,11 +304,9 @@ case class WfFragRunner(
         call inc as inc {input: i=k}
    }
     */
-  private def buildCallInputs(
-      callName: String,
-      linkInfo: ExecLinkInfo,
-      env: Map[String, WomValue]
-  ): JsValue = {
+  private def buildCallInputs(callName: String,
+                              linkInfo: ExecLinkInfo,
+                              env: Map[String, WomValue]): JsValue = {
     Utils.appletLog(
         verbose,
         s"""|buildCallInputs (${callName})
@@ -382,41 +344,33 @@ case class WfFragRunner(
 
   // Figure out what instance type to launch at task in. Return None if the instance
   // type is a constant, and is already set.
-  private def preCalcInstanceType(
-      task: CallableTaskDefinition,
-      taskSourceCode: String,
-      taskInputs: Map[InputDefinition, WomValue]
-  ): Option[String] = {
+  private def preCalcInstanceType(task: CallableTaskDefinition,
+                                  taskSourceCode: String,
+                                  taskInputs: Map[InputDefinition, WomValue]): Option[String] = {
     // Note: if none of these attributes are specified, the return value is None.
     val instanceAttrs = Set("memory", "disks", "cpu")
     val allConst = instanceAttrs.forall { attrName =>
       task.runtimeAttributes.attributes.get(attrName) match {
-        case None => true
-        case Some(expr) =>
-          WomValueAnalysis.isExpressionConst(WomStringType, expr)
+        case None       => true
+        case Some(expr) => WomValueAnalysis.isExpressionConst(WomStringType, expr)
       }
     }
     if (allConst)
       return None
 
     // There is runtime evaluation for the instance type
-    val taskRunner = new TaskRunner(
-        task,
-        taskSourceCode,
-        typeAliases,
-        instanceTypeDB,
-        dxPathConfig,
-        dxIoFunctions,
-        jobInputOutput,
-        defaultRuntimeAttributes,
-        runtimeDebugLevel
-    )
+    val taskRunner = new TaskRunner(task,
+                                    taskSourceCode,
+                                    typeAliases,
+                                    instanceTypeDB,
+                                    dxPathConfig,
+                                    dxIoFunctions,
+                                    jobInputOutput,
+                                    defaultRuntimeAttributes,
+                                    runtimeDebugLevel)
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
-      Utils.appletLog(
-          verbose,
-          s"Precalculated instance type for ${task.unqualifiedName}: ${iType}"
-      )
+      Utils.appletLog(verbose, s"Precalculated instance type for ${task.unqualifiedName}: ${iType}")
       Some(iType)
     } catch {
       case e: Throwable =>
@@ -432,12 +386,10 @@ case class WfFragRunner(
     }
   }
 
-  private def execDNAxExecutable(
-      dxExecId: String,
-      dbgName: String,
-      callInputs: JsValue,
-      instanceType: Option[String]
-  ): (Int, DxExecution) = {
+  private def execDNAxExecutable(dxExecId: String,
+                                 dbgName: String,
+                                 callInputs: JsValue,
+                                 instanceType: Option[String]): (Int, DxExecution) = {
     // We may need to run a collect subjob. Add the the sequence
     // number to each invocation, so the collect subjob will be
     // able to put the results back together in the correct order.
@@ -463,18 +415,12 @@ case class WfFragRunner(
         )
         val req = JsObject(fields ++ instanceFields)
         val retval: JsonNode =
-          DXAPI.appRun(
-              dxExecId,
-              DxUtils.jsonNodeOfJsValue(req),
-              classOf[JsonNode]
-          )
+          DXAPI.appRun(dxExecId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         val info: JsValue = DxUtils.jsValueOfJsonNode(retval)
         val id: String = info.asJsObject.fields.get("id") match {
           case Some(JsString(x)) => x
           case _ =>
-            throw new AppInternalException(
-                s"Bad format returned from jobNew ${info.prettyPrint}"
-            )
+            throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
         }
         DxJob.getInstance(id)
       } else if (dxExecId.startsWith("applet-")) {
@@ -486,24 +432,17 @@ case class WfFragRunner(
         )
         val req = JsObject(fields ++ instanceFields)
         val retval: JsonNode =
-          DXAPI.appletRun(
-              applet.getId,
-              DxUtils.jsonNodeOfJsValue(req),
-              classOf[JsonNode]
-          )
+          DXAPI.appletRun(applet.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         val info: JsValue = DxUtils.jsValueOfJsonNode(retval)
         val id: String = info.asJsObject.fields.get("id") match {
           case Some(JsString(x)) => x
           case _ =>
-            throw new AppInternalException(
-                s"Bad format returned from jobNew ${info.prettyPrint}"
-            )
+            throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
         }
         DxJob.getInstance(id)
       } else if (dxExecId.startsWith("workflow-")) {
         val workflow = DxWorkflow.getInstance(dxExecId)
-        val dxAnalysis: DxAnalysis =
-          workflow.newRun(input = callInputs, name = dbgName)
+        val dxAnalysis: DxAnalysis = workflow.newRun(input = callInputs, name = dbgName)
         val props = Map("seq_number" -> seqNum.toString)
         dxAnalysis.setProperties(props)
         dxAnalysis
@@ -513,16 +452,13 @@ case class WfFragRunner(
     (seqNum, dxExec)
   }
 
-  private def execCall(
-      call: CallNode,
-      callInputs: Map[String, WomValue],
-      callNameHint: Option[String]
-  ): (Int, DxExecution) = {
+  private def execCall(call: CallNode,
+                       callInputs: Map[String, WomValue],
+                       callNameHint: Option[String]): (Int, DxExecution) = {
     val linkInfo = getCallLinkInfo(call)
     val callName = call.identifier.localName.value
     val calleeName = call.callable.name
-    val callInputsJSON: JsValue =
-      buildCallInputs(callName, linkInfo, callInputs)
+    val callInputsJSON: JsValue = buildCallInputs(callName, linkInfo, callInputs)
     /*        Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
                                      |inputs = ${callInputsJSON}""".stripMargin)*/
@@ -542,20 +478,12 @@ case class WfFragRunner(
           preCalcInstanceType(task, taskSourceCode, taskInputs)
         case (_, _) => None
       }
-    execDNAxExecutable(
-        linkInfo.dxExec.getId,
-        dbgName,
-        callInputsJSON,
-        instanceType
-    )
+    execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)
   }
 
   // create promises to this call. This allows returning
   // from the parent job immediately.
-  private def genPromisesForCall(
-      call: CallNode,
-      dxExec: DxExecution
-  ): Map[String, WdlVarLinks] = {
+  private def genPromisesForCall(call: CallNode, dxExec: DxExecution): Map[String, WdlVarLinks] = {
     val linkInfo = getCallLinkInfo(call)
     val callName = call.identifier.localName.value
     linkInfo.outputs.map {
@@ -571,10 +499,7 @@ case class WfFragRunner(
   // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
   // under WDL version 1.0, it is compiled as "i".
   // We just want the "i" component.
-  def evalCallInputs(
-      call: CallNode,
-      env: Map[String, WomValue]
-  ): Map[String, WomValue] = {
+  def evalCallInputs(call: CallNode, env: Map[String, WomValue]): Map[String, WomValue] = {
     // Find the type required for a call input
     def findWomType(paramName: String): WomType = {
       val retval = call.inputDefinitionMappings.find {
@@ -590,8 +515,7 @@ case class WfFragRunner(
     }
     call.upstream.collect {
       case exprNode: ExpressionNode =>
-        val paramName =
-          Utils.getUnqualifiedName(exprNode.identifier.localName.value)
+        val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
         val expression = exprNode.womExpression
         val womType = findWomType(paramName)
         paramName -> evaluateWomExpression(expression, womType, env)
@@ -599,22 +523,12 @@ case class WfFragRunner(
   }
 
   // Evaluate the condition
-  private def evalCondition(
-      cnNode: ConditionalNode,
-      env: Map[String, WomValue]
-  ): Boolean = {
+  private def evalCondition(cnNode: ConditionalNode, env: Map[String, WomValue]): Boolean = {
     val condValueRaw: WomValue =
-      evaluateWomExpression(
-          cnNode.conditionExpression.womExpression,
-          WomBooleanType,
-          env
-      )
+      evaluateWomExpression(cnNode.conditionExpression.womExpression, WomBooleanType, env)
     val condValue: Boolean = condValueRaw match {
       case b: WomBoolean => b.value
-      case other =>
-        throw new AppInternalException(
-            s"Unexpected class ${other.getClass}, ${other}"
-        )
+      case other         => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
     condValue
   }
@@ -626,11 +540,9 @@ case class WfFragRunner(
   //   call zinc as inc3 { input: a = num}
   // }
   //
-  private def execConditionalCall(
-      cnNode: ConditionalNode,
-      call: CallNode,
-      env: Map[String, WomValue]
-  ): Map[String, WdlVarLinks] = {
+  private def execConditionalCall(cnNode: ConditionalNode,
+                                  call: CallNode,
+                                  env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -638,8 +550,7 @@ case class WfFragRunner(
       // evaluate the call inputs, and add to the environment
       val callInputs = evalCallInputs(call, env)
       val (_, dxExec) = execCall(call, callInputs, None)
-      val callResults: Map[String, WdlVarLinks] =
-        genPromisesForCall(call, dxExec)
+      val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
 
       // Add optional modifier to the return types.
       callResults.map {
@@ -665,10 +576,8 @@ case class WfFragRunner(
   //   call zinc as inc5 { input: a = b * 4 }
   // }
   //
-  private def execConditionalSubblock(
-      cnNode: ConditionalNode,
-      env: Map[String, WomValue]
-  ): Map[String, WdlVarLinks] = {
+  private def execConditionalSubblock(cnNode: ConditionalNode,
+                                      env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -679,12 +588,7 @@ case class WfFragRunner(
 
       // The subblock is complex, and requires a fragment, or a subworkflow
       val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-      val (_, dxExec) = execDNAxExecutable(
-          linkInfo.dxExec.getId,
-          linkInfo.name,
-          callInputs,
-          None
-      )
+      val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, callInputs, None)
 
       // create promises for results
       linkInfo.outputs.map {
@@ -739,27 +643,20 @@ case class WfFragRunner(
     assert(sctNode.scatterVariableNodes.size == 1)
     val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
     val collectionRaw: WomValue =
-      evaluateWomExpression(
-          svNode.scatterExpressionNode.womExpression,
-          WomArrayType(svNode.womType),
-          env
-      )
+      evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
+                            WomArrayType(svNode.womType),
+                            env)
     val collection: Seq[WomValue] = collectionRaw match {
       case x: WomArray => x.value
-      case other =>
-        throw new AppInternalException(
-            s"Unexpected class ${other.getClass}, ${other}"
-        )
+      case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
     (svNode, collection)
   }
 
   // Launch a subjob to collect and marshal the call results.
   // Remove the declarations already calculated
-  private def collectScatter(
-      sctNode: ScatterNode,
-      childJobs: Vector[DxExecution]
-  ): Map[String, WdlVarLinks] = {
+  private def collectScatter(sctNode: ScatterNode,
+                             childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
     val resultTypes: Map[String, WomArrayType] = sctNode.outputMapping.map {
       case scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
@@ -772,11 +669,9 @@ case class WfFragRunner(
     promises
   }
 
-  private def execScatterCall(
-      sctNode: ScatterNode,
-      call: CallNode,
-      env: Map[String, WomValue]
-  ): Map[String, WdlVarLinks] = {
+  private def execScatterCall(sctNode: ScatterNode,
+                              call: CallNode,
+                              env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     val (svNode, collection) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
@@ -792,10 +687,8 @@ case class WfFragRunner(
     collectScatter(sctNode, childJobs)
   }
 
-  private def execScatterSubblock(
-      sctNode: ScatterNode,
-      env: Map[String, WomValue]
-  ): Map[String, WdlVarLinks] = {
+  private def execScatterSubblock(sctNode: ScatterNode,
+                                  env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     val (svNode, collection) = evalScatterCollection(sctNode, env)
 
     // There must be exactly one sub-workflow
@@ -813,21 +706,17 @@ case class WfFragRunner(
         }
 
         // The subblock is complex, and requires a fragment, or a subworkflow
-        val callInputs: JsValue =
-          buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-        val (_, dxJob) =
-          execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
+        val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
+        val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
         dxJob
       }.toVector
 
     collectScatter(sctNode, childJobs)
   }
 
-  def apply(
-      blockPath: Vector[Int],
-      envInitial: Map[String, WomValue],
-      runMode: RunnerWfFragmentMode.Value
-  ): Map[String, JsValue] = {
+  def apply(blockPath: Vector[Int],
+            envInitial: Map[String, WomValue],
+            runMode: RunnerWfFragmentMode.Value): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"link info=${execLinkInfo}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
@@ -858,10 +747,8 @@ case class WfFragRunner(
             None
           case (None, _) =>
             // input is missing, and there is no default.
-            Utils.warning(
-                utlVerbose,
-                s"input is missing for ${name}, and there is no default at the callee"
-            )
+            Utils.warning(utlVerbose,
+                          s"input is missing for ${name}, and there is no default at the callee")
             None
           case (Some(x), _) =>
             Some(name -> x)
@@ -930,15 +817,10 @@ case class WfFragRunner(
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)
             val (_, linkInfo) = execLinkInfo.toVector.head
-            collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(
-                linkInfo,
-                childJobsComplete
-            )
+            collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
 
           case other =>
-            throw new AppInternalException(
-                s"Bad case ${other.getClass} ${other}"
-            )
+            throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
         }
     }
 
@@ -946,8 +828,7 @@ case class WfFragRunner(
     val blockOutputs: Map[String, WomType] = Block.outputs(block)
     val exportedVars: Set[String] = blockOutputs.keys.toSet
 
-    val jsOutputs: Map[String, JsValue] =
-      processOutputs(env, fragResults, exportedVars)
+    val jsOutputs: Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
     val jsOutputsDbgStr = jsOutputs.mkString("\n")
     Utils.appletLog(verbose, s"""|JSON outputs:
                                      |${jsOutputsDbgStr}""".stripMargin)

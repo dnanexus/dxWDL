@@ -11,11 +11,9 @@ import dxWDL.util._
 // A bunch of WDL source lines
 case class WdlCodeSnippet(value: String)
 
-case class WdlCodeGen(
-    verbose: Verbose,
-    typeAliases: Map[String, WomType],
-    language: Language.Value
-) {
+case class WdlCodeGen(verbose: Verbose,
+                      typeAliases: Map[String, WomType],
+                      language: Language.Value) {
 
   // A self contained WDL workflow
   def versionString(): String = {
@@ -167,12 +165,10 @@ task Add {
     }
   }
 
-  def genDnanexusAppletStub(
-      id: String,
-      appletName: String,
-      inputSpec: Map[String, WomType],
-      outputSpec: Map[String, WomType]
-  ): WdlCodeSnippet = {
+  def genDnanexusAppletStub(id: String,
+                            appletName: String,
+                            inputSpec: Map[String, WomType],
+                            outputSpec: Map[String, WomType]): WdlCodeSnippet = {
     val inputs = inputSpec
       .map {
         case (name, womType) =>
@@ -254,10 +250,8 @@ task Add {
   //   call Hello
   // }
   //
-  private val callLibrary: Regex =
-    "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
-  private val callLibraryNoArgs: Regex =
-    "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
+  private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+  private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
   private def flattenWorkflow(wdlWfSource: String): String = {
     val originalLines = wdlWfSource.split("\n").toList
     val cleanLines = originalLines.map { line =>
@@ -311,13 +305,11 @@ task Add {
 
   def standAloneTask(originalTaskSource: String): WdlCodeSnippet = {
     val wdlWfSource =
-      List(
-          versionString() + "\n",
-          "# struct definitions",
-          typeAliasDefinitions,
-          "# Task",
-          originalTaskSource
-      ).mkString("\n")
+      List(versionString() + "\n",
+           "# struct definitions",
+           typeAliasDefinitions,
+           "# Task",
+           originalTaskSource).mkString("\n")
 
     // Make sure this is actually valid WDL
     ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)
@@ -331,10 +323,8 @@ task Add {
   // called tasks. The generated tasks are named by their
   // unqualified names, not their fully-qualified names. This works
   // because the WDL workflow must be "flattenable".
-  def standAloneWorkflow(
-      originalWorkflowSource: String,
-      allCalls: Vector[IR.Callable]
-  ): WdlCodeSnippet = {
+  def standAloneWorkflow(originalWorkflowSource: String,
+                         allCalls: Vector[IR.Callable]): WdlCodeSnippet = {
     val taskStubs: Map[String, WdlCodeSnippet] =
       allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) {
         case (accu, callable) =>
@@ -343,18 +333,9 @@ task Add {
             accu
           } else {
             val sourceCode = callable match {
-              case IR.Applet(
-                  _,
-                  _,
-                  _,
-                  _,
-                  _,
-                  IR.AppletKindTask(_),
-                  taskSourceCode
-                  ) =>
+              case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
                 // This is a task, include its source code, instead of a header.
-                val taskDir =
-                  ParseWomSourceFile(false).scanForTasks(taskSourceCode)
+                val taskDir = ParseWomSourceFile(false).scanForTasks(taskSourceCode)
                 assert(taskDir.size == 1)
                 val taskBody = taskDir.values.head
                 WdlCodeSnippet(taskBody)
@@ -374,15 +355,13 @@ task Add {
       .mkString("\n\n")
     val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
     val wdlWfSource =
-      List(
-          versionString() + "\n",
-          "# struct definitions",
-          typeAliasDefinitions,
-          "# Task headers",
-          tasksStr,
-          "# Workflow with imports made local",
-          wfWithoutImportCalls
-      ).mkString("\n")
+      List(versionString() + "\n",
+           "# struct definitions",
+           typeAliasDefinitions,
+           "# Task headers",
+           tasksStr,
+           "# Workflow with imports made local",
+           wfWithoutImportCalls).mkString("\n")
 
     // Make sure this is actually valid WDL
     ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)

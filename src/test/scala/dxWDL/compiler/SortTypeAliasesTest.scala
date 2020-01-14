@@ -21,15 +21,8 @@ class SortTypeAliasesTest extends FlatSpec with Matchers {
     val (_, _, typeAliases: Map[String, WomType]) =
       ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
-    val defs: Vector[(String, WomType)] =
-      SortTypeAliases(verbose).apply(typeAliases.toVector)
+    val defs: Vector[(String, WomType)] = SortTypeAliases(verbose).apply(typeAliases.toVector)
     val defNames = defs.map { case (name, _) => name }.toVector
-    defNames shouldBe (Vector(
-        "Coord",
-        "Bunk",
-        "Foo",
-        "SampleReports",
-        "SampleReportsArray"
-    ))
+    defNames shouldBe (Vector("Coord", "Bunk", "Foo", "SampleReports", "SampleReportsArray"))
   }
 }

@@ -39,12 +39,11 @@ class InputFileTest extends FlatSpec with Matchers {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
     val inputs = pathFromBasename("input_file", "math_inputs.json")
     Main.compile(
-        List(
-            wdlCode.toString,
-            "-inputs",
-            inputs.toString,
-            "--locked"
-            //, "--verbose", "--verboseKey", "GenerateIR"
+        List(wdlCode.toString,
+             "-inputs",
+             inputs.toString,
+             "--locked"
+             //, "--verbose", "--verboseKey", "GenerateIR"
         ) ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }

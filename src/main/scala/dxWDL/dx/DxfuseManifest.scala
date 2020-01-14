@@ -11,10 +11,7 @@ import dxWDL.util.DxIoFunctions
 case class DxfuseManifest(value: JsValue)
 
 object DxfuseManifest {
-  def apply(
-      file2LocalMapping: Map[DxFile, Path],
-      dxIoFunctions: DxIoFunctions
-  ): DxfuseManifest = {
+  def apply(file2LocalMapping: Map[DxFile, Path], dxIoFunctions: DxIoFunctions): DxfuseManifest = {
     if (file2LocalMapping.isEmpty)
       return DxfuseManifest(JsNull)
 
@@ -41,10 +38,7 @@ object DxfuseManifest {
     }.toVector
 
     DxfuseManifest(
-        JsObject(
-            "files" -> JsArray(files),
-            "directories" -> JsArray(Vector.empty)
-        )
+        JsObject("files" -> JsArray(files), "directories" -> JsArray(Vector.empty))
     )
   }
 }

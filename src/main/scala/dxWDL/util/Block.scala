@@ -173,10 +173,7 @@ object Block {
 
   // Is the call [callName] invoked in one of the nodes, or their
   // inner graphs?
-  private def graphContainsCall(
-      callName: String,
-      nodes: Set[GraphNode]
-  ): Boolean = {
+  private def graphContainsCall(callName: String, nodes: Set[GraphNode]): Boolean = {
     nodes.exists {
       case callNode: CallNode =>
         callNode.identifier.localName.value == callName
@@ -189,10 +186,7 @@ object Block {
   }
 
   // Find the toplevel graph node that contains this call
-  def findCallByName(
-      callName: String,
-      nodes: Set[GraphNode]
-  ): Option[GraphNode] = {
+  def findCallByName(callName: String, nodes: Set[GraphNode]): Option[GraphNode] = {
     val gnode: Option[GraphNode] = nodes.find {
       case callNode: CallNode =>
         callNode.identifier.localName.value == callName
@@ -306,20 +300,19 @@ object Block {
   //  [ call B ]  [ call C ]
   //
   // We choose option #2 because it resembles the original.
-  def splitGraph(graph: Graph, callsLoToHi: Vector[String]): (
-      Vector[GraphInputNode], // inputs
+  def splitGraph(
+      graph: Graph,
+      callsLoToHi: Vector[String]
+  ): (Vector[GraphInputNode], // inputs
       Vector[GraphInputNode], // missing inner inputs that propagate
       Vector[Block], // blocks
-      Vector[GraphOutputNode]
-  ) // outputs
+      Vector[GraphOutputNode]) // outputs
   = {
     var rest: Set[GraphNode] = graph.nodes
     var blocks = Vector.empty[Block]
 
     // separate out the inputs
-    val (inputBlock, innerInputs) = distinguishTopLevelInputs(
-        graph.inputNodes.toSeq
-    )
+    val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
     rest --= graph.inputNodes.toSet
 
     // separate out the outputs
@@ -372,16 +365,13 @@ object Block {
   }
 
   // An easy to use method that takes the workflow source
-  def split(graph: Graph, wfSource: String): (
-      Vector[GraphInputNode], // inputs
-      Vector[GraphInputNode], // implicit inputs
-      Vector[Block], // blocks
-      Vector[GraphOutputNode]
-  ) // outputs
+  def split(graph: Graph, wfSource: String): (Vector[GraphInputNode], // inputs
+                                              Vector[GraphInputNode], // implicit inputs
+                                              Vector[Block], // blocks
+                                              Vector[GraphOutputNode]) // outputs
   = {
     // sort from low to high according to the source lines.
-    val callsLoToHi: Vector[String] =
-      ParseWomSourceFile(false).scanForCalls(graph, wfSource)
+    val callsLoToHi: Vector[String] = ParseWomSourceFile(false).scanForCalls(graph, wfSource)
     splitGraph(graph, callsLoToHi)
   }
 
@@ -397,10 +387,7 @@ object Block {
   //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
   //   CommandCall(add, Set(a, b))
   // ]
-  private def isSimpleCall(
-      nodes: Seq[GraphNode],
-      trivialExpressionsOnly: Boolean
-  ): Boolean = {
+  private def isSimpleCall(nodes: Seq[GraphNode], trivialExpressionsOnly: Boolean): Boolean = {
     // find the call
     val calls: Seq[CallNode] = nodes.collect {
       case cNode: CallNode => cNode
@@ -490,32 +477,21 @@ object Block {
   }
   case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
   case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-  case class CallWithSubexpressions(
-      override val nodes: Vector[GraphNode],
-      value: CallNode
-  ) extends Category
-  case class CallFragment(
-      override val nodes: Vector[GraphNode],
-      value: CallNode
-  ) extends Category
-  case class CondOneCall(
-      override val nodes: Vector[GraphNode],
-      value: ConditionalNode,
-      call: CallNode
-  ) extends Category
-  case class CondFullBlock(
-      override val nodes: Vector[GraphNode],
-      value: ConditionalNode
-  ) extends Category
-  case class ScatterOneCall(
-      override val nodes: Vector[GraphNode],
-      value: ScatterNode,
-      call: CallNode
-  ) extends Category
-  case class ScatterFullBlock(
-      override val nodes: Vector[GraphNode],
-      value: ScatterNode
-  ) extends Category
+  case class CallWithSubexpressions(override val nodes: Vector[GraphNode], value: CallNode)
+      extends Category
+  case class CallFragment(override val nodes: Vector[GraphNode], value: CallNode) extends Category
+  case class CondOneCall(override val nodes: Vector[GraphNode],
+                         value: ConditionalNode,
+                         call: CallNode)
+      extends Category
+  case class CondFullBlock(override val nodes: Vector[GraphNode], value: ConditionalNode)
+      extends Category
+  case class ScatterOneCall(override val nodes: Vector[GraphNode],
+                            value: ScatterNode,
+                            call: CallNode)
+      extends Category
+  case class ScatterFullBlock(override val nodes: Vector[GraphNode], value: ScatterNode)
+      extends Category
 
   object Category {
     def getInnerGraph(catg: Category): Graph = {
@@ -573,11 +549,7 @@ object Block {
     }
   }
 
-  def getSubBlock(
-      path: Vector[Int],
-      graph: Graph,
-      callsLoToHi: Vector[String]
-  ): Block = {
+  def getSubBlock(path: Vector[Int], graph: Graph, callsLoToHi: Vector[String]): Block = {
     assert(path.size >= 1)
 
     val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
@@ -628,9 +600,7 @@ object Block {
       .toSet
 
     // Examine an input port, and keep it only if it points outside the block.
-    def keepOnlyOutsideRefs(
-        inPort: GraphNodePort.InputPort
-    ): Option[(String, WomType)] = {
+    def keepOnlyOutsideRefs(inPort: GraphNodePort.InputPort): Option[(String, WomType)] = {
       if (allBlockNodes contains inPort.upstream.graphNode) None
       else Some((inPort.name, inPort.womType))
     }
@@ -653,8 +623,7 @@ object Block {
         val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
       case cnNode: ConditionalNode =>
-        val cnInputs =
-          cnNode.conditionExpression.inputPorts.flatMap(keepOnlyOutsideRefs(_))
+        val cnInputs = cnNode.conditionExpression.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         cnInputs ++ getInputsToGraph(cnNode.innerGraph)
       case node: GraphNode =>
         node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
@@ -770,14 +739,11 @@ object Block {
   //      String blah = lane
   //   }
   // }
-  def inputsUsedAsOutputs(
-      inputNodes: Vector[GraphInputNode],
-      outputNodes: Vector[GraphOutputNode]
-  ): Set[String] = {
+  def inputsUsedAsOutputs(inputNodes: Vector[GraphInputNode],
+                          outputNodes: Vector[GraphOutputNode]): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes)
-    val inputs: Set[String] =
-      inputNodes.map(iNode => iNode.identifier.localName.value).toSet
+    val inputs: Set[String] = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
     //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
     inputs.intersect(outputs)
   }

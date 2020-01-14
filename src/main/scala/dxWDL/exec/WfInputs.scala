@@ -11,14 +11,12 @@ import wom.types.WomType
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
-case class WfInputs(
-    wf: WorkflowDefinition,
-    wfSourceCode: String,
-    typeAliases: Map[String, WomType],
-    dxPathConfig: DxPathConfig,
-    dxIoFunctions: DxIoFunctions,
-    runtimeDebugLevel: Int
-) {
+case class WfInputs(wf: WorkflowDefinition,
+                    wfSourceCode: String,
+                    typeAliases: Map[String, WomType],
+                    dxPathConfig: DxPathConfig,
+                    dxIoFunctions: DxIoFunctions,
+                    runtimeDebugLevel: Int) {
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
@@ -31,9 +29,7 @@ case class WfInputs(
     Utils.appletLog(
         verbose,
         s"""|Artificial applet for unlocked workflow inputs
-                                     |${WomPrettyPrintApproxWdl.graphInputs(
-               wf.inputs.toSeq
-           )}
+                                     |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
                                      |""".stripMargin
     )
 
@@ -41,8 +37,7 @@ case class WfInputs(
     val outputFields: Map[String, JsValue] = inputs
       .map {
         case (outputVarName, womValue) =>
-          val wvl =
-            wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList

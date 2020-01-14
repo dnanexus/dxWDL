@@ -113,11 +113,10 @@ object IR {
   sealed trait AppletKind
   case class AppletKindNative(id: String) extends AppletKind
   case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
-  case class AppletKindWfFragment(
-      calls: Vector[String],
-      blockPath: Vector[Int],
-      fqnDictTypes: Map[String, WomType]
-  ) extends AppletKind
+  case class AppletKindWfFragment(calls: Vector[String],
+                                  blockPath: Vector[Int],
+                                  fqnDictTypes: Map[String, WomType])
+      extends AppletKind
   case object AppletKindWfInputs extends AppletKind
 
   // Output - default and custom reorg
@@ -137,15 +136,14 @@ object IR {
     * @param task          Task definition
     * @param womSourceCode WDL/CWL source code for task.
     */
-  case class Applet(
-      name: String,
-      inputs: Vector[CVar],
-      outputs: Vector[CVar],
-      instanceType: InstanceType,
-      docker: DockerImage,
-      kind: AppletKind,
-      womSourceCode: String
-  ) extends Callable {
+  case class Applet(name: String,
+                    inputs: Vector[CVar],
+                    outputs: Vector[CVar],
+                    instanceType: InstanceType,
+                    docker: DockerImage,
+                    kind: AppletKind,
+                    womSourceCode: String)
+      extends Callable {
     def inputVars = inputs
     def outputVars = outputs
   }
@@ -165,13 +163,11 @@ object IR {
   // Note: the description may contain dots, parentheses, and other special
   // symbols. It is shown to the user on the UI. The [id] is unique
   // across the workflow.
-  case class Stage(
-      description: String,
-      id: DxWorkflowStage,
-      calleeName: String,
-      inputs: Vector[SArg],
-      outputs: Vector[CVar]
-  )
+  case class Stage(description: String,
+                   id: DxWorkflowStage,
+                   calleeName: String,
+                   inputs: Vector[SArg],
+                   outputs: Vector[CVar])
 
   /** A workflow output is linked to the stage that
     * generated it.
@@ -184,15 +180,14 @@ object IR {
     val Top, Sub = Value
   }
 
-  case class Workflow(
-      name: String,
-      inputs: Vector[(CVar, SArg)],
-      outputs: Vector[(CVar, SArg)],
-      stages: Vector[Stage],
-      womSourceCode: String,
-      locked: Boolean,
-      level: Level.Value
-  ) extends Callable {
+  case class Workflow(name: String,
+                      inputs: Vector[(CVar, SArg)],
+                      outputs: Vector[(CVar, SArg)],
+                      stages: Vector[Stage],
+                      womSourceCode: String,
+                      locked: Boolean,
+                      level: Level.Value)
+      extends Callable {
     def inputVars = inputs.map { case (cVar, _)   => cVar }.toVector
     def outputVars = outputs.map { case (cVar, _) => cVar }.toVector
   }
@@ -200,10 +195,8 @@ object IR {
   // dependencies: the order in which to compile the workflows and tasks.
   // The first element in the vector depends on nothing else. Each other
   // element (may) depend on all previous elements.
-  case class Bundle(
-      primaryCallable: Option[Callable],
-      allCallables: Map[String, Callable],
-      dependencies: Vector[String],
-      typeAliases: Map[String, WomType]
-  )
+  case class Bundle(primaryCallable: Option[Callable],
+                    allCallables: Map[String, Callable],
+                    dependencies: Vector[String],
+                    typeAliases: Map[String, WomType])
 }

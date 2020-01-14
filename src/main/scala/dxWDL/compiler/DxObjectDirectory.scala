@@ -15,12 +15,10 @@ import dxWDL.base.Utils.CHECKSUM_PROP
 import dxWDL.dx._
 
 // Keep all the information about an applet in packaged form
-case class DxObjectInfo(
-    name: String,
-    crDate: LocalDateTime,
-    dxObj: DxDataObject,
-    digest: Option[String]
-) {
+case class DxObjectInfo(name: String,
+                        crDate: LocalDateTime,
+                        dxObj: DxDataObject,
+                        digest: Option[String]) {
   lazy val dxClass: String =
     dxObj.getClass.getSimpleName match {
       case "DxWorkflow" => "Workflow"
@@ -32,13 +30,11 @@ case class DxObjectInfo(
 // Take a snapshot of the platform target path before the build starts.
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
-case class DxObjectDirectory(
-    ns: IR.Bundle,
-    dxProject: DxProject,
-    folder: String,
-    projectWideReuse: Boolean,
-    verbose: Verbose
-) {
+case class DxObjectDirectory(ns: IR.Bundle,
+                             dxProject: DxProject,
+                             folder: String,
+                             projectWideReuse: Boolean,
+                             verbose: Verbose) {
   // a list of all dx:workflow and dx:applet names used in this WDL workflow
   private val allExecutableNames: Set[String] = ns.allCallables.keys.toSet
 
@@ -69,15 +65,13 @@ case class DxObjectDirectory(
     // find applets
     val t0 = System.nanoTime()
     val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
-      DxFindDataObjects(None, verbose).apply(
-          dxProject,
-          Some(folder),
-          false,
-          Some("applet"),
-          Vector(CHECKSUM_PROP),
-          allExecutableNames.toVector,
-          false
-      )
+      DxFindDataObjects(None, verbose).apply(dxProject,
+                                             Some(folder),
+                                             false,
+                                             Some("applet"),
+                                             Vector(CHECKSUM_PROP),
+                                             allExecutableNames.toVector,
+                                             false)
     val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
@@ -90,15 +84,13 @@ case class DxObjectDirectory(
     // find workflows
     val t2 = System.nanoTime()
     val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
-      DxFindDataObjects(None, verbose).apply(
-          dxProject,
-          Some(folder),
-          false,
-          Some("workflow"),
-          Vector(CHECKSUM_PROP),
-          allExecutableNames.toVector,
-          false
-      )
+      DxFindDataObjects(None, verbose).apply(dxProject,
+                                             Some(folder),
+                                             false,
+                                             Some("workflow"),
+                                             Vector(CHECKSUM_PROP),
+                                             allExecutableNames.toVector,
+                                             false)
     val t3 = System.nanoTime()
     diffMSec = (t3 - t2) / (1000 * 1000)
     Utils.trace(
@@ -114,10 +106,7 @@ case class DxObjectDirectory(
       case (dxObj, desc) =>
         val creationDate = new java.util.Date(desc.created)
         val crLdt: LocalDateTime =
-          LocalDateTime.ofInstant(
-              creationDate.toInstant(),
-              ZoneId.systemDefault()
-          )
+          LocalDateTime.ofInstant(creationDate.toInstant(), ZoneId.systemDefault())
         val chksum = desc.properties.flatMap { p =>
           p.get(CHECKSUM_PROP)
         }
@@ -156,15 +145,13 @@ case class DxObjectDirectory(
   private def projectBulkLookup(): Map[String, Vector[(DxDataObject, DxObjectDescribe)]] = {
     val t0 = System.nanoTime()
     val dxAppletsInProject: Map[DxDataObject, DxObjectDescribe] =
-      DxFindDataObjects(None, verbose).apply(
-          dxProject,
-          None,
-          true,
-          Some("applet"),
-          Vector(CHECKSUM_PROP),
-          allExecutableNames.toVector,
-          false
-      )
+      DxFindDataObjects(None, verbose).apply(dxProject,
+                                             None,
+                                             true,
+                                             Some("applet"),
+                                             Vector(CHECKSUM_PROP),
+                                             allExecutableNames.toVector,
+                                             false)
     val nrApplets = dxAppletsInProject.size
     val t1 = System.nanoTime()
     val diffMSec = (t1 - t0) / (1000 * 1000)
@@ -204,10 +191,8 @@ case class DxObjectDirectory(
   //
   // Note: in case of checksum collision, there could be several hits.
   // Return only the one that starts with the name we are looking for.
-  def lookupOtherVersions(
-      execName: String,
-      digest: String
-  ): Option[(DxDataObject, DxObjectDescribe)] = {
+  def lookupOtherVersions(execName: String,
+                          digest: String): Option[(DxDataObject, DxObjectDescribe)] = {
     val checksumMatches = projectWideExecutableDir.get(digest) match {
       case None      => return None
       case Some(vec) => vec
@@ -264,17 +249,9 @@ case class DxObjectDirectory(
 
     dxClass match {
       case "Workflow" =>
-        DXAPI.workflowRename(
-            objInfo.dxObj.getId,
-            DxUtils.jsonNodeOfJsValue(req),
-            classOf[JsonNode]
-        )
+        DXAPI.workflowRename(objInfo.dxObj.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
       case "Applet" =>
-        DXAPI.appletRename(
-            objInfo.dxObj.getId,
-            DxUtils.jsonNodeOfJsValue(req),
-            classOf[JsonNode]
-        )
+        DXAPI.appletRename(objInfo.dxObj.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
       case other => throw new Exception(s"Unkown class ${other}")
     }
   }

@@ -11,11 +11,10 @@ import wom.values._
 import dxWDL.base.{AppInternalException, Utils}
 import dxWDL.dx.{DxFileDescribe, DxFile, DxUtils}
 
-case class DxPathFunctions(
-    fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-    config: DxPathConfig,
-    runtimeDebugLevel: Int
-) extends PathFunctionSet {
+case class DxPathFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                           config: DxPathConfig,
+                           runtimeDebugLevel: Int)
+    extends PathFunctionSet {
 
   /**
     * Similar to java.nio.Path.resolveSibling with
@@ -46,9 +45,7 @@ case class DxPathFunctions(
     * If path is relative, prefix it with the _host_ call root.
     */
   override def relativeToHostCallRoot(path: String): String =
-    throw new AppInternalException(
-        "relativeToHostCallRoot: not implemented in DxIoFunctions"
-    )
+    throw new AppInternalException("relativeToHostCallRoot: not implemented in DxIoFunctions")
 
   /**
     * Similar to java.nio.Path.getFileName
@@ -80,14 +77,12 @@ case class DxPathFunctions(
   override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(
-    fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-    config: DxPathConfig,
-    runtimeDebugLevel: Int
-) extends IoFunctionSet {
+case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                         config: DxPathConfig,
+                         runtimeDebugLevel: Int)
+    extends IoFunctionSet {
   private val verbose = runtimeDebugLevel >= 1
-  override def pathFunctions =
-    new DxPathFunctions(fileInfoDir, config, runtimeDebugLevel)
+  override def pathFunctions = new DxPathFunctions(fileInfoDir, config, runtimeDebugLevel)
 
   // Functions that (possibly) necessitate I/O operation (on local, network, or cloud filesystems)
   /**
@@ -97,11 +92,9 @@ case class DxIoFunctions(
     * @param failOnOverflow if true, the Future will fail if the files has more than maxBytes
     * @return the content of the file as a String
     */
-  override def readFile(
-      path: String,
-      maxBytes: Option[Int],
-      failOnOverflow: Boolean
-  ): Future[String] = {
+  override def readFile(path: String,
+                        maxBytes: Option[Int],
+                        failOnOverflow: Boolean): Future[String] = {
     val content = Furl.parse(path) match {
       case FurlLocal(localPath) =>
         val p = Paths.get(localPath)
@@ -124,10 +117,7 @@ case class DxIoFunctions(
   /**
     * Write "content" to the specified "path" location
     */
-  override def writeFile(
-      path: String,
-      content: String
-  ): Future[WomSingleFile] = {
+  override def writeFile(path: String, content: String): Future[WomSingleFile] = {
     Furl.parse(path) match {
       case FurlLocal(localPath) =>
         val p = Paths.get(localPath)
@@ -145,18 +135,13 @@ case class DxIoFunctions(
     * In a world where then backend is not known at submission time this will not be sufficient.
     */
   override def createTemporaryDirectory(name: Option[String]): Future[String] =
-    throw new AppInternalException(
-        "createTemporaryDirectory: not implemented in DxIoFunctions"
-    )
+    throw new AppInternalException("createTemporaryDirectory: not implemented in DxIoFunctions")
 
   /**
     * Copy pathFrom to targetName
     * @return destination as a WomSingleFile
     */
-  override def copyFile(
-      source: String,
-      destination: String
-  ): Future[WomSingleFile] =
+  override def copyFile(source: String, destination: String): Future[WomSingleFile] =
     throw new AppInternalException("copyFile: not implemented in DxIoFunctions")
 
   /**
@@ -183,8 +168,7 @@ case class DxIoFunctions(
           .toSeq
         files.sorted
       }
-    Utils.appletLog(config.verbose, s"""glob results=${retval
-      .mkString("\n")}""")
+    Utils.appletLog(config.verbose, s"""glob results=${retval.mkString("\n")}""")
     Future(retval)
   }
 
@@ -193,12 +177,8 @@ case class DxIoFunctions(
     * dirPath MUST BE a directory
     * @return The list of all files under "dirPath"
     */
-  override def listAllFilesUnderDirectory(
-      dirPath: String
-  ): Future[Seq[String]] =
-    throw new AppInternalException(
-        "listAllFilesUnderDirectory: not implemented in DxIoFunctions"
-    )
+  override def listAllFilesUnderDirectory(dirPath: String): Future[Seq[String]] =
+    throw new AppInternalException("listAllFilesUnderDirectory: not implemented in DxIoFunctions")
 
   /**
     * List entries in a directory non recursively. Includes directories
@@ -206,9 +186,7 @@ case class DxIoFunctions(
   override def listDirectory(
       path: String
   )(visited: Vector[String] = Vector.empty): Future[Iterator[IoElement]] =
-    throw new AppInternalException(
-        "listDirectory: not implemented in DxIoFunctions"
-    )
+    throw new AppInternalException("listDirectory: not implemented in DxIoFunctions")
 
   /**
     * Return true if path points to a directory, false otherwise

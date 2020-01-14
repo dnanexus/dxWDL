@@ -37,44 +37,35 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                         |the platform""".stripMargin
         )
     }
-  lazy val cFlags = List(
-      "-compileMode",
-      "NativeWithoutRuntimeAsset",
-      "-project",
-      dxTestProject.getId,
-      "-folder",
-      "/unit_tests",
-      "-force",
-      "-locked",
-      "-quiet"
-  )
+  lazy val cFlags = List("-compileMode",
+                         "NativeWithoutRuntimeAsset",
+                         "-project",
+                         dxTestProject.getId,
+                         "-folder",
+                         "/unit_tests",
+                         "-force",
+                         "-locked",
+                         "-quiet")
 
-  lazy private val cFlagsReorg = List(
-      "-compileMode",
-      "NativeWithoutRuntimeAsset",
-      "--project",
-      dxTestProject.getId,
-      "-quiet",
-      "--folder",
-      "/reorg_tests"
-  )
+  lazy private val cFlagsReorg = List("-compileMode",
+                                      "NativeWithoutRuntimeAsset",
+                                      "--project",
+                                      dxTestProject.getId,
+                                      "-quiet",
+                                      "--folder",
+                                      "/reorg_tests")
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-    Utils.execCommand(
-        s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
-        quiet = true
-    )
+    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/", quiet = true)
 
     // building necessary applets before starting the tests
-    val native_applets = Vector(
-        "native_concat",
-        "native_diff",
-        "native_mk_list",
-        "native_sum",
-        "native_sum_012",
-        "functional_reorg_test"
-    )
+    val native_applets = Vector("native_concat",
+                                "native_diff",
+                                "native_mk_list",
+                                "native_sum",
+                                "native_sum_012",
+                                "functional_reorg_test")
     val topDir = Paths.get(System.getProperty("user.dir"))
     native_applets.foreach { app =>
       try {
@@ -92,15 +83,13 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val folder = Paths.get(path).getParent().toAbsolutePath().toString()
     val basename = Paths.get(path).getFileName().toString()
     val verbose = Verbose(false, true, Set.empty)
-    val results = DxFindDataObjects(Some(10), verbose).apply(
-        dxTestProject,
-        Some(folder),
-        recurse = false,
-        klassRestriction = None,
-        withProperties = Vector.empty,
-        nameConstraints = Vector(basename),
-        withInputOutputSpec = false
-    )
+    val results = DxFindDataObjects(Some(10), verbose).apply(dxTestProject,
+                                                             Some(folder),
+                                                             recurse = false,
+                                                             klassRestriction = None,
+                                                             withProperties = Vector.empty,
+                                                             nameConstraints = Vector(basename),
+                                                             withInputOutputSpec = false)
     results.size shouldBe (1)
     val desc = results.values.head
     desc.id
@@ -179,18 +168,16 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "be able to build interfaces to native applets" taggedAs (NativeTestXX, EdgeTest) in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
-        List(
-            "--force",
-            "--quiet",
-            "--folder",
-            "/unit_tests/applets",
-            "--project",
-            dxTestProject.getId,
-            "--language",
-            "wdl_draft2",
-            "--output",
-            outputPath
-        )
+        List("--force",
+             "--quiet",
+             "--folder",
+             "/unit_tests/applets",
+             "--project",
+             dxTestProject.getId,
+             "--language",
+             "wdl_draft2",
+             "--output",
+             outputPath)
     ) shouldBe a[Main.SuccessfulTermination]
 
     // check that the generated file contains the correct tasks
@@ -298,8 +285,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "deep nesting" taggedAs (NativeTestXX) in {
-    val path =
-      pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
+    val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(
         path.toString
         /*                :: "--verbose"
@@ -319,8 +305,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -331,11 +316,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other => throw new Exception(s"Unexpected result ${other}")
     }
     timeout shouldBe JsObject(
-        "*" -> JsObject(
-            "days" -> JsNumber(2),
-            "hours" -> JsNumber(0),
-            "minutes" -> JsNumber(0)
-        )
+        "*" -> JsObject("days" -> JsNumber(2), "hours" -> JsNumber(0), "minutes" -> JsNumber(0))
     )
   }
 
@@ -351,8 +332,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -375,8 +355,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -498,8 +477,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     // remove compile mode
     val retval = Main.compile(
-        path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg
-          .drop(2)
+        path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg.drop(2)
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
 

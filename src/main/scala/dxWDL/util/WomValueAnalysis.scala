@@ -77,10 +77,7 @@ object WomValueAnalysis {
       case (_, WomOptionalValue(_, None)) => false
 
       // struct -- make sure all of its fields do not require evaluation
-      case (
-          WomCompositeType(typeMap: Map[String, WomType], _),
-          WomObject(valueMap, _)
-          ) =>
+      case (WomCompositeType(typeMap: Map[String, WomType], _), WomObject(valueMap, _)) =>
         typeMap.exists {
           case (name, t) =>
             val value: WomValue = valueMap(name)
@@ -88,11 +85,8 @@ object WomValueAnalysis {
         }
 
       case (_, _) =>
-        throw new Exception(
-            s"""|Unsupported combination type=(${womType.stableName},${womType})
-                    |value=(${value.toWomString}, ${value})""".stripMargin
-              .replaceAll("\n", " ")
-        )
+        throw new Exception(s"""|Unsupported combination type=(${womType.stableName},${womType})
+                    |value=(${value.toWomString}, ${value})""".stripMargin.replaceAll("\n", " "))
     }
   }
 
@@ -120,8 +114,7 @@ object WomValueAnalysis {
 
   def evalConst(womType: WomType, expr: WomExpression): WomValue = {
     ifConstEval(womType, expr) match {
-      case None =>
-        throw new Exception(s"Expression ${expr} is not a WDL constant")
+      case None           => throw new Exception(s"Expression ${expr} is not a WDL constant")
       case Some(wdlValue) => wdlValue
     }
   }

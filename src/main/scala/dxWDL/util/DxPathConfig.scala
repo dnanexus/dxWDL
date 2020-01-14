@@ -16,47 +16,45 @@ import dxWDL.base.Utils
 // will need access to temporary files created with stdlib calls like
 // "write_lines".
 //
-case class DxPathConfig(
-    homeDir: Path,
-    metaDir: Path,
-    // Running applets download files from the platform to this location
-    inputFilesDir: Path,
-    // Running applets place output files in this location
-    outputFilesDir: Path,
-    // scratch space for WDL stdlib operations like "write_lines"
-    tmpDir: Path,
-    // Where a JSON representation of the instance data base is stored
-    instanceTypeDB: Path,
-    // Source WOM code. We could get it from the details field, but that
-    // would require an additional API call. This is a private copy.
-    womSourceCodeEncoded: Path,
-    stdout: Path,
-    stderr: Path,
-    // bash script for running the docker image the user specified
-    // is deposited here.
-    dockerSubmitScript: Path,
-    // bash script is written to this location
-    script: Path,
-    // Status code returned from the shell command is written
-    // to this file
-    rcPath: Path,
-    // file where the docker container name is stored.
-    dockerCid: Path,
-    // bash commands for streaming files with 'dx cat' are located here
-    setupStreams: Path,
-    // Location of dx download agent (dxda) manifest. It will download all these
-    // files, if the file is non empty.
-    dxdaManifest: Path,
-    // Location of dxfuse manifest. It will mount all these
-    // files, if the file is non empty.
-    dxfuseManifest: Path,
-    dxfuseMountpoint: Path,
-    // file for storing the state between prolog and epilog of the task runner
-    runnerTaskEnv: Path,
-    // should we stream all files?
-    streamAllFiles: Boolean,
-    verbose: Boolean
-) {
+case class DxPathConfig(homeDir: Path,
+                        metaDir: Path,
+                        // Running applets download files from the platform to this location
+                        inputFilesDir: Path,
+                        // Running applets place output files in this location
+                        outputFilesDir: Path,
+                        // scratch space for WDL stdlib operations like "write_lines"
+                        tmpDir: Path,
+                        // Where a JSON representation of the instance data base is stored
+                        instanceTypeDB: Path,
+                        // Source WOM code. We could get it from the details field, but that
+                        // would require an additional API call. This is a private copy.
+                        womSourceCodeEncoded: Path,
+                        stdout: Path,
+                        stderr: Path,
+                        // bash script for running the docker image the user specified
+                        // is deposited here.
+                        dockerSubmitScript: Path,
+                        // bash script is written to this location
+                        script: Path,
+                        // Status code returned from the shell command is written
+                        // to this file
+                        rcPath: Path,
+                        // file where the docker container name is stored.
+                        dockerCid: Path,
+                        // bash commands for streaming files with 'dx cat' are located here
+                        setupStreams: Path,
+                        // Location of dx download agent (dxda) manifest. It will download all these
+                        // files, if the file is non empty.
+                        dxdaManifest: Path,
+                        // Location of dxfuse manifest. It will mount all these
+                        // files, if the file is non empty.
+                        dxfuseManifest: Path,
+                        dxfuseMountpoint: Path,
+                        // file for storing the state between prolog and epilog of the task runner
+                        runnerTaskEnv: Path,
+                        // should we stream all files?
+                        streamAllFiles: Boolean,
+                        verbose: Boolean) {
 
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
@@ -70,11 +68,7 @@ case class DxPathConfig(
 }
 
 object DxPathConfig {
-  def apply(
-      homeDir: Path,
-      streamAllFiles: Boolean,
-      verbose: Boolean
-  ): DxPathConfig = {
+  def apply(homeDir: Path, streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
     val metaDir: Path = homeDir.resolve("meta")
     val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")

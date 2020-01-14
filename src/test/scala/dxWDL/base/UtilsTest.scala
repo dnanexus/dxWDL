@@ -12,8 +12,7 @@ class UtilsTest extends FlatSpec with Matchers {
   }
 
   it should "Correctly encode and decode base64" in {
-    val encodeDecode =
-      Utils.base64DecodeAndGunzip(Utils.gzipAndBase64Encode(sentence))
+    val encodeDecode = Utils.base64DecodeAndGunzip(Utils.gzipAndBase64Encode(sentence))
     sentence should be(encodeDecode)
   }
 
@@ -31,13 +30,10 @@ class UtilsTest extends FlatSpec with Matchers {
     val retval = Utils.buildLimitedSizeName(Vector(1, 2, 3).map(_.toString), 10)
     retval should be("[1, 2, 3]")
 
-    val retval2 =
-      Utils.buildLimitedSizeName(Vector(100, 200, 300).map(_.toString), 10)
+    val retval2 = Utils.buildLimitedSizeName(Vector(100, 200, 300).map(_.toString), 10)
     retval2 should be("[100, 200]")
 
-    Utils.buildLimitedSizeName(Vector("A", "B", "hel", "nope"), 10) should be(
-        "[A, B, hel]"
-    )
+    Utils.buildLimitedSizeName(Vector("A", "B", "hel", "nope"), 10) should be("[A, B, hel]")
 
     Utils.buildLimitedSizeName(Vector("A", "B", "C", "D", "neverland"), 13) should be(
         "[A, B, C, D]"

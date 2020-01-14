@@ -29,11 +29,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     IOParameter(name, ioClass, optional)
   }
 
-  private def parseDescribe(
-      jsv: JsValue,
-      dxobj: DxDataObject,
-      dxProject: DxProject
-  ): DxObjectDescribe = {
+  private def parseDescribe(jsv: JsValue,
+                            dxobj: DxDataObject,
+                            dxProject: DxProject): DxObjectDescribe = {
     val size = jsv.asJsObject.fields.get("size") match {
       case None                 => None
       case Some(JsNumber(size)) => Some(size.toLong)
@@ -47,105 +45,90 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     val folder = jsv.asJsObject.fields.get("folder") match {
       case None                   => throw new Exception("folder field missing")
       case Some(JsString(folder)) => folder
-      case Some(other) =>
-        throw new Exception(s"malformed folder field ${other}")
+      case Some(other)            => throw new Exception(s"malformed folder field ${other}")
     }
-    val properties: Map[String, String] =
-      jsv.asJsObject.fields.get("properties") match {
-        case None => Map.empty
-        case Some(JsObject(fields)) =>
-          fields.map {
-            case (key, JsString(value)) =>
-              key -> value
-            case (key, other) =>
-              throw new Exception(s"key ${key} has malformed property ${other}")
-          }.toMap
-        case Some(other) =>
-          throw new Exception(s"malformed properties field ${other}")
-      }
-    val inputSpec: Option[Vector[IOParameter]] =
-      jsv.asJsObject.fields.get("inputSpec") match {
-        case None         => None
-        case Some(JsNull) => None
-        case Some(JsArray(iSpecVec)) =>
-          Some(iSpecVec.map(parseParamSpec).toVector)
-        case Some(other) =>
-          throw new Exception(s"malformed inputSpec field ${other}")
-      }
-    val outputSpec: Option[Vector[IOParameter]] =
-      jsv.asJsObject.fields.get("outputSpec") match {
-        case None         => None
-        case Some(JsNull) => None
-        case Some(JsArray(oSpecVec)) =>
-          Some(oSpecVec.map(parseParamSpec).toVector)
-        case Some(other) =>
-          throw new Exception(s"malformed output field ${other}")
-      }
+    val properties: Map[String, String] = jsv.asJsObject.fields.get("properties") match {
+      case None => Map.empty
+      case Some(JsObject(fields)) =>
+        fields.map {
+          case (key, JsString(value)) =>
+            key -> value
+          case (key, other) =>
+            throw new Exception(s"key ${key} has malformed property ${other}")
+        }.toMap
+      case Some(other) => throw new Exception(s"malformed properties field ${other}")
+    }
+    val inputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
+      case None         => None
+      case Some(JsNull) => None
+      case Some(JsArray(iSpecVec)) =>
+        Some(iSpecVec.map(parseParamSpec).toVector)
+      case Some(other) =>
+        throw new Exception(s"malformed inputSpec field ${other}")
+    }
+    val outputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("outputSpec") match {
+      case None         => None
+      case Some(JsNull) => None
+      case Some(JsArray(oSpecVec)) =>
+        Some(oSpecVec.map(parseParamSpec).toVector)
+      case Some(other) =>
+        throw new Exception(s"malformed output field ${other}")
+    }
     val created: Long = jsv.asJsObject.fields.get("created") match {
       case None                 => throw new Exception("'created' field is missing")
       case Some(JsNumber(date)) => date.toLong
-      case Some(other) =>
-        throw new Exception(s"malformed created field ${other}")
+      case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
     val modified: Long = jsv.asJsObject.fields.get("modified") match {
       case None                 => throw new Exception("'modified' field is missing")
       case Some(JsNumber(date)) => date.toLong
-      case Some(other) =>
-        throw new Exception(s"malformed created field ${other}")
+      case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
     val details: Option[JsValue] = jsv.asJsObject.fields.get("details")
 
     dxobj match {
       case _: DxApp =>
-        DxAppDescribe(
-            dxobj.id,
-            name,
-            created,
-            modified,
-            Some(properties),
-            details,
-            inputSpec,
-            outputSpec
-        )
+        DxAppDescribe(dxobj.id,
+                      name,
+                      created,
+                      modified,
+                      Some(properties),
+                      details,
+                      inputSpec,
+                      outputSpec)
       case _: DxApplet =>
-        DxAppletDescribe(
-            dxProject.id,
-            dxobj.id,
-            name,
-            folder,
-            created,
-            modified,
-            Some(properties),
-            details,
-            inputSpec,
-            outputSpec
-        )
+        DxAppletDescribe(dxProject.id,
+                         dxobj.id,
+                         name,
+                         folder,
+                         created,
+                         modified,
+                         Some(properties),
+                         details,
+                         inputSpec,
+                         outputSpec)
       case _: DxWorkflow =>
-        DxAppletDescribe(
-            dxProject.id,
-            dxobj.id,
-            name,
-            folder,
-            created,
-            modified,
-            Some(properties),
-            details,
-            inputSpec,
-            outputSpec
-        )
+        DxAppletDescribe(dxProject.id,
+                         dxobj.id,
+                         name,
+                         folder,
+                         created,
+                         modified,
+                         Some(properties),
+                         details,
+                         inputSpec,
+                         outputSpec)
       case _: DxFile =>
-        DxFileDescribe(
-            dxProject.id,
-            dxobj.id,
-            name,
-            folder,
-            created,
-            modified,
-            size.get,
-            Some(properties),
-            details,
-            None
-        )
+        DxFileDescribe(dxProject.id,
+                       dxobj.id,
+                       name,
+                       folder,
+                       created,
+                       modified,
+                       size.get,
+                       Some(properties),
+                       details,
+                       None)
       case other =>
         throw new Exception(s"unsupported object ${other}")
     }
@@ -159,19 +142,15 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         val dxDataObj = dxObj.asInstanceOf[DxDataObject]
         (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
       case _ =>
-        throw new Exception(
-            s"""|malformed result: expecting {project, id, describe} fields, got:
+        throw new Exception(s"""|malformed result: expecting {project, id, describe} fields, got:
                     |${jsv.prettyPrint}
-                    |""".stripMargin
-        )
+                    |""".stripMargin)
     }
   }
 
-  private def buildScope(
-      dxProject: DxProject,
-      folder: Option[String],
-      recurse: Boolean
-  ): JsValue = {
+  private def buildScope(dxProject: DxProject,
+                         folder: Option[String],
+                         recurse: Boolean): JsValue = {
     val part1 = Map("project" -> JsString(dxProject.getId))
     val part2 = folder match {
       case None       => Map.empty
@@ -195,24 +174,20 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    val describeFields = Map(
-        "name" -> JsBoolean(true),
-        "folder" -> JsBoolean(true),
-        "size" -> JsBoolean(true),
-        "properties" -> JsBoolean(true)
-    )
+    val describeFields = Map("name" -> JsBoolean(true),
+                             "folder" -> JsBoolean(true),
+                             "size" -> JsBoolean(true),
+                             "properties" -> JsBoolean(true))
     val ioSpec =
       if (withInputOutputSpec)
         Map("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true))
       else
         Map.empty
 
-    val reqFields = Map(
-        "visibility" -> JsString("either"),
-        "project" -> JsString(dxProject.getId),
-        "describe" -> JsObject(describeFields ++ ioSpec),
-        "scope" -> scope
-    )
+    val reqFields = Map("visibility" -> JsString("either"),
+                        "project" -> JsString(dxProject.getId),
+                        "describe" -> JsObject(describeFields ++ ioSpec),
+                        "scope" -> scope)
     val limitField = limit match {
       case None      => Map.empty
       case Some(lim) => Map("limit" -> JsNumber(lim))
@@ -260,11 +235,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
 
-    val response = DXAPI.systemFindDataObjects(
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
-    )
+    val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
+                                               classOf[JsonNode],
+                                               DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {
@@ -277,42 +250,36 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       repJs.asJsObject.fields.get("results") match {
         case None                   => throw new Exception(s"missing results field ${repJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
-        case Some(other) =>
-          throw new Exception(s"malformed results field ${other.prettyPrint}")
+        case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
       }
 
     (results.toMap, next)
   }
 
-  def apply(
-      dxProject: DxProject,
-      folder: Option[String],
-      recurse: Boolean,
-      klassRestriction: Option[String],
-      withProperties: Vector[String], // object must have these properties
-      nameConstraints: Vector[String], // the object name has to be one of these strings
-      withInputOutputSpec: Boolean // should the IO spec be described?
+  def apply(dxProject: DxProject,
+            folder: Option[String],
+            recurse: Boolean,
+            klassRestriction: Option[String],
+            withProperties: Vector[String], // object must have these properties
+            nameConstraints: Vector[String], // the object name has to be one of these strings
+            withInputOutputSpec: Boolean // should the IO spec be described?
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
-        throw new Exception(
-            "class limitation must be one of {record, file, applet, workflow}"
-        )
+        throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
     val scope = buildScope(dxProject, folder, recurse)
 
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
-      val (results, next) = submitRequest(
-          scope,
-          dxProject,
-          cursor,
-          klassRestriction,
-          withProperties,
-          nameConstraints,
-          withInputOutputSpec
-      )
+      val (results, next) = submitRequest(scope,
+                                          dxProject,
+                                          cursor,
+                                          klassRestriction,
+                                          withProperties,
+                                          nameConstraints,
+                                          withInputOutputSpec)
       allResults = allResults ++ results
       cursor = next
     } while (cursor != None);

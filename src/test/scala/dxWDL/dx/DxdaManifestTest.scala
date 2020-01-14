@@ -37,8 +37,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
   // it to what we get from our DxdaManifest code.
   //
   private def describeWithParts(dxFile: DxFile): JsValue = {
-    val cmd =
-      s"""dx api ${dxFile.getId} describe '{"fields": { "parts" : true } }'"""
+    val cmd = s"""dx api ${dxFile.getId} describe '{"fields": { "parts" : true } }'"""
     val (stdout, stderr) = Utils.execCommand(cmd)
     val jsv = stdout.parseJson
 

@@ -7,29 +7,22 @@ import dxWDL.base._
 
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
-case class ExecLinkInfo(
-    name: String,
-    inputs: Map[String, WomType],
-    outputs: Map[String, WomType],
-    dxExec: DxExecutable
-)
+case class ExecLinkInfo(name: String,
+                        inputs: Map[String, WomType],
+                        outputs: Map[String, WomType],
+                        dxExec: DxExecutable)
 
 object ExecLinkInfo {
   // Serialize applet input definitions, so they could be used
   // at runtime.
-  def writeJson(
-      ali: ExecLinkInfo,
-      typeAliases: Map[String, WomType]
-  ): JsValue = {
+  def writeJson(ali: ExecLinkInfo, typeAliases: Map[String, WomType]): JsValue = {
     val womTypeConverter = WomTypeSerialization(typeAliases)
 
     val appInputDefs: Map[String, JsString] = ali.inputs.map {
-      case (name, womType) =>
-        name -> JsString(womTypeConverter.toString(womType))
+      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
     }.toMap
     val appOutputDefs: Map[String, JsString] = ali.outputs.map {
-      case (name, womType) =>
-        name -> JsString(womTypeConverter.toString(womType))
+      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
     }.toMap
     JsObject(
         "name" -> JsString(ali.name),
@@ -39,10 +32,7 @@ object ExecLinkInfo {
     )
   }
 
-  def readJson(
-      aplInfo: JsValue,
-      typeAliases: Map[String, WomType]
-  ): ExecLinkInfo = {
+  def readJson(aplInfo: JsValue, typeAliases: Map[String, WomType]): ExecLinkInfo = {
     val womTypeConverter = WomTypeSerialization(typeAliases)
 
     val name = aplInfo.asJsObject.fields("name") match {
@@ -54,9 +44,8 @@ object ExecLinkInfo {
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) =>
-          key -> womTypeConverter.fromString(womTypeStr)
-        case _ => throw new Exception("Bad JSON")
+        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case _                           => throw new Exception("Bad JSON")
       }
       .toMap
     val outputDefs = aplInfo.asJsObject
@@ -64,18 +53,16 @@ object ExecLinkInfo {
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) =>
-          key -> womTypeConverter.fromString(womTypeStr)
-        case _ => throw new Exception("Bad JSON")
+        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case _                           => throw new Exception("Bad JSON")
       }
       .toMap
     val dxExec = aplInfo.asJsObject.fields("id") match {
       case JsString(id) if id.startsWith("app-")      => DxApp(id)
       case JsString(id) if id.startsWith("applet-")   => DxApplet(id, None)
       case JsString(id) if id.startsWith("workflow-") => DxWorkflow(id, None)
-      case JsString(id) =>
-        throw new Exception(s"${id} is not an app/applet/workflow")
-      case _ => throw new Exception("Bad JSON")
+      case JsString(id)                               => throw new Exception(s"${id} is not an app/applet/workflow")
+      case _                                          => throw new Exception("Bad JSON")
     }
     ExecLinkInfo(name, inputDefs, outputDefs, dxExec)
   }

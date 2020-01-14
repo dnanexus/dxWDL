@@ -38,9 +38,7 @@ case class SortTypeAliases(verbose: Verbose) {
 
       // catch-all for other types not currently supported
       case other =>
-        throw new Exception(
-            s"Unsupported WOM type ${other}, ${other.stableName}"
-        )
+        throw new Exception(s"Unsupported WOM type ${other}, ${other.stableName}")
     }
   }
 
@@ -52,10 +50,8 @@ case class SortTypeAliases(verbose: Verbose) {
     }
   }
 
-  private def next(
-      remaining: Vector[WomType],
-      alreadySorted: Vector[WomType]
-  ): (Vector[WomType], Vector[WomType]) = {
+  private def next(remaining: Vector[WomType],
+                   alreadySorted: Vector[WomType]): (Vector[WomType], Vector[WomType]) = {
     val alreadySortedNames: Set[String] = alreadySorted.collect {
       case WomCompositeType(_, Some(name)) => name
     }.toSet
@@ -94,9 +90,7 @@ case class SortTypeAliases(verbose: Verbose) {
     accu
   }
 
-  def apply(
-      typeAliases: Vector[(String, WomType)]
-  ): Vector[(String, WomType)] = {
+  def apply(typeAliases: Vector[(String, WomType)]): Vector[(String, WomType)] = {
     val justTypes = typeAliases.map { case (_, x) => x }
     val sortedTypes = apply2(justTypes)
 

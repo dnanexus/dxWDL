@@ -35,23 +35,21 @@ case class Verbose(on: Boolean, quiet: Boolean, keywords: Set[String]) {
 
 // Packing of all compiler flags in an easy to digest
 // format
-case class CompilerOptions(
-    archive: Boolean,
-    compileMode: CompilerFlag.Value,
-    defaults: Option[Path],
-    extras: Option[Extras],
-    fatalValidationWarnings: Boolean,
-    force: Boolean,
-    importDirs: List[Path],
-    inputs: List[Path],
-    leaveWorkflowsOpen: Boolean,
-    locked: Boolean,
-    projectWideReuse: Boolean,
-    reorg: Boolean,
-    streamAllFiles: Boolean,
-    runtimeDebugLevel: Option[Int],
-    verbose: Verbose
-)
+case class CompilerOptions(archive: Boolean,
+                           compileMode: CompilerFlag.Value,
+                           defaults: Option[Path],
+                           extras: Option[Extras],
+                           fatalValidationWarnings: Boolean,
+                           force: Boolean,
+                           importDirs: List[Path],
+                           inputs: List[Path],
+                           leaveWorkflowsOpen: Boolean,
+                           locked: Boolean,
+                           projectWideReuse: Boolean,
+                           reorg: Boolean,
+                           streamAllFiles: Boolean,
+                           runtimeDebugLevel: Option[Int],
+                           verbose: Verbose)
 
 // Different ways of using the mini-workflow runner.
 //   Launch:     there are WDL calls, lanuch the dx:executables.

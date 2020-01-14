@@ -73,10 +73,7 @@ object Furl {
   // We need to change the standard so that the conversion from file to
   // string is well defined, and requires an explicit conversion function.
   //
-  def dxFileToFurl(
-      dxFile: DxFile,
-      fileInfoDir: Map[String, (DxFile, DxFileDescribe)]
-  ): FurlDx = {
+  def dxFileToFurl(dxFile: DxFile, fileInfoDir: Map[String, (DxFile, DxFileDescribe)]): FurlDx = {
     // Try the cache first; if the file isn't there, submit an API call.
     val (folder, name) = fileInfoDir.get(dxFile.id) match {
       case None =>
@@ -92,11 +89,9 @@ object Furl {
         FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}", None, dxFile)
       case Some(proj) =>
         val projId = proj.getId
-        FurlDx(
-            s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
-            Some(DxProject.getInstance(projId)),
-            dxFile
-        )
+        FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
+               Some(DxProject.getInstance(projId)),
+               dxFile)
     }
   }
 }

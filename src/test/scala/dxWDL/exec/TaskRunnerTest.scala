@@ -18,15 +18,7 @@ import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, 
 class TaskRunnerTest extends FlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
-    DxInstanceType(
-        "mem_ssd_unicorn",
-        100,
-        100,
-        4,
-        1.00f,
-        Vector(("Ubuntu", "16.04")),
-        false
-    )
+    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
   private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
   private val verbose = false
 
@@ -60,8 +52,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   private def addBaseDir(womValue: WomValue): WomValue = {
     womValue match {
       // primitive types, pass through
-      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) =>
-        womValue
+      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
 
       // single file
       case WomSingleFile(s) => WomSingleFile(pathFromBasename(s).toString)
@@ -141,36 +132,26 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     val (language, womBundle: WomBundle, allSources, _) =
       ParseWomSourceFile(false).apply(wdlCode, List.empty)
-    val task: CallableTaskDefinition =
-      ParseWomSourceFile(false).getMainTask(womBundle)
+    val task: CallableTaskDefinition = ParseWomSourceFile(false).getMainTask(womBundle)
     assert(allSources.size == 1)
-    val sourceDict =
-      ParseWomSourceFile(false).scanForTasks(allSources.values.head)
+    val sourceDict = ParseWomSourceFile(false).scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
     val taskSourceCode = sourceDict.values.head
 
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
-    val dxIoFunctions =
-      DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
-    val jobInputOutput = new JobInputOutput(
-        dxIoFunctions,
-        runtimeDebugLevel,
-        womBundle.typeAliases
-    )
-    val taskRunner = TaskRunner(
-        task,
-        taskSourceCode,
-        womBundle.typeAliases,
-        instanceTypeDB,
-        dxPathConfig,
-        dxIoFunctions,
-        jobInputOutput,
-        Some(WdlRuntimeAttrs(Map.empty)),
-        0
-    )
-    val inputsRelPaths =
-      taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
+    val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
+    val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
+    val taskRunner = TaskRunner(task,
+                                taskSourceCode,
+                                womBundle.typeAliases,
+                                instanceTypeDB,
+                                dxPathConfig,
+                                dxIoFunctions,
+                                jobInputOutput,
+                                Some(WdlRuntimeAttrs(Map.empty)),
+                                0)
+    val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {
       case (inpDef, value) => (inpDef, addBaseDir(value))
     }.toMap
@@ -249,8 +230,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "read a docker manifest file" in {
-    val buf =
-      """|[
+    val buf = """|[
                      |{"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
                      |"RepoTags":["ubuntu_18_04_minimal:latest"],
                      |"Layers":[

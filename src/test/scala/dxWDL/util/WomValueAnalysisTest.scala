@@ -10,8 +10,7 @@ import wom.values._
 class WomValueAnalysisTest extends FlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[ExpressionNode] = {
-    val (wf: WorkflowDefinition, _, _) =
-      ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
+    val (wf: WorkflowDefinition, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
     val eNodes: Vector[ExpressionNode] = wf.innerGraph.nodes.collect {
       case x: ExpressionNode => x
     }.toVector
@@ -25,16 +24,12 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
         "x" -> Some(WomFloat(2.718)),
         "s" -> Some(WomString("hello world")),
         "ar1" -> Some(
-            WomArray(
-                WomArrayType(WomStringType),
-                Vector(WomString("A"), WomString("B"), WomString("C"))
-            )
+            WomArray(WomArrayType(WomStringType),
+                     Vector(WomString("A"), WomString("B"), WomString("C")))
         ),
         "m1" -> Some(
-            WomMap(
-                WomMapType(WomStringType, WomIntegerType),
-                Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10))
-            )
+            WomMap(WomMapType(WomStringType, WomIntegerType),
+                   Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10)))
         ),
         "p" -> Some(WomPair(WomInteger(1), WomInteger(12))),
         "file2" -> None,

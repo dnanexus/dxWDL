@@ -4,26 +4,20 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-case class DxWorkflowStageDesc(
-    id: String,
-    executable: String,
-    name: String,
-    input: JsValue
-)
+case class DxWorkflowStageDesc(id: String, executable: String, name: String, input: JsValue)
 
-case class DxWorkflowDescribe(
-    project: String,
-    id: String,
-    name: String,
-    folder: String,
-    created: Long,
-    modified: Long,
-    properties: Option[Map[String, String]],
-    details: Option[JsValue],
-    inputSpec: Option[Vector[IOParameter]],
-    outputSpec: Option[Vector[IOParameter]],
-    stages: Option[Vector[DxWorkflowStageDesc]]
-) extends DxObjectDescribe
+case class DxWorkflowDescribe(project: String,
+                              id: String,
+                              name: String,
+                              folder: String,
+                              created: Long,
+                              modified: Long,
+                              properties: Option[Map[String, String]],
+                              details: Option[JsValue],
+                              inputSpec: Option[Vector[IOParameter]],
+                              outputSpec: Option[Vector[IOParameter]],
+                              stages: Option[Vector[DxWorkflowStageDesc]])
+    extends DxObjectDescribe
 
 case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutable {
   private def parseStages(jsv: JsValue): Vector[DxWorkflowStageDesc] = {
@@ -33,60 +27,49 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     }
     jsVec.map {
       case jsv2 =>
-        val stage =
-          jsv2.asJsObject.getFields("id", "executable", "name", "input") match {
-            case Seq(JsString(id), JsString(exec), JsString(name), input) =>
-              DxWorkflowStageDesc(id, exec, name, input)
-            case other =>
-              throw new Exception(s"Malfored JSON ${other}")
-          }
+        val stage = jsv2.asJsObject.getFields("id", "executable", "name", "input") match {
+          case Seq(JsString(id), JsString(exec), JsString(name), input) =>
+            DxWorkflowStageDesc(id, exec, name, input)
+          case other =>
+            throw new Exception(s"Malfored JSON ${other}")
+        }
         stage
     }.toVector
   }
 
   def describe(fields: Set[Field.Value] = Set.empty): DxWorkflowDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
-    val defaultFields = Set(
-        Field.Project,
-        Field.Id,
-        Field.Name,
-        Field.Folder,
-        Field.Created,
-        Field.Modified,
-        Field.InputSpec,
-        Field.OutputSpec
-    )
+    val defaultFields = Set(Field.Project,
+                            Field.Id,
+                            Field.Name,
+                            Field.Folder,
+                            Field.Created,
+                            Field.Modified,
+                            Field.InputSpec,
+                            Field.OutputSpec)
     val allFields = fields ++ defaultFields
-    val request = JsObject(
-        projSpec + ("fields" -> DxObject.requestFields(allFields))
-    )
-    val response = DXAPI.workflowDescribe(
-        id,
-        DxUtils.jsonNodeOfJsValue(request),
-        classOf[JsonNode],
-        DxUtils.dxEnv
-    )
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val response = DXAPI.workflowDescribe(id,
+                                          DxUtils.jsonNodeOfJsValue(request),
+                                          classOf[JsonNode],
+                                          DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val desc = descJs.asJsObject.getFields(
-        "project",
-        "id",
-        "name",
-        "folder",
-        "created",
-        "modified",
-        "inputSpec",
-        "outputSpec"
-    ) match {
-      case Seq(
-          JsString(projectId),
-          JsString(id),
-          JsString(name),
-          JsString(folder),
-          JsNumber(created),
-          JsNumber(modified),
-          JsArray(inputSpec),
-          JsArray(outputSpec)
-          ) =>
+    val desc = descJs.asJsObject.getFields("project",
+                                           "id",
+                                           "name",
+                                           "folder",
+                                           "created",
+                                           "modified",
+                                           "inputSpec",
+                                           "outputSpec") match {
+      case Seq(JsString(projectId),
+               JsString(id),
+               JsString(name),
+               JsString(folder),
+               JsNumber(created),
+               JsNumber(modified),
+               JsArray(inputSpec),
+               JsArray(outputSpec)) =>
         DxWorkflowDescribe(
             projectId,
             id,
@@ -105,9 +88,7 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields
-      .get("properties")
-      .map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     val stages = descJs.asJsObject.fields.get("stages").map(parseStages)
     desc.copy(details = details, properties = props, stages = stages)
   }
@@ -117,15 +98,9 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
   }
 
   def newRun(input: JsValue, name: String): DxAnalysis = {
-    val request =
-      JsObject("name" -> JsString(name), "input" -> input.asJsObject)
+    val request = JsObject("name" -> JsString(name), "input" -> input.asJsObject)
     val response =
-      DXAPI.workflowRun(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
-      )
+      DXAPI.workflowRun(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     repJs.asJsObject.fields.get("id") match {
       case None =>

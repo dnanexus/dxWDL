@@ -4,64 +4,50 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-case class DxAppletDescribe(
-    project: String,
-    id: String,
-    name: String,
-    folder: String,
-    created: Long,
-    modified: Long,
-    properties: Option[Map[String, String]],
-    details: Option[JsValue],
-    inputSpec: Option[Vector[IOParameter]],
-    outputSpec: Option[Vector[IOParameter]]
-) extends DxObjectDescribe
+case class DxAppletDescribe(project: String,
+                            id: String,
+                            name: String,
+                            folder: String,
+                            created: Long,
+                            modified: Long,
+                            properties: Option[Map[String, String]],
+                            details: Option[JsValue],
+                            inputSpec: Option[Vector[IOParameter]],
+                            outputSpec: Option[Vector[IOParameter]])
+    extends DxObjectDescribe
 
 case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable {
   def describe(fields: Set[Field.Value] = Set.empty): DxAppletDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
-    val defaultFields = Set(
-        Field.Project,
-        Field.Id,
-        Field.Name,
-        Field.Folder,
-        Field.Created,
-        Field.Modified,
-        Field.InputSpec,
-        Field.OutputSpec
-    )
+    val defaultFields = Set(Field.Project,
+                            Field.Id,
+                            Field.Name,
+                            Field.Folder,
+                            Field.Created,
+                            Field.Modified,
+                            Field.InputSpec,
+                            Field.OutputSpec)
     val allFields = fields ++ defaultFields
-    val request = JsObject(
-        projSpec + ("fields" -> DxObject.requestFields(allFields))
-    )
+    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val response =
-      DXAPI.appletDescribe(
-          id,
-          DxUtils.jsonNodeOfJsValue(request),
-          classOf[JsonNode],
-          DxUtils.dxEnv
-      )
+      DXAPI.appletDescribe(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val desc = descJs.asJsObject.getFields(
-        "project",
-        "id",
-        "name",
-        "folder",
-        "created",
-        "modified",
-        "inputSpec",
-        "outputSpec"
-    ) match {
-      case Seq(
-          JsString(project),
-          JsString(id),
-          JsString(name),
-          JsString(folder),
-          JsNumber(created),
-          JsNumber(modified),
-          JsArray(inputSpec),
-          JsArray(outputSpec)
-          ) =>
+    val desc = descJs.asJsObject.getFields("project",
+                                           "id",
+                                           "name",
+                                           "folder",
+                                           "created",
+                                           "modified",
+                                           "inputSpec",
+                                           "outputSpec") match {
+      case Seq(JsString(project),
+               JsString(id),
+               JsString(name),
+               JsString(folder),
+               JsNumber(created),
+               JsNumber(modified),
+               JsArray(inputSpec),
+               JsArray(outputSpec)) =>
         DxAppletDescribe(
             project,
             id,
@@ -79,9 +65,7 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
     }
 
     val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields
-      .get("properties")
-      .map(DxObject.parseJsonProperties)
+    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 }

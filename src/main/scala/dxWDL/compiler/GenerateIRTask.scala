@@ -15,17 +15,14 @@ import dxWDL.dx._
 import dxWDL.util._
 import IR.CVar
 
-case class GenerateIRTask(
-    verbose: Verbose,
-    typeAliases: Map[String, WomType],
-    language: Language.Value,
-    defaultRuntimeAttrs: WdlRuntimeAttrs
-) {
+case class GenerateIRTask(verbose: Verbose,
+                          typeAliases: Map[String, WomType],
+                          language: Language.Value,
+                          defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
   private class DynamicInstanceTypesException private (ex: Exception) extends RuntimeException(ex) {
-    def this() =
-      this(new RuntimeException("Runtime instance type calculation required"))
+    def this() = this(new RuntimeException("Runtime instance type calculation required"))
   }
 
   // Figure out which instance to use.
@@ -35,9 +32,7 @@ case class GenerateIRTask(
   // that, in the general case, could be calculated only at runtime.
   // At compile time, constants expressions are handled. Some can
   // only be evaluated at runtime.
-  private def calcInstanceType(
-      task: CallableTaskDefinition
-  ): IR.InstanceType = {
+  private def calcInstanceType(task: CallableTaskDefinition): IR.InstanceType = {
     def evalAttr(attrName: String): Option[WomValue] = {
       task.runtimeAttributes.attributes.get(attrName) match {
         case None =>
@@ -45,10 +40,7 @@ case class GenerateIRTask(
           defaultRuntimeAttrs.m.get(attrName)
         case Some(expr) =>
           val result: ErrorOr[WomValue] =
-            expr.evaluateValue(
-                Map.empty[String, WomValue],
-                wom.expression.NoIoFunctionSet
-            )
+            expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
           result match {
             case Invalid(_)         => throw new DynamicInstanceTypesException()
             case Valid(x: WomValue) => Some(x)
@@ -62,15 +54,12 @@ case class GenerateIRTask(
       val diskSpace = evalAttr("disks")
       val cores = evalAttr("cpu")
       val gpu = evalAttr("gpu")
-      val iTypeDesc =
-        InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
-      IR.InstanceTypeConst(
-          iTypeDesc.dxInstanceType,
-          iTypeDesc.memoryMB,
-          iTypeDesc.diskGB,
-          iTypeDesc.cpu,
-          iTypeDesc.gpu
-      )
+      val iTypeDesc = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
+      IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
+                           iTypeDesc.memoryMB,
+                           iTypeDesc.diskGB,
+                           iTypeDesc.cpu,
+                           iTypeDesc.gpu)
     } catch {
       case e: DynamicInstanceTypesException =>
         // The generated code will need to calculate the instance type at runtime
@@ -137,13 +126,7 @@ case class GenerateIRTask(
         Some(CVar(iName.value, womType, None, attr))
       }
 
-      case OverridableInputDefinitionWithDefault(
-          iName,
-          womType,
-          defaultExpr,
-          _,
-          paramMeta
-          ) =>
+      case OverridableInputDefinitionWithDefault(iName,womType,defaultExpr,_,paramMeta) =>
         WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
             // This is a task "input" of the form:
@@ -183,16 +166,11 @@ case class GenerateIRTask(
 
     val kind =
       (task.meta.get("type"), task.meta.get("id")) match {
-        case (
-            Some(MetaValueElementString("native")),
-            Some(MetaValueElementString(id))
-            ) =>
+        case (Some(MetaValueElementString("native")), Some(MetaValueElementString(id))) =>
           // wrapper for a native applet.
           // make sure the runtime block is empty
           if (!task.runtimeAttributes.attributes.isEmpty)
-            throw new Exception(
-                s"Native task ${task.name} should have an empty runtime block"
-            )
+            throw new Exception(s"Native task ${task.name} should have an empty runtime block")
           IR.AppletKindNative(id)
         case (_, _) =>
           // a WDL task
@@ -200,9 +178,7 @@ case class GenerateIRTask(
       }
 
     // Figure out if we need to use docker
-    val docker = triageDockerImage(
-        task.runtimeAttributes.attributes.get("docker")
-    )
+    val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
 
     val taskCleanedSourceCode = docker match {
       case IR.DockerImageDxFile(orgURL, dxFile) =>
@@ -216,29 +192,18 @@ case class GenerateIRTask(
       case _ => taskSourceCode
     }
     val WdlCodeSnippet(selfContainedSourceCode) =
-      WdlCodeGen(verbose, typeAliases, language).standAloneTask(
-          taskCleanedSourceCode
-      )
+      WdlCodeGen(verbose, typeAliases, language).standAloneTask(taskCleanedSourceCode)
 
     val dockerFinal = docker match {
       case IR.DockerImageNone =>
         // No docker image was specified, but there might be one in the
         // overall defaults
         defaultRuntimeAttrs.m.get("docker") match {
-          case None => IR.DockerImageNone
-          case Some(wValue) =>
-            triageDockerImage(Some(ValueAsAnExpression(wValue)))
+          case None         => IR.DockerImageNone
+          case Some(wValue) => triageDockerImage(Some(ValueAsAnExpression(wValue)))
         }
       case other => other
     }
-    IR.Applet(
-        task.name,
-        inputs,
-        outputs,
-        instanceType,
-        dockerFinal,
-        kind,
-        selfContainedSourceCode
-    )
+    IR.Applet(task.name, inputs, outputs, instanceType, dockerFinal, kind, selfContainedSourceCode)
   }
 }

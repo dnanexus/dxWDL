@@ -70,42 +70,33 @@ import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
 
-case class ChildExecDesc(
-    execName: String,
-    seqNum: Int,
-    outputs: Map[String, JsValue],
-    exec: DxExecution
-)
+case class ChildExecDesc(execName: String,
+                         seqNum: Int,
+                         outputs: Map[String, JsValue],
+                         exec: DxExecution)
 
-case class CollectSubJobs(
-    jobInputOutput: JobInputOutput,
-    inputsRaw: JsValue,
-    instanceTypeDB: InstanceTypeDB,
-    runtimeDebugLevel: Int,
-    typeAliases: Map[String, WomType]
-) {
+case class CollectSubJobs(jobInputOutput: JobInputOutput,
+                          inputsRaw: JsValue,
+                          instanceTypeDB: InstanceTypeDB,
+                          runtimeDebugLevel: Int,
+                          typeAliases: Map[String, WomType]) {
   //private val verbose = runtimeDebugLevel >= 1
   private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
-  def launch(
-      childJobs: Vector[DxExecution],
-      exportTypes: Map[String, WomType]
-  ): Map[String, WdlVarLinks] = {
+  def launch(childJobs: Vector[DxExecution],
+             exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
     assert(!childJobs.isEmpty)
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
-    val dxSubJob: DxJob = DxUtils.runSubJob(
-        "collect",
-        Some(instanceTypeDB.defaultInstanceType),
-        inputsRaw,
-        childJobs,
-        maxVerboseLevel
-    )
+    val dxSubJob: DxJob = DxUtils.runSubJob("collect",
+                                            Some(instanceTypeDB.defaultInstanceType),
+                                            inputsRaw,
+                                            childJobs,
+                                            maxVerboseLevel)
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
@@ -120,8 +111,7 @@ case class CollectSubJobs(
     val dxJob = DxJob(DxUtils.dxEnv.getJob())
     val parentJob: DxJob = dxJob.describe().parentJob.get
 
-    val childExecs: Vector[DxExecution] =
-      DxFindExecutions.apply(Some(parentJob))
+    val childExecs: Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
 
     // make sure the collect subjob is not included. Theoretically,
     // it should not be returned as a search result, becase we did
@@ -132,62 +122,45 @@ case class CollectSubJobs(
 
   // Describe all the scatter child jobs. Use a bulk-describe
   // for efficiency.
-  private def describeChildExecs(
-      execs: Vector[DxExecution]
-  ): Vector[ChildExecDesc] = {
+  private def describeChildExecs(execs: Vector[DxExecution]): Vector[ChildExecDesc] = {
     val jobInfoReq: Vector[JsValue] = execs.map { job =>
       JsObject(
           "id" -> JsString(job.getId),
-          "describe" -> JsObject(
-              "outputs" -> JsBoolean(true),
-              "executableName" -> JsBoolean(true),
-              "properties" -> JsBoolean(true)
-          )
+          "describe" -> JsObject("outputs" -> JsBoolean(true),
+                                 "executableName" -> JsBoolean(true),
+                                 "properties" -> JsBoolean(true))
       )
     }
     val req = JsObject("executions" -> JsArray(jobInfoReq))
     System.err.println(s"bulk-describe request=${req}")
     val retval: JsValue =
       DxUtils.jsValueOfJsonNode(
-          DXAPI.systemDescribeExecutions(
-              DxUtils.jsonNodeOfJsValue(req),
-              classOf[JsonNode]
-          )
+          DXAPI.systemDescribeExecutions(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
       )
-    val results: Vector[JsValue] =
-      retval.asJsObject.fields.get("results") match {
-        case Some(JsArray(x)) => x.toVector
-        case _ =>
-          throw new Exception(s"wrong type for executableName ${retval}")
-      }
+    val results: Vector[JsValue] = retval.asJsObject.fields.get("results") match {
+      case Some(JsArray(x)) => x.toVector
+      case _                => throw new Exception(s"wrong type for executableName ${retval}")
+    }
     (execs zip results).map {
       case (dxExec, desc) =>
         val fields = desc.asJsObject.fields.get("describe") match {
           case Some(JsObject(fields)) => fields
-          case _ =>
-            throw new Exception(
-                s"result does not contains a describe field ${desc}"
-            )
+          case _                      => throw new Exception(s"result does not contains a describe field ${desc}")
         }
         val execName = fields.get("executableName") match {
           case Some(JsString(name)) => name
-          case _ =>
-            throw new Exception(s"wrong type for executableName ${desc}")
+          case _                    => throw new Exception(s"wrong type for executableName ${desc}")
         }
         val seqNum = fields.get("properties") match {
           case Some(obj) =>
             obj.asJsObject.getFields("seq_number") match {
               case Seq(JsString(seqNum)) => seqNum.toInt
-              case _ =>
-                throw new Exception(
-                    s"wrong value for properties ${desc}, ${obj}"
-                )
+              case _                     => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
             }
           case _ => throw new Exception(s"wrong type for properties ${desc}")
         }
         val outputs = fields.get("output") match {
-          case None =>
-            throw new Exception(s"No output field for a child job ${desc}")
+          case None    => throw new Exception(s"No output field for a child job ${desc}")
           case Some(o) => o
         }
         ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
@@ -214,11 +187,9 @@ case class CollectSubJobs(
 
   // collect field [name] from all child jobs, by looking at their
   // outputs. Coerce to the correct [womType].
-  private def collectCallField(
-      name: String,
-      womType: WomType,
-      childJobsComplete: Vector[ChildExecDesc]
-  ): WomValue = {
+  private def collectCallField(name: String,
+                               womType: WomType,
+                               childJobsComplete: Vector[ChildExecDesc]): WomValue = {
     val vec: Vector[WomValue] =
       childJobsComplete.flatMap {
         case childExec =>
@@ -232,9 +203,7 @@ case class CollectSubJobs(
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
             case (_, None) =>
               // Required output that is missing
-              throw new Exception(
-                  s"Could not find compulsory field <${name}> in results"
-              )
+              throw new Exception(s"Could not find compulsory field <${name}> in results")
             case (_, Some(jsv)) =>
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
           }
@@ -243,15 +212,12 @@ case class CollectSubJobs(
   }
 
   // aggregate call results
-  def aggregateResults(
-      call: CallNode,
-      childJobsComplete: Vector[ChildExecDesc]
-  ): Map[String, WdlVarLinks] = {
+  def aggregateResults(call: CallNode,
+                       childJobsComplete: Vector[ChildExecDesc]): Map[String, WdlVarLinks] = {
     call.callable.outputs.map { cot: OutputDefinition =>
       val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
       val womType = cot.womType
-      val value: WomValue =
-        collectCallField(cot.name, womType, childJobsComplete)
+      val value: WomValue = collectCallField(cot.name, womType, childJobsComplete)
       val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
       fullName -> wvl
     }.toMap

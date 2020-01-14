@@ -21,34 +21,26 @@ import IR.{CVar, SArg}
 // An overall design principal here, is that the json requests
 // have to be deterministic. This is because the checksums rely
 // on that property.
-case class Native(
-    dxWDLrtId: Option[String],
-    folder: String,
-    dxProject: DxProject,
-    dxObjDir: DxObjectDirectory,
-    instanceTypeDB: InstanceTypeDB,
-    dxPathConfig: DxPathConfig,
-    fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-    typeAliases: Map[String, WomType],
-    extras: Option[Extras],
-    runtimeDebugLevel: Option[Int],
-    leaveWorkflowsOpen: Boolean,
-    force: Boolean,
-    archive: Boolean,
-    locked: Boolean,
-    verbose: Verbose
-) {
-  case class ExecRecord(
-      callable: IR.Callable,
-      dxExec: DxExecutable,
-      links: Vector[ExecLinkInfo]
-  )
+case class Native(dxWDLrtId: Option[String],
+                  folder: String,
+                  dxProject: DxProject,
+                  dxObjDir: DxObjectDirectory,
+                  instanceTypeDB: InstanceTypeDB,
+                  dxPathConfig: DxPathConfig,
+                  fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                  typeAliases: Map[String, WomType],
+                  extras: Option[Extras],
+                  runtimeDebugLevel: Option[Int],
+                  leaveWorkflowsOpen: Boolean,
+                  force: Boolean,
+                  archive: Boolean,
+                  locked: Boolean,
+                  verbose: Verbose) {
+  case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
 
   private val verbose2: Boolean = verbose.containsKey("Native")
-  private val rtDebugLvl =
-    runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
+  private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+  private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
 
   // Are we setting up a private docker registry?
@@ -193,26 +185,16 @@ case class Native(
         case WomSingleFileType => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
-        case WomNonEmptyArrayType(WomBooleanType) =>
-          mkPrimitiveArray("boolean", optional)
-        case WomNonEmptyArrayType(WomIntegerType) =>
-          mkPrimitiveArray("int", optional)
-        case WomNonEmptyArrayType(WomFloatType) =>
-          mkPrimitiveArray("float", optional)
-        case WomNonEmptyArrayType(WomStringType) =>
-          mkPrimitiveArray("string", optional)
-        case WomNonEmptyArrayType(WomSingleFileType) =>
-          mkPrimitiveArray("file", optional)
-        case WomMaybeEmptyArrayType(WomBooleanType) =>
-          mkPrimitiveArray("boolean", true)
-        case WomMaybeEmptyArrayType(WomIntegerType) =>
-          mkPrimitiveArray("int", true)
-        case WomMaybeEmptyArrayType(WomFloatType) =>
-          mkPrimitiveArray("float", true)
-        case WomMaybeEmptyArrayType(WomStringType) =>
-          mkPrimitiveArray("string", true)
-        case WomMaybeEmptyArrayType(WomSingleFileType) =>
-          mkPrimitiveArray("file", true)
+        case WomNonEmptyArrayType(WomBooleanType)      => mkPrimitiveArray("boolean", optional)
+        case WomNonEmptyArrayType(WomIntegerType)      => mkPrimitiveArray("int", optional)
+        case WomNonEmptyArrayType(WomFloatType)        => mkPrimitiveArray("float", optional)
+        case WomNonEmptyArrayType(WomStringType)       => mkPrimitiveArray("string", optional)
+        case WomNonEmptyArrayType(WomSingleFileType)   => mkPrimitiveArray("file", optional)
+        case WomMaybeEmptyArrayType(WomBooleanType)    => mkPrimitiveArray("boolean", true)
+        case WomMaybeEmptyArrayType(WomIntegerType)    => mkPrimitiveArray("int", true)
+        case WomMaybeEmptyArrayType(WomFloatType)      => mkPrimitiveArray("float", true)
+        case WomMaybeEmptyArrayType(WomStringType)     => mkPrimitiveArray("string", true)
+        case WomMaybeEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
@@ -236,175 +218,165 @@ case class Native(
           Utils.ignore(dxFile)
         } catch {
           case e: Throwable =>
-            throw new Exception(
-                s"""|credentials has to point to a platform file.
-                                                |It is now:
-                                                |   ${credentials}
-                                                |Error:
-                                                |  ${e}
-                                                |""".stripMargin
-            )
+            throw new Exception(s"""|credentials has to point to a platform file.
+                                    |It is now:
+                                    |   ${credentials}
+                                    |Error:
+                                    |  ${e}
+                                    |""".stripMargin)
         }
 
         // strip the URL from the dx:// prefix, so we can use dx-download directly
-        val credentialsWithoutPrefix =
-          credentials.substring(Utils.DX_URL_PREFIX.length)
+        val credentialsWithoutPrefix = credentials.substring(Utils.DX_URL_PREFIX.length)
         s"""|
-                    |# if we need to set up a private docker registry,
-                    |# download the credentials file and login. Do not expose the
-                    |# credentials to the logs or to stdout.
-                    |
-                    |export DOCKER_REGISTRY=${registry}
-                    |export DOCKER_USERNAME=${username}
-                    |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
-                    |
-                    |echo "Logging in to docker registry $${DOCKER_REGISTRY}, as user $${DOCKER_USERNAME}"
-                    |
-                    |# there has to be a single credentials file
-                    |num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
-                    |if [[ $$num_lines != 1 ]]; then
-                    |    echo "There has to be exactly one credentials file, found $$num_lines."
-                    |    dx ls -l $${DOCKER_CREDENTIALS}
-                    |    exit 1
-                    |fi
-                    |dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
-                    |cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
-                    |rm -f $${HOME}/docker_credentials
-                    |""".stripMargin
+            |# if we need to set up a private docker registry,
+            |# download the credentials file and login. Do not expose the
+            |# credentials to the logs or to stdout.
+            |
+            |export DOCKER_REGISTRY=${registry}
+            |export DOCKER_USERNAME=${username}
+            |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
+            |
+            |echo "Logging in to docker registry $${DOCKER_REGISTRY}, as user $${DOCKER_USERNAME}"
+            |
+            |# there has to be a single credentials file
+            |num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
+            |if [[ $$num_lines != 1 ]]; then
+            |    echo "There has to be exactly one credentials file, found $$num_lines."
+            |    dx ls -l $${DOCKER_CREDENTIALS}
+            |    exit 1
+            |fi
+            |dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
+            |cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
+            |rm -f $${HOME}/docker_credentials
+            |""".stripMargin
     }
   }
 
   private def genBashScriptTaskBody(): String = {
     s"""|    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |
-            |    # run the dx-download-agent (dxda) on a manifest of files
-            |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
-            |       head -n 20 ${dxPathConfig.dxdaManifest}
-            |       bzip2 ${dxPathConfig.dxdaManifest}
-            |
-            |       # run the download agent, and store the return code; do not exit on error.
-            |       # we need to run it from the root directory, because it uses relative paths.
-            |       cd /
-            |       rc=0
-            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
-            |
-            |       # if there was an error during download, print out the download log
-            |       if [[ $$rc != 0 ]]; then
-            |           echo "download agent failed rc=$$rc"
-            |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
-            |              echo "The download log is:"
-            |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log
-            |           fi
-            |           exit $$rc
-            |       fi
-            |
-            |       # The download was ok, check file integrity on disk
-            |       dx-download-agent inspect ${dxPathConfig.dxdaManifest.toString}.bz2
-            |
-            |       # go back to home directory
-            |       cd ${dxPathConfig.homeDir.toString}
-            |    fi
-            |
-            |    # run dxfuse on a manifest of files. It will provide remote access
-            |    # to DNAx files.
-            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
-            |       head -n 20 ${dxPathConfig.dxfuseManifest.toString}
-            |
-            |       # make sure the mountpoint exists
-            |       mkdir -p ${dxPathConfig.dxfuseMountpoint.toString}
-            |
-            |       # don't leak the token to stdout. We need the DNAx token to be accessible
-            |       # in the environment, so that dxfuse could get it.
-            |       source environment >& /dev/null
-            |
-            |       # run dxfuse so that it will not exit after the bash script exists.
-            |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-            |       dxfuse_log=/var/log/dxfuse.log
-            |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
-            |       dxfuse_err_code=$$?
-            |       if [[ $$dxfuse_err_code != 0 ]]; then
-            |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
-            |           if [[ -f $$dxfuse_log ]]; then
-            |               cat $$dxfuse_log
-            |           fi
-            |           exit 1
-            |       fi
-            |       disown %1
-            |
-            |       # wait for the mount to start.
-            |       cnt=0
-            |       while [[ ! -f $$dxfuse_log ]]; do
-            |           echo "Waiting for dxfuse to start"
-            |           sleep 1
-            |           cnt=$$((cnt + 1))
-            |           if [[ $$cnt == 30 ]]; then
-            |              echo "waited 30 seconds, but dxfuse didn't start"
-            |              exit 1
-            |           fi
-            |       done
-            |       cat $$dxfuse_log
-            |    fi
-            |
-            |    echo "bash command encapsulation script:"
-            |    cat ${dxPathConfig.script.toString}
-            |
-            |    # Run the shell script generated by the prolog.
-            |    # Capture the stderr/stdout in files
-            |    if [[ -e ${dxPathConfig.dockerSubmitScript.toString} ]]; then
-            |        echo "docker submit script:"
-            |        cat ${dxPathConfig.dockerSubmitScript.toString}
-            |        ${dxPathConfig.dockerSubmitScript.toString}
-            |    else
-            |        /bin/bash ${dxPathConfig.script.toString}
-            |    fi
-            |
-            |    #  check return code of the script
-            |    rc=`cat ${dxPathConfig.rcPath}`
-            |    if [[ $$rc != 0 ]]; then
-            |        exit $$rc
-            |    fi
-            |
-            |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |
-            |    # unmount dxfuse
-            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
-            |        echo "unmounting dxfuse"
-            |        sudo umount ${dxPathConfig.dxfuseMountpoint}
-            |    fi
-            |""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
+        |    # run the dx-download-agent (dxda) on a manifest of files
+        |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
+        |       head -n 20 ${dxPathConfig.dxdaManifest}
+        |       bzip2 ${dxPathConfig.dxdaManifest}
+        |
+        |       # run the download agent, and store the return code; do not exit on error.
+        |       # we need to run it from the root directory, because it uses relative paths.
+        |       cd /
+        |       rc=0
+        |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
+        |
+        |       # if there was an error during download, print out the download log
+        |       if [[ $$rc != 0 ]]; then
+        |           echo "download agent failed rc=$$rc"
+        |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
+        |              echo "The download log is:"
+        |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log
+        |           fi
+        |           exit $$rc
+        |       fi
+        |
+        |       # The download was ok, check file integrity on disk
+        |       dx-download-agent inspect ${dxPathConfig.dxdaManifest.toString}.bz2
+        |
+        |       # go back to home directory
+        |       cd ${dxPathConfig.homeDir.toString}
+        |    fi
+        |
+        |    # run dxfuse on a manifest of files. It will provide remote access
+        |    # to DNAx files.
+        |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+        |       head -n 20 ${dxPathConfig.dxfuseManifest.toString}
+        |
+        |       # make sure the mountpoint exists
+        |       mkdir -p ${dxPathConfig.dxfuseMountpoint.toString}
+        |
+        |       # don't leak the token to stdout. We need the DNAx token to be accessible
+        |       # in the environment, so that dxfuse could get it.
+        |       source environment >& /dev/null
+        |
+        |       # run dxfuse so that it will not exit after the bash script exists.
+        |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
+        |       dxfuse_log=/var/log/dxfuse.log
+        |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
+        |       dxfuse_err_code=$$?
+        |       if [[ $$dxfuse_err_code != 0 ]]; then
+        |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
+        |           if [[ -f $$dxfuse_log ]]; then
+        |               cat $$dxfuse_log
+        |           fi
+        |           exit 1
+        |       fi
+        |       disown %1
+        |
+        |       # wait for the mount to start.
+        |       cnt=0
+        |       while [[ ! -f $$dxfuse_log ]]; do
+        |           echo "Waiting for dxfuse to start"
+        |           sleep 1
+        |           cnt=$$((cnt + 1))
+        |           if [[ $$cnt == 30 ]]; then
+        |              echo "waited 30 seconds, but dxfuse didn't start"
+        |              exit 1
+        |           fi
+        |       done
+        |       cat $$dxfuse_log
+        |    fi
+        |
+        |    echo "bash command encapsulation script:"
+        |    cat ${dxPathConfig.script.toString}
+        |
+        |    # Run the shell script generated by the prolog.
+        |    # Capture the stderr/stdout in files
+        |    if [[ -e ${dxPathConfig.dockerSubmitScript.toString} ]]; then
+        |        echo "docker submit script:"
+        |        cat ${dxPathConfig.dockerSubmitScript.toString}
+        |        ${dxPathConfig.dockerSubmitScript.toString}
+        |    else
+        |        /bin/bash ${dxPathConfig.script.toString}
+        |    fi
+        |
+        |    #  check return code of the script
+        |    rc=`cat ${dxPathConfig.rcPath}`
+        |    if [[ $$rc != 0 ]]; then
+        |        exit $$rc
+        |    fi
+        |
+        |    # evaluate applet outputs, and upload result files
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
+        |    # unmount dxfuse
+        |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+        |        echo "unmounting dxfuse"
+        |        sudo umount ${dxPathConfig.dxfuseMountpoint}
+        |    fi
+        |""".stripMargin.trim
   }
 
   private def genBashScriptWfFragment(): String = {
     s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}
-            |
-            |collect() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}
+        |
+        |collect() {
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}""".stripMargin.trim
   }
 
   private def genBashScriptCmd(cmd: String): String = {
     s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-            |}""".stripMargin.trim
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}""".stripMargin.trim
   }
 
-  private def genBashScript(
-      applet: IR.Applet,
-      instanceType: IR.InstanceType
-  ): String = {
+  private def genBashScript(applet: IR.Applet, instanceType: IR.InstanceType): String = {
     val body: String = applet.kind match {
       case IR.AppletKindNative(_) =>
-        throw new Exception(
-            "Sanity: generating a bash script for a native applet"
-        )
+        throw new Exception("Sanity: generating a bash script for a native applet")
       case IR.AppletKindWorkflowCustomReorg(_) =>
-        throw new Exception(
-            "Sanity: generating a bash script for a custom reorg applet"
-        )
+        throw new Exception("Sanity: generating a bash script for a custom reorg applet")
       case IR.AppletKindWfFragment(_, _, _) =>
         genBashScriptWfFragment()
       case IR.AppletKindWfInputs =>
@@ -419,36 +391,36 @@ case class Native(
         instanceType match {
           case IR.InstanceTypeDefault | IR.InstanceTypeConst(_, _, _, _, _) =>
             s"""|${dockerPreamble(applet.docker)}
-                            |
-                            |set -e -o pipefail
-                            |main() {
-                            |${genBashScriptTaskBody()}
-                            |}""".stripMargin
+                |
+                |set -e -o pipefail
+                |main() {
+                |${genBashScriptTaskBody()}
+                |}""".stripMargin
           case IR.InstanceTypeRuntime =>
             s"""|${dockerPreamble(applet.docker)}
-                            |
-                            |set -e -o pipefail
-                            |main() {
-                            |    # check if this is the correct instance type
-                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
-                            |    if [[ $$correctInstanceType == "true" ]]; then
-                            |        body
-                            |    else
-                            |       # evaluate the instance type, and launch a sub job on it
-                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
-                            |    fi
-                            |}
-                            |
-                            |# We are on the correct instance type, run the task
-                            |body() {
-                            |${genBashScriptTaskBody()}
-                            |}""".stripMargin.trim
+                |
+                |set -e -o pipefail
+                |main() {
+                |    # check if this is the correct instance type
+                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
+                |    if [[ $$correctInstanceType == "true" ]]; then
+                |        body
+                |    else
+                |       # evaluate the instance type, and launch a sub job on it
+                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+                |    fi
+                |}
+                |
+                |# We are on the correct instance type, run the task
+                |body() {
+                |${genBashScriptTaskBody()}
+                |}""".stripMargin.trim
         }
     }
 
     s"""|#!/bin/bash -ex
-            |
-            |${body}""".stripMargin
+        |
+        |${body}""".stripMargin
   }
 
   // Calculate the MD5 checksum of a string
@@ -458,16 +430,13 @@ case class Native(
   }
 
   // Add a checksum to a request
-  private def checksumReq(
-      name: String,
-      fields: Map[String, JsValue]
-  ): (String, JsValue) = {
+  private def checksumReq(name: String, fields: Map[String, JsValue]): (String, JsValue) = {
     Utils.trace(
         verbose2,
         s"""|${name} -> checksum request
-                                  |fields = ${JsObject(fields).prettyPrint}
-                                  |
-                                  |""".stripMargin
+            |fields = ${JsObject(fields).prettyPrint}
+            |
+            |""".stripMargin
     )
 
     // We need to sort the hash-tables. They are natually unsorted,
@@ -506,10 +475,7 @@ case class Native(
   // Returns:
   //   None: build is required
   //   Some(dxobject) : the right object is already on the platform
-  private def isBuildRequired(
-      name: String,
-      digest: String
-  ): Option[DxDataObject] = {
+  private def isBuildRequired(name: String, digest: String): Option[DxDataObject] = {
     // Have we built this applet already, but placed it elsewhere in the project?
     dxObjDir.lookupOtherVersions(name, digest) match {
       case None => ()
@@ -518,15 +484,11 @@ case class Native(
           case a: DxAppDescribe =>
             Utils.trace(verbose.on, s"Found existing version of app ${name}")
           case apl: DxAppletDescribe =>
-            Utils.trace(
-                verbose.on,
-                s"Found existing version of applet ${name} in folder ${apl.folder}"
-            )
+            Utils.trace(verbose.on,
+                        s"Found existing version of applet ${name} in folder ${apl.folder}")
           case wf: DxWorkflowDescribe =>
-            Utils.trace(
-                verbose.on,
-                s"Found existing version of workflow ${name} in folder ${wf.folder}"
-            )
+            Utils.trace(verbose.on,
+                        s"Found existing version of workflow ${name} in folder ${wf.folder}")
           case other =>
             throw new Exception(s"bad object ${other}")
         }
@@ -541,29 +503,18 @@ case class Native(
         val dxObjInfo = existingDxObjs.head
         dxObjInfo.digest match {
           case None =>
-            throw new Exception(
-                s"There is an existing non-dxWDL applet ${name}"
-            )
+            throw new Exception(s"There is an existing non-dxWDL applet ${name}")
           case Some(digest2) if digest != digest2 =>
-            Utils.trace(
-                verbose.on,
-                s"${dxObjInfo.dxClass} ${name} has changed, rebuild required"
-            )
+            Utils.trace(verbose.on, s"${dxObjInfo.dxClass} ${name} has changed, rebuild required")
             true
           case Some(_) =>
-            Utils.trace(
-                verbose.on,
-                s"${dxObjInfo.dxClass} ${name} has not changed"
-            )
+            Utils.trace(verbose.on, s"${dxObjInfo.dxClass} ${name} has not changed")
             false
         }
       case _ =>
         val dxClass = existingDxObjs.head.dxClass
-        Utils.warning(
-            verbose,
-            s"""|More than one ${dxClass} ${name} found in
-                                           |path ${dxProject.id}:${folder}""".stripMargin
-        )
+        Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
+                                           |path ${dxProject.id}:${folder}""".stripMargin)
         true
     }
 
@@ -580,10 +531,8 @@ case class Native(
           dxProject.removeObjects(objs)
         } else {
           val dxClass = existingDxObjs.head.dxClass
-          throw new Exception(
-              s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.id}:${folder}""".stripMargin
-          )
+          throw new Exception(s"""|${dxClass} ${name} already exists in
+                                  | ${dxProject.id}:${folder}""".stripMargin)
         }
       }
       None
@@ -594,10 +543,7 @@ case class Native(
   }
 
   // Create linking information for a dx:executable
-  private def genLinkInfo(
-      irCall: IR.Callable,
-      dxObj: DxExecutable
-  ): ExecLinkInfo = {
+  private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
     val callInputDefs: Map[String, WomType] = irCall.inputVars.map {
       case CVar(name, wdlType, _, _) => (name -> wdlType)
     }.toMap
@@ -612,8 +558,7 @@ case class Native(
     repJs.asJsObject.fields.get("id") match {
       case None              => throw new Exception("API call did not returnd an ID")
       case Some(JsString(x)) => x
-      case other =>
-        throw new Exception(s"API call returned invalid ID ${other}")
+      case other             => throw new Exception(s"API call returned invalid ID ${other}")
     }
   }
 
@@ -639,16 +584,13 @@ case class Native(
 
   // Set the run spec.
   //
-  private def calcRunSpec(
-      applet: IR.Applet,
-      details: Map[String, JsValue],
-      bashScript: String
-  ): (JsValue, Map[String, JsValue]) = {
+  private def calcRunSpec(applet: IR.Applet,
+                          details: Map[String, JsValue],
+                          bashScript: String): (JsValue, Map[String, JsValue]) = {
     // find the dxWDL asset
     val instanceType: String = applet.instanceType match {
       case x: IR.InstanceTypeConst =>
-        val xDesc =
-          InstanceTypeReq(x.dxInstanceType, x.memoryMB, x.diskGB, x.cpu, x.gpu)
+        val xDesc = InstanceTypeReq(x.dxInstanceType, x.memoryMB, x.diskGB, x.cpu, x.gpu)
         instanceTypeDB.apply(xDesc)
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
@@ -672,13 +614,7 @@ case class Native(
           None,
           None,
           None,
-          Some(
-              DxTimeout(
-                  Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS),
-                  Some(0),
-                  Some(0)
-              )
-          )
+          Some(DxTimeout(Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS), Some(0), Some(0)))
       ).toRunSpecJson
 
     // Start with the default dx-attribute section, and override
@@ -753,8 +689,7 @@ case class Native(
       case None    => DxAccess.empty
       case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
     }
-    val taskAccess =
-      extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
+    val taskAccess = extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
 
     val access: DxAccess = applet.kind match {
       case IR.AppletKindTask(_) =>
@@ -785,12 +720,10 @@ case class Native(
   // For applets that call other applets, we pass a directory
   // of the callees, so they could be found a runtime. This is
   // equivalent to linking, in a standard C compiler.
-  private def appletNewReq(
-      applet: IR.Applet,
-      bashScript: String,
-      folder: String,
-      aplLinks: Map[String, ExecLinkInfo]
-  ): (String, JsValue) = {
+  private def appletNewReq(applet: IR.Applet,
+                           bashScript: String,
+                           folder: String,
+                           aplLinks: Map[String, ExecLinkInfo]): (String, JsValue) = {
     Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
     val inputSpec: Vector[JsValue] = applet.inputs
@@ -825,8 +758,7 @@ case class Native(
           // meta information used for running workflow fragments
           val fqnDictTypes = JsObject(applet.inputVars.map {
             case cVar =>
-              val tStr =
-                WomTypeSerialization(typeAliases).toString(cVar.womType)
+              val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
               cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
@@ -845,25 +777,20 @@ case class Native(
     // Add the pricing model, and make the prices opaque.
     val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
     val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-    val dbOpaqueInstance =
-      Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+    val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
     }
-    val auxInfo = Map(
-        "womSourceCode" -> JsString(womSourceCode),
-        "instanceTypeDB" -> JsString(dbOpaqueInstance),
-        "runtimeAttrs" -> runtimeAttrs
-    )
+    val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
+                      "instanceTypeDB" -> JsString(dbOpaqueInstance),
+                      "runtimeAttrs" -> runtimeAttrs)
 
     // Links to applets that could get called at runtime. If
     // this applet is copied, we need to maintain referential integrity.
     val dxLinks = aplLinks.map {
       case (name, execLinkInfo) =>
-        ("link_" + name) -> JsObject(
-            "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
-        )
+        ("link_" + name) -> JsObject("$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
     }.toMap
     val (runSpec: JsValue, details: Map[String, JsValue]) =
       calcRunSpec(applet, auxInfo ++ dxLinks ++ metaInfo, bashScript)
@@ -925,8 +852,7 @@ case class Native(
 
     // Calculate a checksum of the inputs that went into the
     // making of the applet.
-    val (digest, appletApiRequest) =
-      appletNewReq(applet, bashScript, folder, aplLinks)
+    val (digest, appletApiRequest) = appletNewReq(applet, bashScript, folder, aplLinks)
     if (verbose2) {
       val fName = s"${applet.name}_req.json"
       val trgPath = Utils.appCompileDirPath.resolve(fName)
@@ -937,10 +863,7 @@ case class Native(
     val dxApplet = buildRequired match {
       case None =>
         // Compile a WDL snippet into an applet.
-        val rep = DXAPI.appletNew(
-            DxUtils.jsonNodeOfJsValue(appletApiRequest),
-            classOf[JsonNode]
-        )
+        val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         val dxApplet = DxApplet.getInstance(id)
         dxObjDir.insert(applet.name, dxApplet, digest)
@@ -958,33 +881,28 @@ case class Native(
   // It comprises mappings from variable name to WomType.
   private def genStageInputs(inputs: Vector[(CVar, SArg)]): JsValue = {
     // sort the inputs, to make the request deterministic
-    val jsInputs: TreeMap[String, JsValue] =
-      inputs.foldLeft(TreeMap.empty[String, JsValue]) {
-        case (m, (cVar, sArg)) =>
-          sArg match {
-            case IR.SArgEmpty =>
-              // We do not have a value for this input at compile time.
-              // For compulsory applet inputs, the user will have to fill
-              // in a value at runtime.
-              m
-            case IR.SArgConst(wValue) =>
-              val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
-              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-              m ++ fields.toMap
-            case IR.SArgLink(dxStage, argName) =>
-              val wvl = WdlVarLinks(
-                  cVar.womType,
-                  DxlStage(dxStage, IORef.Output, argName.dxVarName)
-              )
-              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-              m ++ fields.toMap
-            case IR.SArgWorkflowInput(argName) =>
-              val wvl =
-                WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
-              val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-              m ++ fields.toMap
-          }
-      }
+    val jsInputs: TreeMap[String, JsValue] = inputs.foldLeft(TreeMap.empty[String, JsValue]) {
+      case (m, (cVar, sArg)) =>
+        sArg match {
+          case IR.SArgEmpty =>
+            // We do not have a value for this input at compile time.
+            // For compulsory applet inputs, the user will have to fill
+            // in a value at runtime.
+            m
+          case IR.SArgConst(wValue) =>
+            val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+            m ++ fields.toMap
+          case IR.SArgLink(dxStage, argName) =>
+            val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+            m ++ fields.toMap
+          case IR.SArgWorkflowInput(argName) =>
+            val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+            m ++ fields.toMap
+        }
+    }
     JsObject(jsInputs)
   }
 
@@ -993,10 +911,7 @@ case class Native(
   // A WDL input can generate one or two DNAx inputs.  This requires
   // creating a vector of JSON values from each input.
   //
-  private def buildWorkflowInputSpec(
-      cVar: CVar,
-      sArg: SArg
-  ): Vector[JsValue] = {
+  private def buildWorkflowInputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
     // deal with default values
     val sArgDefault: Option[WomValue] = sArg match {
       case IR.SArgConst(wdlValue) =>
@@ -1017,10 +932,7 @@ case class Native(
   }
 
   // Note: a single WDL output can generate one or two JSON outputs.
-  private def buildWorkflowOutputSpec(
-      cVar: CVar,
-      sArg: SArg
-  ): Vector[JsValue] = {
+  private def buildWorkflowOutputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
     val oSpec: Vector[JsValue] = cVarToSpec(cVar)
 
     // add the field names, to help index this structure
@@ -1039,10 +951,7 @@ case class Native(
             s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
         )
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(
-            cVar.womType,
-            DxlStage(dxStage, IORef.Output, argName.dxVarName)
-        )
+        val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar) =>
         val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
@@ -1064,10 +973,8 @@ case class Native(
 
   // Create a request for a workflow encapsulated in single API call.
   // Prepare the list of stages, and the checksum in advance.
-  private def workflowNewReq(
-      wf: IR.Workflow,
-      execDict: Map[String, ExecRecord]
-  ): (String, JsValue) = {
+  private def workflowNewReq(wf: IR.Workflow,
+                             execDict: Map[String, ExecRecord]): (String, JsValue) = {
     Utils.trace(verbose2, s"build workflow ${wf.name}")
 
     val stagesReq =
@@ -1078,12 +985,10 @@ case class Native(
           val inputs = genStageInputs(linkedInputs)
           // convert the per-stage metadata into JSON
           val stageReqDesc = JsObject(
-              Map(
-                  "id" -> JsString(stg.id.getId),
+              Map("id" -> JsString(stg.id.getId),
                   "executable" -> JsString(dxExec.getId),
                   "name" -> JsString(stg.description),
-                  "input" -> inputs
-              )
+                  "input" -> inputs)
           )
           stagesReq :+ stageReqDesc
       }
@@ -1100,12 +1005,10 @@ case class Native(
       }
 
     // pack all the arguments into a single API call
-    val reqFields = Map(
-        "name" -> JsString(wf.name),
-        "stages" -> JsArray(stagesReq),
-        "tags" -> JsArray(JsString("dxWDL")),
-        "hidden" -> JsBoolean(hidden)
-    )
+    val reqFields = Map("name" -> JsString(wf.name),
+                        "stages" -> JsArray(stagesReq),
+                        "tags" -> JsArray(JsString("dxWDL")),
+                        "hidden" -> JsBoolean(hidden))
 
     val wfInputOutput: Map[String, JsValue] =
       if (wf.locked) {
@@ -1118,10 +1021,7 @@ case class Native(
           .sortWith(_._1.name < _._1.name)
           .map { case (cVar, sArg) => buildWorkflowOutputSpec(cVar, sArg) }
           .flatten
-        Map(
-            "inputs" -> JsArray(wfInputSpec),
-            "outputs" -> JsArray(wfOutputSpec)
-        )
+        Map("inputs" -> JsArray(wfInputSpec), "outputs" -> JsArray(wfOutputSpec))
       } else {
         Map.empty
       }
@@ -1165,8 +1065,7 @@ case class Native(
   }
 
   private def buildWorkflow(req: JsValue): DxWorkflow = {
-    val rep =
-      DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val id = apiParseReplyID(rep)
     val dxwf = DxWorkflow.getInstance(id)
 
@@ -1180,10 +1079,8 @@ case class Native(
   //
   // - Calculate the workflow checksum from the intermediate representation
   // - Do not rebuild the workflow if it has a correct checksum
-  private def buildWorkflowIfNeeded(
-      wf: IR.Workflow,
-      execDict: Map[String, ExecRecord]
-  ): DxWorkflow = {
+  private def buildWorkflowIfNeeded(wf: IR.Workflow,
+                                    execDict: Map[String, ExecRecord]): DxWorkflow = {
     val (digest, wfNewReq) = workflowNewReq(wf, execDict)
     val buildRequired = isBuildRequired(wf.name, digest)
     buildRequired match {

@@ -15,11 +15,9 @@ import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
 import dxWDL.dx.{DxFile, DxUtils, DxdaManifest, DxfuseManifest}
 import dxWDL.util._
 
-case class JobInputOutput(
-    dxIoFunctions: DxIoFunctions,
-    runtimeDebugLevel: Int,
-    typeAliases: Map[String, WomType]
-) {
+case class JobInputOutput(dxIoFunctions: DxIoFunctions,
+                          runtimeDebugLevel: Int,
+                          typeAliases: Map[String, WomType]) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
@@ -32,26 +30,19 @@ case class JobInputOutput(
     womValue
   }
 
-  def unpackJobInputFindRefFiles(
-      womType: WomType,
-      jsv: JsValue
-  ): Vector[DxFile] = {
+  def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue): Vector[DxFile] = {
     val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", womType, jsv)
     dxFiles
   }
 
-  private def evaluateWomExpression(
-      expr: WomExpression,
-      womType: WomType,
-      env: Map[String, WomValue]
-  ): WomValue = {
+  private def evaluateWomExpression(expr: WomExpression,
+                                    womType: WomType,
+                                    env: Map[String, WomValue]): WomValue = {
     val result: ErrorOr[WomValue] =
       expr.evaluateValue(env, dxIoFunctions)
     val value = result match {
       case Invalid(errors) =>
-        throw new Exception(
-            s"Failed to evaluate expression ${expr} with ${errors}"
-        )
+        throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
       case Valid(x: WomValue) => x
     }
 
@@ -64,10 +55,8 @@ case class JobInputOutput(
 
   // Read the job-inputs JSON file, and convert the variables
   // from JSON to WOM values. Delay downloading the files.
-  def loadInputs(
-      inputs: JsValue,
-      callable: wom.callable.Callable
-  ): Map[InputDefinition, WomValue] = {
+  def loadInputs(inputs: JsValue,
+                 callable: wom.callable.Callable): Map[InputDefinition, WomValue] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
@@ -85,9 +74,7 @@ case class JobInputOutput(
           case RequiredInputDefinition(iName, womType, _, _) =>
             fields.get(iName.value) match {
               case None =>
-                throw new Exception(
-                    s"Input ${iName} is required but not provided"
-                )
+                throw new Exception(s"Input ${iName} is required but not provided")
               case Some(x: JsValue) =>
                 // Conversion from JSON to WomValue
                 unpackJobInput(iName.value, womType, x)
@@ -95,13 +82,7 @@ case class JobInputOutput(
 
           // An input definition that has a default value supplied.
           // Typical WDL example would be a declaration like: "Int x = 5"
-          case OverridableInputDefinitionWithDefault(
-              iName,
-              womType,
-              defaultExpr,
-              _,
-              _
-              ) =>
+          case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
             fields.get(iName.value) match {
               case None =>
                 // use the default expression
@@ -112,13 +93,7 @@ case class JobInputOutput(
 
           // An input whose value should always be calculated from the default, and is
           // not allowed to be overridden.
-          case FixedInputDefinitionWithDefault(
-              iName,
-              womType,
-              defaultExpr,
-              _,
-              _
-              ) =>
+          case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
             fields.get(iName.value) match {
               case None => ()
               case Some(_) =>
@@ -185,12 +160,10 @@ case class JobInputOutput(
   // Create a local path for a DNAx file. The normal location, is to download
   // to the $HOME/inputs directory. However, since downloaded files may have the same
   // name, we may need to disambiguate them.
-  private def createUniqueDownloadPath(
-      basename: String,
-      dxFile: DxFile,
-      existingFiles: Set[Path],
-      inputsDir: Path
-  ): Path = {
+  private def createUniqueDownloadPath(basename: String,
+                                       dxFile: DxFile,
+                                       existingFiles: Set[Path],
+                                       inputsDir: Path): Path = {
     val shortPath = inputsDir.resolve(basename)
     if (!(existingFiles contains shortPath))
       return shortPath
@@ -214,14 +187,10 @@ case class JobInputOutput(
 
   // Recursively go into a womValue, and replace file string with
   // an equivalent. Use the [translation] map to translate.
-  private def translateFiles(
-      womValue: WomValue,
-      translation: Map[String, String]
-  ): WomValue = {
+  private def translateFiles(womValue: WomValue, translation: Map[String, String]): WomValue = {
     womValue match {
       // primitive types, pass through
-      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) =>
-        womValue
+      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
 
       // single file
       case WomSingleFile(s) =>
@@ -258,10 +227,7 @@ case class JobInputOutput(
 
       // special case: an optional file. If it doesn't exist,
       // return None
-      case WomOptionalValue(
-          WomSingleFileType,
-          Some(WomSingleFile(localPath))
-          ) =>
+      case WomOptionalValue(WomSingleFileType, Some(WomSingleFile(localPath))) =>
         translation.get(localPath) match {
           case None =>
             WomOptionalValue(WomSingleFileType, None)
@@ -286,10 +252,8 @@ case class JobInputOutput(
 
   // Recursively go into a womValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceFURLsWithLocalPaths(
-      womValue: WomValue,
-      localizationPlan: Map[Furl, Path]
-  ): WomValue = {
+  private def replaceFURLsWithLocalPaths(womValue: WomValue,
+                                         localizationPlan: Map[Furl, Path]): WomValue = {
     val translation: Map[String, String] = localizationPlan.map {
       case (FurlDx(value, _, _), path) => value -> path.toString
       case (FurlLocal(p1), p2)         => p1 -> p2.toString
@@ -299,10 +263,8 @@ case class JobInputOutput(
 
   // Recursively go into a womValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceLocalPathsWithURLs(
-      womValue: WomValue,
-      path2furl: Map[Path, Furl]
-  ): WomValue = {
+  private def replaceLocalPathsWithURLs(womValue: WomValue,
+                                        path2furl: Map[Path, Furl]): WomValue = {
     val translation: Map[String, String] = path2furl.map {
       case (path, dxUrl: FurlDx)    => path.toString -> dxUrl.value
       case (path, local: FurlLocal) => path.toString -> local.path
@@ -311,10 +273,8 @@ case class JobInputOutput(
   }
 
   // Figure out which files need to be streamed
-  private def areStreaming(
-      parameterMeta: Map[String, MetaValueElement],
-      inputs: Map[InputDefinition, WomValue]
-  ): Set[Furl] = {
+  private def areStreaming(parameterMeta: Map[String, MetaValueElement],
+                           inputs: Map[InputDefinition, WomValue]): Set[Furl] = {
     inputs
       .map {
         case (iDef, womValue) =>
@@ -332,9 +292,7 @@ case class JobInputOutput(
                 //   stream : true
                 // }
                 if (value.contains("stream") &&
-                    value("stream")
-                      .asInstanceOf[MetaValueElement.MetaValueElementBoolean]
-                      .value) {
+                    value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
                   findFiles(womValue)
                 } else {
                   Vector.empty
@@ -363,12 +321,7 @@ case class JobInputOutput(
       parameterMeta: Map[String, MetaValueElement],
       inputs: Map[InputDefinition, WomValue],
       inputsDir: Path
-  ): (
-      Map[InputDefinition, WomValue],
-      Map[Furl, Path],
-      DxdaManifest,
-      DxfuseManifest
-  ) = {
+  ): (Map[InputDefinition, WomValue], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
     val fileURLs: Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
     Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -393,24 +346,17 @@ case class JobInputOutput(
               // file should be streamed
               val existingFiles = accu.values.toSet
               val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
-              val path = createUniqueDownloadPath(
-                  desc.name,
-                  dxUrl.dxFile,
-                  existingFiles,
-                  dxIoFunctions.config.dxfuseMountpoint
-              )
+              val path = createUniqueDownloadPath(desc.name,
+                                                  dxUrl.dxFile,
+                                                  existingFiles,
+                                                  dxIoFunctions.config.dxfuseMountpoint)
               accu + (dxUrl -> path)
 
             case dxUrl: FurlDx =>
               // The file needs to be localized
               val existingFiles = accu.values.toSet
               val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
-              val path = createUniqueDownloadPath(
-                  desc.name,
-                  dxUrl.dxFile,
-                  existingFiles,
-                  inputsDir
-              )
+              val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
               accu + (dxUrl -> path)
           }
       }
@@ -448,10 +394,8 @@ case class JobInputOutput(
   // 1) If a file is already on the cloud, do not re-upload it. The content has not
   // changed because files are immutable.
   // 2) A file that was initially local, does not need to be uploaded.
-  def delocalizeFiles(
-      outputs: Map[String, WomValue],
-      furl2path: Map[Furl, Path]
-  ): Map[String, WomValue] = {
+  def delocalizeFiles(outputs: Map[String, WomValue],
+                      furl2path: Map[Furl, Path]): Map[String, WomValue] = {
     // Files that were local to begin with
     val localInputFiles: Set[Path] = furl2path.collect {
       case (FurlLocal(_), path) => path
@@ -464,9 +408,7 @@ case class JobInputOutput(
       .map {
         case FurlLocal(p) => Paths.get(p)
         case dxUrl: FurlDx =>
-          throw new Exception(
-              s"Should not find cloud file on local machine (${dxUrl})"
-          )
+          throw new Exception(s"Should not find cloud file on local machine (${dxUrl})")
       }
       .toVector
 
@@ -497,11 +439,10 @@ case class JobInputOutput(
     }.toMap
 
     // invert the furl2path map
-    val alreadyOnCloud_path2furl: Map[Path, Furl] =
-      furl2path.foldLeft(Map.empty[Path, Furl]) {
-        case (accu, (furl, path)) =>
-          accu + (path -> furl)
-      }
+    val alreadyOnCloud_path2furl: Map[Path, Furl] = furl2path.foldLeft(Map.empty[Path, Furl]) {
+      case (accu, (furl, path)) =>
+        accu + (path -> furl)
+    }
     val path2furl = alreadyOnCloud_path2furl ++ uploaded_path2furl
 
     // Replace the files that need to be uploaded, file paths with FURLs

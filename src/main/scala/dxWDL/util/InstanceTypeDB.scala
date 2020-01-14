@@ -50,22 +50,18 @@ case class InstanceTypeReq(
 // disk:   80 GB
 // price:  0.5 dollar per hour
 // os:     [(Ubuntu, 12.04), (Ubuntu, 14.04)}
-case class DxInstanceType(
-    name: String,
-    memoryMB: Int,
-    diskGB: Int,
-    cpu: Int,
-    price: Float,
-    os: Vector[(String, String)],
-    gpu: Boolean
-) {
+case class DxInstanceType(name: String,
+                          memoryMB: Int,
+                          diskGB: Int,
+                          cpu: Int,
+                          price: Float,
+                          os: Vector[(String, String)],
+                          gpu: Boolean) {
   // Does this instance satisfy the requirements?
-  def satisfies(
-      memReq: Option[Int],
-      diskReq: Option[Int],
-      cpuReq: Option[Int],
-      gpuReq: Option[Boolean]
-  ): Boolean = {
+  def satisfies(memReq: Option[Int],
+                diskReq: Option[Int],
+                cpuReq: Option[Int],
+                gpuReq: Option[Boolean]): Boolean = {
     memReq match {
       case Some(x) => if (memoryMB < x) return false
       case None    => ()
@@ -142,10 +138,7 @@ object DxInstanceType extends DefaultJsonProtocol {
   implicit val dxInstanceTypeFormat = jsonFormat7(DxInstanceType.apply)
 }
 
-case class InstanceTypeDB(
-    pricingAvailable: Boolean,
-    instances: Vector[DxInstanceType]
-) {
+case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanceType]) {
 
   // if prices are available, choose the cheapest instance. Otherwise,
   // choose one with minimal resources.
@@ -174,12 +167,10 @@ case class InstanceTypeDB(
   // we use here is:
   // 1) discard all instances that do not have enough resources
   // 2) choose the cheapest instance
-  def chooseAttrs(
-      memoryMB: Option[Int],
-      diskGB: Option[Int],
-      cpu: Option[Int],
-      gpu: Option[Boolean]
-  ): String = {
+  def chooseAttrs(memoryMB: Option[Int],
+                  diskGB: Option[Int],
+                  cpu: Option[Int],
+                  gpu: Option[Boolean]): String = {
     // discard all instances that are too weak
     val sufficient: Vector[DxInstanceType] =
       instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu))
@@ -207,18 +198,13 @@ case class InstanceTypeDB(
         iType
       case None =>
         // Probably a bad instance name
-        throw new Exception(
-            s"""|Instance type ${iType} is unavailable
-                                        |or badly named""".stripMargin
-              .replaceAll("\n", " ")
-        )
+        throw new Exception(s"""|Instance type ${iType} is unavailable
+                                        |or badly named""".stripMargin.replaceAll("\n", " "))
     }
   }
 
   // The cheapest available instance, this is normally also the smallest.
-  private def calcMinimalInstanceType(
-      iTypes: Set[DxInstanceType]
-  ): DxInstanceType = {
+  private def calcMinimalInstanceType(iTypes: Set[DxInstanceType]): DxInstanceType = {
     if (iTypes.isEmpty)
       throw new Exception("empty list")
     iTypes.tail.foldLeft(iTypes.head) {
@@ -283,13 +269,11 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   implicit val instanceTypeDBFormat = jsonFormat2(InstanceTypeDB.apply)
 
   // Currently, we support only constants.
-  def parse(
-      dxInstanceType: Option[WomValue],
-      wdlMemoryMB: Option[WomValue],
-      wdlDiskGB: Option[WomValue],
-      wdlCpu: Option[WomValue],
-      wdlGpu: Option[WomValue]
-  ): InstanceTypeReq = {
+  def parse(dxInstanceType: Option[WomValue],
+            wdlMemoryMB: Option[WomValue],
+            wdlDiskGB: Option[WomValue],
+            wdlCpu: Option[WomValue],
+            wdlGpu: Option[WomValue]): InstanceTypeReq = {
     // Shortcut the entire calculation, and provide the dx instance type directly
     dxInstanceType match {
       case None => None
@@ -350,9 +334,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val memMib: Double = memBytes / (1024 * 1024).toDouble
         Some(memMib.toInt)
       case Some(x) =>
-        throw new Exception(
-            s"Memory has to evaluate to a WomString type ${x.toWomString}"
-        )
+        throw new Exception(s"Memory has to evaluate to a WomString type ${x.toWomString}")
     }
 
     // Examples: "local-disk 1024 HDD"
@@ -373,9 +355,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           }
         Some(i)
       case Some(x) =>
-        throw new Exception(
-            s"Disk space has to evaluate to a WomString type ${x.toWomString}"
-        )
+        throw new Exception(s"Disk space has to evaluate to a WomString type ${x.toWomString}")
     }
 
     // Examples: "1", "12"
@@ -392,8 +372,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         Some(i)
       case Some(WomInteger(i)) => Some(i)
       case Some(WomFloat(x))   => Some(x.toInt)
-      case Some(x) =>
-        throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
+      case Some(x)             => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
     }
 
     val gpu: Option[Boolean] = wdlGpu match {
@@ -410,10 +389,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     js.asJsObject.fields.get(fieldName) match {
       case Some(JsNumber(x)) => x.toInt
       case Some(JsString(x)) => x.toInt
-      case _ =>
-        throw new Exception(
-            s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
-        )
+      case _                 => throw new Exception(s"Missing field ${fieldName} in JSON ${js.prettyPrint}}")
     }
   }
 
@@ -421,32 +397,25 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     js.asJsObject.fields.get(fieldName) match {
       case Some(JsNumber(x)) => x.toString
       case Some(JsString(x)) => x
-      case _ =>
-        throw new Exception(
-            s"Missing field ${fieldName} in JSON ${js.prettyPrint}}"
-        )
+      case _                 => throw new Exception(s"Missing field ${fieldName} in JSON ${js.prettyPrint}}")
     }
   }
 
   private def getJsField(js: JsValue, fieldName: String): JsValue = {
     js.asJsObject.fields.get(fieldName) match {
       case Some(x: JsValue) => x
-      case None =>
-        throw new Exception(s"Missing field ${fieldName} in ${js.prettyPrint}")
+      case None             => throw new Exception(s"Missing field ${fieldName} in ${js.prettyPrint}")
     }
   }
 
   // Query the platform for the available instance types in
   // this project.
-  private def queryAvailableInstanceTypes(
-      dxProject: DxProject
-  ): Map[String, DxInstanceType] = {
+  private def queryAvailableInstanceTypes(dxProject: DxProject): Map[String, DxInstanceType] = {
     // get List of supported OSes
     def getSupportedOSes(js: JsValue): Vector[(String, String)] = {
       val osSupported: Vector[JsValue] = js.asJsObject.fields.get("os") match {
         case Some(JsArray(x)) => x
-        case _ =>
-          throw new Exception(s"Missing field os in JSON ${js.prettyPrint}")
+        case _                => throw new Exception(s"Missing field os in JSON ${js.prettyPrint}")
       }
       osSupported.map { elem =>
         val distribution = getJsStringField(elem, "distribution")
@@ -458,23 +427,18 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val availableField = "availableInstanceTypes"
     val req: ObjectNode = DXJSON
       .getObjectBuilder()
-      .put(
-          "fields",
-          DXJSON
-            .getObjectBuilder()
-            .put(availableField, true)
-            .build()
-      )
+      .put("fields",
+           DXJSON
+             .getObjectBuilder()
+             .put(availableField, true)
+             .build())
       .build()
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
       repJs.asJsObject.fields.get(availableField) match {
         case Some(x) => x
-        case None =>
-          throw new Exception(
-              s"Field ${availableField} is missing ${repJs.prettyPrint}"
-          )
+        case None    => throw new Exception(s"Field ${availableField} is missing ${repJs.prettyPrint}")
       }
 
     // convert to a list of DxInstanceTypes, with prices set to zero
@@ -485,8 +449,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val diskSpaceGB = getJsIntField(jsValue, "ephemeralStorageGB")
         val os = getSupportedOSes(jsValue)
         val gpu = iName contains "_gpu"
-        val dxInstanceType =
-          DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
+        val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
         iName -> dxInstanceType
     }.toMap
   }
@@ -495,19 +458,14 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   // project we are in. Describing a user requires permission to
   // view the user account. The compiler may not have these
   // permissions, causing this method to throw an exception.
-  private def getPricingModel(
-      billTo: String,
-      region: String
-  ): Map[String, Float] = {
+  private def getPricingModel(billTo: String, region: String): Map[String, Float] = {
     val req: ObjectNode = DXJSON
       .getObjectBuilder()
-      .put(
-          "fields",
-          DXJSON
-            .getObjectBuilder()
-            .put("pricingModelsByRegion", true)
-            .build()
-      )
+      .put("fields",
+           DXJSON
+             .getObjectBuilder()
+             .put("pricingModelsByRegion", true)
+             .build())
       .build()
 
     val rep =
@@ -529,34 +487,27 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val hourlyRate: Float = jsValue match {
           case JsNumber(x) => x.toFloat
           case JsString(x) => x.toFloat
-          case _ =>
-            throw new Exception(
-                s"compute rate is not a number ${jsValue.prettyPrint}"
-            )
+          case _           => throw new Exception(s"compute rate is not a number ${jsValue.prettyPrint}")
         }
         key -> hourlyRate
     }.toMap
   }
 
-  private def crossTables(
-      availableIT: Map[String, DxInstanceType],
-      pm: Map[String, Float]
-  ): Vector[DxInstanceType] = {
+  private def crossTables(availableIT: Map[String, DxInstanceType],
+                          pm: Map[String, Float]): Vector[DxInstanceType] = {
     pm.map {
         case (iName, hourlyRate) =>
           availableIT.get(iName) match {
             case None => None
             case Some(iType) =>
               Some(
-                  DxInstanceType(
-                      iName,
-                      iType.memoryMB,
-                      iType.diskGB,
-                      iType.cpu,
-                      hourlyRate,
-                      iType.os,
-                      iType.gpu
-                  )
+                  DxInstanceType(iName,
+                                 iType.memoryMB,
+                                 iType.diskGB,
+                                 iType.cpu,
+                                 hourlyRate,
+                                 iType.os,
+                                 iType.gpu)
               )
           }
       }
@@ -609,12 +560,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val pm = getPricingModel(billTo, region)
 
     // Create fully formed instance types by crossing the tables
-    val availableInstanceTypes: Vector[DxInstanceType] =
-      crossTables(allAvailableIT, pm)
+    val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
 
     // filter out instances that we cannot use
-    val iTypes: Vector[DxInstanceType] =
-      availableInstanceTypes.filter(instanceCriteria)
+    val iTypes: Vector[DxInstanceType] = availableInstanceTypes.filter(instanceCriteria)
     InstanceTypeDB(true, iTypes)
   }
 

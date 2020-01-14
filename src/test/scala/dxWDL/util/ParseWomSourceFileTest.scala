@@ -122,12 +122,9 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) =
-      parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map(
-        "type" -> MetaValueElementString("native"),
-        "id" -> MetaValueElementString("applet-xxxx")
-    ))
+    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
+                            "id" -> MetaValueElementString("applet-xxxx")))
   }
 
   it should "parse the meta section in wdl 1.0" in {
@@ -151,12 +148,9 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) =
-      parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map(
-        "type" -> MetaValueElementString("native"),
-        "id" -> MetaValueElementString("applet-xxxx")
-    ))
+    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
+                            "id" -> MetaValueElementString("applet-xxxx")))
   }
 
   // The scanForTasks method takes apart the source WOM code, and then puts
@@ -204,11 +198,8 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) =
-      parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map(
-        "type" -> MetaValueElementString("native"),
-        "id" -> MetaValueElementString("applet-xxxx")
-    ))
+    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
+                            "id" -> MetaValueElementString("applet-xxxx")))
   }
 }

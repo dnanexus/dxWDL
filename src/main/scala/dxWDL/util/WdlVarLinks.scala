@@ -27,21 +27,15 @@ import dxWDL.dx._
 // all the files it references.
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink // This may contain dx-files
-case class DxlStage(
-    dxStage: DxWorkflowStage,
-    ioRef: IORef.Value,
-    varName: String
-) extends DxLink
+case class DxlStage(dxStage: DxWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-case class WdlVarLinksConverter(
-    verbose: Verbose,
-    fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-    typeAliases: Map[String, WomType]
-) {
+case class WdlVarLinksConverter(verbose: Verbose,
+                                fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                                typeAliases: Map[String, WomType]) {
   val womTypeSerializer = WomTypeSerialization(typeAliases)
 
   private def isDoubleOptional(t: WomType): Boolean = {
@@ -80,9 +74,7 @@ case class WdlVarLinksConverter(
       case (WomStringType, WomSingleFile(path))     => JsString(path)
       case (WomStringType, WomString(buf)) =>
         if (buf.length > Utils.MAX_STRING_LEN)
-          throw new AppInternalException(
-              s"string is longer than ${Utils.MAX_STRING_LEN}"
-          )
+          throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
         JsString(buf)
       case (WomBooleanType, WomBoolean(b))      => JsBoolean(b)
       case (WomBooleanType, WomString("true"))  => JsBoolean(true)
@@ -111,8 +103,7 @@ case class WdlVarLinksConverter(
         // general case
         val keys: WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
         val kJs = jsFromWomValue(keys.womType, keys)
-        val values: WomValue =
-          WomArray(WomArrayType(valueType), m.values.toVector)
+        val values: WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
         val vJs = jsFromWomValue(values.womType, values)
         JsObject("keys" -> kJs, "values" -> vJs)
 
@@ -146,10 +137,7 @@ case class WdlVarLinksConverter(
       case (WomCompositeType(typeMap, None), _) =>
         throw new Exception("struct without a name")
 
-      case (
-          WomCompositeType(typeMap, Some(structName)),
-          WomObject(m: Map[String, WomValue], _)
-          ) =>
+      case (WomCompositeType(typeMap, Some(structName)), WomObject(m: Map[String, WomValue], _)) =>
         // Convert each of the elements
         val mJs = m.map {
           case (key, womValue) =>
@@ -179,11 +167,9 @@ case class WdlVarLinksConverter(
             "null"
           else
             s"(${womValue.toWomString}, ${womValue.womType})"
-        throw new Exception(
-            s"""|Unsupported combination:
+        throw new Exception(s"""|Unsupported combination:
                                         |    womType:  ${womTypeStr}
-                                        |    womValue: ${womValueStr}""".stripMargin
-        )
+                                        |    womValue: ${womValueStr}""".stripMargin)
     }
   }
 
@@ -196,11 +182,7 @@ case class WdlVarLinksConverter(
   // Convert a job input to a WomValue. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def jobInputToWomValue(
-      name: String,
-      womType: WomType,
-      jsValue: JsValue
-  ): WomValue = {
+  private def jobInputToWomValue(name: String, womType: WomType, jsValue: JsValue): WomValue = {
     (womType, jsValue) match {
       // base case: primitive types
       case (WomBooleanType, JsBoolean(b))   => WomBoolean(b.booleanValue)
@@ -290,11 +272,7 @@ case class WdlVarLinksConverter(
     }
   }
 
-  def unpackJobInput(
-      name: String,
-      womType: WomType,
-      jsv: JsValue
-  ): (WomValue, Vector[DxFile]) = {
+  def unpackJobInput(name: String, womType: WomType, jsv: JsValue): (WomValue, Vector[DxFile]) = {
     val jsv1 =
       jsv match {
         case JsObject(fields) if fields contains "___" =>
@@ -310,11 +288,9 @@ case class WdlVarLinksConverter(
 
   // create input/output fields that bind the variable name [bindName] to
   // this WdlVar
-  def genFields(
-      wvl: WdlVarLinks,
-      bindName: String,
-      encodeDots: Boolean = true
-  ): List[(String, JsValue)] = {
+  def genFields(wvl: WdlVarLinks,
+                bindName: String,
+                encodeDots: Boolean = true): List[(String, JsValue)] = {
     def nodots(s: String): String =
       Utils.encodeAppletVarName(Utils.transformVarName(s))
     val bindEncName =
@@ -330,9 +306,7 @@ case class WdlVarLinksConverter(
           }
         case DxlWorkflowInput(varEncName) =>
           JsObject(
-              "$dnanexus_link" -> JsObject(
-                  "workflowInputField" -> JsString(nodots(varEncName))
-              )
+              "$dnanexus_link" -> JsObject("workflowInputField" -> JsString(nodots(varEncName)))
           )
         case DxlExec(dxJob, varEncName) =>
           DxUtils.makeEBOR(dxJob, nodots(varEncName))
@@ -369,23 +343,17 @@ case class WdlVarLinksConverter(
           Map(
               bindEncName ->
                 JsObject(
-                    "$dnanexus_link" -> JsObject(
-                        "workflowInputField" -> JsString(varEncName)
-                    )
+                    "$dnanexus_link" -> JsObject("workflowInputField" -> JsString(varEncName))
                 ),
               bindEncName_F ->
                 JsObject(
-                    "$dnanexus_link" -> JsObject(
-                        "workflowInputField" -> JsString(varEncName_F)
-                    )
+                    "$dnanexus_link" -> JsObject("workflowInputField" -> JsString(varEncName_F))
                 )
           )
         case DxlExec(dxJob, varEncName) =>
           val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
-          Map(
-              bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
-              bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F))
-          )
+          Map(bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
+              bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F)))
       }
     }
 
