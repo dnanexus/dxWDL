@@ -33,7 +33,6 @@ def get_runtime_conf_path(top_dir):
 
 def build_dirs(project, version_id):
     user_desc = pwd.getpwuid(os.getuid())
-    print(user_desc)
     username = user_desc.pw_name
     base_folder = "/builds/{}/{}".format(username, version_id)
     applet_folder = base_folder + "/applets"
