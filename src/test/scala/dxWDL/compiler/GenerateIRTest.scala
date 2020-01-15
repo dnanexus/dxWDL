@@ -461,7 +461,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
-    println(cgrepApplet.inputs)
     cgrepApplet.inputs shouldBe Vector(
         IR.CVar(
             "in_file",
