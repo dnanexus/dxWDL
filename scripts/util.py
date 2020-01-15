@@ -19,7 +19,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
 dxda_version = "20190909212832_c28a2ad"
-dxfuse_version = "v0.13"
+dxfuse_version = "v0.16"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -33,7 +33,6 @@ def get_runtime_conf_path(top_dir):
 
 def build_dirs(project, version_id):
     user_desc = pwd.getpwuid(os.getuid())
-    print(user_desc)
     username = user_desc.pw_name
     base_folder = "/builds/{}/{}".format(username, version_id)
     applet_folder = base_folder + "/applets"

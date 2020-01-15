@@ -24,7 +24,8 @@ task test_streaming {
         File f2
     }
 
-    command <<<
+  command <<<
+  ls -R /home/dnanexus/MNT
     zcat ~{f1} > r1
     zcat ~{f2} > r2
     >>>
@@ -34,9 +35,9 @@ task test_streaming {
         File r2 = "r2"
     }
 
-    runtime {
-        docker: "debian:stretch-slim"
-    }
+#    runtime {
+#        docker: "debian:stretch-slim"
+#    }
 
     parameter_meta {
         f1: "stream"
