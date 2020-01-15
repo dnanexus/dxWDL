@@ -6,6 +6,7 @@ import dxpy
 import fnmatch
 import json
 import pprint
+import pwd
 import os
 import re
 import shutil
@@ -30,6 +31,16 @@ def get_appl_conf_path(top_dir):
 def get_runtime_conf_path(top_dir):
     return os.path.join(top_dir, "src", "main", "resources", "dxWDL_runtime.conf")
 
+def build_dirs(project, version_id):
+    user_desc = pwd.getpwuid(os.getuid())
+    print(user_desc)
+    username = user_desc.pw_name
+    base_folder = "/builds/{}/{}".format(username, version_id)
+    applet_folder = base_folder + "/applets"
+    test_folder = base_folder + "/test"
+    project.new_folder(test_folder, parents=True)
+    project.new_folder(applet_folder, parents=True)
+    return base_folder
 
 def get_project(project_name):
     '''Try to find the project with the given name or id.'''

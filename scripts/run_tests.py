@@ -485,14 +485,6 @@ def register_all_tests(verbose : bool) -> None :
                         print("Skipping WDL file {} error={}".format(fname, e))
 
 
-def build_dirs(project, version_id):
-    base_folder = "/builds/{}".format(version_id)
-    applet_folder = base_folder + "/applets"
-    test_folder = base_folder + "/test"
-    project.new_folder(test_folder, parents=True)
-    project.new_folder(applet_folder, parents=True)
-    return base_folder
-
 # Some compiler flags are test specific
 def compiler_per_test_flags(tname):
     flags = []
@@ -687,7 +679,7 @@ def main():
     if project is None:
         raise RuntimeError("Could not find project {}".format(args.project))
     if args.folder is None:
-        base_folder = build_dirs(project, version_id)
+        base_folder = util.build_dirs(project, version_id)
     else:
         # Use existing prebuilt folder
         base_folder = args.folder

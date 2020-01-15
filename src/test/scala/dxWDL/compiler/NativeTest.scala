@@ -37,12 +37,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                         |the platform""".stripMargin
         )
     }
+
+  lazy val username = System.getProperty("user.name")
+  lazy val unitTestsPath = s"unit_tests/${username}"
   lazy val cFlags = List("-compileMode",
                          "NativeWithoutRuntimeAsset",
                          "-project",
                          dxTestProject.getId,
                          "-folder",
-                         "/unit_tests",
+                         "/" + unitTestsPath,
                          "-force",
                          "-locked",
                          "-quiet")
@@ -57,7 +60,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/", quiet = true)
+    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
+    Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
+    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/${unitTestsPath}/applets/", quiet = true)
 
     // building necessary applets before starting the tests
     val native_applets = Vector("native_concat",
@@ -70,7 +75,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     native_applets.foreach { app =>
       try {
         val (stdout, stderr) = Utils.execCommand(
-            s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/unit_tests/applets/",
+            s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/${unitTestsPath}/applets/",
             quiet = true
         )
       } catch {
@@ -171,7 +176,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         List("--force",
              "--quiet",
              "--folder",
-             "/unit_tests/applets",
+             s"/${unitTestsPath}/applets",
              "--project",
              dxTestProject.getId,
              "--language",
@@ -371,7 +376,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "Compile a workflow with subworkflows on the platform with the reorg app" taggedAs (EdgeTest) in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     val extrasContent =
       s"""|{
                 | "custom_reorg" : {
@@ -418,7 +423,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
     val (uploadOut, uploadErr) = Utils.execCommand(
         s"dx upload ${path.toString} --destination /reorg_tests --brief"
@@ -462,7 +467,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId("/unit_tests/applets/functional_reorg_test")
+    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
     val extrasContent =
       s"""|{

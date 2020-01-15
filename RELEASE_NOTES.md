@@ -3,6 +3,7 @@
 ## 1.41 1-Jan-2020
 
 - Added support for `patterns` and `help` in the `parameters_meta` section of a WDL task. For more information, see [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
+- Upgrade to Cromwell 48
 
 ## 1.40  19-Dec-2019
 - Replaced the dxjava package with scala code. The dnanexus calls now go through the low-level DXAPI java
