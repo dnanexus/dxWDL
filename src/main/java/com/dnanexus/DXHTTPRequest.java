@@ -423,15 +423,17 @@ public class DXHTTPRequest {
                         // Just fall back to reproducing the entire response
                         // body.
                     }
-                    logError(errorType + ": " + errorMessage + ". Code: " + Integer.toString(statusCode)
-                        + " Request ID: " + requestId);
+                    // Temporarily remove logging error to allow better control on handling exception
+                    // logError(errorType + ": " + errorMessage + ". Code: " + Integer.toString(statusCode)
+                    //    + " Request ID: " + requestId);
                     throw DXAPIException.getInstance(errorType, errorMessage, statusCode);
                 } else {
                     // Propagate 500 error to caller
                     if (this.disableRetry && statusCode != 503) {
-                        logError("POST " + resource + ": " + statusCode + " Internal Server Error, try "
-                                + String.valueOf(attempts + 1) + "/" + NUM_RETRIES
-                                + " Request ID: " +  requestId);
+                        // Temporarily remove logging error to allow better control on handling exception
+                        // logError("POST " + resource + ": " + statusCode + " Internal Server Error, try "
+                        //      + String.valueOf(attempts + 1) + "/" + NUM_RETRIES
+                        //      + " Request ID: " +  requestId);
                         throw new InternalErrorException("Internal Server Error", statusCode);
                     }
                     // If retries enabled, 500 InternalError should get retried unconditionally
@@ -455,23 +457,28 @@ public class DXHTTPRequest {
                 int secondsToWait = retryAfterSeconds;
 
                 if (this.disableRetry) {
-                    logError("POST " + resource + ": 503 Service Unavailable, suggested wait "
-                            + secondsToWait + " seconds" + ". Request ID: " +  requestId);
+                    // Temporarily remove logging error to allow better control on handling exception
+                    // logError("POST " + resource + ": 503 Service Unavailable, suggested wait "
+                    //        + secondsToWait + " seconds" + ". Request ID: " +  requestId);
                     throw e;
                 }
 
                 // Retries due to 503 Service Unavailable and Retry-After do NOT count against the
                 // allowed number of retries.
-                logError("POST " + resource + ": 503 Service Unavailable, waiting for "
-                        + Integer.toString(secondsToWait) + " seconds" + " Request ID: " +  requestId);
+
+                // Temporarily remove logging error to allow better control on handling exception
+                // logError("POST " + resource + ": 503 Service Unavailable, waiting for "
+                //        + Integer.toString(secondsToWait) + " seconds" + " Request ID: " +  requestId);
                 sleep(secondsToWait);
                 continue;
             } catch (IOException e) {
                 // Note, this catches both exceptions directly thrown from httpclient.execute (e.g.
                 // no connectivity to server) and exceptions thrown by our code above after parsing
                 // the response.
-                logError(errorMessage("POST", resource, e.toString(), timeoutSeconds,
-                        attempts + 1, NUM_RETRIES));
+
+                // Temporarily remove logging error to allow better control on handling exception
+                // logError(errorMessage("POST", resource, e.toString(), timeoutSeconds,
+                //        attempts + 1, NUM_RETRIES));
                 if (attempts == NUM_RETRIES || !retryRequest) {
                     if (statusCode == null) {
                         throw new DXHTTPException();
