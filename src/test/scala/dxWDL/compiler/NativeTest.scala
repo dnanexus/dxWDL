@@ -170,7 +170,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX) in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
         List("--force",
@@ -199,6 +199,30 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         "native_diff",
         "native_concat"
     ))
+  }
+
+  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX, EdgeTest) in {
+    val outputPath = "/tmp/dx_extern_one.wdl"
+    Main.dxni(
+        List("--force",
+             "--quiet",
+             "--path",
+             s"/${unitTestsPath}/applets/native_sum",
+             "--project",
+             dxTestProject.getId,
+             "--language",
+             "wdl_1_0",
+             "--output",
+             outputPath)
+    ) shouldBe a[Main.SuccessfulTermination]
+
+    // check that the generated file contains the correct tasks
+    val content = Source.fromFile(outputPath).getLines.mkString("\n")
+
+    val tasks: Map[String, String] =
+      ParseWomSourceFile(false).scanForTasks(content)
+
+    tasks.keys shouldBe (Set("native_sum"))
   }
 
   it should "be able to include pattern information in inputSpec" in {
@@ -266,7 +290,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     val appId = Main.compile(
         path.toString
-        /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
+          //:: "--verbose"
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
@@ -374,7 +398,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     instanceType should include("_gpu")
   }
 
-  it should "Compile a workflow with subworkflows on the platform with the reorg app" taggedAs (EdgeTest) in {
+  it should "Compile a workflow with subworkflows on the platform with the reorg app" in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     val extrasContent =

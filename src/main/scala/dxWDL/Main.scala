@@ -31,6 +31,8 @@ object Main extends App {
                          outputFile: Option[Path],
                          recursive: Boolean,
                          language: Language.Value,
+                         dxProject : DxProject,
+                         folderOrPath : Either[String, String],
                          verbose: Verbose)
 
   // This directory exists only at runtime in the cloud. Beware of using
@@ -146,6 +148,9 @@ object Main extends App {
           case ("o" | "output" | "outputFile") =>
             checkNumberOfArguments(keyword, 1, subargs)
             ("outputFile", subargs.head)
+          case "path" =>
+            checkNumberOfArguments(keyword, 1, subargs)
+            (keyword, subargs.head)
           case "project" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
@@ -430,11 +435,55 @@ object Main extends App {
       case _ => throw new Exception("only one language can be specified")
     }
     val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
+    val project: String = options.get("project") match {
+      case None          => throw new Exception("no project specified")
+      case Some(List(p)) => p
+      case _             => throw new Exception("project specified multiple times")
+    }
+    val dxProject =
+      try {
+        DxPath.resolveProject(project)
+      } catch {
+        case e: Exception =>
+          Utils.error(e.getMessage)
+          throw new Exception(
+              s"""|Could not find project ${project}, you probably need to be logged into
+                  |the platform""".stripMargin
+          )
+      }
+    val folder = options.get("folder") match {
+      case None => None
+      case Some(List(fl)) =>
+        // Validate the folder. It would have been nicer to be able
+        // to check if a folder exists, instead of validating by
+        // listing its contents, which could be very large.
+        try {
+          dxProject.listFolder(fl)
+        } catch {
+          case e: Throwable =>
+            throw new Exception(s"err when validating folder ${fl} : ${e}")
+        }
+        Some(fl)
+      case Some(_) => throw new Exception("folder specified multiple times")
+    }
+    val path : Option[String] = options.get("path") match {
+      case None => None
+      case Some(List(p)) => Some(p)
+      case Some(_) => throw new Exception("path specified multiple times")
+    }
+    val folderOrPath : Either[String, String] = (folder, path) match {
+      case (None, None) => Left("/")    // use the root folder as the default
+      case (Some(fl), None) => Left(fl)
+      case (None, Some(p)) => Right(p)
+      case (Some(_), Some(_)) => throw new Exception("both folder and path specified")
+    }
     DxniOptions(options contains "apps",
                 options contains "force",
                 outputFile,
                 options contains "recursive",
                 language,
+                dxProject,
+                folderOrPath,
                 verbose)
   }
 
@@ -473,29 +522,10 @@ object Main extends App {
     }
   }
 
-  private def dxniApplets(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
-    val (dxProject, folder) =
-      try {
-        pathOptions(options, dOpt.verbose)
-      } catch {
-        case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
-      }
-
-    // Validate the folder. It would have been nicer to be able
-    // to check if a folder exists, instead of validating by
-    // listing its contents, which could be very large.
+  private def dxniApplets(dOpt: DxniOptions, outputFile: Path): Termination = {
     try {
-      dxProject.listFolder(folder)
-    } catch {
-      case e: Throwable =>
-        System.err.println(s"err when validating folder ${folder} : ${e}")
-        return UnsuccessfulTermination(s"Folder ${folder} is invalid")
-    }
-
-    try {
-      compiler.DxNI.apply(dxProject,
-                          folder,
+      compiler.DxNI.apply(dOpt.dxProject,
+                          dOpt.folderOrPath,
                           outputFile,
                           dOpt.recursive,
                           dOpt.force,
@@ -508,7 +538,7 @@ object Main extends App {
     }
   }
 
-  private def dxniApps(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
+  private def dxniApps(dOpt: DxniOptions, outputFile: Path): Termination = {
     try {
       compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.language, dOpt.verbose)
       SuccessfulTermination("")
@@ -531,9 +561,9 @@ object Main extends App {
       }
 
       if (dOpt.apps)
-        dxniApps(options, dOpt, output)
+        dxniApps(dOpt, output)
       else
-        dxniApplets(options, dOpt, output)
+        dxniApplets(dOpt, output)
     } catch {
       case e: Throwable =>
         return BadUsageTermination(Utils.exceptionToString(e))
