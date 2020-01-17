@@ -510,8 +510,46 @@ def compiler_per_test_flags(tname):
 # def project_for_test(tname):
 
 ######################################################################
+
+def native_call_dxni(project, applet_folder, version_id, verbose: bool):
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline_common = [ "java", "-jar",
+                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                       "dxni",
+                       "--force",
+                       "--folder", applet_folder,
+                       "--project", project.get_id()]
+    if verbose:
+        cmdline_common.append("--verbose")
+
+    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
+                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
+    print(" ".join(cmdline_draft2))
+    subprocess.check_output(cmdline_draft2)
+
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
+    print(" ".join(cmdline_v1))
+    subprocess.check_output(cmdline_v1)
+
+
+def native_one_call_dxni(project, path, version_id, verbose):
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline_common = [ "java", "-jar",
+                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                       "dxni",
+                       "--force",
+                       "--path", path,
+                       "--project", project.get_id()]
+    if verbose:
+        cmdline_common.append("--verbose")
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")]
+    print(" ".join(cmdline_v1))
+    subprocess.check_output(cmdline_v1)
+
 # Set up the native calling tests
-def native_call_setup(project, applet_folder, version_id):
+def native_call_setup(project, applet_folder, version_id, verbose):
     native_applets = ["native_concat",
                       "native_diff",
                       "native_mk_list",
@@ -531,32 +569,14 @@ def native_call_setup(project, applet_folder, version_id):
             print(" ".join(cmdline))
             subprocess.check_output(cmdline)
 
-    # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline_common = [ "java", "-jar",
-                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                       "dxni",
-                       "--force",
-                       "--verbose",
-                       "--folder", applet_folder,
-                       "--project", project.get_id()]
+    native_one_call_dxni(project, applet_folder + "/native_concat", version_id, verbose)
+    native_call_dxni(project, applet_folder, version_id, verbose)
 
-    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
-                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
-    print(" ".join(cmdline_draft2))
-    subprocess.check_output(cmdline_draft2)
-
-    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
-                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
-    print(" ".join(cmdline_v1))
-    subprocess.check_output(cmdline_v1)
-
-
-def native_call_app_setup(version_id):
+def native_call_app_setup(version_id, verbose):
     app_name = "native_hello"
 
     # Check if they already exist
     apps = list(dxpy.bindings.search.find_apps(name= app_name))
-
     if len(apps) == 0:
         # build the app
         cmdline = [ "dx", "build", "--create-app", "--publish",
@@ -573,6 +593,8 @@ def native_call_app_setup(version_id):
                 "--force",
                 "--language", "wdl_v1.0",
                 "--output", header_file]
+    if verbose:
+        cmdline_common.append("--verbose")
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 
@@ -723,9 +745,9 @@ def main():
     #  is "native" included in one of the test names?
     if ("call_native" in test_names or
         "call_native_v1" in test_names):
-        native_call_setup(project, applet_folder, version_id)
+        native_call_setup(project, applet_folder, version_id, args.verbose)
     if "call_native_app" in test_names:
-        native_call_app_setup(version_id)
+        native_call_app_setup(version_id, args.verbose)
 
     try:
         # Compile the WDL files to dx:workflows and dx:applets
