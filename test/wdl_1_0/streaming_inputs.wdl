@@ -24,7 +24,7 @@ task test_streaming {
         File f2
     }
 
-    command <<<
+  command <<<
     zcat ~{f1} > r1
     zcat ~{f2} > r2
     >>>

@@ -310,8 +310,8 @@ case class TaskRunner(task: CallableTaskDefinition,
     val script =
       if (command.isEmpty) {
         s"""|#!/bin/bash
-                    |echo 0 > ${dxPathConfig.rcPath}
-                    |""".stripMargin.trim + "\n"
+            |echo 0 > ${dxPathConfig.rcPath}
+            |""".stripMargin.trim + "\n"
       } else {
         // It would have been easier to have one long
         // section bracketed with triple quotes (`"""`). However,
@@ -319,21 +319,21 @@ case class TaskRunner(task: CallableTaskDefinition,
         // example pipe ('|').
         val part1 =
           s"""|#!/bin/bash
-                        |(
-                        |    cd ${dxPathConfig.homeDir.toString}
-                        |""".stripMargin
+              |(
+              |    cd ${dxPathConfig.homeDir.toString}
+              |""".stripMargin
         val part2 =
           s"""|) \\
-                        |  > >( tee ${dxPathConfig.stdout} ) \\
-                        |  2> >( tee ${dxPathConfig.stderr} >&2 )
-                        |
-                        |echo $$? > ${dxPathConfig.rcPath}
-                        |
-                        |# make sure the files are on stable storage
-                        |# before leaving. This helps with stdin and stdout
-                        |# characters that may be in the fifo queues.
-                        |sync
-                        |""".stripMargin
+              |  > >( tee ${dxPathConfig.stdout} ) \\
+              |  2> >( tee ${dxPathConfig.stderr} >&2 )
+              |
+              |echo $$? > ${dxPathConfig.rcPath}
+              |
+              |# make sure the files are on stable storage
+              |# before leaving. This helps with stdin and stdout
+              |# characters that may be in the fifo queues.
+              |sync
+              |""".stripMargin
         List(part1, command, part2).mkString("\n")
       }
     Utils.appletLog(verbose, s"writing bash script to ${dxPathConfig.script}")
@@ -361,65 +361,41 @@ case class TaskRunner(task: CallableTaskDefinition,
         totalAvailableMemoryBytes
     val dockerRunScript =
       s"""|#!/bin/bash -x
-                |
-                |# make sure there is no preexisting Docker CID file
-                |rm -f ${dxPathConfig.dockerCid}
-                |
-                |# Run the container under a priviliged user, so it will have
-                |# permissions to read/write files in the home directory. This
-                |# is required in cases where the container uses a different
-                |# user.
-                |extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
-                |
-                |# run as in the original configuration
-                |docker run \\
-                |  --memory=${memCap} \\
-                |  --cidfile ${dxPathConfig.dockerCid} \\
-                |  $${extraFlags} \\
-                |  --entrypoint /bin/bash \\
-                |  -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
-                |  ${imgName} ${dxPathConfig.script.toString}
-                |
-                |# get the return code (working even if the container was detached)
-                |rc=$$(docker wait `cat ${dxPathConfig.dockerCid.toString}`)
-                |
-                |# remove the container after waiting
-                |docker rm `cat ${dxPathConfig.dockerCid.toString}`
-                |
-                |# return exit code
-                |exit $$rc
-                |""".stripMargin
+          |
+          |# make sure there is no preexisting Docker CID file
+          |rm -f ${dxPathConfig.dockerCid}
+          |
+          |# Run the container under a priviliged user, so it will have
+          |# permissions to read/write files in the home directory. This
+          |# is required in cases where the container uses a different
+          |# user.
+          |extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
+          |
+          |# run as in the original configuration
+          |docker run \\
+          |  --memory=${memCap} \\
+          |  --cidfile ${dxPathConfig.dockerCid} \\
+          |  $${extraFlags} \\
+          |  --entrypoint /bin/bash \\
+          |  -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
+          |  ${imgName} ${dxPathConfig.script.toString}
+          |
+          |# get the return code (working even if the container was detached)
+          |rc=$$(docker wait `cat ${dxPathConfig.dockerCid.toString}`)
+          |
+          |# remove the container after waiting
+          |docker rm `cat ${dxPathConfig.dockerCid.toString}`
+          |
+          |# return exit code
+          |exit $$rc
+          |""".stripMargin
+
+    //  -v ${dxPathConfig.dxfuseMountpoint}:${dxPathConfig.dxfuseMountpoint}
 
     Utils.appletLog(verbose, s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
     Utils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
-
-  /*
-    private def evalEnvironment(localizedInputs: Map[InputDefinition, WomValue]) : Map[String, WomValue] = {
-        val inputs = localizedInputs.map{ case (inpDfn, value) =>
-            inpDfn.name -> value
-        }.toMap
-
-        // evaluate the declarations.
-        //
-        // It isn't clear that this is actually correct, because I'm not sure what's in the
-        // environment.
-        val env = task.environmentExpressions.map{
-            case (varName, expr) =>
-                val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(inputs, dxIoFunctions)
-                val v = result match {
-                    case Valid(value) => value
-                    case _ =>
-                        throw new AppInternalException(s"Error evaluating expression ${expr}")
-                }
-                varName -> v
-        }.toMap
-
-        inputs ++ env
-    }
-   */
 
   private def inputsDbg(inputs: Map[InputDefinition, WomValue]): String = {
     inputs

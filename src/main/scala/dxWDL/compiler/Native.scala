@@ -300,7 +300,8 @@ case class Native(dxWDLrtId: Option[String],
         |       # run dxfuse so that it will not exit after the bash script exists.
         |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
         |       dxfuse_log=/var/log/dxfuse.log
-        |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
+        |
+        |       sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString}
         |       dxfuse_err_code=$$?
         |       if [[ $$dxfuse_err_code != 0 ]]; then
         |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
@@ -309,20 +310,12 @@ case class Native(dxWDLrtId: Option[String],
         |           fi
         |           exit 1
         |       fi
-        |       disown %1
         |
-        |       # wait for the mount to start.
-        |       cnt=0
-        |       while [[ ! -f $$dxfuse_log ]]; do
-        |           echo "Waiting for dxfuse to start"
-        |           sleep 1
-        |           cnt=$$((cnt + 1))
-        |           if [[ $$cnt == 30 ]]; then
-        |              echo "waited 30 seconds, but dxfuse didn't start"
-        |              exit 1
-        |           fi
-        |       done
+        |       # do we really need this?
+        |       sleep 1
         |       cat $$dxfuse_log
+        |       echo ""
+        |       ls -Rl ${dxPathConfig.dxfuseMountpoint.toString}
         |    fi
         |
         |    echo "bash command encapsulation script:"
@@ -335,12 +328,17 @@ case class Native(dxWDLrtId: Option[String],
         |        cat ${dxPathConfig.dockerSubmitScript.toString}
         |        ${dxPathConfig.dockerSubmitScript.toString}
         |    else
+        |        whoami
         |        /bin/bash ${dxPathConfig.script.toString}
         |    fi
         |
         |    #  check return code of the script
         |    rc=`cat ${dxPathConfig.rcPath}`
         |    if [[ $$rc != 0 ]]; then
+        |        if [[ -f $$dxfuse_log ]]; then
+        |            echo "=== dxfuse filesystem log === "
+        |            cat $$dxfuse_log
+        |        fi
         |        exit $$rc
         |    fi
         |
@@ -392,7 +390,7 @@ case class Native(dxWDLrtId: Option[String],
           case IR.InstanceTypeDefault | IR.InstanceTypeConst(_, _, _, _, _) =>
             s"""|${dockerPreamble(applet.docker)}
                 |
-                |set -e -o pipefail
+                |set -e -o pipefail -x
                 |main() {
                 |${genBashScriptTaskBody()}
                 |}""".stripMargin
