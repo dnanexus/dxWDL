@@ -26,12 +26,20 @@ object Main extends App {
         TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
   }
 
-  case class DxniOptions(apps: Boolean,
-                         force: Boolean,
-                         outputFile: Option[Path],
-                         recursive: Boolean,
-                         language: Language.Value,
-                         verbose: Verbose)
+
+  case class DxniBaseOptions(force: Boolean,
+                            outputFile: Path,
+                            language: Language.Value,
+                            verbose: Verbose)
+
+  case class DxniAppletOptions(apps: Boolean,
+                               force: Boolean,
+                               outputFile: Path,
+                               recursive: Boolean,
+                               language: Language.Value,
+                               dxProject : DxProject,
+                               folderOrPath : Either[String, String],
+                               verbose: Verbose)
 
   // This directory exists only at runtime in the cloud. Beware of using
   // it in code paths that run at compile time.
@@ -146,6 +154,9 @@ object Main extends App {
           case ("o" | "output" | "outputFile") =>
             checkNumberOfArguments(keyword, 1, subargs)
             ("outputFile", subargs.head)
+          case "path" =>
+            checkNumberOfArguments(keyword, 1, subargs)
+            (keyword, subargs.head)
           case "project" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
@@ -401,16 +412,19 @@ object Main extends App {
     )
   }
 
-  private def dxniOptions(options: OptionsMap): DxniOptions = {
-    val outputFile: Option[Path] = options.get("outputFile") match {
-      case None          => None
-      case Some(List(p)) => Some(Paths.get(p))
+  private def dxniAppOptions(options: OptionsMap): DxniBaseOptions = {
+    val outputFile: Path = options.get("outputFile") match {
+      case None          => throw new Exception("output file not specified")
+      case Some(List(p)) => Paths.get(p)
       case _             => throw new Exception("only one output file can be specified")
     }
     val verboseKeys: Set[String] = options.get("verbose") match {
       case None                 => Set.empty
       case Some(modulesToTrace) => modulesToTrace.toSet
     }
+    val verbose = Verbose(options contains "verbose",
+                          options contains "quiet",
+                          verboseKeys)
     val language = options.get("language") match {
       case None => Language.WDLvDraft2
       case Some(List(buf)) =>
@@ -429,13 +443,64 @@ object Main extends App {
           throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
       case _ => throw new Exception("only one language can be specified")
     }
-    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
-    DxniOptions(options contains "apps",
-                options contains "force",
-                outputFile,
-                options contains "recursive",
-                language,
-                verbose)
+    DxniBaseOptions(options contains "force",
+                   outputFile,
+                   language,
+                   verbose)
+  }
+
+  private def dxniAppletOptions(options: OptionsMap): DxniAppletOptions = {
+    val dOpt = dxniAppOptions(options)
+    val project: String = options.get("project") match {
+      case None          => throw new Exception("no project specified")
+      case Some(List(p)) => p
+      case _             => throw new Exception("project specified multiple times")
+    }
+    val dxProject =
+      try {
+        DxPath.resolveProject(project)
+      } catch {
+        case e: Exception =>
+          Utils.error(e.getMessage)
+          throw new Exception(
+              s"""|Could not find project ${project}, you probably need to be logged into
+                  |the platform""".stripMargin
+          )
+      }
+    val folder = options.get("folder") match {
+      case None => None
+      case Some(List(fl)) =>
+        // Validate the folder. It would have been nicer to be able
+        // to check if a folder exists, instead of validating by
+        // listing its contents, which could be very large.
+        try {
+          dxProject.listFolder(fl)
+        } catch {
+          case e: Throwable =>
+            throw new Exception(s"err when validating folder ${fl} : ${e}")
+        }
+        Some(fl)
+      case Some(_) => throw new Exception("folder specified multiple times")
+    }
+    val path : Option[String] = options.get("path") match {
+      case None => None
+      case Some(List(p)) => Some(p)
+      case Some(_) => throw new Exception("path specified multiple times")
+    }
+    val folderOrPath : Either[String, String] = (folder, path) match {
+      case (None, None) => Left("/")    // use the root folder as the default
+      case (Some(fl), None) => Left(fl)
+      case (None, Some(p)) => Right(p)
+      case (Some(_), Some(_)) => throw new Exception("both folder and path specified")
+    }
+    DxniAppletOptions(options contains "apps",
+                      dOpt.force,
+                      dOpt.outputFile,
+                      options contains "recursive",
+                      dOpt.language,
+                      dxProject,
+                      folderOrPath,
+                      dOpt.verbose)
   }
 
   def compile(args: Seq[String]): Termination = {
@@ -473,30 +538,11 @@ object Main extends App {
     }
   }
 
-  private def dxniApplets(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
-    val (dxProject, folder) =
-      try {
-        pathOptions(options, dOpt.verbose)
-      } catch {
-        case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
-      }
-
-    // Validate the folder. It would have been nicer to be able
-    // to check if a folder exists, instead of validating by
-    // listing its contents, which could be very large.
+  private def dxniApplets(dOpt: DxniAppletOptions): Termination = {
     try {
-      dxProject.listFolder(folder)
-    } catch {
-      case e: Throwable =>
-        System.err.println(s"err when validating folder ${folder} : ${e}")
-        return UnsuccessfulTermination(s"Folder ${folder} is invalid")
-    }
-
-    try {
-      compiler.DxNI.apply(dxProject,
-                          folder,
-                          outputFile,
+      compiler.DxNI.apply(dOpt.dxProject,
+                          dOpt.folderOrPath,
+                          dOpt.outputFile,
                           dOpt.recursive,
                           dOpt.force,
                           dOpt.language,
@@ -508,9 +554,9 @@ object Main extends App {
     }
   }
 
-  private def dxniApps(options: OptionsMap, dOpt: DxniOptions, outputFile: Path): Termination = {
+  private def dxniApps(dOpt: DxniBaseOptions): Termination = {
     try {
-      compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.language, dOpt.verbose)
+      compiler.DxNI.applyApps(dOpt.outputFile, dOpt.force, dOpt.language, dOpt.verbose)
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
@@ -524,16 +570,16 @@ object Main extends App {
       if (options contains "help")
         return BadUsageTermination("")
 
-      val dOpt = dxniOptions(options)
-      val output = dOpt.outputFile match {
-        case None    => throw new Exception("Output file not specified")
-        case Some(x) => x
+      val apps = options contains "apps"
+      if (apps) {
+        // Search for global apps
+        val dOpt = dxniAppOptions(options)
+        dxniApps(dOpt)
+      } else {
+        // Search for applets inside or a folder, path, or project.
+        val dOpt = dxniAppletOptions(options)
+        dxniApplets(dOpt)
       }
-
-      if (dOpt.apps)
-        dxniApps(options, dOpt, output)
-      else
-        dxniApplets(options, dOpt, output)
     } catch {
       case e: Throwable =>
         return BadUsageTermination(Utils.exceptionToString(e))
