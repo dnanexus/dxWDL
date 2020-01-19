@@ -120,13 +120,20 @@ public class DXHTTPRequest {
     }
 
     /**
-     * Prints an error message to stderr
+     * Prints an error message to stderr when _DX_DEBUG env is set as > 0.
      *
      * @param msg the error message to be printed
      *
      */
     private static void logError(String msg) {
-        System.err.println("[" + System.currentTimeMillis() + "] " + msg);
+
+        // check that if debug level is not set (null), set it as "0"
+        String debugLevel = System.getenv("_DX_DEBUG");
+        debugLevel = debugLevel == null ? "0": debugLevel;
+
+        if (!debugLevel.equals("0")) {
+            System.err.println("[" + System.currentTimeMillis() + "] " + msg);
+        }
     }
 
     /**
