@@ -15,6 +15,17 @@ object DxfuseManifest {
     if (file2LocalMapping.isEmpty)
       return DxfuseManifest(JsNull)
 
+    // Check that the files are not archived
+    val dxFiles = file2LocalMapping.keys.toVector
+    val fileDescs: Map[DxFile, DxFileDescribe] = DxFile.bulkDescribe(dxFiles)
+    fileDescs.foreach {
+      case (dxFile, desc) =>
+        if (desc.archivalState != DxArchivalState.LIVE)
+          throw new Exception(
+              s"file ${dxFile.id} is not live, it is in ${desc.archivalState} state"
+          )
+    }
+
     val files = file2LocalMapping.map {
       case (dxFile, path) =>
         val parentDir = path.getParent().toString

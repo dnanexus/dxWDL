@@ -65,9 +65,12 @@ object DxdaManifest {
         .toMap
 
     // Make sure they are all in the live state. Archived files cannot be accessed.
-    fileDescs.foreach { case (_, (dxFile, desc)) =>
-      if (desc.archivalState != DxArchivalState.LIVE)
-        throw new Exception(s"file ${dxFile.id} is not live, it is in ${desc.archivalState} state")
+    fileDescs.foreach {
+      case (_, (dxFile, desc)) =>
+        if (desc.archivalState != DxArchivalState.LIVE)
+          throw new Exception(
+              s"file ${dxFile.id} is not live, it is in ${desc.archivalState} state"
+          )
     }
 
     // create a sub-map per container
