@@ -13,7 +13,7 @@ class DxfuseManifestTest extends FlatSpec with Matchers {
 
   it should "detect and provide legible error for archived files" in {
     val ARCHIVED_PROJ = "ArchivedStuff"
-    val dxArchivedProj : DxProject = DxPath.resolveProject(ARCHIVED_PROJ)
+    val dxArchivedProj: DxProject = DxPath.resolveProject(ARCHIVED_PROJ)
 
     val fileDir: Map[String, Path] = Map(
         s"dx://${ARCHIVED_PROJ}:/Catch22.txt" -> Paths.get("inputs/A"),
