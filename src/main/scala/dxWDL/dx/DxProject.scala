@@ -9,7 +9,7 @@ import dxWDL.base.Utils
 case class DxProjectDescribe(id: String,
                              name: String,
                              created: Long,
-                             modified: Long,
+	     modified: Long,
                              properties: Option[Map[String, String]],
                              details: Option[JsValue])
     extends DxObjectDescribe
