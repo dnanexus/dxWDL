@@ -202,9 +202,12 @@ case class TaskRunner(task: CallableTaskDefinition,
         // ideally should catch specific exception.
         case e: Throwable =>
           retry_count = retry_count - 1
-          Utils.appletLog(verbose, s"""Failed to pull docker image:
-                                      |${dImg}. Retrying... ${5 - retry_count}
-                    """.stripMargin)
+          Utils.appletLog(
+              verbose,
+              s"""Failed to pull docker image:
+                 |${dImg}. Retrying... ${5 - retry_count}
+                    """.stripMargin
+          )
           Thread.sleep(1000)
       }
     }

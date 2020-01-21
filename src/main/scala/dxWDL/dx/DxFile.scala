@@ -10,16 +10,22 @@ import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
 case class DxFilePart(state: String, size: Long, md5: String)
 
-
 object DxArchivalState extends Enumeration {
   val LIVE, ARCHIVAL, ARCHIVED, UNARCHIVING = Value
 
-  def fromString( s : String) : DxArchivalState.Value = {
+  def fromString(s: String): DxArchivalState.Value = {
     s match {
-      case "live" => LIVE
-      case "archival" => ARCHIVAL
-      case "archived" => ARCHIVED
+      case "live"        => LIVE
+      case "archival"    => ARCHIVAL
+      case "archived"    => ARCHIVED
       case "unarchiving" => UNARCHIVING
+    }
+  }
+
+  def fromString(jsv: JsValue): DxArchivalState.Value = {
+    jsv match {
+      case JsString(s) => fromString(s)
+      case other       => throw new Exception(s"Archival state is not a string type ${other}")
     }
   }
 }
@@ -31,7 +37,7 @@ case class DxFileDescribe(project: String,
                           created: Long,
                           modified: Long,
                           size: Long,
-                          archivalState : DxArchivalState.Value,
+                          archivalState: DxArchivalState.Value,
                           properties: Option[Map[String, String]],
                           details: Option[JsValue],
                           parts: Option[Map[Int, DxFilePart]])
@@ -96,29 +102,29 @@ object DxFile {
   }
 
   // Parse a JSON description of a file received from the platform
-  def parseJsonFileDesribe(descJs : JsValue) : DxFileDescribe = {
-    val desc = descJs.asJsObject.getFields(
-      "project", "id", "name", "folder", "created", "modified", "archivalState") match {
-        case Seq(JsString(project),
-                 JsString(id),
-                 JsString(name),
-                 JsString(folder),
-                 JsNumber(created),
-                 JsNumber(modified),
-                 JsString(archivalState)) =>
-          DxFileDescribe(project,
-                         id,
-                         name,
-                         folder,
-                         created.toLong,
-                         modified.toLong,
-                         0,
-                         DxArchivalState.fromString(archivalState),
-                         None,
-                         None,
-                         None)
-        case _ =>
-          throw new Exception(s"Malformed JSON ${descJs}")
+  def parseJsonFileDesribe(descJs: JsValue): DxFileDescribe = {
+    val desc = descJs.asJsObject
+      .getFields("project", "id", "name", "folder", "created", "modified", "archivalState") match {
+      case Seq(JsString(project),
+               JsString(id),
+               JsString(name),
+               JsString(folder),
+               JsNumber(created),
+               JsNumber(modified),
+               JsString(archivalState)) =>
+        DxFileDescribe(project,
+                       id,
+                       name,
+                       folder,
+                       created.toLong,
+                       modified.toLong,
+                       0,
+                       DxArchivalState.fromString(archivalState),
+                       None,
+                       None,
+                       None)
+      case _ =>
+        throw new Exception(s"Malformed JSON ${descJs}")
     }
 
     // populate the size field. It is missing from files that are in the open or closing
