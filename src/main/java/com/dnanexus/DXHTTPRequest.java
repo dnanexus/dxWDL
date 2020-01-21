@@ -109,6 +109,9 @@ public class DXHTTPRequest {
 
     private static final String USER_AGENT = DXUserAgent.getUserAgent();
 
+    // consider moving this to DXEnvironment.java
+    private static final String debugLevel = System.getenv("_DX_DEBUG") == null ? "0": System.getenv("_DX_DEBUG");
+
     private static String errorMessage(String method, String resource, String errorString,
             int retryWait, int nextRetryNum, int maxRetries) {
         String baseError = method + " " + resource + ": " + errorString + ".";
@@ -128,9 +131,6 @@ public class DXHTTPRequest {
     private static void logError(String msg) {
 
         // check that if debug level is not set (null), set it as "0"
-        String debugLevel = System.getenv("_DX_DEBUG");
-        debugLevel = debugLevel == null ? "0": debugLevel;
-
         if (!debugLevel.equals("0")) {
             System.err.println("[" + System.currentTimeMillis() + "] " + msg);
         }
