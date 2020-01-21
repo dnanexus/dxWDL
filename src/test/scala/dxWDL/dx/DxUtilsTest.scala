@@ -12,7 +12,7 @@ class DxUtilsTest extends FlatSpec with Matchers {
       case e: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
-                                        |the platform on staging.""".stripMargin
+                |the platform on staging.""".stripMargin
         )
     }
 

@@ -52,8 +52,8 @@ case class WfOutputs(wf: WorkflowDefinition,
     Utils.appletLog(
         verbose,
         s"""|Evaluating workflow outputs
-                                     |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
-                                     |""".stripMargin
+            |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
+            |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,

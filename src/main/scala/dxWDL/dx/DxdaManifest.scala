@@ -36,7 +36,7 @@ object DxdaManifest {
   private def processFile(desc: DxFileDescribe, destination: Path): JsValue = {
     val partsRaw: Map[Int, DxFilePart] = desc.parts match {
       case None    => throw new Exception(s"""|No options for file ${desc.id},
-                    |name=${desc.name} folder=${desc.folder}""".stripMargin)
+                                           |name=${desc.name} folder=${desc.folder}""".stripMargin)
       case Some(x) => x
     }
     val parts: Map[String, JsValue] = partsRaw.map {

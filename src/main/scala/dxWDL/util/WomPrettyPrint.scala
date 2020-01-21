@@ -25,9 +25,9 @@ object WomPrettyPrint {
             }
             .mkString("\n")
         s"""|Conditional(${cond.conditionExpression.womExpression.sourceString}) {
-                    |${inner}
-                    |}
-                    |""".stripMargin
+            |${inner}
+            |}
+            |""".stripMargin
 
       case call: CommandCallNode =>
         val inputNames = call.inputPorts.map(_.name)

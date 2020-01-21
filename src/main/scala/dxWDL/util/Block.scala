@@ -92,8 +92,8 @@ case class Block(nodes: Vector[GraphNode]) {
       }
       .mkString("")
     s"""|Block [
-            |${desc}
-            |]""".stripMargin
+        |${desc}
+        |]""".stripMargin
   }
 
   // Check that this block is valid.

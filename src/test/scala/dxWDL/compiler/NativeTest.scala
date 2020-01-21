@@ -34,7 +34,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case e: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
-                                        |the platform""".stripMargin
+                |the platform""".stripMargin
         )
     }
 
@@ -273,16 +273,16 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "be able to include license information in details" in {
     val expected =
       """
-              |[
-              |  {
-              |    "author":"Broad Institute",
-              |    "license":"BSD-3-Clause",
-              |    "licenseUrl":"https://github.com/broadinstitute/LICENSE.TXT",
-              |    "name":"GATK4",
-              |    "repoUrl":"https://github.com/broadinstitute/gatk",
-              |    "version":"GATK-4.0.1.2"
-              |    }
-              |]
+        |[
+        |  {
+        |    "author":"Broad Institute",
+        |    "license":"BSD-3-Clause",
+        |    "licenseUrl":"https://github.com/broadinstitute/LICENSE.TXT",
+        |    "name":"GATK4",
+        |    "repoUrl":"https://github.com/broadinstitute/gatk",
+        |    "version":"GATK-4.0.1.2"
+        |    }
+        |]
             """.stripMargin.parseJson
 
     val path = pathFromBasename("compiler", "add.wdl")
@@ -290,7 +290,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     val appId = Main.compile(
         path.toString
-          //:: "--verbose"
+        //:: "--verbose"
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
@@ -403,12 +403,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     val extrasContent =
       s"""|{
-                | "custom_reorg" : {
-                |    "app_id" : "${appletId}",
-                |    "conf" : null
-                |  }
-                |}
-                |""".stripMargin
+          | "custom_reorg" : {
+          |    "app_id" : "${appletId}",
+          |    "conf" : null
+          |  }
+          |}
+          |""".stripMargin
 
     val tmpFile = createExtras(extrasContent)
     // remove locked workflow flag
@@ -455,12 +455,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val fileId = uploadOut.trim
     val extrasContent =
       s"""|{
-                | "custom_reorg" : {
-                |    "app_id" : "${appletId}",
-                |    "conf" : "dx://$fileId"
-                |  }
-                |}
-                |""".stripMargin
+          | "custom_reorg" : {
+          |    "app_id" : "${appletId}",
+          |    "conf" : "dx://$fileId"
+          |  }
+          |}
+          |""".stripMargin
 
     val tmpFile = createExtras(extrasContent)
     // remove locked workflow flag
@@ -495,12 +495,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     // upload random file
     val extrasContent =
       s"""|{
-                | "custom_reorg" : {
-                |    "app_id" : "${appletId}",
-                |    "conf" : null
-                |  }
-                |}
-                |""".stripMargin
+          | "custom_reorg" : {
+          |    "app_id" : "${appletId}",
+          |    "conf" : null
+          |  }
+          |}
+          |""".stripMargin
 
     val tmpFile = createExtras(extrasContent)
 

@@ -163,12 +163,12 @@ case class Top(cOpt: CompilerOptions) {
             // unequal.
             case Some(existing) if (existing.toString != callable.toString) =>
               Utils.error(s"""|${key} appears with two different callable definitions
-                                        |1)
-                                        |${callable}
-                                        |
-                                        |2)
-                                        |${existing}
-                                        |""".stripMargin)
+                              |1)
+                              |${callable}
+                              |
+                              |2)
+                              |${existing}
+                              |""".stripMargin)
               throw new Exception(s"${key} appears twice, with two different definitions")
             case _ => ()
           }
@@ -180,12 +180,12 @@ case class Top(cOpt: CompilerOptions) {
               allTypeAliases = allTypeAliases + (key -> definition)
             case Some(existing) if (existing != definition) =>
               Utils.error(s"""|${key} appears twice, with two different definitions
-                                        |1)
-                                        |${definition}
-                                        |
-                                        |2)
-                                        |${existing}
-                                        |""".stripMargin)
+                              |1)
+                              |${definition}
+                              |
+                              |2)
+                              |${existing}
+                              |""".stripMargin)
               throw new Exception(s"${key} type alias appears twice")
             case _ => ()
           }

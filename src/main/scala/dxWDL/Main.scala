@@ -26,19 +26,18 @@ object Main extends App {
         TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
   }
 
-
   case class DxniBaseOptions(force: Boolean,
-                            outputFile: Path,
-                            language: Language.Value,
-                            verbose: Verbose)
+                             outputFile: Path,
+                             language: Language.Value,
+                             verbose: Verbose)
 
   case class DxniAppletOptions(apps: Boolean,
                                force: Boolean,
                                outputFile: Path,
                                recursive: Boolean,
                                language: Language.Value,
-                               dxProject : DxProject,
-                               folderOrPath : Either[String, String],
+                               dxProject: DxProject,
+                               folderOrPath: Either[String, String],
                                verbose: Verbose)
 
   // This directory exists only at runtime in the cloud. Beware of using
@@ -96,8 +95,8 @@ object Main extends App {
                                subargs: List[String]): Unit = {
       if (expectedNumArgs != subargs.length)
         throw new Exception(s"""|Wrong number of arguments for ${keyword}.
-                                        |Expected ${expectedNumArgs}, input is
-                                        |${subargs}""".stripMargin.replaceAll("\n", " "))
+                                |Expected ${expectedNumArgs}, input is
+                                |${subargs}""".stripMargin.replaceAll("\n", " "))
     }
     val cmdLineOpts = splitCmdLine(arglist)
     val options = HashMap.empty[String, List[String]]
@@ -287,11 +286,11 @@ object Main extends App {
           Utils.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${projectRaw}, you probably need to be logged into
-                                            |the platform""".stripMargin
+                  |the platform""".stripMargin
           )
       }
     Utils.trace(verbose.on, s"""|project ID: ${dxProject.id}
-                        |folder: ${dxFolder}""".stripMargin)
+                                |folder: ${dxFolder}""".stripMargin)
     (dxProject, dxFolder)
   }
 
@@ -303,14 +302,14 @@ object Main extends App {
         case e: java.lang.NumberFormatException =>
           throw new Exception(
               s"""|the runtimeDebugLevel flag takes an integer input,
-                                            |${numberStr} is not of type int""".stripMargin
+                  |${numberStr} is not of type int""".stripMargin
                 .replaceAll("\n", " ")
           )
       }
     if (rtDebugLvl < 0 || rtDebugLvl > 2)
       throw new Exception(
           s"""|the runtimeDebugLevel flag must be one of {0, 1, 2}.
-                                    |Value ${rtDebugLvl} is out of bounds.""".stripMargin
+              |Value ${rtDebugLvl} is out of bounds.""".stripMargin
             .replaceAll("\n", " ")
       )
     rtDebugLvl
@@ -323,7 +322,7 @@ object Main extends App {
       case other =>
         throw new Exception(
             s"""|the streamAllFiles flag must be a boolean (true,false).
-                                        |Value ${other} is illegal.""".stripMargin
+                |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
     }
@@ -422,9 +421,7 @@ object Main extends App {
       case None                 => Set.empty
       case Some(modulesToTrace) => modulesToTrace.toSet
     }
-    val verbose = Verbose(options contains "verbose",
-                          options contains "quiet",
-                          verboseKeys)
+    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
     val language = options.get("language") match {
       case None => Language.WDLvDraft2
       case Some(List(buf)) =>
@@ -443,10 +440,7 @@ object Main extends App {
           throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
       case _ => throw new Exception("only one language can be specified")
     }
-    DxniBaseOptions(options contains "force",
-                   outputFile,
-                   language,
-                   verbose)
+    DxniBaseOptions(options contains "force", outputFile, language, verbose)
   }
 
   private def dxniAppletOptions(options: OptionsMap): DxniAppletOptions = {
@@ -468,7 +462,7 @@ object Main extends App {
           )
       }
     val folder = options.get("folder") match {
-      case None => None
+      case None           => None
       case Some(List(fl)) =>
         // Validate the folder. It would have been nicer to be able
         // to check if a folder exists, instead of validating by
@@ -482,15 +476,15 @@ object Main extends App {
         Some(fl)
       case Some(_) => throw new Exception("folder specified multiple times")
     }
-    val path : Option[String] = options.get("path") match {
-      case None => None
+    val path: Option[String] = options.get("path") match {
+      case None          => None
       case Some(List(p)) => Some(p)
-      case Some(_) => throw new Exception("path specified multiple times")
+      case Some(_)       => throw new Exception("path specified multiple times")
     }
-    val folderOrPath : Either[String, String] = (folder, path) match {
-      case (None, None) => Left("/")    // use the root folder as the default
-      case (Some(fl), None) => Left(fl)
-      case (None, Some(p)) => Right(p)
+    val folderOrPath: Either[String, String] = (folder, path) match {
+      case (None, None)       => Left("/") // use the root folder as the default
+      case (Some(fl), None)   => Left(fl)
+      case (None, Some(p))    => Right(p)
       case (Some(_), Some(_)) => throw new Exception("both folder and path specified")
     }
     DxniAppletOptions(options contains "apps",
@@ -776,8 +770,8 @@ object Main extends App {
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
         Utils.trace(true, s"""|applet field not found locally, performing
-                                |an API call.
-                                |""".stripMargin)
+                              |an API call.
+                              |""".stripMargin)
         val dxJob = DxJob(DxUtils.dxEnv.getJob())
         dxJob.describe().applet
       case Some(JsString(x)) =>
@@ -876,10 +870,10 @@ object Main extends App {
         }
       case Some(_) =>
         BadUsageTermination(s"""|Bad arguments to internal operation
-                                        |  ${args}
-                                        |Usage:
-                                        |  java -jar dxWDL.jar internal <action> <home dir> <debug level>
-                                        |""".stripMargin)
+                                |  ${args}
+                                |Usage:
+                                |  java -jar dxWDL.jar internal <action> <home dir> <debug level>
+                                |""".stripMargin)
     }
   }
 
@@ -902,52 +896,52 @@ object Main extends App {
 
   val usageMessage =
     s"""|java -jar dxWDL.jar <action> <parameters> [options]
-            |
-            |Actions:
-            |  compile <WDL file>
-            |    Compile a wdl file into a dnanexus workflow.
-            |    Optionally, specify a destination path on the
-            |    platform. If a WDL inputs files is specified, a dx JSON
-            |    inputs file is generated from it.
-            |    options
-            |      -archive               Archive older versions of applets
-            |      -compileMode <string>  Compilation mode, a debugging flag
-            |      -defaults <string>     File with Cromwell formatted default values (JSON)
-            |      -destination <string>  Output path on the platform for workflow
-            |      -extras <string>       JSON formatted file with extra options, for example
-            |                             default runtime options for tasks.
-            |      -inputs <string>       File with Cromwell formatted inputs
-            |      -locked                Create a locked-down workflow
-            |      -p | -imports <string> Directory to search for imported WDL files
-            |      -projectWideReuse      Look for existing applets/workflows in the entire project
-            |                             before generating new ones. The normal search scope is the
-            |                             target folder only.
-            |      -reorg                 Reorganize workflow output files
-            |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
-            |                             job log at runtime. Zero means write the minimum,
-            |                             one is the default, and two is for internal debugging.
-            |      -streamAllFiles        mount all files with dxfuse, do not use the download agent
-            |
-            |  dxni
-            |    Dx Native call Interface. Create stubs for calling dx
-            |    executables (apps/applets/workflows), and store them as WDL
-            |    tasks in a local file. Allows calling existing platform executables
-            |    without modification. Default is to look for applets.
-            |    options:
-            |      -apps                  Search only for global apps.
-            |      -o <string>            Destination file for WDL task definitions
-            |      -r | recursive         Recursive search
-            |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0)
-            |
-            |Common options
-            |    -destination             Full platform path (project:/folder)
-            |    -f | force               Delete existing applets/workflows
-            |    -folder <string>         Platform folder
-            |    -project <string>        Platform project
-            |    -quiet                   Do not print warnings or informational outputs
-            |    -verbose                 Print detailed progress reports
-            |    -verboseKey [module]     Detailed information for a specific module
-            |""".stripMargin
+        |
+        |Actions:
+        |  compile <WDL file>
+        |    Compile a wdl file into a dnanexus workflow.
+        |    Optionally, specify a destination path on the
+        |    platform. If a WDL inputs files is specified, a dx JSON
+        |    inputs file is generated from it.
+        |    options
+        |      -archive               Archive older versions of applets
+        |      -compileMode <string>  Compilation mode, a debugging flag
+        |      -defaults <string>     File with Cromwell formatted default values (JSON)
+        |      -destination <string>  Output path on the platform for workflow
+        |      -extras <string>       JSON formatted file with extra options, for example
+        |                             default runtime options for tasks.
+        |      -inputs <string>       File with Cromwell formatted inputs
+        |      -locked                Create a locked-down workflow
+        |      -p | -imports <string> Directory to search for imported WDL files
+        |      -projectWideReuse      Look for existing applets/workflows in the entire project
+        |                             before generating new ones. The normal search scope is the
+        |                             target folder only.
+        |      -reorg                 Reorganize workflow output files
+        |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
+        |                             job log at runtime. Zero means write the minimum,
+        |                             one is the default, and two is for internal debugging.
+        |      -streamAllFiles        mount all files with dxfuse, do not use the download agent
+        |
+        |  dxni
+        |    Dx Native call Interface. Create stubs for calling dx
+        |    executables (apps/applets/workflows), and store them as WDL
+        |    tasks in a local file. Allows calling existing platform executables
+        |    without modification. Default is to look for applets.
+        |    options:
+        |      -apps                  Search only for global apps.
+        |      -o <string>            Destination file for WDL task definitions
+        |      -r | recursive         Recursive search
+        |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0)
+        |
+        |Common options
+        |    -destination             Full platform path (project:/folder)
+        |    -f | force               Delete existing applets/workflows
+        |    -folder <string>         Platform folder
+        |    -project <string>        Platform project
+        |    -quiet                   Do not print warnings or informational outputs
+        |    -verbose                 Print detailed progress reports
+        |    -verboseKey [module]     Detailed information for a specific module
+        |""".stripMargin
 
   val termination = dispatchCommand(args)
 

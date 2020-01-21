@@ -175,7 +175,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     if (sufficient.length == 0)
       throw new Exception(
           s"""|No instances found that match the requirements
-                                    |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu""".stripMargin
+              |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu""".stripMargin
             .replaceAll("\n", " ")
       )
     val initialGuess = sufficient.head
@@ -197,7 +197,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
       case None =>
         // Probably a bad instance name
         throw new Exception(s"""|Instance type ${iType} is unavailable
-                                        |or badly named""".stripMargin.replaceAll("\n", " "))
+                                |or badly named""".stripMargin.replaceAll("\n", " "))
     }
   }
 
@@ -280,7 +280,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case Some(x) =>
         throw new Exception(
             s"""|dxInstaceType has to evaluate to a
-                                        |WomString type ${x.toWomString}""".stripMargin
+                |WomString type ${x.toWomString}""".stripMargin
               .replaceAll("\n", " ")
         )
     }
@@ -574,9 +574,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         Utils.warning(
             verbose,
             """|Warning: insufficient permissions to retrieve the
-                                          |instance price list. This will result in suboptimal machine choices,
-                                          |incurring higher costs when running workflows.
-                                          |""".stripMargin.replaceAll("\n", " ")
+               |instance price list. This will result in suboptimal machine choices,
+               |incurring higher costs when running workflows.
+               |""".stripMargin.replaceAll("\n", " ")
         )
         queryNoPrices(dxProject)
     }

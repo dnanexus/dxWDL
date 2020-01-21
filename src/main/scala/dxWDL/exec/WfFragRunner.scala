@@ -101,12 +101,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
           }
           .mkString("\n")
         throw new Exception(s"""|Failed to evaluate expression ${expr.sourceString}
-                        |Errors:
-                        |${errors}
-                        |
-                        |Environment:
-                        |${envDbg}
-                        |""".stripMargin)
+                                |Errors:
+                                |${errors}
+                                |
+                                |Environment:
+                                |${envDbg}
+                                |""".stripMargin)
       case Valid(x: WomValue) => x
     }
 
@@ -250,13 +250,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(
             true,
             s"""|Error unimplemented type ${other.getClass} while evaluating expressions
-                                          |
-                                          |env =
-                                          |${env}
-                                          |
-                                          |graph =
-                                          |${dbgGraph}
-                                          |""".stripMargin
+                |
+                |env =
+                |${env}
+                |
+                |graph =
+                |${dbgGraph}
+                |""".stripMargin
         )
         throw new Exception(s"${other.getClass} not implemented yet")
     }
@@ -268,10 +268,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
     Utils.appletLog(
         verbose,
         s"""|processOutputs
-                                     |  env = ${env.keys}
-                                     |  fragResults = ${fragResults.keys}
-                                     |  exportedVars = ${exportedVars}
-                                     |""".stripMargin
+            |  env = ${env.keys}
+            |  fragResults = ${fragResults.keys}
+            |  exportedVars = ${exportedVars}
+            |""".stripMargin
     )
 
     // convert the WOM values to WVLs
@@ -310,9 +310,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
     Utils.appletLog(
         verbose,
         s"""|buildCallInputs (${callName})
-                                     |env:
-                                     |${env.mkString("\n")}
-                                     |""".stripMargin
+            |env:
+            |${env.mkString("\n")}
+            |""".stripMargin
     )
 
     val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap {
@@ -377,10 +377,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(
             verbose,
             s"""|Failed to precalculate the instance type for
-                                    |task ${task.unqualifiedName}.
-                                    |
-                                    |${e}
-                                    |""".stripMargin
+                |task ${task.unqualifiedName}.
+                |
+                |${e}
+                |""".stripMargin
         )
         None
     }
@@ -730,9 +730,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
     Utils.appletLog(
         verbose,
         s"""|Block ${blockPath} to execute:
-                                     |${WomPrettyPrintApproxWdl.block(block)}
-                                     |
-                                     |""".stripMargin
+            |${WomPrettyPrintApproxWdl.block(block)}
+            |
+            |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,
@@ -831,7 +831,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     val jsOutputs: Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
     val jsOutputsDbgStr = jsOutputs.mkString("\n")
     Utils.appletLog(verbose, s"""|JSON outputs:
-                                     |${jsOutputsDbgStr}""".stripMargin)
+                                 |${jsOutputsDbgStr}""".stripMargin)
     jsOutputs
   }
 }

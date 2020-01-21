@@ -65,11 +65,11 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }.toMap
         val explanationLines = stuckWaitingOn.mkString("\n")
         throw new Exception(s"""|Sanity: cannot find the next callable to compile.
-                                        |ready = ${readyNames}
-                                        |stuck = ${stuck}
-                                        |stuckWaitingOn =
-                                        |${explanationLines}
-                                        |""".stripMargin)
+                                |ready = ${readyNames}
+                                |stuck = ${stuck}
+                                |stuckWaitingOn =
+                                |${explanationLines}
+                                |""".stripMargin)
       }
       satisfiedCallables
     }
@@ -112,8 +112,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           val localName = Utils.getUnqualifiedName(cNode.callable.name)
           if (localName.startsWith("Scatter"))
             throw new Exception("""|The workflow contains a nested scatter, it is not
-                                               |handled currently due to a cromwell WOM library issue
-                                               |""".stripMargin.replaceAll("\n", " "))
+                                   |handled currently due to a cromwell WOM library issue
+                                   |""".stripMargin.replaceAll("\n", " "))
           callables(localName)
         case cNode: CallNode =>
           val localname = Utils.getUnqualifiedName(cNode.callable.name)
@@ -170,8 +170,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }
       case x =>
         throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
-                                        |${x}
-                                        |""".stripMargin.replaceAll("\n", " "))
+                                |${x}
+                                |""".stripMargin.replaceAll("\n", " "))
     }
   }
 
