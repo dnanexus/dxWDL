@@ -40,9 +40,9 @@ object WomPrettyPrintApproxWdl {
           }
           .mkString("\n")
         Some(s"""|${indent}scatter (${varName} in ${collection}) {
-                         |${innerBlock}
-                         |${indent}}
-                         |""".stripMargin)
+                 |${innerBlock}
+                 |${indent}}
+                 |""".stripMargin)
 
       case cnd: ConditionalNode =>
         val orderedNodes = Block.partialSortByDep(cnd.innerGraph.nodes)
@@ -53,9 +53,9 @@ object WomPrettyPrintApproxWdl {
             }
             .mkString("\n")
         Some(s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
-                         |${innerBlock}
-                         |${indent}}
-                         |""".stripMargin)
+                 |${innerBlock}
+                 |${indent}}
+                 |""".stripMargin)
 
       case call: CommandCallNode =>
         val inputNames = call.upstream

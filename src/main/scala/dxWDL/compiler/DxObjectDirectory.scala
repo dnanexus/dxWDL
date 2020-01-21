@@ -77,7 +77,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     Utils.trace(
         verbose.on,
         s"""|Found ${dxAppletsInFolder.size} applets
-                        |in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
+            |in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
           .replaceAll("\n", " ")
     )
 
@@ -96,7 +96,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     Utils.trace(
         verbose.on,
         s"""|Found ${dxWorkflowsInFolder.size} workflows
-                        | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
+            | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
           .replaceAll("\n", " ")
     )
 

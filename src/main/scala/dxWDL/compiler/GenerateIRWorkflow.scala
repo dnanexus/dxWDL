@@ -75,8 +75,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                                              valueMapper) =>
         val defaultValue: WomValue = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
-                            | ${input}
-                            |""".stripMargin)
+                                               | ${input}
+                                               |""".stripMargin)
           case Some(value) => value
         }
         CVar(id.workflowLocalName, womType, Some(defaultValue))
@@ -143,10 +143,10 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             }
             .mkString("\n")
           Utils.trace(verbose.on, s"""|env =
-                                                |${envDbg}""".stripMargin)
+                                      |${envDbg}""".stripMargin)
           throw new Exception(
               s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                            |is unspecified. This is illegal in a locked workflow.""".stripMargin
+                  |is unspecified. This is illegal in a locked workflow.""".stripMargin
                 .replaceAll("\n", " ")
           )
 
@@ -170,12 +170,12 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                 }
                 .mkString("\n")
               Utils.trace(verbose.on, s"""|env =
-                                                        |${envDbg}""".stripMargin)
+                                          |${envDbg}""".stripMargin)
               throw new Exception(
                   s"""|Internal compiler error.
-                                    |
-                                    |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                                    |is missing from the environment.""".stripMargin
+                      |
+                      |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+                      |is missing from the environment.""".stripMargin
                     .replaceAll("\n", " ")
               )
             case Some(lVar) => lVar.sArg
@@ -214,8 +214,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       case None =>
         val envDesc = env.mkString("\n")
         Utils.trace(verbose.on, s"""|env=[
-                                            |${envDesc}
-                                            |]""".stripMargin)
+                                    |${envDesc}
+                                    |]""".stripMargin)
         throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
       case Some(lVar) => lVar.sArg
     }
@@ -394,7 +394,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     // get to the native phase.
     val catg = Block.categorize(block)
     Utils.trace(verbose2, s"""|category : ${Block.Category.toString(catg)}
-                                  |""".stripMargin)
+                              |""".stripMargin)
 
     val (innerCall, auxCallables): (Option[String], Vector[IR.Callable]) = catg match {
       case Block.AllExpressions(_) => (None, Vector.empty)
@@ -894,12 +894,12 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             }
             .mkString("    ")
           throw new Exception(s"""|Generated bad workflow.
-                            |Stage <${stage.id.getId}, ${stage.description}> calls <${stage.calleeName}>
-                            |which is missing.
-                            |
-                            |stages = ${allStages}
-                            |callables = ${callableNames}
-                            |""".stripMargin)
+                                  |Stage <${stage.id.getId}, ${stage.description}> calls <${stage.calleeName}>
+                                  |which is missing.
+                                  |
+                                  |stages = ${allStages}
+                                  |callables = ${callableNames}
+                                  |""".stripMargin)
         }
     }
 

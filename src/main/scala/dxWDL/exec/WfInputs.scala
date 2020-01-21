@@ -29,8 +29,8 @@ case class WfInputs(wf: WorkflowDefinition,
     Utils.appletLog(
         verbose,
         s"""|Artificial applet for unlocked workflow inputs
-                                     |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
-                                     |""".stripMargin
+            |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
+            |""".stripMargin
     )
 
     // convert the WDL values to JSON

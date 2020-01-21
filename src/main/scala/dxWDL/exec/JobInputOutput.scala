@@ -180,7 +180,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     }
     throw new Exception(
         s"""|Tried to download ${dxFile.getId} ${basename} to local filesystem
-                                |at ${inputsDir}/*/${basename}, all are taken""".stripMargin
+            |at ${inputsDir}/*/${basename}, all are taken""".stripMargin
           .replaceAll("\n", " ")
     )
   }

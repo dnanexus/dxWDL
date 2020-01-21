@@ -193,9 +193,9 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(
             verbose,
             s"""|output:
-                                             |${outstr}
-                                             |stderr:
-                                             |${errstr}""".stripMargin
+                |${outstr}
+                |stderr:
+                |${errstr}""".stripMargin
         )
         return Some(dImg)
       } catch {
@@ -203,7 +203,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         case e: Throwable =>
           retry_count = retry_count - 1
           Utils.appletLog(verbose, s"""Failed to pull docker image:
-                           |${dImg}. Retrying... ${5 - retry_count}
+                                      |${dImg}. Retrying... ${5 - retry_count}
                     """.stripMargin)
           Thread.sleep(1000)
       }
@@ -235,8 +235,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(
             verbose,
             s"""|manifest content:
-                                             |${mContent}
-                                             |""".stripMargin
+                |${mContent}
+                |""".stripMargin
         )
         val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
         Utils.appletLog(verbose, s"repository is ${repo}")
@@ -246,9 +246,9 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(
             verbose,
             s"""|output:
-                                             |${outstr}
-                                             |stderr:
-                                             |${errstr}""".stripMargin
+                |${outstr}
+                |stderr:
+                |${errstr}""".stripMargin
         )
         Some(repo)
 
@@ -570,7 +570,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     Utils.appletLog(
         verbose,
         s"""|calcInstanceType memory=${memory} disk=${diskSpace}
-                                     |cores=${cores} instancetype=${iType}""".stripMargin
+            |cores=${cores} instancetype=${iType}""".stripMargin
           .replaceAll("\n", " ")
     )
     iType

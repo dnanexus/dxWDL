@@ -29,33 +29,33 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
   val wdlCode =
     """|version 1.0
-           |
-           |task Add {
-           |  input {
-           |    Int a
-           |    Int b
-           |  }
-           |
-           |  command {
-           |    echo $((${a} + ${b}))
-           |  }
-           |  output {
-           |    Int result = read_int(stdout())
-           |  }
-           |}
-           |
-           |workflow foo {
-           |  input {
-           |    Int x
-           |    Int y
-           |  }
-           |
-           |  call Add{ input: a = x + 5,
-           |                   b = y - 1 }
-           |
-           |  output {}
-           |}
-           |""".stripMargin
+       |
+       |task Add {
+       |  input {
+       |    Int a
+       |    Int b
+       |  }
+       |
+       |  command {
+       |    echo $((${a} + ${b}))
+       |  }
+       |  output {
+       |    Int result = read_int(stdout())
+       |  }
+       |}
+       |
+       |workflow foo {
+       |  input {
+       |    Int x
+       |    Int y
+       |  }
+       |
+       |  call Add{ input: a = x + 5,
+       |                   b = y - 1 }
+       |
+       |  output {}
+       |}
+       |""".stripMargin
 
   // Figure out the type of an expression
   def evalType(expr: WomExpression, inputTypes: Map[String, WomType]): WomType = {

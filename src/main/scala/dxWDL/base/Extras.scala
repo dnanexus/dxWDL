@@ -415,8 +415,8 @@ object Extras {
         Utils.warning(
             verbose,
             s"""|Unsupported runtime attribute ${k},
-                                           |we currently support ${RUNTIME_ATTRS}
-                                           |""".stripMargin.replaceAll("\n", "")
+                |we currently support ${RUNTIME_ATTRS}
+                |""".stripMargin.replaceAll("\n", "")
         )
     }
 
@@ -445,8 +445,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(RUN_SPEC_EXEC_POLICY_ATTRS contains k))
         throw new Exception(s"""|Unsupported runSpec.access attribute ${k},
-                                        |we currently support ${RUN_SPEC_EXEC_POLICY_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${RUN_SPEC_EXEC_POLICY_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
 
     }
 
@@ -470,8 +470,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(RUN_SPEC_ACCESS_ATTRS contains k))
         throw new Exception(s"""|Unsupported runSpec.access attribute ${k},
-                                        |we currently support ${RUN_SPEC_ACCESS_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${RUN_SPEC_ACCESS_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
 
     }
 
@@ -509,9 +509,8 @@ object Extras {
     for (k <- subFields.keys) {
       if (!(RUN_SPEC_TIMEOUT_ATTRS contains k))
         throw new Exception(s"""|Unsupported runSpec.timeoutPolicy attribute ${k},
-                                        |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", "")
-        )
+                                |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
 
     }
     return Some(
@@ -528,8 +527,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(RUN_SPEC_ATTRS contains k))
         throw new Exception(s"""|Unsupported runSpec attribute ${k},
-                                        |we currently support ${RUN_SPEC_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${RUN_SPEC_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
 
     }
 
@@ -576,8 +575,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(TASK_DX_ATTRS contains k))
         throw new Exception(s"""|Unsupported runtime attribute ${k},
-                                        |we currently support ${TASK_DX_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${TASK_DX_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
     }
 
     val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
@@ -594,8 +593,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(DOCKER_REGISTRY_ATTRS contains k))
         throw new Exception(s"""|Unsupported docker registry attribute ${k},
-                                        |we currently support ${DOCKER_REGISTRY_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${DOCKER_REGISTRY_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
 
     }
     def getSome(fieldName: String): String = {
@@ -615,8 +614,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(CUSTOM_REORG_ATTRS contains k))
         throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute ${k},
-                        |we currently support ${CUSTOM_REORG_ATTRS}
-                        |""".stripMargin.replaceAll("\n", ""))
+                                               |we currently support ${CUSTOM_REORG_ATTRS}
+                                               |""".stripMargin.replaceAll("\n", ""))
     }
 
     val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
@@ -695,12 +694,12 @@ object Extras {
     Utils.trace(
         verbose.on,
         s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
-                |it may misplace or outright delete files.
-                |The applet: ${reorgAppId} requires CONTRIBUTE project access,
-                |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
-                |You can refer to this example:
-                |
-                |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
+            |it may misplace or outright delete files.
+            |The applet: ${reorgAppId} requires CONTRIBUTE project access,
+            |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
+            |You can refer to this example:
+            |
+            |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
             """.stripMargin.replaceAll("\n", " ")
     )
     Some(ReorgAttrs(reorgAppId, reorgConf))
@@ -716,8 +715,8 @@ object Extras {
     for (k <- fields.keys) {
       if (!(EXTRA_ATTRS contains k))
         throw new Exception(s"""|Unsupported special option ${k},
-                                        |we currently support ${EXTRA_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                |we currently support ${EXTRA_ATTRS}
+                                |""".stripMargin.replaceAll("\n", ""))
     }
 
     // parse the individual task dx attributes

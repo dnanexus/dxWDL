@@ -669,15 +669,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val commandSection =
       """|  command {
-               |  echo 1 hello world | sed 's/world/wdl/'
-               |  echo 2 hello \
-               |  world \
-               |  | sed 's/world/wdl/'
-               |  echo 3 hello \
-               |  world | \
-               |  sed 's/world/wdl/'
-               |  }
-               |""".stripMargin
+         |  echo 1 hello world | sed 's/world/wdl/'
+         |  echo 2 hello \
+         |  world \
+         |  | sed 's/world/wdl/'
+         |  echo 3 hello \
+         |  world | \
+         |  sed 's/world/wdl/'
+         |  }
+         |""".stripMargin
 
     inside(retval) {
       case Main.SuccessfulTerminationIR(bundle) =>

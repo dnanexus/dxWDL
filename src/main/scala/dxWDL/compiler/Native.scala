@@ -512,7 +512,7 @@ case class Native(dxWDLrtId: Option[String],
       case _ =>
         val dxClass = existingDxObjs.head.dxClass
         Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
-                                           |path ${dxProject.id}:${folder}""".stripMargin)
+                                   |path ${dxProject.id}:${folder}""".stripMargin)
         true
     }
 
