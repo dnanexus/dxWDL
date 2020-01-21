@@ -6,3 +6,4 @@ addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
 // This prevents the SLF dialog from appearing when starting
 // an SBT session
 libraryDependencies += "org.slf4j" % "slf4j-nop" % "1.7.24"
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.2.1")
