@@ -93,4 +93,30 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         JsObject(dxTestProject.getId -> JsArray(expected))
     ))
   }
+
+  it should "detect and provide legible error for archived files" in {
+    val ARCHIVED_PROJ = "ArchivedStuff"
+    val dxArchivedProj: DxProject = DxPath.resolveProject(ARCHIVED_PROJ)
+
+    val fileDir: Map[String, Path] = Map(
+        s"dx://${ARCHIVED_PROJ}:/Catch22.txt" -> Paths.get("inputs/A"),
+        s"dx://${ARCHIVED_PROJ}:/LICENSE" -> Paths.get("inputs/B"),
+        s"dx://${ARCHIVED_PROJ}:/README" -> Paths.get("inputs/C")
+    )
+
+    // resolve the paths
+    val resolvedObjects: Map[String, DxDataObject] =
+      DxPath.resolveBulk(fileDir.keys.toVector, dxArchivedProj)
+    val filesInManifest: Map[String, (DxFile, Path)] = resolvedObjects.map {
+      case (dxPath, dataObj) =>
+        val dxFile = dataObj.asInstanceOf[DxFile]
+        val local: Path = fileDir(dxPath)
+        dxFile.id -> (dxFile, local)
+    }.toMap
+
+    // Creating a manifest should fail, because some of the files are archived
+    assertThrows[Exception] {
+      DxdaManifest.apply(filesInManifest)
+    }
+  }
 }

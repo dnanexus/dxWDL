@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.41 1-Jan-2020
+## 1.41 21-Jan-2020
 - Added support for `patterns` and `help` in the `parameters_meta` section of a WDL task. For more information, see [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
 - Upgrade to Cromwell v48
 - Upgrade to dxfuse v0.17
@@ -9,6 +9,11 @@
 ```
 java -jar dxWDL-v1.41.jar dxni --path /MY_APPLETS/assemble --project project-xxxx --language wdl_v1.0 --output headers.wdl
 ```
+
+- Using `scalafmt` to normalize code indentation.
+- Check if a file is archived prior to downloading or streaming it. Such a file cannot be read, and will cause a
+"403 forbidden" http error code.
+
 
 ## 1.40  19-Dec-2019
 - Replaced the dxjava package with scala code. The dnanexus calls now go through the low-level DXAPI java

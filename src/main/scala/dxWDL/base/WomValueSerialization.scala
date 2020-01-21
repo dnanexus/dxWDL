@@ -71,8 +71,12 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
         }.toMap
         JsObject(mJs)
 
-      case (_, _) => throw new Exception(s"""|Unsupported combination type=(${t.stableName},${t})
-                                             |value=(${w.toWomString}, ${w})""".stripMargin.replaceAll("\n", " "))
+      case (_, _) =>
+        throw new Exception(
+            s"""|Unsupported combination type=(${t.stableName},${t})
+                |value=(${w.toWomString}, ${w})""".stripMargin
+              .replaceAll("\n", " ")
+        )
     }
   }
 

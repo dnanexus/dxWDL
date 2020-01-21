@@ -119,16 +119,19 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
                          inputSpec,
                          outputSpec)
       case _: DxFile =>
-        DxFileDescribe(dxProject.id,
-                       dxobj.id,
-                       name,
-                       folder,
-                       created,
-                       modified,
-                       size.get,
-                       Some(properties),
-                       details,
-                       None)
+        DxFileDescribe(
+            dxProject.id,
+            dxobj.id,
+            name,
+            folder,
+            created,
+            modified,
+            size.get,
+            DxArchivalState.fromString(jsv.asJsObject.fields("archivedState")),
+            Some(properties),
+            details,
+            None
+        )
       case other =>
         throw new Exception(s"unsupported object ${other}")
     }
@@ -174,19 +177,13 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    val describeFields = Map("name" -> JsBoolean(true),
-                             "folder" -> JsBoolean(true),
-                             "size" -> JsBoolean(true),
-                             "properties" -> JsBoolean(true))
-    val ioSpec =
-      if (withInputOutputSpec)
-        Map("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true))
-      else
-        Map.empty
-
+    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
+    if (withInputOutputSpec) {
+      fields ++= Set(Field.InputSpec, Field.OutputSpec)
+    }
     val reqFields = Map("visibility" -> JsString("either"),
                         "project" -> JsString(dxProject.getId),
-                        "describe" -> JsObject(describeFields ++ ioSpec),
+                        "describe" -> DxObject.requestFields(fields),
                         "scope" -> scope)
     val limitField = limit match {
       case None      => Map.empty
