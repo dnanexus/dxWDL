@@ -418,7 +418,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     }
     if (!defaultFields.isEmpty) {
       throw new Exception(s"""|Could not map all default fields.
-                                    |These were left: ${defaultFields}""".stripMargin)
+                              |These were left: ${defaultFields}""".stripMargin)
     }
     bundle.copy(primaryCallable = primaryCallable, allCallables = callablesWithDefaults)
   }
@@ -450,7 +450,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       if (inputFields.isEmpty)
         return
       throw new Exception(s"""|Could not map all default fields.
-                                    |These were left: ${inputFields}""".stripMargin)
+                              |These were left: ${inputFields}""".stripMargin)
     }
   }
 

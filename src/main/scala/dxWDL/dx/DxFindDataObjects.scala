@@ -143,8 +143,8 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
       case _ =>
         throw new Exception(s"""|malformed result: expecting {project, id, describe} fields, got:
-                    |${jsv.prettyPrint}
-                    |""".stripMargin)
+                                |${jsv.prettyPrint}
+                                |""".stripMargin)
     }
   }
 

@@ -126,7 +126,7 @@ case class GenerateIRTask(verbose: Verbose,
         Some(CVar(iName.value, womType, None, attr))
       }
 
-      case OverridableInputDefinitionWithDefault(iName,womType,defaultExpr,_,paramMeta) =>
+      case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, paramMeta) =>
         WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
             // This is a task "input" of the form:

@@ -135,8 +135,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
         System.out.println("=== WOM file =====")
         System.out.println(mainFileContents)
         throw new Exception(s"""|WOM validation errors:
-                                        | ${errors}
-                                        |""".stripMargin)
+                                | ${errors}
+                                |""".stripMargin)
       case Right(bundle) => bundle
     }
     val lang =
@@ -171,8 +171,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                          List(languageFactory),
                                          convertNestedScatterToSubworkflow = false) match {
               case Left(errors)  => throw new Exception(s"""|WOM validation errors:
-                                                                         | ${errors}
-                                                                         |""".stripMargin)
+                                                           | ${errors}
+                                                           |""".stripMargin)
               case Right(bundle) => bundle
             }
           Some(path -> bundle)
@@ -246,9 +246,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
           val allMatches = elemStartLine.findAllMatchIn(line).toList
           if (allMatches.size != 1)
             throw new Exception(s"""|task definition appears twice in one line
-                                                |
-                                                |${line}
-                                                |""".stripMargin)
+                                    |
+                                    |${line}
+                                    |""".stripMargin)
           taskName = Some(allMatches(0).group(3))
         case None =>
           // lines before the task
@@ -376,8 +376,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
         Utils.error("Found Errors in generated WDL source")
         Utils.error(wdlWfSource + "\n")
         throw new Exception(s"""|WOM validation errors:
-                                        | ${errors}
-                                        |""".stripMargin)
+                                | ${errors}
+                                |""".stripMargin)
       case Right(bundle) =>
         // Passed WOM validation
         ()
@@ -401,8 +401,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                    convertNestedScatterToSubworkflow = false)
     val womBundle = bundleChk match {
       case Left(errors)  => throw new Exception(s"""|WOM validation errors:
-                                                         | ${errors}
-                                                         |""".stripMargin)
+                                                   | ${errors}
+                                                   |""".stripMargin)
       case Right(bundle) => bundle
     }
     val wf = womBundle.primaryCallable match {
@@ -449,8 +449,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
       languageFactory.getWomBundle(wfSource, None, "{}", List.empty, List(languageFactory), false)
     val womBundle = bundleChk match {
       case Left(errors)  => throw new Exception(s"""|WOM validation errors:
-                                                         | ${errors}
-                                                         |""".stripMargin)
+                                                   | ${errors}
+                                                   |""".stripMargin)
       case Right(bundle) => bundle
     }
     (getMainTask(womBundle), womBundle.typeAliases)

@@ -140,25 +140,25 @@ task Add {
         // Draft-2 does not support the input block.
         WdlCodeSnippet(
             s"""|task ${callable.name} {
-                        |${inputs}
-                        |
-                        |  command {}
-                        |  output {
-                        |${outputs}
-                        |  }
-                        |}""".stripMargin
+                |${inputs}
+                |
+                |  command {}
+                |  output {
+                |${outputs}
+                |  }
+                |}""".stripMargin
         )
       case Language.WDLv1_0 | Language.WDLv2_0 =>
         WdlCodeSnippet(
             s"""|task ${callable.name} {
-                        |  input {
-                        |${inputs}
-                        |  }
-                        |  command {}
-                        |  output {
-                        |${outputs}
-                        |  }
-                        |}""".stripMargin
+                |  input {
+                |${inputs}
+                |  }
+                |  command {}
+                |  output {
+                |${outputs}
+                |  }
+                |}""".stripMargin
         )
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
@@ -185,33 +185,33 @@ task Add {
 
     val metaSection =
       s"""|  meta {
-                |     type : "native"
-                |     id : "${id}"
-                |  }""".stripMargin
+          |     type : "native"
+          |     id : "${id}"
+          |  }""".stripMargin
 
     val taskSourceCode = language match {
       case Language.WDLvDraft2 =>
         // Draft-2 does not support the input block.
         s"""|task ${appletName} {
-                    |${inputs}
-                    |
-                    |  command {}
-                    |  output {
-                    |${outputs}
-                    |  }
-                    |${metaSection}
-                    |}""".stripMargin
+            |${inputs}
+            |
+            |  command {}
+            |  output {
+            |${outputs}
+            |  }
+            |${metaSection}
+            |}""".stripMargin
       case Language.WDLv1_0 | Language.WDLv2_0 =>
         s"""|task ${appletName} {
-                    |  input {
-                    |${inputs}
-                    |  }
-                    |  command {}
-                    |  output {
-                    |${outputs}
-                    |  }
-                    |${metaSection}
-                    |}""".stripMargin
+            |  input {
+            |${inputs}
+            |  }
+            |  command {}
+            |  output {
+            |${outputs}
+            |  }
+            |${metaSection}
+            |}""".stripMargin
 
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
@@ -222,9 +222,9 @@ task Add {
     // We need to add the version to this task, to
     // make it valid WDL
     val taskStandalone = s"""|${versionString()}
-                                 |
-                                 |${taskSourceCode}
-                                 |""".stripMargin
+                             |
+                             |${taskSourceCode}
+                             |""".stripMargin
     ParseWomSourceFile(false).validateWdlCode(taskStandalone, language)
 
     WdlCodeSnippet(taskSourceCode)
@@ -294,8 +294,8 @@ task Add {
           .mkString("\n")
 
         s"""|struct ${name} {
-                    |${fieldLines}
-                    |}""".stripMargin
+            |${fieldLines}
+            |}""".stripMargin
 
       case (name, other) =>
         throw new Exception(s"Unknown type alias ${name} ${other}")

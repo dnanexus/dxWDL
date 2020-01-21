@@ -6,6 +6,7 @@ import scoverage.ScoverageKeys._
 scalaVersion := "2.12.9"
 name := "dxWDL"
 organization := "com.dnanexus"
+val root = Project("root", file("."))
 
 resolvers ++= Seq(
     "Broad Artifactory Releases" at "https://broadinstitute.jfrog.io/broadinstitute/libs-release/"
@@ -24,8 +25,8 @@ scalacOptions ++= Seq(
     "-deprecation",
     "-feature",
     "-explaintypes",
-    "-encoding", "UTF-8",
-
+    "-encoding",
+    "UTF-8",
     "-Xfuture",
     "-Xlint:by-name-right-associative",
     "-Xlint:constant",
@@ -42,14 +43,14 @@ scalacOptions ++= Seq(
     "-Xlint:private-shadow",
     "-Xlint:stars-align",
     "-Xlint:type-parameter-shadow",
-    "-Ypartial-unification",  // https://typelevel.org/cats
+    "-Ypartial-unification", // https://typelevel.org/cats
     "-Ywarn-dead-code",
     "-Ywarn-inaccessible",
     "-Ywarn-unused:implicits",
     "-Ywarn-unused:privates",
     "-Ywarn-unused:locals",
     "-Ywarn-unused:imports", // warns about every unused import on every command.
-    "-Xfatal-warnings"       // makes those warnings fatal.
+    "-Xfatal-warnings" // makes those warnings fatal.
 )
 
 assemblyJarName in assembly := "dxWDL.jar"
@@ -68,8 +69,8 @@ val googleHttpClientDependencies = List(
     which is in both packages. We need these particular versions of the packages.
      */
     "com.google.http-client" % "google-http-client-apache" % googleHttpClientApacheV,
-    "com.google.http-client" % "google-http-client" % googleHttpClientV,
-    )
+    "com.google.http-client" % "google-http-client" % googleHttpClientV
+)
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
@@ -79,13 +80,11 @@ libraryDependencies ++= Seq(
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
     "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
-
     "io.spray" %% "spray-json" % "1.3.5",
     "com.typesafe" % "config" % "1.3.3",
-
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 ) ++ googleHttpClientDependencies
 
 // If an exception is thrown during tests, show the full
@@ -106,7 +105,8 @@ Test / parallelExecution := false
 // comment out this line to enable tests in assembly
 test in assembly := {}
 
-
+// scalafmt
+scalafmtConfig := root.base / ".scalafmt.conf"
 // Coverage
 //
 // sbt clean coverage test

@@ -73,7 +73,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.ARRAY_OF_FILES    => WomMaybeEmptyArrayType(WomSingleFileType)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
-                    |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
+                                  |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
       }
     } else {
       ioClass match {
@@ -89,7 +89,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WomSingleFileType)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
-                        |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
+                                  |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
       }
     }
   }
@@ -115,7 +115,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   }
 
   // Create a small WDL snippet that is a header for this applet
-  private def createAppletWdlHeader(desc : DxAppletDescribe) : Option[String] = {
+  private def createAppletWdlHeader(desc: DxAppletDescribe): Option[String] = {
     val aplName = desc.name
     try {
       val (inputSpec, outputSpec) = wdlTypesOfDxApplet(aplName, desc)
@@ -127,7 +127,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       if (!both.isEmpty) {
         val bothStr = "[" + both.mkString(", ") + "]"
         throw new Exception(
-          s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
+            s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
         )
       }
       val WdlCodeSnippet(taskCode) =
@@ -172,13 +172,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     }.toMap
 
     nativeApplets
-      .map { case (_, desc) =>  createAppletWdlHeader(desc) }
+      .map { case (_, desc) => createAppletWdlHeader(desc) }
       .flatten
       .toVector
   }
 
-  private def fullPath(dxProject : DxProject, path : String) : Option[String] = {
-    val dxObj : DxDataObject = DxPath.resolveOnePath(path, dxProject)
+  private def fullPath(dxProject: DxProject, path: String): Option[String] = {
+    val dxObj: DxDataObject = DxPath.resolveOnePath(path, dxProject)
     if (!dxObj.isInstanceOf[DxApplet])
       return None
     val applet = dxObj.asInstanceOf[DxApplet]
@@ -225,7 +225,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     if (ioParam.ioClass == DxIOClass.HASH)
       throw new Exception(
           s"""|app ${appName} has field ${ioParam.name}
-                                    |with non WDL-native io class HASH""".stripMargin
+              |with non WDL-native io class HASH""".stripMargin
             .replaceAll("\n", " ")
       )
     ioParam
@@ -259,7 +259,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           Utils.warning(
               verbose,
               s"""|app ${nameClean} does not start
-                                               |with a letter, adding the prefix '${prefix}'""".stripMargin
+                  |with a letter, adding the prefix '${prefix}'""".stripMargin
                 .replaceAll("\n", " ")
           )
         s"${prefix}${nameClean}"
@@ -302,7 +302,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       val bothStr = "[" + both.mkString(", ") + "]"
       throw new Exception(
           s"""|Parameters ${bothStr} used as both input and
-                                    |output in applet ${dxApp.name}""".stripMargin
+              |output in applet ${dxApp.name}""".stripMargin
             .replaceAll("\n", " ")
       )
     }
@@ -324,8 +324,8 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val appsJs = repJs.asJsObject.fields.get("results") match {
       case Some(JsArray(apps)) => apps
       case _                   => throw new Exception(s"""|malformed reply to findApps
-                                              |
-                                              |${repJs}""".stripMargin)
+                                        |
+                                        |${repJs}""".stripMargin)
     }
     if (appsJs.length == 1000)
       throw new Exception("There are probably more than 1000 accessible apps")
@@ -356,7 +356,7 @@ object DxNI {
       if (!force) {
         throw new Exception(
             s"""|Output file ${outputPath.toString} already exists,
-                                        |use -force to overwrite it""".stripMargin
+                |use -force to overwrite it""".stripMargin
               .replaceAll("\n", " ")
         )
       }
@@ -381,12 +381,12 @@ object DxNI {
     val dxni = new DxNI(verbose, language)
     val dxNativeTasks: Vector[String] = folderOrPath match {
       case Left(folder) => dxni.search(dxProject, folder, recursive)
-      case Right(path) => dxni.fullPath(dxProject, Utils.DX_URL_PREFIX + "/" + path).toVector
+      case Right(path)  => dxni.fullPath(dxProject, Utils.DX_URL_PREFIX + "/" + path).toVector
     }
 
     val folderOrPathRepr = folderOrPath match {
       case Left(folder) => s"folder = ${folder}"
-      case Right(path) => s"path = ${path}"
+      case Right(path)  => s"path = ${path}"
     }
     if (dxNativeTasks.isEmpty) {
       Utils.warning(verbose, s"Found no DX native applets in ${folderOrPathRepr}")
@@ -424,10 +424,10 @@ object DxNI {
     val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
     val header =
       s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
-                |# These are interfaces to apps.
-                |#
-                |${languageHeader}
-                |""".stripMargin
+          |# These are interfaces to apps.
+          |#
+          |${languageHeader}
+          |""".stripMargin
 
     writeHeadersToFile(header, uniqueTasks, output, force)
   }

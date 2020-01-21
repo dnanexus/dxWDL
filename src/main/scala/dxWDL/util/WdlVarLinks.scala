@@ -52,10 +52,10 @@ case class WdlVarLinksConverter(verbose: Verbose,
     if (isDoubleOptional(womType) ||
         isDoubleOptional(womValue.womType)) {
       System.err.println(s"""|jsFromWomValue
-                                   |    type=${womType}
-                                   |    val=${womValue.toWomString}
-                                   |    val.type=${womValue.womType}
-                                   |""".stripMargin)
+                             |    type=${womType}
+                             |    val=${womValue.toWomString}
+                             |    val.type=${womValue.womType}
+                             |""".stripMargin)
       throw new Exception("a double optional type")
     }
     def handleFile(path: String): JsValue = {
@@ -144,12 +144,12 @@ case class WdlVarLinksConverter(verbose: Verbose,
             val elemType = typeMap.get(key) match {
               case None =>
                 throw new Exception(s"""|ERROR
-                                                    |WomCompositeType
-                                                    |  structName=${structName}
-                                                    |  typeMap=${typeMap}
-                                                    |  wom-object=${m}
-                                                    |typeMap is missing key=${key}
-                                                    |""".stripMargin)
+                                        |WomCompositeType
+                                        |  structName=${structName}
+                                        |  typeMap=${typeMap}
+                                        |  wom-object=${m}
+                                        |typeMap is missing key=${key}
+                                        |""".stripMargin)
               case Some(t) => t
             }
             key -> jsFromWomValue(elemType, womValue)
@@ -168,8 +168,8 @@ case class WdlVarLinksConverter(verbose: Verbose,
           else
             s"(${womValue.toWomString}, ${womValue.womType})"
         throw new Exception(s"""|Unsupported combination:
-                                        |    womType:  ${womTypeStr}
-                                        |    womValue: ${womValueStr}""".stripMargin)
+                                |    womType:  ${womTypeStr}
+                                |    womValue: ${womValueStr}""".stripMargin)
     }
   }
 
@@ -207,8 +207,8 @@ case class WdlVarLinksConverter(verbose: Verbose,
             case (JsArray(x), JsArray(y)) =>
               if (x.length != y.length)
                 throw new Exception(s"""|len(keys) != len(values)
-                                                        |fields: ${fields}
-                                                        |""".stripMargin)
+                                        |fields: ${fields}
+                                        |""".stripMargin)
               (x zip y).toMap
             case _ =>
               throw new Exception(s"Malformed JSON ${fields}")
@@ -251,12 +251,12 @@ case class WdlVarLinksConverter(verbose: Verbose,
             val t = typeMap.get(key) match {
               case None =>
                 throw new Exception(s"""|ERROR
-                                                        |WomCompositeType
-                                                        |  structName=${structName}
-                                                        |  typeMap=${typeMap}
-                                                        |  fields=${fields}
-                                                        |typeMap is missing key=${key}
-                                                        |""".stripMargin)
+                                        |WomCompositeType
+                                        |  structName=${structName}
+                                        |  typeMap=${typeMap}
+                                        |  fields=${fields}
+                                        |typeMap is missing key=${key}
+                                        |""".stripMargin)
               case Some(t) => t
             }
             key -> jobInputToWomValue(key, t, jsValue)
@@ -265,10 +265,10 @@ case class WdlVarLinksConverter(verbose: Verbose,
 
       case _ =>
         throw new AppInternalException(s"""|Unsupported combination
-                        |  name:    ${name}
-                        |  womType: ${womType}
-                        |  JSON:    ${jsValue.prettyPrint}
-                        |""".stripMargin)
+                                           |  name:    ${name}
+                                           |  womType: ${womType}
+                                           |  JSON:    ${jsValue.prettyPrint}
+                                           |""".stripMargin)
     }
   }
 
