@@ -193,7 +193,7 @@ object DxObject {
 
 trait DxDataObject extends DxObject
 
-// Objects that can be run on the platform
+// Objects that can be run on the platform. These are apps, applets, and workflows.
 trait DxExecutable extends DxDataObject
 
 // Actual executions on the platform. There are jobs and analyses

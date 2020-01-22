@@ -18,6 +18,16 @@ import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
 
+// The end result of the compiler
+object Native {
+  case class ExecRecord(callable: IR.Callable,
+                        dxExec: DxExecutable,
+                        links: Vector[ExecLinkInfo])
+
+  case class Results(primaryCallable: Option[ExecRecord],
+                     execDict: Map[String, ExecRecord])
+}
+
 // An overall design principal here, is that the json requests
 // have to be deterministic. This is because the checksums rely
 // on that property.
@@ -36,8 +46,6 @@ case class Native(dxWDLrtId: Option[String],
                   archive: Boolean,
                   locked: Boolean,
                   verbose: Verbose) {
-  case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
-
   private val verbose2: Boolean = verbose.containsKey("Native")
   private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
@@ -830,7 +838,7 @@ case class Native(dxWDLrtId: Option[String],
   // if the WDL code has changed.
   private def buildAppletIfNeeded(
       applet: IR.Applet,
-      execDict: Map[String, ExecRecord]
+      execDict: Map[String, Native.ExecRecord]
   ): (DxApplet, Vector[ExecLinkInfo]) = {
     Utils.trace(verbose2, s"Compiling applet ${applet.name}")
 
@@ -841,7 +849,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     val aplLinks: Map[String, ExecLinkInfo] = calls.map { tName =>
-      val ExecRecord(irCall, dxObj, _) = execDict(tName)
+      val Native.ExecRecord(irCall, dxObj, _) = execDict(tName)
       tName -> genLinkInfo(irCall, dxObj)
     }.toMap
 
@@ -972,13 +980,13 @@ case class Native(dxWDLrtId: Option[String],
   // Create a request for a workflow encapsulated in single API call.
   // Prepare the list of stages, and the checksum in advance.
   private def workflowNewReq(wf: IR.Workflow,
-                             execDict: Map[String, ExecRecord]): (String, JsValue) = {
+                             execDict: Map[String, Native.ExecRecord]): (String, JsValue) = {
     Utils.trace(verbose2, s"build workflow ${wf.name}")
 
     val stagesReq =
       wf.stages.foldLeft(Vector.empty[JsValue]) {
         case (stagesReq, stg) =>
-          val ExecRecord(irApplet, dxExec, _) = execDict(stg.calleeName)
+          val Native.ExecRecord(irApplet, dxExec, _) = execDict(stg.calleeName)
           val linkedInputs: Vector[(CVar, SArg)] = irApplet.inputVars zip stg.inputs
           val inputs = genStageInputs(linkedInputs)
           // convert the per-stage metadata into JSON
@@ -998,7 +1006,7 @@ case class Native(dxWDLrtId: Option[String],
     val transitiveDependencies: Vector[ExecLinkInfo] =
       wf.stages.foldLeft(Vector.empty[ExecLinkInfo]) {
         case (accu, stg) =>
-          val ExecRecord(_, _, dependencies) = execDict(stg.calleeName)
+          val Native.ExecRecord(_, _, dependencies) = execDict(stg.calleeName)
           accu ++ dependencies
       }
 
@@ -1078,7 +1086,7 @@ case class Native(dxWDLrtId: Option[String],
   // - Calculate the workflow checksum from the intermediate representation
   // - Do not rebuild the workflow if it has a correct checksum
   private def buildWorkflowIfNeeded(wf: IR.Workflow,
-                                    execDict: Map[String, ExecRecord]): DxWorkflow = {
+                                    execDict: Map[String, Native.ExecRecord]): DxWorkflow = {
     val (digest, wfNewReq) = workflowNewReq(wf, execDict)
     val buildRequired = isBuildRequired(wf.name, digest)
     buildRequired match {
@@ -1093,12 +1101,12 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  def apply(bundle: IR.Bundle): CompilationResults = {
+  def apply(bundle: IR.Bundle): Native.Results = {
     Utils.trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
     Utils.traceLevelInc()
 
     // build applets and workflows if they aren't on the platform already
-    val execDict = bundle.dependencies.foldLeft(Map.empty[String, ExecRecord]) {
+    val execDict = bundle.dependencies.foldLeft(Map.empty[String, Native.ExecRecord]) {
       case (accu, cName) =>
         val execIr = bundle.allCallables(cName)
         execIr match {
@@ -1107,33 +1115,28 @@ case class Native(dxWDLrtId: Option[String],
               case IR.AppletKindNative(id) =>
                 // native applets do not depend on other data-objects
                 val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
-                ExecRecord(apl, dxExec, Vector.empty)
+                Native.ExecRecord(apl, dxExec, Vector.empty)
               case IR.AppletKindWorkflowCustomReorg(id) =>
-                // does this has to be a different class?
+                // does this have to be a different class?
                 val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
-                ExecRecord(apl, dxExec, Vector.empty)
+                Native.ExecRecord(apl, dxExec, Vector.empty)
               case _ =>
                 val (dxApplet, dependencies) = buildAppletIfNeeded(apl, accu)
-                ExecRecord(apl, dxApplet, dependencies)
+                Native.ExecRecord(apl, dxApplet, dependencies)
             }
             accu + (apl.name -> execRecord)
           case wf: IR.Workflow =>
             val dxwfl = buildWorkflowIfNeeded(wf, accu)
-            accu + (wf.name -> ExecRecord(wf, dxwfl, Vector.empty))
+            accu + (wf.name -> Native.ExecRecord(wf, dxwfl, Vector.empty))
         }
     }
 
     // build the toplevel workflow, if it is defined
-    val primary: Option[DxExecutable] = bundle.primaryCallable.flatMap { callable =>
-      execDict.get(callable.name) match {
-        case None                           => None
-        case Some(ExecRecord(_, dxExec, _)) => Some(dxExec)
-      }
+    val primary: Option[Native.ExecRecord] = bundle.primaryCallable.flatMap { callable =>
+      execDict.get(callable.name)
     }
 
     Utils.traceLevelDec()
-    CompilationResults(primary, execDict.map {
-      case (name, ExecRecord(_, dxExec, _)) => name -> dxExec
-    }.toMap)
+    Native.Results(primary, execDict)
   }
 }
