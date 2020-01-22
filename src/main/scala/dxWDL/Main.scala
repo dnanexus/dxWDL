@@ -120,6 +120,9 @@ object Main extends App {
           case "destination" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
+          case "execTree" =>
+            checkNumberOfArguments(keyword, 0, subargs)
+            (keyword, "")
           case "extras" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
@@ -373,23 +376,17 @@ object Main extends App {
       }
 
     if (extras != None) {
-
       if (extras.contains("reorg") && (options contains "reorg")) {
-
         throw new InvalidInputException(
             "ERROR: cannot provide --reorg option when reorg is specified in extras."
         )
-
       }
 
       if (extras.contains("reorg") && (options contains "locked")) {
-
         throw new InvalidInputException(
             "ERROR: cannot provide --locked option when reorg is specified in extras."
         )
-
       }
-
     }
 
     CompilerOptions(
@@ -406,6 +403,7 @@ object Main extends App {
         options contains "projectWideReuse",
         options contains "reorg",
         options contains "streamAllFiles",
+        options contains "execTree",
         runtimeDebugLevel,
         verbose
     )
@@ -522,7 +520,8 @@ object Main extends App {
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
-          val (retval, treeDesc) = top.apply(sourceFile, folder, dxProject, dxPathConfig)
+          val (retval, treeDesc) =
+            top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
           return SuccessfulTermination(retval, treeDesc)
       }
     } catch {
@@ -907,6 +906,7 @@ object Main extends App {
         |      -compileMode <string>  Compilation mode, a debugging flag
         |      -defaults <string>     File with Cromwell formatted default values (JSON)
         |      -destination <string>  Output path on the platform for workflow
+        |      -execTree              Write out a json representation of the workflow
         |      -extras <string>       JSON formatted file with extra options, for example
         |                             default runtime options for tasks.
         |      -inputs <string>       File with Cromwell formatted inputs
@@ -948,7 +948,6 @@ object Main extends App {
     case SuccessfulTermination(s, None) =>
       println(s)
     case SuccessfulTermination(s, Some(tree)) =>
-      println(s)
       println(tree.prettyPrint)
     case SuccessfulTerminationIR(s) =>
       println("Intermediate representation")

@@ -59,7 +59,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "--folder",
                                       "/reorg_tests")
 
-  /*  override def beforeAll(): Unit = {
+  override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
     Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
@@ -84,7 +84,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       }
     }
   }
-   */
+
   private def getAppletId(path: String): String = {
     val folder = Paths.get(path).getParent().toAbsolutePath().toString()
     val basename = Paths.get(path).getFileName().toString()
@@ -117,7 +117,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
         path.toString
-//                                      :: "--verbose"
+        //                                      :: "--verbose"
+          :: "--execTree"
           :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTermination]
@@ -136,7 +137,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val retval = Main.compile(path.toString :: "--execTree" :: cFlags)
     retval shouldBe a[Main.SuccessfulTermination]
 
     inside(retval) {

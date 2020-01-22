@@ -299,7 +299,8 @@ case class Top(cOpt: CompilerOptions) {
   def apply(source: Path,
             folder: String,
             dxProject: DxProject,
-            runtimePathConfig: DxPathConfig): (String, Option[JsValue]) = {
+            runtimePathConfig: DxPathConfig,
+            execTree: Boolean): (String, Option[JsValue]) = {
     val bundle: IR.Bundle = womToIR(source)
 
     // lookup platform files in bulk
@@ -319,10 +320,16 @@ case class Top(cOpt: CompilerOptions) {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
         (ids, None)
+      case Some(wf) if execTree =>
+        cResults.primaryCallable match {
+          case None =>
+            (wf.dxExec.getId, None)
+          case Some(primary) =>
+            val tree = new Tree(cResults.execDict).apply(primary)
+            (wf.dxExec.getId, Some(tree))
+        }
       case Some(wf) =>
-        val wfId = wf.dxExec.getId
-        val tree = new Tree(cResults.execDict).apply(wf)
-        (wfId, Some(tree))
+        (wf.dxExec.getId, None)
     }
   }
 }
