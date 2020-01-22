@@ -20,12 +20,8 @@ import IR.{CVar, SArg}
 
 // The end result of the compiler
 object Native {
-  case class ExecRecord(callable: IR.Callable,
-                        dxExec: DxExecutable,
-                        links: Vector[ExecLinkInfo])
-
-  case class Results(primaryCallable: Option[ExecRecord],
-                     execDict: Map[String, ExecRecord])
+  case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
+  case class Results(primaryCallable: Option[ExecRecord], execDict: Map[String, ExecRecord])
 }
 
 // An overall design principal here, is that the json requests

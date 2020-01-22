@@ -11,7 +11,7 @@ import dxWDL.util._
 
 object Main extends App {
   sealed trait Termination
-  case class SuccessfulTermination(output: String) extends Termination
+  case class SuccessfulTermination(output: String, treeDesc: Option[JsValue]) extends Termination
   case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
   case class UnsuccessfulTermination(output: String) extends Termination
   case class BadUsageTermination(info: String) extends Termination
@@ -522,9 +522,8 @@ object Main extends App {
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
-          val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
-          val desc = retval.getOrElse("")
-          return SuccessfulTermination(desc)
+          val (retval, treeDesc) = top.apply(sourceFile, folder, dxProject, dxPathConfig)
+          return SuccessfulTermination(retval, treeDesc)
       }
     } catch {
       case e: Throwable =>
@@ -541,7 +540,7 @@ object Main extends App {
                           dOpt.force,
                           dOpt.language,
                           dOpt.verbose)
-      SuccessfulTermination("")
+      SuccessfulTermination("", None)
     } catch {
       case e: Throwable =>
         return UnsuccessfulTermination(Utils.exceptionToString(e))
@@ -551,7 +550,7 @@ object Main extends App {
   private def dxniApps(dOpt: DxniBaseOptions): Termination = {
     try {
       compiler.DxNI.applyApps(dOpt.outputFile, dOpt.force, dOpt.language, dOpt.verbose)
-      SuccessfulTermination("")
+      SuccessfulTermination("", None)
     } catch {
       case e: Throwable =>
         return UnsuccessfulTermination(Utils.exceptionToString(e))
@@ -617,12 +616,12 @@ object Main extends App {
       case InternalOp.TaskCheckInstanceType =>
         // special operation to check if this task is on the right instance type
         val correctInstanceType: Boolean = taskRunner.checkInstanceType(inputs)
-        SuccessfulTermination(correctInstanceType.toString)
+        SuccessfulTermination(correctInstanceType.toString, None)
 
       case InternalOp.TaskProlog =>
         val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
         taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
-        SuccessfulTermination(s"success ${op}")
+        SuccessfulTermination(s"success ${op}", None)
 
       case InternalOp.TaskEpilog =>
         val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
@@ -635,7 +634,7 @@ object Main extends App {
         })
         val ast_pp = json.prettyPrint
         Utils.writeFileContent(jobOutputPath, ast_pp)
-        SuccessfulTermination(s"success ${op}")
+        SuccessfulTermination(s"success ${op}", None)
 
       case InternalOp.TaskRelaunch =>
         val outputFields: Map[String, JsValue] = taskRunner.relaunch(inputs, originalInputs)
@@ -644,7 +643,7 @@ object Main extends App {
         })
         val ast_pp = json.prettyPrint
         Utils.writeFileContent(jobOutputPath, ast_pp)
-        SuccessfulTermination(s"success ${op}")
+        SuccessfulTermination(s"success ${op}", None)
 
       case _ =>
         UnsuccessfulTermination(s"Illegal task operation ${op}")
@@ -758,7 +757,7 @@ object Main extends App {
     val ast_pp = json.prettyPrint
     Utils.writeFileContent(jobOutputPath, ast_pp)
 
-    SuccessfulTermination(s"success ${op}")
+    SuccessfulTermination(s"success ${op}", None)
   }
 
   // Get the WOM source code, and the instance type database from the
@@ -886,10 +885,10 @@ object Main extends App {
       case Some(x) =>
         x match {
           case Actions.Compile  => compile(args.tail)
-          case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
+          case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString, None)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
-          case Actions.Version  => SuccessfulTermination(Utils.getVersion())
+          case Actions.Version  => SuccessfulTermination(Utils.getVersion(), None)
         }
     }
   }
@@ -946,8 +945,11 @@ object Main extends App {
   val termination = dispatchCommand(args)
 
   termination match {
-    case SuccessfulTermination(s) =>
+    case SuccessfulTermination(s, None) =>
       println(s)
+    case SuccessfulTermination(s, Some(tree)) =>
+      println(s)
+      println(tree.prettyPrint)
     case SuccessfulTerminationIR(s) =>
       println("Intermediate representation")
     case BadUsageTermination(s) if (s == "") =>

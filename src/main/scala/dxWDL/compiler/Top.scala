@@ -4,6 +4,7 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+import spray.json._
 
 import wom.callable._
 import wom.executable.WomBundle
@@ -298,7 +299,7 @@ case class Top(cOpt: CompilerOptions) {
   def apply(source: Path,
             folder: String,
             dxProject: DxProject,
-            runtimePathConfig: DxPathConfig): Option[String] = {
+            runtimePathConfig: DxPathConfig): (String, Option[JsValue]) = {
     val bundle: IR.Bundle = womToIR(source)
 
     // lookup platform files in bulk
@@ -314,12 +315,14 @@ case class Top(cOpt: CompilerOptions) {
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
     val cResults = compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
-    val execIds = cResults.primaryCallable match {
+    cResults.primaryCallable match {
       case None =>
-        cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
+        val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
+        (ids, None)
       case Some(wf) =>
-        wf.dxExec.getId
+        val wfId = wf.dxExec.getId
+        val tree = new Tree(cResults.execDict).apply(wf)
+        (wfId, Some(tree))
     }
-    Some(execIds)
   }
 }
