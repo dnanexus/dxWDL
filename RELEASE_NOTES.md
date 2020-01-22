@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.42
+- Bug fix for case where the number of executions is large, and requires multiple queries.
+
 ## 1.41 21-Jan-2020
 - Added support for `patterns` and `help` in the `parameters_meta` section of a WDL task. For more information, see [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
 - Upgrade to Cromwell v48
