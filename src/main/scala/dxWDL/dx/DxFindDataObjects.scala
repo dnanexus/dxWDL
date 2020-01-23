@@ -8,27 +8,6 @@ import dxWDL.base.Verbose
 
 case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
-  private def parseParamSpec(jsv: JsValue): IOParameter = {
-    val ioClass: DxIOClass.Value = jsv.asJsObject.fields.get("class") match {
-      case None                    => throw new Exception("class field missing")
-      case Some(JsString(ioClass)) => DxIOClass.fromString(ioClass)
-      case other                   => throw new Exception(s"malformed class field ${other}")
-    }
-
-    val name: String = jsv.asJsObject.fields.get("name") match {
-      case None                 => throw new Exception("name field missing")
-      case Some(JsString(name)) => name
-      case other                => throw new Exception(s"malformed name field ${other}")
-    }
-
-    val optional: Boolean = jsv.asJsObject.fields.get("optional") match {
-      case None                  => false
-      case Some(JsBoolean(flag)) => flag
-      case other                 => throw new Exception(s"malformed optional field ${other}")
-    }
-    IOParameter(name, ioClass, optional)
-  }
-
   private def parseDescribe(jsv: JsValue,
                             dxobj: DxDataObject,
                             dxProject: DxProject): DxObjectDescribe = {
@@ -48,21 +27,14 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       case Some(other)            => throw new Exception(s"malformed folder field ${other}")
     }
     val properties: Map[String, String] = jsv.asJsObject.fields.get("properties") match {
-      case None => Map.empty
-      case Some(JsObject(fields)) =>
-        fields.map {
-          case (key, JsString(value)) =>
-            key -> value
-          case (key, other) =>
-            throw new Exception(s"key ${key} has malformed property ${other}")
-        }.toMap
-      case Some(other) => throw new Exception(s"malformed properties field ${other}")
+      case None        => Map.empty
+      case Some(props) => DxObject.parseJsonProperties(props)
     }
     val inputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(iSpecVec)) =>
-        Some(iSpecVec.map(parseParamSpec).toVector)
+        Some(iSpecVec.map(DxObject.parseIoParam).toVector)
       case Some(other) =>
         throw new Exception(s"malformed inputSpec field ${other}")
     }
@@ -70,7 +42,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(oSpecVec)) =>
-        Some(oSpecVec.map(parseParamSpec).toVector)
+        Some(oSpecVec.map(DxObject.parseIoParam).toVector)
       case Some(other) =>
         throw new Exception(s"malformed output field ${other}")
     }
