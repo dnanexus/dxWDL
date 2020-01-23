@@ -34,7 +34,7 @@ object DxFindExecutions {
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {
       case None                  => None
       case Some(JsNull)          => None
-      case Some(other: JsObject) => Some(other)
+      case Some(JsString(jobId)) => Some(JsString(jobId))
       case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
     }
     val results: Vector[DxExecution] =
