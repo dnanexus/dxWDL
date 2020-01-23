@@ -16,7 +16,8 @@ object DxFindExecutions {
   }
 
   private def submitRequest(parentJob: Option[DxJob],
-                            cursor: Option[JsValue]): (Vector[DxExecution], Option[JsValue]) = {
+                            cursor: Option[JsValue],
+                            limit: Option[Int]): (Vector[DxExecution], Option[JsValue]) = {
     val parentField = parentJob match {
       case None      => Map.empty
       case Some(job) => Map("parentJob" -> JsString(job.getId))
@@ -25,7 +26,11 @@ object DxFindExecutions {
       case None              => Map.empty
       case Some(cursorValue) => Map("starting" -> cursorValue)
     }
-    val request = JsObject(parentField ++ cursorField)
+    val limitField = limit match {
+      case None    => Map.empty
+      case Some(i) => Map("limit" -> JsNumber(i))
+    }
+    val request = JsObject(parentField ++ cursorField ++ limitField)
     val response = DXAPI.systemFindExecutions(DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],
                                               DxUtils.dxEnv)
@@ -51,7 +56,7 @@ object DxFindExecutions {
     var allResults = Vector.empty[DxExecution]
     var cursor: Option[JsValue] = None
     do {
-      val (results, next) = submitRequest(parentJob, cursor)
+      val (results, next) = submitRequest(parentJob, cursor, None)
       allResults = allResults ++ results
       cursor = next
     } while (cursor != None);

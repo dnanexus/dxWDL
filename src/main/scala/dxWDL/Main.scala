@@ -12,6 +12,7 @@ import dxWDL.util._
 object Main extends App {
   sealed trait Termination
   case class SuccessfulTermination(output: String) extends Termination
+  case class SuccessfulTerminationTree(js: JsValue, pretty: String) extends Termination
   case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
   case class UnsuccessfulTermination(output: String) extends Termination
   case class BadUsageTermination(info: String) extends Termination
@@ -120,6 +121,9 @@ object Main extends App {
           case "destination" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
+          case "execTree" =>
+            checkNumberOfArguments(keyword, 0, subargs)
+            (keyword, "")
           case "extras" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
@@ -373,23 +377,17 @@ object Main extends App {
       }
 
     if (extras != None) {
-
       if (extras.contains("reorg") && (options contains "reorg")) {
-
         throw new InvalidInputException(
             "ERROR: cannot provide --reorg option when reorg is specified in extras."
         )
-
       }
 
       if (extras.contains("reorg") && (options contains "locked")) {
-
         throw new InvalidInputException(
             "ERROR: cannot provide --locked option when reorg is specified in extras."
         )
-
       }
-
     }
 
     CompilerOptions(
@@ -406,6 +404,7 @@ object Main extends App {
         options contains "projectWideReuse",
         options contains "reorg",
         options contains "streamAllFiles",
+        options contains "execTree",
         runtimeDebugLevel,
         verbose
     )
@@ -522,13 +521,18 @@ object Main extends App {
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
-          val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
-          val desc = retval.getOrElse("")
-          return SuccessfulTermination(desc)
+          val (retval, treeDesc) =
+            top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
+          treeDesc match {
+            case None =>
+              SuccessfulTermination(retval)
+            case Some((treeJs, treePretty)) =>
+              SuccessfulTerminationTree(treeJs, treePretty)
+          }
       }
     } catch {
       case e: Throwable =>
-        return UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(Utils.exceptionToString(e))
     }
   }
 
@@ -908,6 +912,7 @@ object Main extends App {
         |      -compileMode <string>  Compilation mode, a debugging flag
         |      -defaults <string>     File with Cromwell formatted default values (JSON)
         |      -destination <string>  Output path on the platform for workflow
+        |      -execTree              Write out a json representation of the workflow
         |      -extras <string>       JSON formatted file with extra options, for example
         |                             default runtime options for tasks.
         |      -inputs <string>       File with Cromwell formatted inputs
@@ -948,6 +953,10 @@ object Main extends App {
   termination match {
     case SuccessfulTermination(s) =>
       println(s)
+    case SuccessfulTerminationTree(js, pretty) =>
+      if (js != JsNull)
+        println(js.prettyPrint)
+      println(pretty)
     case SuccessfulTerminationIR(s) =>
       println("Intermediate representation")
     case BadUsageTermination(s) if (s == "") =>

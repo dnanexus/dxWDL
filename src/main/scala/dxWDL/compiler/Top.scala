@@ -4,6 +4,7 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+import spray.json._
 
 import wom.callable._
 import wom.executable.WomBundle
@@ -13,10 +14,6 @@ import dxWDL.base._
 import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
 import dxWDL.dx._
 import dxWDL.util._
-
-// The end result of the compiler
-case class CompilationResults(primaryCallable: Option[DxExecutable],
-                              execDict: Map[String, DxExecutable])
 
 case class Top(cOpt: CompilerOptions) {
   val verbose = cOpt.verbose
@@ -74,7 +71,7 @@ case class Top(cOpt: CompilerOptions) {
       dxProject: DxProject,
       runtimePathConfig: DxPathConfig,
       fileInfoDir: Map[String, (DxFile, DxFileDescribe)]
-  ): CompilationResults = {
+  ): Native.Results = {
     val dxWDLrtId: Option[String] = cOpt.compileMode match {
       case CompilerFlag.IR =>
         throw new Exception("Invalid value IR for compilation mode")
@@ -302,7 +299,8 @@ case class Top(cOpt: CompilerOptions) {
   def apply(source: Path,
             folder: String,
             dxProject: DxProject,
-            runtimePathConfig: DxPathConfig): Option[String] = {
+            runtimePathConfig: DxPathConfig,
+            execTree: Boolean): (String, Option[(JsValue, String)]) = {
     val bundle: IR.Bundle = womToIR(source)
 
     // lookup platform files in bulk
@@ -318,12 +316,23 @@ case class Top(cOpt: CompilerOptions) {
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
     val cResults = compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
-    val execIds = cResults.primaryCallable match {
+    cResults.primaryCallable match {
       case None =>
-        cResults.execDict.map { case (_, dxExec) => dxExec.getId }.mkString(",")
+        val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
+        (ids, None)
+      case Some(wf) if execTree =>
+        cResults.primaryCallable match {
+          case None =>
+            (wf.dxExec.getId, Some((JsNull, "")))
+          case Some(primary) =>
+            val tree = new Tree(cResults.execDict)
+            val js = tree.apply(primary)
+            // Pretty printing requires more work
+            //val pretty = tree.prettyPrint(primary)
+            (wf.dxExec.getId, Some((js, "")))
+        }
       case Some(wf) =>
-        wf.getId
+        (wf.dxExec.getId, None)
     }
-    Some(execIds)
   }
 }

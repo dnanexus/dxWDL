@@ -1,6 +1,7 @@
 # Release Notes
 
-## 1.42
+## 1.42 23-Jan-2020
+- Providing a JSON structure representing a compiled workflow.
 - Bug fix for case where the number of executions is large, and requires multiple queries.
 
 ## 1.41 21-Jan-2020

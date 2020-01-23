@@ -5,6 +5,7 @@ import java.nio.file.{Path, Paths}
 
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.BeforeAndAfterAll
+import org.scalatest.Inside._
 
 import scala.io.Source
 import dxWDL.Main
@@ -57,7 +58,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-
   override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
@@ -112,21 +112,43 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     tmp_extras.toString
   }
 
-  it should "Native compile a single WDL task" taggedAs (NativeTestXX) in {
+  it should "Native compile a single WDL task" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
-        path.toString
-//                                      :: "--verbose"
-          :: cFlags
+        path.toString :: "--execTree" :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Main.SuccessfulTerminationTree]
+    inside(retval) {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind") match {
+          case Seq(JsString(name), JsString(kind)) =>
+            name shouldBe ("add")
+            kind shouldBe ("Task")
+          //System.out.println(treePretty)
+          case other =>
+            throw new Exception(s"tree representation is wrong ${treeJs}")
+        }
+    }
   }
 
   // linear workflow
-  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
+  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTermination]
+    val retval = Main.compile(path.toString :: "--execTree" :: cFlags)
+    retval shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(retval) {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind", "stages") match {
+          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+            name shouldBe ("wf_linear_no_expr")
+            kind shouldBe ("workflow")
+            stages.size shouldBe (3)
+          //System.out.println(treePretty)
+          case other =>
+            throw new Exception(s"tree representation is wrong ${treeJs}")
+        }
+    }
   }
 
   it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {
@@ -152,11 +174,25 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
+  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
-    Main.compile(
-        path.toString :: "--force" :: cFlags
-    ) shouldBe a[Main.SuccessfulTermination]
+    val retval = Main.compile(
+        path.toString :: "--force" :: "--execTree" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(retval) {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind", "stages") match {
+          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+            name shouldBe ("two_levels")
+            kind shouldBe ("workflow")
+            stages.size shouldBe (3)
+          //System.out.println(treePretty)
+          case other =>
+            throw new Exception(s"tree representation is wrong ${treeJs}")
+        }
+    }
   }
 
   it should "handle various conditionals" taggedAs (NativeTestXX) in {
@@ -201,7 +237,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ))
   }
 
-  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX) in {
     val outputPath = "/tmp/dx_extern_one.wdl"
     Main.dxni(
         List("--force",
@@ -417,7 +453,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     )
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
-      case Main.SuccessfulTermination(ir) => ir
+      case Main.SuccessfulTermination(id) => id
       case _                              => throw new Exception("sanity")
     }
 
@@ -488,6 +524,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     reorgInput.fields.size shouldBe 2
     reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS, Utils.REORG_CONFIG)
   }
+
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")

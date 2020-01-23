@@ -48,6 +48,7 @@ case class CompilerOptions(archive: Boolean,
                            projectWideReuse: Boolean,
                            reorg: Boolean,
                            streamAllFiles: Boolean,
+                           execTree: Boolean,
                            runtimeDebugLevel: Option[Int],
                            verbose: Verbose)
 
