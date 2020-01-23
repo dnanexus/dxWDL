@@ -176,11 +176,24 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
+  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
-    Main.compile(
-        path.toString :: "--force" :: cFlags
-    ) shouldBe a[Main.SuccessfulTermination]
+    val retval = Main.compile(
+        path.toString :: "--force" :: "--execTree" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    inside(retval) {
+      case Main.SuccessfulTermination(_, Some(tree)) =>
+        tree.asJsObject.getFields("name", "kind", "stages") match {
+          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+            name shouldBe ("two_levels")
+            kind shouldBe ("workflow")
+            stages.size shouldBe (3)
+          case other =>
+            throw new Exception(s"tree representation is wrong ${tree}")
+        }
+    }
   }
 
   it should "handle various conditionals" taggedAs (NativeTestXX) in {
