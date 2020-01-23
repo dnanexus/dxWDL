@@ -300,7 +300,7 @@ case class Top(cOpt: CompilerOptions) {
             folder: String,
             dxProject: DxProject,
             runtimePathConfig: DxPathConfig,
-            execTree: Boolean): (String, Option[JsValue]) = {
+            execTree: Boolean): (String, Option[(JsValue, String)]) = {
     val bundle: IR.Bundle = womToIR(source)
 
     // lookup platform files in bulk
@@ -323,10 +323,13 @@ case class Top(cOpt: CompilerOptions) {
       case Some(wf) if execTree =>
         cResults.primaryCallable match {
           case None =>
-            (wf.dxExec.getId, None)
+            (wf.dxExec.getId, Some((JsNull, "")))
           case Some(primary) =>
-            val tree = new Tree(cResults.execDict).apply(primary)
-            (wf.dxExec.getId, Some(tree))
+            val tree = new Tree(cResults.execDict)
+            val js = tree.apply(primary)
+            // Pretty printing requires more work
+            //val pretty = tree.prettyPrint(primary)
+            (wf.dxExec.getId, Some((js, "")))
         }
       case Some(wf) =>
         (wf.dxExec.getId, None)

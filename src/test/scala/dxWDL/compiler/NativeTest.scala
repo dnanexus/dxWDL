@@ -58,7 +58,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-
   override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
@@ -116,20 +115,18 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a single WDL task" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
-        path.toString
-        //                                      :: "--verbose"
-          :: "--execTree"
-          :: cFlags
+        path.toString :: "--execTree" :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Main.SuccessfulTerminationTree]
     inside(retval) {
-      case Main.SuccessfulTermination(_, Some(tree)) =>
-        tree.asJsObject.getFields("name", "kind") match {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind") match {
           case Seq(JsString(name), JsString(kind)) =>
             name shouldBe ("add")
             kind shouldBe ("Task")
+          //System.out.println(treePretty)
           case other =>
-            throw new Exception(s"tree representation is wrong ${tree}")
+            throw new Exception(s"tree representation is wrong ${treeJs}")
         }
     }
   }
@@ -138,17 +135,18 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: "--execTree" :: cFlags)
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Main.SuccessfulTerminationTree]
 
     inside(retval) {
-      case Main.SuccessfulTermination(_, Some(tree)) =>
-        tree.asJsObject.getFields("name", "kind", "stages") match {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind", "stages") match {
           case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
             name shouldBe ("wf_linear_no_expr")
             kind shouldBe ("workflow")
             stages.size shouldBe (3)
+          //System.out.println(treePretty)
           case other =>
-            throw new Exception(s"tree representation is wrong ${tree}")
+            throw new Exception(s"tree representation is wrong ${treeJs}")
         }
     }
   }
@@ -181,17 +179,18 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Main.SuccessfulTerminationTree]
 
     inside(retval) {
-      case Main.SuccessfulTermination(_, Some(tree)) =>
-        tree.asJsObject.getFields("name", "kind", "stages") match {
+      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
+        treeJs.asJsObject.getFields("name", "kind", "stages") match {
           case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
             name shouldBe ("two_levels")
             kind shouldBe ("workflow")
             stages.size shouldBe (3)
+          //System.out.println(treePretty)
           case other =>
-            throw new Exception(s"tree representation is wrong ${tree}")
+            throw new Exception(s"tree representation is wrong ${treeJs}")
         }
     }
   }
@@ -268,8 +267,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appId = Main.compile(
         path.toString :: cFlags
     ) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
 
     }
 
@@ -292,8 +291,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appId = Main.compile(
         path.toString :: cFlags
     ) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
 
     }
 
@@ -330,8 +329,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         //:: "--verbose"
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
 
     }
 
@@ -366,8 +365,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appId = Main.compile(
         path.toString :: "--force" :: cFlags
     ) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
     }
 
     // make sure the timeout is what it should be
@@ -393,8 +392,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         path.toString
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
     }
 
     // make sure the timeout is what it should be
@@ -416,8 +415,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "GPU2.wdl")
 
     val appId = Main.compile(path.toString :: cFlags) match {
-      case SuccessfulTermination(x, _) => x
-      case _                           => throw new Exception("sanity")
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
     }
 
     // make sure the timeout is what it should be
@@ -454,8 +453,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     )
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
-      case Main.SuccessfulTermination(id, _) => id
-      case _                                 => throw new Exception("sanity")
+      case Main.SuccessfulTermination(id) => id
+      case _                              => throw new Exception("sanity")
     }
 
     val wf = DxWorkflow.getInstance(wfId)
@@ -507,8 +506,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
-      case Main.SuccessfulTermination(wfId, _) => wfId
-      case _                                   => throw new Exception("sanity")
+      case Main.SuccessfulTermination(wfId) => wfId
+      case _                                => throw new Exception("sanity")
     }
 
     val wf = DxWorkflow.getInstance(wfId)

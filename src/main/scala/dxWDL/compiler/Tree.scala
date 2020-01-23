@@ -5,6 +5,7 @@ package dxWDL.compiler
 import spray.json._
 import Native.ExecRecord
 import IR._
+import dxWDL.base.Utils
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -56,38 +57,35 @@ case class Tree(execDict: Map[String, ExecRecord]) {
     }
   }
 
-  /*  val pallete : Map[Kind, Console
-  def prettyPrint(primary: Native.ExecRecord,
-                  indent : Int = 0) : String = {
+  def prettyPrint(primary: Native.ExecRecord, indent: Int = 0): String = {
     primary.callable match {
-      case apl: IR.Applet if primary.links.size == 0 =>
-        JsObject("name" -> JsString(apl.name),
-                 "id" -> JsString(primary.dxExec.id),
-                 "kind" -> JsString(kindToString(apl.kind)))
+      case apl: IR.Applet if apl.kind.isInstanceOf[AppletKindTask] =>
+        Utils.genNSpaces(indent) + Console.GREEN + apl.name + Console.RESET
 
-      case apl: IR.Applet =>
+      case apl: IR.Applet if apl.kind.isInstanceOf[AppletKindWfFragment] =>
         // applet that calls other applets/workflows at runtime.
         // recursively describe all called elements.
-        val links : Vector[JsValue] = primary.links.map{ case eli =>
-          val calleeRecord = execDict(eli.name)
-          apply(calleeRecord)
+        val links: Vector[String] = primary.links.map {
+          case eli =>
+            val calleeRecord = execDict(eli.name)
+            prettyPrint(calleeRecord, indent + 4)
         }.toVector
-        JsObject("name" -> JsString(apl.name),
-                 "id" -> JsString(primary.dxExec.id),
-                 "kind" -> JsString(kindToString(apl.kind)),
-                 "executables" -> JsArray(links))
+        val topLine = Utils.genNSpaces(indent) + Console.CYAN + apl.name + Console.RESET
+        val lines = topLine +: links
+        lines.mkString("\n")
 
       case wf: IR.Workflow =>
-        val vec = wf.stages.map {
+        val stageLines: Vector[String] = wf.stages.map {
           case stage =>
             val calleeRecord = execDict(stage.calleeName)
-            val jsv: JsValue = apply(calleeRecord)
-            JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
+            val calleeDesc: String = prettyPrint(calleeRecord, indent + 4)
+            val topLine = Utils
+              .genNSpaces(indent) + Console.MAGENTA + stage.description + Console.RESET
+            topLine + calleeDesc
         }.toVector
-        val stages = JsArray(vec)
-        JsObject("name" -> JsString(wf.name),
-                 "id" -> JsString(primary.dxExec.id),
-                 "kind" -> JsString("workflow"),
-                 "stages" -> stages)
-  } */
+        val wfTopLine = Utils.genNSpaces(indent) + Console.BLACK + wf.name + Console.RESET
+        val lines = wfTopLine +: stageLines
+        lines.mkString("\n")
+    }
+  }
 }
