@@ -21,7 +21,7 @@ function get_top_dir {
 
 function get_version {
     # figure out the release tag
-    config=$top_dir/src/main/resources/application.conf
+    local config=$top_dir/src/main/resources/application.conf
     version=$(grep version src/main/resources/application.conf | cut --delimiter='"' --fields=2)
     if [ -z $version ]; then
         echo "could not figure out the release version"
@@ -32,17 +32,26 @@ function get_version {
 
 function basic_checks {
     # make sure dx is in our path
-    path_to_dx=$(which dx)
+    local path_to_dx=$(which dx)
     if [ -z "$path_to_dx" ] ; then
         echo "Could not find the dx CLI"
         exit 1
     fi
     echo "Found the dx CLI: $path_to_dx"
+
+    local branch=$(git symbolic-ref --short HEAD)
+    if [[ $branch != "master" ]]; then
+        echo "This isn't master branch, please do 'git checkout master'"
+        exit 1
+    fi
+
+    echo "making sure master is up to date"
+    git pull
 }
 
 function tag {
-    currentHash=$(git rev-parse HEAD)
-    possibleTags=$(git tag --contains $currentHash)
+    local currentHash=$(git rev-parse HEAD)
+    local possibleTags=$(git tag --contains $currentHash)
     if [[ $possibleTags == "" ]]; then
         echo "setting release tag on github"
         git tag $version
