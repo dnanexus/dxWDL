@@ -59,16 +59,22 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                  "stages" -> stages)
     }
   }
-  def prettyPrintRec(primary: Native.ExecRecord): Displayable = {
+  // TODO: add tree style formatting
+  // Traverse the exec tree by creating displayble nodes. Children contian more nodes to visit.
+  // Converting the exec tree to this format allows for formatting it more easily than trying to do the
+  // formatting and traversing at the same time.
+  def prettyPrintRec(primary: Native.ExecRecord, stageDesc: Option[String] = None): Displayable = {
     primary.callable match {
       case wf: IR.Workflow => {
         val stageLines = wf.stages.map {
           case stage => {
-            prettyPrintRec(execDict(stage.calleeName))
+            prettyPrintRec(execDict(stage.calleeName), Some(stage.description))
           }
         }.toVector
 
-        Displayable(primary, wf.name + " (Workflow)", stageLines)
+        Displayable(primary,
+                    Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET,
+                    stageLines)
 
       }
       case apl: IR.Applet => {
@@ -82,35 +88,77 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                 prettyPrintRec(calleeRecord)
               }
             }.toVector
-            Displayable(primary, s"${apl.name} (${kindToString(apl.kind)})", links)
+            val result = Displayable(primary, _, links)
+            val name = stageDesc match {
+              case Some(name) => name
+              case None       => s"${apl.name}"
+            }
+            result(
+                Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
+            )
           }
           case _ =>
-            Displayable(primary, s"${apl.name} (${kindToString(apl.kind)})", Vector())
+            val result = Displayable(primary, _, Vector())
+            val name = stageDesc match {
+              case Some(name) => name
+              case None       => s"${apl.name}"
+            }
+            result(
+                Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
+            )
         }
       }
     }
   }
 
+  // Entry point into the prettyPrintRec recursive function, calls the formatter
   def prettyPrint(primary: Native.ExecRecord): String = {
     val steps = prettyPrintRec(primary)
     formatter(steps)
   }
-  def formatter(items: Displayable, level: Int = 0): String = {
-    Utils.genNSpaces(level * 2) + items.name + "\n" + items.children
+
+  // Traverse the Displayable nodes and buildup a single string to print
+  def formatter(items: Displayable,
+                level: Int = 0,
+                last: Boolean = false,
+                indent: Int = 3): String = {
+    println(s"${items.name}, last? $last")
+    Utils.genTree(level, indent, last) + items.name + "\n" + items.children.zipWithIndex
       .map {
-        case Displayable(primary, name, children) => {
-          primary.callable match {
-            case wf: IR.Workflow => {
-              Utils.genNSpaces((level + 1) * 2) + name + "\n" + children
-                .map(formatter(_, level + 2))
-                .toVector
-                .mkString("")
-            }
-            case apl: IR.Applet => {
-              Utils.genNSpaces((level + 1) * 2) + name + "\n" + children
-                .map(formatter(_, level + 2))
-                .toVector
-                .mkString("")
+        case (element, index) => {
+          val last = if (index == items.children.size - 1) true else false
+          element match {
+            case Displayable(primary, name, children) => {
+              primary.callable match {
+                case wf: IR.Workflow => {
+                  Utils
+                    .genTree(level + 1, indent, last) + name + "\n" + children.zipWithIndex
+                    .map {
+                      // Mark the last element
+                      case (e, i) => {
+                        println(s">> WF child: $e.name $i / ${children.size}")
+                        val last = if (i == children.size - 1) true else false
+                        formatter(e, level + 2, last)
+                      }
+                    }
+                    .toVector
+                    .mkString("")
+                }
+                case apl: IR.Applet => {
+                  Utils
+                    .genTree(level + 1, indent, last) + name + "\n" + children.zipWithIndex
+                    .map {
+                      // Mark the last element
+                      case (e, i) => {
+                        println(s">> App child: ${e.name} $i / ${children.size}")
+                        val last = if (i == children.size - 1) true else false
+                        formatter(e, level + 2, last)
+                      }
+                    }
+                    .toVector
+                    .mkString("")
+                }
+              }
             }
           }
         }
