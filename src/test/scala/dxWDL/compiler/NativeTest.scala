@@ -128,6 +128,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           case other =>
             throw new Exception(s"tree representation is wrong ${treeJs}")
         }
+        println(treePretty)
     }
   }
 
@@ -148,6 +149,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           case other =>
             throw new Exception(s"tree representation is wrong ${treeJs}")
         }
+        println(treePretty)
     }
   }
 
@@ -192,6 +194,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           case other =>
             throw new Exception(s"tree representation is wrong ${treeJs}")
         }
+        println(treePretty)
     }
   }
 

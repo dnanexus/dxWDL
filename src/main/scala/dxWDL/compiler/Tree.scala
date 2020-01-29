@@ -5,7 +5,10 @@ package dxWDL.compiler
 import spray.json._
 import Native.ExecRecord
 import IR._
+// import org.python.bouncycastle.math.raw.Nat
 import dxWDL.base.Utils
+
+case class Displayable(root: Native.ExecRecord, name: String, children: Vector[Displayable])
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -56,36 +59,63 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                  "stages" -> stages)
     }
   }
-
-  def prettyPrint(primary: Native.ExecRecord, indent: Int = 0): String = {
+  def prettyPrintRec(primary: Native.ExecRecord): Displayable = {
     primary.callable match {
-      case apl: IR.Applet if apl.kind.isInstanceOf[AppletKindTask] =>
-        Utils.genNSpaces(indent) + Console.GREEN + apl.name + Console.RESET
-
-      case apl: IR.Applet if apl.kind.isInstanceOf[AppletKindWfFragment] =>
-        // applet that calls other applets/workflows at runtime.
-        // recursively describe all called elements.
-        val links: Vector[String] = primary.links.map {
-          case eli =>
-            val calleeRecord = execDict(eli.name)
-            prettyPrint(calleeRecord, indent + 4)
+      case wf: IR.Workflow => {
+        val stageLines = wf.stages.map {
+          case stage => {
+            prettyPrintRec(execDict(stage.calleeName))
+          }
         }.toVector
-        val topLine = Utils.genNSpaces(indent) + Console.CYAN + apl.name + Console.RESET
-        val lines = topLine +: links
-        lines.mkString("\n")
 
-      case wf: IR.Workflow =>
-        val stageLines: Vector[String] = wf.stages.map {
-          case stage =>
-            val calleeRecord = execDict(stage.calleeName)
-            val calleeDesc: String = prettyPrint(calleeRecord, indent + 4)
-            val topLine = Utils
-              .genNSpaces(indent) + Console.MAGENTA + stage.description + Console.RESET
-            topLine + calleeDesc
-        }.toVector
-        val wfTopLine = Utils.genNSpaces(indent) + Console.BLACK + wf.name + Console.RESET
-        val lines = wfTopLine +: stageLines
-        lines.mkString("\n")
+        Displayable(primary, wf.name + " WF", stageLines)
+
+      }
+      case apl: IR.Applet => {
+        apl.kind match {
+          case AppletKindWfFragment(calls, blockPath, fqnDictTypes) => {
+            // applet that calls other applets/workflows at runtime.
+            // recursively describe all called elements.
+            val links = calls.map {
+              case link => {
+                val calleeRecord = execDict(link)
+                prettyPrintRec(calleeRecord)
+              }
+            }.toVector
+            Displayable(primary, apl.name + " " + kindToString(apl.kind), links)
+          }
+          case _ =>
+            Displayable(primary, apl.name + " " + kindToString(apl.kind), Vector())
+        }
+      }
     }
+  }
+
+  def prettyPrint(primary: Native.ExecRecord): String = {
+    val steps = prettyPrintRec(primary)
+    formatter(steps)
+  }
+  def formatter(items: Displayable, level: Int = 0): String = {
+    Utils.genNSpaces(level * 2) + items.name + "\n" + items.children
+      .map {
+        case Displayable(primary, name, children) => {
+          primary.callable match {
+            case wf: IR.Workflow => {
+              Utils.genNSpaces((level + 1) * 2) + name + "\n" + children
+                .map(formatter(_, level + 2))
+                .toVector
+                .mkString("")
+            }
+            case apl: IR.Applet => {
+              Utils.genNSpaces((level + 1) * 2) + name + "\n" + children
+                .map(formatter(_, level + 2))
+                .toVector
+                .mkString("")
+            }
+          }
+        }
+      }
+      .toVector
+      .mkString("")
   }
 }

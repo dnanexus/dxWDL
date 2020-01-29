@@ -328,8 +328,8 @@ case class Top(cOpt: CompilerOptions) {
             val tree = new Tree(cResults.execDict)
             val js = tree.apply(primary)
             // Pretty printing requires more work
-            //val pretty = tree.prettyPrint(primary)
-            (wf.dxExec.getId, Some((js, "")))
+            val pretty = tree.prettyPrint(primary)
+            (wf.dxExec.getId, Some((js, pretty)))
         }
       case Some(wf) =>
         (wf.dxExec.getId, None)
