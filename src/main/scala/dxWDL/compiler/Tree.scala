@@ -68,7 +68,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
           }
         }.toVector
 
-        Displayable(primary, wf.name + " WF", stageLines)
+        Displayable(primary, wf.name + " (Workflow)", stageLines)
 
       }
       case apl: IR.Applet => {
@@ -82,10 +82,10 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                 prettyPrintRec(calleeRecord)
               }
             }.toVector
-            Displayable(primary, apl.name + " " + kindToString(apl.kind), links)
+            Displayable(primary, s"${apl.name} (${kindToString(apl.kind)})", links)
           }
           case _ =>
-            Displayable(primary, apl.name + " " + kindToString(apl.kind), Vector())
+            Displayable(primary, s"${apl.name} (${kindToString(apl.kind)})", Vector())
         }
       }
     }
