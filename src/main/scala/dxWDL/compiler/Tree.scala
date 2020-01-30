@@ -5,10 +5,6 @@ package dxWDL.compiler
 import spray.json._
 import Native.ExecRecord
 import IR._
-// import org.python.bouncycastle.math.raw.Nat
-import dxWDL.base.Utils
-
-case class Displayable(root: Native.ExecRecord, name: String, children: Vector[Displayable])
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -59,111 +55,69 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                  "stages" -> stages)
     }
   }
-  // TODO: add tree style formatting
-  // Traverse the exec tree by creating displayble nodes. Children contian more nodes to visit.
-  // Converting the exec tree to this format allows for formatting it more easily than trying to do the
-  // formatting and traversing at the same time.
-  def prettyPrintRec(primary: Native.ExecRecord, stageDesc: Option[String] = None): Displayable = {
+
+  // Traverse the exec tree and generate an appropriate name + color based on the node type
+  // pass back the prefix for the next node build on.
+  def prettyPrint(primary: Native.ExecRecord,
+                  stageDesc: Option[String] = None,
+                  indent: Int = 3,
+                  prefix: String = ""): String = {
+
+    val lastElem = s"└${"─" * indent}"
+    val midElem = s"├${"─" * indent}"
+
     primary.callable match {
       case wf: IR.Workflow => {
-        val stageLines = wf.stages.map {
-          case stage => {
-            prettyPrintRec(execDict(stage.calleeName), Some(stage.description))
+        val stageLines = wf.stages.zipWithIndex.map {
+          case (stage, index) => {
+            val isLast = index == wf.stages.size - 1
+            val postPrefix = if (isLast) lastElem else midElem
+            val wholePrefix = if (isLast) {
+              prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
+            } else {
+              prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
+            }
+            prettyPrint(execDict(stage.calleeName), Some(stage.description), indent, wholePrefix)
           }
         }.toVector
 
-        Displayable(primary,
-                    Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET,
-                    stageLines)
-
+        val stages = stageLines.mkString("\n")
+        prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET + "\n" + stages
       }
       case apl: IR.Applet => {
         apl.kind match {
           case AppletKindWfFragment(calls, blockPath, fqnDictTypes) => {
             // applet that calls other applets/workflows at runtime.
             // recursively describe all called elements.
-            val links = calls.map {
-              case link => {
-                val calleeRecord = execDict(link)
-                prettyPrintRec(calleeRecord)
+            val links = calls.zipWithIndex.map {
+              case (link, index) => {
+                val isLast = index == (calls.size - 1)
+                val postPrefix = if (isLast) lastElem else midElem
+                val wholePrefix = if (isLast) {
+                  prefix.replace("├", "│").replace("└", "│").replace("─", " ") + postPrefix
+                } else {
+                  prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
+                }
+                prettyPrint(execDict(link), None, indent, wholePrefix)
               }
             }.toVector
-            val result = Displayable(primary, _, links)
+
             val name = stageDesc match {
               case Some(name) => name
               case None       => s"${apl.name}"
             }
-            result(
-                Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
-            )
+
+            prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET + "\n" + links
+              .mkString("\n")
           }
           case _ =>
-            val result = Displayable(primary, _, Vector())
             val name = stageDesc match {
               case Some(name) => name
               case None       => s"${apl.name}"
             }
-            result(
-                Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
-            )
+            prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
         }
       }
     }
-  }
-
-  // Entry point into the prettyPrintRec recursive function, calls the formatter
-  def prettyPrint(primary: Native.ExecRecord): String = {
-    val steps = prettyPrintRec(primary)
-    formatter(steps)
-  }
-
-  // Traverse the Displayable nodes and buildup a single string to print
-  def formatter(items: Displayable,
-                level: Int = 0,
-                last: Boolean = false,
-                indent: Int = 3): String = {
-    println(s"${items.name}, last? $last")
-    Utils.genTree(level, indent, last) + items.name + "\n" + items.children.zipWithIndex
-      .map {
-        case (element, index) => {
-          val last = if (index == items.children.size - 1) true else false
-          element match {
-            case Displayable(primary, name, children) => {
-              primary.callable match {
-                case wf: IR.Workflow => {
-                  Utils
-                    .genTree(level + 1, indent, last) + name + "\n" + children.zipWithIndex
-                    .map {
-                      // Mark the last element
-                      case (e, i) => {
-                        println(s">> WF child: $e.name $i / ${children.size}")
-                        val last = if (i == children.size - 1) true else false
-                        formatter(e, level + 2, last)
-                      }
-                    }
-                    .toVector
-                    .mkString("")
-                }
-                case apl: IR.Applet => {
-                  Utils
-                    .genTree(level + 1, indent, last) + name + "\n" + children.zipWithIndex
-                    .map {
-                      // Mark the last element
-                      case (e, i) => {
-                        println(s">> App child: ${e.name} $i / ${children.size}")
-                        val last = if (i == children.size - 1) true else false
-                        formatter(e, level + 2, last)
-                      }
-                    }
-                    .toVector
-                    .mkString("")
-                }
-              }
-            }
-          }
-        }
-      }
-      .toVector
-      .mkString("")
   }
 }

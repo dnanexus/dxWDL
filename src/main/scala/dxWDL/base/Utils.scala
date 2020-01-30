@@ -284,25 +284,6 @@ object Utils {
   }
 
   def genNSpaces(n: Int) = s"${" " * n}"
-  def genTree(level: Int, indent: Int, last: Boolean = false): String = {
-    level match {
-      case 0 => ""
-      case 1 => {
-        last match {
-          case true  => s"└${"─" * (level * (indent - 1))} "
-          case false => s"├${"─" * (level * (indent - 1))} "
-        }
-      }
-      case _ => {
-        last match {
-          case true =>
-            s"│${" " * ((level - 1) * indent)}${" " * (level - 2)}└${"─" * (indent - 1)} "
-          case false =>
-            s"│${" " * ((level - 1) * indent)}${" " * (level - 2)}├${"─" * (indent - 1)} "
-        }
-      }
-    }
-  }
 
   def traceLevelSet(i: Int): Unit = {
     traceLevel = i
