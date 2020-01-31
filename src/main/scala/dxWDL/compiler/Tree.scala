@@ -81,8 +81,11 @@ case class Tree(execDict: Map[String, ExecRecord]) {
           }
         }.toVector
 
-        val stages = stageLines.mkString("\n")
-        prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET + "\n" + stages
+        if (stageLines.size > 0) {
+          prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET + "\n" + stageLines.mkString("\n")
+        } else {
+          prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wf.name + Console.RESET
+        }
       }
       case apl: IR.Applet => {
         apl.kind match {
@@ -94,7 +97,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                 val isLast = index == (calls.size - 1)
                 val postPrefix = if (isLast) lastElem else midElem
                 val wholePrefix = if (isLast) {
-                  prefix.replace("├", "│").replace("└", "│").replace("─", " ") + postPrefix
+                  prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
                 } else {
                   prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
                 }
@@ -107,8 +110,12 @@ case class Tree(execDict: Map[String, ExecRecord]) {
               case None       => s"${apl.name}"
             }
 
-            prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET + "\n" + links
-              .mkString("\n")
+            if (links.size > 0) {
+              prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET + "\n" + links
+                .mkString("\n")
+            } else {
+              prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
+            }
           }
           case _ =>
             val name = stageDesc match {

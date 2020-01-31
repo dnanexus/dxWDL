@@ -33,6 +33,11 @@ case class Verbose(on: Boolean, quiet: Boolean, keywords: Set[String]) {
   }
 }
 
+// Tree printer types for the execTree option
+sealed trait TreePrinter
+case object JsonTreePrinter extends TreePrinter
+case object PrettyTreePrinter extends TreePrinter
+
 // Packing of all compiler flags in an easy to digest
 // format
 case class CompilerOptions(archive: Boolean,
@@ -48,7 +53,7 @@ case class CompilerOptions(archive: Boolean,
                            projectWideReuse: Boolean,
                            reorg: Boolean,
                            streamAllFiles: Boolean,
-                           execTree: Boolean,
+                           execTree: Option[TreePrinter],
                            runtimeDebugLevel: Option[Int],
                            verbose: Verbose)
 

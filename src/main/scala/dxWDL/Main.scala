@@ -12,7 +12,7 @@ import dxWDL.util._
 object Main extends App {
   sealed trait Termination
   case class SuccessfulTermination(output: String) extends Termination
-  case class SuccessfulTerminationTree(js: JsValue, pretty: String) extends Termination
+  case class SuccessfulTerminationTree(pretty: Either[String, JsValue]) extends Termination
   case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
   case class UnsuccessfulTermination(output: String) extends Termination
   case class BadUsageTermination(info: String) extends Termination
@@ -122,8 +122,8 @@ object Main extends App {
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
           case "execTree" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
+            checkNumberOfArguments(keyword, 1, subargs)
+            (keyword, subargs.head)
           case "extras" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
@@ -319,6 +319,12 @@ object Main extends App {
     rtDebugLvl
   }
 
+  private def parseExecTree(execTreeTypeAsString: String): TreePrinter = execTreeTypeAsString.toLowerCase match {
+    case "json" => JsonTreePrinter
+    case "pretty" => PrettyTreePrinter
+    case _ => throw new Exception(s"--execTree must be either json or pretty, found $execTreeTypeAsString")
+  }
+
   private def parseStreamAllFiles(s: String): Boolean = {
     s.toLowerCase match {
       case "true"  => true
@@ -369,6 +375,11 @@ object Main extends App {
       case None     => List.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
+
+    val treePrinter: Option[TreePrinter] = options.get("execTree") match {
+      case None => None
+      case Some(treeType) => Some(parseExecTree(treeType(0))) // take first element and drop the rest? 
+    }
     val runtimeDebugLevel: Option[Int] =
       options.get("runtimeDebugLevel") match {
         case None                  => None
@@ -404,7 +415,8 @@ object Main extends App {
         options contains "projectWideReuse",
         options contains "reorg",
         options contains "streamAllFiles",
-        options contains "execTree",
+        // options contains "execTree",
+        treePrinter,
         runtimeDebugLevel,
         verbose
     )
@@ -526,8 +538,8 @@ object Main extends App {
           treeDesc match {
             case None =>
               SuccessfulTermination(retval)
-            case Some((treeJs, treePretty)) =>
-              SuccessfulTerminationTree(treeJs, treePretty)
+            case Some(treePretty) =>
+              SuccessfulTerminationTree(treePretty)
           }
       }
     } catch {
@@ -912,7 +924,7 @@ object Main extends App {
         |      -compileMode <string>  Compilation mode, a debugging flag
         |      -defaults <string>     File with Cromwell formatted default values (JSON)
         |      -destination <string>  Output path on the platform for workflow
-        |      -execTree              Write out a json representation of the workflow
+        |      -execTree [json,pretty] Write out a json representation of the workflow
         |      -extras <string>       JSON formatted file with extra options, for example
         |                             default runtime options for tasks.
         |      -inputs <string>       File with Cromwell formatted inputs
@@ -953,10 +965,11 @@ object Main extends App {
   termination match {
     case SuccessfulTermination(s) =>
       println(s)
-    case SuccessfulTerminationTree(js, pretty) =>
-      if (js != JsNull)
-        println(js.prettyPrint)
-      println(pretty)
+    case SuccessfulTerminationTree(pretty) =>
+      pretty match {
+        case Left(str) => println(str)
+        case Right(js) => if (js != JsNull) println(js.prettyPrint)
+      }
     case SuccessfulTerminationIR(s) =>
       println("Intermediate representation")
     case BadUsageTermination(s) if (s == "") =>
