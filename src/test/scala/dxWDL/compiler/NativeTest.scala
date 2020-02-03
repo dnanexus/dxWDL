@@ -131,7 +131,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
-      }
+        }
     }
   }
 
@@ -206,36 +206,36 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         }
     }
   }
-  
-  // it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
-  //   val path = pathFromBasename("nested", "four_levels.wdl")
-  //   val controlCode : (Char) => Boolean = (c:Char) => (c <= 32 || c == 127)
-  //   val retval = Main.compile(
-  //       path.toString :: "--force" :: "--execTree" :: "pretty" :: cFlags
-  //   )
-  //   retval shouldBe a[Main.SuccessfulTerminationTree]
 
-  //   inside(retval) {
-  //     case Main.SuccessfulTerminationTree(pretty) =>
-  //       pretty match {
-  //         case Left(str) => 
-  //           str.filterNot(controlCode) shouldBe """Workflow: four_levels
-  //                          |├───App Inputs: common
-  //                          |├───App Fragment: if ((username == "a"))
-  //                          |│   └───Workflow: four_levels_block_0
-  //                          |│       ├───App Task: c1
-  //                          |│       └───App Task: c2
-  //                          |├───App Fragment: scatter (i in [1, 4, 9])
-  //                          |│   └───App Fragment: four_levels_frag_4
-  //                          |│       └───Workflow: four_levels_block_1_0
-  //                          |│           ├───App Fragment: if ((j == "john"))
-  //                          |│           │   └───App Task: concat
-  //                          |│           └───App Fragment: if ((j == "clease"))
-  //                          |└───App Outputs: outputs""".stripMargin
-  //         case Right(treeJs) => false // should not go down this road
-  //       }
-  //   }
-  // }
+  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
+    val retval = Main.compile(
+        path.toString :: "--force" :: "--execTree" :: "pretty" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(retval) {
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) =>
+            str.filterNot(controlCode) shouldBe """Workflow: four_levels
+                                                  |├───App Inputs: common
+                                                  |├───App Fragment: if ((username == "a"))
+                                                  |│   └───Workflow: four_levels_block_0
+                                                  |│       ├───App Task: c1
+                                                  |│       └───App Task: c2
+                                                  |├───App Fragment: scatter (i in [1, 4, 9])
+                                                  |│   └───App Fragment: four_levels_frag_4
+                                                  |│       └───Workflow: four_levels_block_1_0
+                                                  |│           ├───App Fragment: if ((j == "john"))
+                                                  |│           │   └───App Task: concat
+                                                  |│           └───App Fragment: if ((j == "clease"))
+                                                  |└───App Outputs: outputs""".stripMargin
+          case Right(treeJs) => false // should not go down this road
+        }
+    }
+  }
 
   it should "handle various conditionals" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")

@@ -319,11 +319,15 @@ object Main extends App {
     rtDebugLvl
   }
 
-  private def parseExecTree(execTreeTypeAsString: String): TreePrinter = execTreeTypeAsString.toLowerCase match {
-    case "json" => JsonTreePrinter
-    case "pretty" => PrettyTreePrinter
-    case _ => throw new Exception(s"--execTree must be either json or pretty, found $execTreeTypeAsString")
-  }
+  private def parseExecTree(execTreeTypeAsString: String): TreePrinter =
+    execTreeTypeAsString.toLowerCase match {
+      case "json"   => JsonTreePrinter
+      case "pretty" => PrettyTreePrinter
+      case _ =>
+        throw new Exception(
+            s"--execTree must be either json or pretty, found $execTreeTypeAsString"
+        )
+    }
 
   private def parseStreamAllFiles(s: String): Boolean = {
     s.toLowerCase match {
@@ -378,7 +382,8 @@ object Main extends App {
 
     val treePrinter: Option[TreePrinter] = options.get("execTree") match {
       case None => None
-      case Some(treeType) => Some(parseExecTree(treeType(0))) // take first element and drop the rest? 
+      case Some(treeType) =>
+        Some(parseExecTree(treeType(0))) // take first element and drop the rest?
     }
     val runtimeDebugLevel: Option[Int] =
       options.get("runtimeDebugLevel") match {
