@@ -3,6 +3,7 @@
 ## 1.43
 - Providing a tree structure representing a compiled workflow via `--execTree pretty`
 - For the json structure use `--execTree json`
+- Added support for the parameter_meta: patterns to take an object: [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section) 
 
 ## 1.42 23-Jan-2020
 - Providing a JSON structure representing a compiled workflow. This can be done with the command line flag `--execTree`. For example:
@@ -14,7 +15,7 @@ java -jar dxWDL-v1.42.jar compile CODE.wdl --project project-xxxx --execTree
 - Bug fix for case where the number of executions is large and requires multiple queries.
 
 ## 1.41 21-Jan-2020
-- Added support for `patterns` and `help` in the `parameters_meta` section of a WDL task. For more information, see [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
+- Added support for `patterns` and `help` in the `parameter_meta` section of a WDL task. For more information, see [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
 - Upgrade to Cromwell v48
 - Upgrade to dxfuse v0.17
 - Added support for a `path` command line argument to `dxni`.
