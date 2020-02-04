@@ -77,11 +77,34 @@ case class GenerateIRTask(verbose: Verbose,
       Some(obj.flatMap {
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
-          Some(IR.IOAttrPatterns(array.flatMap {
+          Some(IR.IOAttrPatterns(IR.PatternsReprArray(array.flatMap {
             case MetaValueElementString(pattern) => Some(pattern)
             case _                               => None
-
-          }.toVector))
+          }.toVector)))
+        case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
+          val name = obj.get("name") match {
+            case Some(MetaValueElementArray(array)) =>
+              Some(array.flatMap {
+                case MetaValueElementString(value) => Some(value)
+                case _                             => None
+              }.toVector)
+            case _ => None
+          }
+          val klass = obj.get("class") match {
+            case Some(MetaValueElementString(value)) => Some(value)
+            case _                                   => None
+          }
+          val tag = obj.get("tag") match {
+            case Some(MetaValueElementArray(array)) =>
+              Some(array.flatMap {
+                case MetaValueElementString(value) => Some(value)
+                case _                             => None
+              }.toVector)
+            case _ => None
+          }
+          Some(
+              IR.IOAttrPatterns(IR.PatternsReprObj(name, klass, tag))
+          )
         case _ => None
 
       }.toVector)
