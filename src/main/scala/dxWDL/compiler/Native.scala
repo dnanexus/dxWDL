@@ -17,7 +17,6 @@ import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
-import dxWDL.compiler.IR.PatternsReprArray
 
 // The end result of the compiler
 object Native {
@@ -107,6 +106,7 @@ case class Native(dxWDLrtId: Option[String],
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
+    // Create the IO Attributes, currently `patterns` and `help`
     def jsMapFromAttrs(
         help: Option[Vector[IR.IOAttr]]
     ): Map[String, JsValue] = {
@@ -126,7 +126,7 @@ case class Native(dxWDLrtId: Option[String],
                   val attrs: Map[String, JsValue] = List(
                       if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
                       else None,
-                      if (tags.isDefined) Some("tags" -> JsArray(tags.get.map(JsString(_))))
+                      if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
                       else None,
                       if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                   ).flatten.toMap

@@ -207,6 +207,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
+  // Can't strip out the escape characters that make the strings colored
+  // TODO: add a pretty print nocolor option?
   ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
@@ -321,7 +323,35 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
     pattern.help shouldBe Some("The pattern to use to search in_file")
-    in_file.patterns shouldBe Some(Vector("*.txt", "*.tsv"))
+    in_file.patterns shouldBe Some(IOParamterPatternArray(Vector("*.txt", "*.tsv")))
+    // out_file would be part of the outputSpec, but wom currently doesn't
+    // support parameter_meta for output vars
+    //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
+  }
+
+  it should "be able to include pattern object information in inputSpec" in {
+    val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (in_file, pattern) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    pattern.help shouldBe Some("The pattern to use to search in_file")
+    in_file.patterns shouldBe Some(
+        IOParamterPatternObject(Some(Vector("*.txt", "*.tsv")),
+                                Some("file"),
+                                Some(Vector("foo", "bar")))
+    )
     // out_file would be part of the outputSpec, but wom currently doesn't
     // support parameter_meta for output vars
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))

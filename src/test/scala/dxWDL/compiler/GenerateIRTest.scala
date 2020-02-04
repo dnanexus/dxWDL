@@ -310,7 +310,56 @@ class GenerateIRTest extends FlatSpec with Matchers {
             Some(
                 Vector(
                     IR.IOAttrHelp("The input file to be searched"),
-                    IR.IOAttrPatterns(Vector("*.txt", "*.tsv"))
+                    IR.IOAttrPatterns(IR.PatternsReprArray(Vector("*.txt", "*.tsv")))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+        )
+    )
+    cgrepApplet.outputs shouldBe Vector(
+        IR.CVar("count", WomIntegerType, None, None),
+        IR.CVar(
+            "out_file",
+            WomSingleFileType,
+            None,
+            None
+        )
+    )
+  }
+
+  // Check parameter_meta `pattern` keyword
+  it should "recognize pattern object in parameters_obj_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("pattern_params_obj_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrHelp("The input file to be searched"),
+                    IR.IOAttrPatterns(
+                        IR.PatternsReprObj(
+                            Some(Vector("*.txt", "*.tsv")),
+                            Some("file"),
+                            Some(Vector("foo", "bar"))
+                        )
+                    )
                 )
             )
         ),

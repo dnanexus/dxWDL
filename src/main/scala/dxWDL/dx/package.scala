@@ -31,12 +31,21 @@ object DxIOClass extends Enumeration {
   }
 }
 
+// Types for the IO spec pattern section
+sealed abstract class IOParameterPattern
+case class IOParamterPatternArray(patterns: Vector[String]) extends IOParameterPattern
+case class IOParamterPatternObject(name: Option[Vector[String]],
+                                   klass: Option[String],
+                                   tag: Option[Vector[String]])
+    extends IOParameterPattern
+
+// Representation of the IO spec
 case class IOParameter(
     name: String,
     ioClass: DxIOClass.Value,
     optional: Boolean,
     help: Option[String] = None,
-    patterns: Option[Vector[String]] = None
+    patterns: Option[IOParameterPattern] = None
 )
 
 // Extra fields for describe
@@ -91,10 +100,33 @@ object DxObject {
     }
     val patterns = jsv.asJsObject.fields.get("patterns") match {
       case Some(JsArray(a)) =>
-        Some(a.flatMap {
+        Some(IOParamterPatternArray(a.flatMap {
           case JsString(s) => Some(s)
           case _           => None
-        })
+        }))
+      case Some(JsObject(obj)) =>
+        val name = obj.get("name") match {
+          case Some(JsArray(array)) =>
+            Some(array.flatMap {
+              case JsString(s) => Some(s)
+              case _           => None
+            })
+          case _ => None
+        }
+        val tag = obj.get("tag") match {
+          case Some(JsArray(array)) =>
+            Some(array.flatMap {
+              case JsString(s) => Some(s)
+              case _           => None
+            })
+          case _ =>
+            None
+        }
+        val klass = obj.get("class") match {
+          case Some(JsString(s)) => Some(s)
+          case _                 => None
+        }
+        Some(IOParamterPatternObject(name, klass, tag))
       case _ => None
     }
     ioParam.copy(optional = optFlag, patterns = patterns, help = help)
