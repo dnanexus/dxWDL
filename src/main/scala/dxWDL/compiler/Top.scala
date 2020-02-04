@@ -300,7 +300,7 @@ case class Top(cOpt: CompilerOptions) {
             folder: String,
             dxProject: DxProject,
             runtimePathConfig: DxPathConfig,
-            execTree: Boolean): (String, Option[(JsValue, String)]) = {
+            execTree: Option[TreePrinter]): (String, Option[Either[String, JsValue]]) = {
     val bundle: IR.Bundle = womToIR(source)
 
     // lookup platform files in bulk
@@ -320,16 +320,17 @@ case class Top(cOpt: CompilerOptions) {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
         (ids, None)
-      case Some(wf) if execTree =>
+      case Some(wf) if execTree.isDefined =>
         cResults.primaryCallable match {
           case None =>
-            (wf.dxExec.getId, Some((JsNull, "")))
+            (wf.dxExec.getId, None)
           case Some(primary) =>
             val tree = new Tree(cResults.execDict)
-            val js = tree.apply(primary)
-            // Pretty printing requires more work
-            //val pretty = tree.prettyPrint(primary)
-            (wf.dxExec.getId, Some((js, "")))
+            val treeRepr = execTree.get match { // Safe get because we check isDefined above
+              case PrettyTreePrinter => Left(tree.prettyPrint(primary))
+              case JsonTreePrinter   => Right(tree.apply(primary)) // Convert to string
+            }
+            (wf.dxExec.getId, Some(treeRepr))
         }
       case Some(wf) =>
         (wf.dxExec.getId, None)

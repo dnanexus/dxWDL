@@ -115,18 +115,22 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a single WDL task" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
-        path.toString :: "--execTree" :: cFlags
+        path.toString :: "--execTree" :: "json" :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationTree]
     inside(retval) {
-      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
-        treeJs.asJsObject.getFields("name", "kind") match {
-          case Seq(JsString(name), JsString(kind)) =>
-            name shouldBe ("add")
-            kind shouldBe ("Task")
-          //System.out.println(treePretty)
-          case other =>
-            throw new Exception(s"tree representation is wrong ${treeJs}")
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) => false // should not be the pretty string version
+          case Right(treeJs) => {
+            treeJs.asJsObject.getFields("name", "kind") match {
+              case Seq(JsString(name), JsString(kind)) =>
+                name shouldBe ("add")
+                kind shouldBe ("Task")
+              case other =>
+                throw new Exception(s"tree representation is wrong ${treeJs}")
+            }
+          }
         }
     }
   }
@@ -134,19 +138,23 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val retval = Main.compile(path.toString :: "--execTree" :: cFlags)
+    val retval = Main.compile(path.toString :: "--execTree" :: "json" :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationTree]
 
     inside(retval) {
-      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
-        treeJs.asJsObject.getFields("name", "kind", "stages") match {
-          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-            name shouldBe ("wf_linear_no_expr")
-            kind shouldBe ("workflow")
-            stages.size shouldBe (3)
-          //System.out.println(treePretty)
-          case other =>
-            throw new Exception(s"tree representation is wrong ${treeJs}")
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) => false // should not be the pretty string version
+          case Right(treeJs) => {
+            treeJs.asJsObject.getFields("name", "kind", "stages") match {
+              case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+                name shouldBe ("wf_linear_no_expr")
+                kind shouldBe ("workflow")
+                stages.size shouldBe (3)
+              case other =>
+                throw new Exception(s"tree representation is wrong ${treeJs}")
+            }
+          }
         }
     }
   }
@@ -177,20 +185,54 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val retval = Main.compile(
-        path.toString :: "--force" :: "--execTree" :: cFlags
+        path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationTree]
 
     inside(retval) {
-      case Main.SuccessfulTerminationTree(treeJs, treePretty) =>
-        treeJs.asJsObject.getFields("name", "kind", "stages") match {
-          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-            name shouldBe ("two_levels")
-            kind shouldBe ("workflow")
-            stages.size shouldBe (3)
-          //System.out.println(treePretty)
-          case other =>
-            throw new Exception(s"tree representation is wrong ${treeJs}")
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) => false // should not produce a pretty string
+          case Right(treeJs) => {
+            treeJs.asJsObject.getFields("name", "kind", "stages") match {
+              case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+                name shouldBe ("two_levels")
+                kind shouldBe ("workflow")
+                stages.size shouldBe (3)
+              case other =>
+                throw new Exception(s"tree representation is wrong ${treeJs}")
+            }
+          }
+        }
+    }
+  }
+
+  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
+    val retval = Main.compile(
+        path.toString :: "--force" :: "--execTree" :: "pretty" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(retval) {
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) =>
+            str.filterNot(controlCode) shouldBe """Workflow: four_levels
+                                                  |├───App Inputs: common
+                                                  |├───App Fragment: if ((username == "a"))
+                                                  |│   └───Workflow: four_levels_block_0
+                                                  |│       ├───App Task: c1
+                                                  |│       └───App Task: c2
+                                                  |├───App Fragment: scatter (i in [1, 4, 9])
+                                                  |│   └───App Fragment: four_levels_frag_4
+                                                  |│       └───Workflow: four_levels_block_1_0
+                                                  |│           ├───App Fragment: if ((j == "john"))
+                                                  |│           │   └───App Task: concat
+                                                  |│           └───App Fragment: if ((j == "clease"))
+                                                  |└───App Outputs: outputs""".stripMargin
+          case Right(treeJs) => false // should not go down this road
         }
     }
   }

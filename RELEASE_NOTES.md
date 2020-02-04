@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.43
+- Providing a tree structure representing a compiled workflow via `--execTree pretty`
+- For the json structure use `--execTree json`
+
 ## 1.42 23-Jan-2020
 - Providing a JSON structure representing a compiled workflow. This can be done with the command line flag `--execTree`. For example:
 
