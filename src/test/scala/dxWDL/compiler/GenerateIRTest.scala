@@ -381,7 +381,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
-  // Check parameter_meta `help` keyword
+  // Check parameter_meta pattern: ["array"]
   it should "recognize pattern in parameters_meta via WOM" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
     val retval = Main.compile(
@@ -436,6 +436,82 @@ class GenerateIRTest extends FlatSpec with Matchers {
                     Vector(
                         MetaValueElement.MetaValueElementString("*.txt"),
                         MetaValueElement.MetaValueElementString("*.tsv")
+                    )
+                )
+            )
+        )
+    ))
+  }
+
+  // Check parameter_meta pattern: {"object"}
+  it should "recognize pattern object in parameters_meta via WOM" in {
+    val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
+    cgrepTask.parameterMeta shouldBe (
+        Map(
+            "in_file" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The input file to be searched"),
+                    "patterns" -> MetaValueElement.MetaValueElementObject(
+                        Map(
+                            "class" -> MetaValueElement.MetaValueElementString("file"),
+                            "tag" -> MetaValueElement.MetaValueElementArray(
+                                Vector(MetaValueElement.MetaValueElementString("foo"),
+                                       MetaValueElement.MetaValueElementString("bar"))
+                            ),
+                            "name" -> MetaValueElement.MetaValueElementArray(
+                                Vector(MetaValueElement.MetaValueElementString("*.txt"),
+                                       MetaValueElement.MetaValueElementString("*.tsv"))
+                            )
+                        )
+                    )
+                )
+            ),
+            "pattern" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "help" -> MetaValueElement
+                      .MetaValueElementString("The pattern to use to search in_file")
+                )
+            ),
+            "out_file" -> MetaValueElement.MetaValueElementObject(
+                Map(
+                    "patterns" -> MetaValueElement.MetaValueElementArray(
+                        Vector(
+                            MetaValueElement.MetaValueElementString("*.txt"),
+                            MetaValueElement.MetaValueElementString("*.tsv")
+                        )
+                    )
+                )
+            )
+        )
+    )
+    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+    iDef.parameterMeta shouldBe (Some(
+        MetaValueElement.MetaValueElementObject(
+            Map(
+                "help" -> MetaValueElement
+                  .MetaValueElementString("The input file to be searched"),
+                "patterns" -> MetaValueElement.MetaValueElementObject(
+                    Map(
+                        "class" -> MetaValueElement.MetaValueElementString("file"),
+                        "tag" -> MetaValueElement.MetaValueElementArray(
+                            Vector(MetaValueElement.MetaValueElementString("foo"),
+                                   MetaValueElement.MetaValueElementString("bar"))
+                        ),
+                        "name" -> MetaValueElement.MetaValueElementArray(
+                            Vector(MetaValueElement.MetaValueElementString("*.txt"),
+                                   MetaValueElement.MetaValueElementString("*.tsv"))
+                        )
                     )
                 )
             )
