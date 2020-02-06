@@ -89,7 +89,7 @@ case class GenerateIRTask(verbose: Verbose,
         // First see if it's an array
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
           Some(IR.IOAttrPatterns(IR.PatternsReprArray(metaStringArrayToVec(array))))
-        // See if it's an object, and if it is, parse out the optionsl key, class, and tag keys
+        // See if it's an object, and if it is, parse out the optional key, class, and tag keys
         // Note all three are optional
         case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
           val name = obj.get("name") match {
