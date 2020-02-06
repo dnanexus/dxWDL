@@ -26,7 +26,17 @@ object IR {
   val PARAM_META_HELP = "help"
   val PARAM_META_PATTERNS = "patterns"
 
-  // Compile time representation of the dxapp IO spec patterns
+  /** Compile time representation of the dxapp IO spec patterns
+    *  Example:
+    *  'patterns': { // PatternsReprObj
+    *    'name': ['*.sam', '*.bam'],
+    *    'class': 'file',
+    *    'tag': ['foo', 'bar']
+    *  }
+    *   OR
+    * 'patterns': ['*.sam', '*.bam'] // PatternsReprArray
+    *
+   **/
   sealed abstract class PatternsRepr
   final case class PatternsReprArray(patterns: Vector[String]) extends PatternsRepr
   final case class PatternsReprObj(name: Option[Vector[String]],

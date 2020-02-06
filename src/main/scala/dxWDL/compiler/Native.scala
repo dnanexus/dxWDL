@@ -130,6 +130,7 @@ case class Native(dxWDLrtId: Option[String],
                       else None,
                       if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                   ).flatten.toMap
+                  // If all three keys for the object version of patterns are None, return None
                   if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
               }
             case _ => None

@@ -67,6 +67,15 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  // Convert a WOM Vector[MetaValueElement] of Strings into a Vector of Strings
+  // Anything not a string will be filtered out.
+  private def metaStringArrayToVec(array: Vector[MetaValueElement]): Vector[String] = {
+    array.flatMap {
+      case MetaValueElementString(str) => Some(str)
+      case _                           => None
+    }.toVector
+  }
+
   // Extract the parameter_meta info from the WOM structure
   private def unwrapParamMeta(
       paramMeta: Option[MetaValueElement]
@@ -76,18 +85,16 @@ case class GenerateIRTask(verbose: Verbose,
       // Use flatmap to get the "help" and "pattern" keys if they exist
       Some(obj.flatMap {
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
+        // Try to parse the patterns key
+        // First see if it's an array
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
-          Some(IR.IOAttrPatterns(IR.PatternsReprArray(array.flatMap {
-            case MetaValueElementString(pattern) => Some(pattern)
-            case _                               => None
-          }.toVector)))
+          Some(IR.IOAttrPatterns(IR.PatternsReprArray(metaStringArrayToVec(array))))
+        // See if it's an object, and if it is, parse out the optionsl key, class, and tag keys
+        // Note all three are optional
         case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
           val name = obj.get("name") match {
             case Some(MetaValueElementArray(array)) =>
-              Some(array.flatMap {
-                case MetaValueElementString(value) => Some(value)
-                case _                             => None
-              }.toVector)
+              Some(metaStringArrayToVec(array))
             case _ => None
           }
           val klass = obj.get("class") match {
@@ -96,12 +103,11 @@ case class GenerateIRTask(verbose: Verbose,
           }
           val tag = obj.get("tag") match {
             case Some(MetaValueElementArray(array)) =>
-              Some(array.flatMap {
-                case MetaValueElementString(value) => Some(value)
-                case _                             => None
-              }.toVector)
+              Some(metaStringArrayToVec(array))
             case _ => None
           }
+          // Even if all were None, create the IR.IOAttrPatterns object
+          // The all none is handled in the native generation
           Some(
               IR.IOAttrPatterns(IR.PatternsReprObj(name, klass, tag))
           )
