@@ -106,6 +106,7 @@ case class Native(dxWDLrtId: Option[String],
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
+    // Create the IO Attributes, currently `patterns` and `help`
     def jsMapFromAttrs(
         help: Option[Vector[IR.IOAttr]]
     ): Map[String, JsValue] = {
@@ -116,8 +117,22 @@ case class Native(dxWDLrtId: Option[String],
           attributes.flatMap {
             case IR.IOAttrHelp(text) =>
               Some(IR.PARAM_META_HELP -> JsString(text))
-            case IR.IOAttrPatterns(patterns) =>
-              Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+            case IR.IOAttrPatterns(patternRepr) =>
+              patternRepr match {
+                case IR.PatternsReprArray(patterns) =>
+                  Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+                // If we have the alternative patterns object, extrac the values, if any at all
+                case IR.PatternsReprObj(name, klass, tags) =>
+                  val attrs: Map[String, JsValue] = List(
+                      if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
+                      else None,
+                      if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
+                      else None,
+                      if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
+                  ).flatten.toMap
+                  // If all three keys for the object version of patterns are None, return None
+                  if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
+              }
             case _ => None
           }.toMap
         }
