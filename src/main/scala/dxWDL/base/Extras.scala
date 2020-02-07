@@ -167,7 +167,9 @@ case class DxRunSpec(access: Option[DxAccess],
   }
 }
 
-case class DxAttrs(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
+case class DxAttrs(runSpec: Option[DxRunSpec],
+                   details: Option[DxDetails],
+                   ignoreReuse : Boolean) {
 
   def getRunSpecJson: Map[String, JsValue] = {
     val runSpecJson: Map[String, JsValue] = runSpec match {
@@ -319,7 +321,7 @@ object Extras {
                                                   "AppInternalError",
                                                   "JobTimeoutExceeded",
                                                   "*")
-  val TASK_DX_ATTRS = Set("runSpec", "details")
+  val TASK_DX_ATTRS = Set("runSpec", "details", "ignoreReuse")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
   private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
@@ -581,8 +583,9 @@ object Extras {
 
     val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     val details = parseDxDetails(checkedParseObjectField(fields, "details"))
+    val ignoreReuse = checkedParseBooleanField(fields, "ignoreReuse").getOrElse(false)
 
-    return Some(DxAttrs(runSpec, details))
+    return Some(DxAttrs(runSpec, details, ignoreReuse))
 
   }
 

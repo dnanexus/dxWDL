@@ -58,7 +58,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-  override def beforeAll(): Unit = {
+/*  override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
     Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
@@ -82,7 +82,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         case _: Throwable =>
       }
     }
-  }
+  } */
 
   private def getAppletId(path: String): String = {
     val folder = Paths.get(path).getParent().toAbsolutePath().toString()
@@ -112,7 +112,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     tmp_extras.toString
   }
 
-  it should "Native compile a single WDL task" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a single WDL task" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
         path.toString :: "--execTree" :: "json" :: cFlags
@@ -136,7 +136,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   // linear workflow
-  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: "--execTree" :: "json" :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationTree]
@@ -182,7 +182,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
@@ -209,7 +209,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   // Can't strip out the escape characters that make the strings colored
   // TODO: add a pretty print nocolor option?
-  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
+  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
     val retval = Main.compile(
@@ -627,5 +627,36 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     // this is a subworkflow so there is no reorg_status___ added.
     val trainsOutputVector: IR.Callable = bundle.allCallables("trains")
     trainsOutputVector.outputVars.size shouldBe 1
+  }
+
+  it should "Set job-reuse flag" taggedAs(NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("compiler", "add_timeout.wdl")
+    val extrasContent =
+      """|{
+         | "default_task_dx_attributes" : {
+         |   "ignoreReuse": true
+         | }
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    // compile the task while
+    val retval = Main.compile(
+        path.toString :: "--extras" :: extrasPath.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val appletId = retval match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+    }
+
+    // make sure the timeout is what it should be
+    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+
+    System.out.println(stdout.parseJson.prettyPrint)
+
+    val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
+    ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
 }
