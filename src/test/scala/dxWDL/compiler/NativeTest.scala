@@ -58,7 +58,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-/*  override def beforeAll(): Unit = {
+  /*  override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
     Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
@@ -629,7 +629,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     trainsOutputVector.outputVars.size shouldBe 1
   }
 
-  it should "Set job-reuse flag" taggedAs(NativeTestXX, EdgeTest) in {
+  it should "Set job-reuse flag" taggedAs (NativeTestXX, EdgeTest) in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -652,7 +652,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
 
     System.out.println(stdout.parseJson.prettyPrint)
 

@@ -31,7 +31,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runtimeAttrs, verbose)
     extras.defaultTaskDxAttributes should be(
-      Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None, false))
+        Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None, false))
     )
   }
 
@@ -172,11 +172,11 @@ class ExtrasTest extends FlatSpec with Matchers {
       Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
     extras.defaultTaskDxAttributes should be(
         Some(
-          DxAttrs(
-            Some(DxRunSpec(None, Some(DxExecPolicy(Some(restartPolicy), Some(5))), None, None)),
-            None,
-            false
-          )
+            DxAttrs(
+                Some(DxRunSpec(None, Some(DxExecPolicy(Some(restartPolicy), Some(5))), None, None)),
+                None,
+                false
+            )
         )
     )
   }
@@ -526,16 +526,16 @@ class ExtrasTest extends FlatSpec with Matchers {
     val extras = Extras.parse(runSpec, verbose)
     extras.defaultTaskDxAttributes should be(
         Some(
-          DxAttrs(Some(
-                    DxRunSpec(
-                      None,
-                      None,
-                      None,
-                      Some(DxTimeout(None, Some(12), None))
-                    )
-                  ),
-                  None,
-                  false)
+            DxAttrs(Some(
+                        DxRunSpec(
+                            None,
+                            None,
+                            None,
+                            Some(DxTimeout(None, Some(12), None))
+                        )
+                    ),
+                    None,
+                    false)
         )
     )
     extras.perTaskDxAttributes should be(

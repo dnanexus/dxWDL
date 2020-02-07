@@ -167,9 +167,7 @@ case class DxRunSpec(access: Option[DxAccess],
   }
 }
 
-case class DxAttrs(runSpec: Option[DxRunSpec],
-                   details: Option[DxDetails],
-                   ignoreReuse : Boolean) {
+case class DxAttrs(runSpec: Option[DxRunSpec], details: Option[DxDetails], ignoreReuse: Boolean) {
 
   def getRunSpecJson: Map[String, JsValue] = {
     val runSpecJson: Map[String, JsValue] = runSpec match {
