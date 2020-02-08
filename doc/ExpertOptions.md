@@ -475,7 +475,7 @@ You are also able add citations or licenses information using for each task at t
 }
 ```
 
-By default, job results are [reused](https://documentation.dnanexus.com/user/running-apps-and-workflows/job-reuse). This means that if a job was run to completion, there is no need to run it again. In order to disable this behavior, use:
+By default, job results are [reused](https://documentation.dnanexus.com/user/running-apps-and-workflows/job-reuse). This means that when the job is rerun, the results from the previous execution will be emitted without need to re-execute the calculation. Sometimes, it is desirable to disable this optimization. To do so use:
 ```
 {
   "ignoreReuse" : false
