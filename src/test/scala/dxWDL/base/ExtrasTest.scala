@@ -31,7 +31,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val extras = Extras.parse(runtimeAttrs, verbose)
     extras.defaultTaskDxAttributes should be(
-        Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None, false))
+        Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None))
     )
   }
 
@@ -140,8 +140,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                         Some(DxTimeout(None, Some(12), None))
                     )
                 ),
-                None,
-                false
+                None
             )
         )
     )
@@ -174,8 +173,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         Some(
             DxAttrs(
                 Some(DxRunSpec(None, Some(DxExecPolicy(Some(restartPolicy), Some(5))), None, None)),
-                None,
-                false
+                None
             )
         )
     )
@@ -534,8 +532,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                             Some(DxTimeout(None, Some(12), None))
                         )
                     ),
-                    None,
-                    false)
+                    None)
         )
     )
     extras.perTaskDxAttributes should be(
@@ -547,13 +544,11 @@ class ExtrasTest extends FlatSpec with Matchers {
                               None,
                               Some(DxTimeout(None, None, Some(30))))
                 ),
-                None,
-                false
+                None
             ),
             "Add" -> DxAttrs(
                 Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
-                None,
-                false
+                None
             )
         )
     )
@@ -620,8 +615,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                             Some(DxTimeout(None, Some(12), None))
                         )
                     ),
-                    None,
-                    false)
+                    None)
         )
     )
 
@@ -642,8 +636,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                             )
                         )
                     )
-                ),
-                false
+                )
             ),
             "Multiply" -> DxAttrs(
                 Some(
@@ -652,8 +645,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                               None,
                               Some(DxTimeout(None, None, Some(30))))
                 ),
-                None,
-                false
+                None
             )
         )
     )
@@ -695,8 +687,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         Some(
             DxAttrs(
                 Some(DxRunSpec(None, None, None, Some(DxTimeout(None, Some(12), None)))),
-                None,
-                false
+                None
             )
         )
     )
@@ -717,8 +708,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                             )
                         )
                     )
-                ),
-                false
+                )
             )
         )
     )
@@ -831,8 +821,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     val dxAttrs: DxAttrs = DxAttrs(
         Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))),
-        None,
-        false
+        None
     )
 
     val runSpecJson: Map[String, JsValue] = dxAttrs.getRunSpecJson
@@ -842,7 +831,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "all DxAttr to return empty runSpec and details Json" in {
 
-    val dxAttrs = DxAttrs(None, None, false)
+    val dxAttrs = DxAttrs(None, None)
 
     val runSpecJson = dxAttrs.getRunSpecJson
     runSpecJson should be(Map.empty)
@@ -886,8 +875,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                     )
                 )
             )
-        ),
-        false
+        )
     )
 
     val detailsJson = dxAttrs.getDetailsJson

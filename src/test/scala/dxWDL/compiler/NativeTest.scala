@@ -633,9 +633,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
-         | "default_task_dx_attributes" : {
-         |   "ignoreReuse": true
-         | }
+         |  "ignoreReuse": true
          |}
          |""".stripMargin
     val extrasPath = createExtras(extrasContent)
@@ -651,12 +649,36 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case _                        => throw new Exception("sanity")
     }
 
-    // make sure the timeout is what it should be
+    // make sure the job reuse flag is set
     val (stdout, stderr) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
+    ignoreReuseFlag shouldBe Some(JsBoolean(true))
+  }
 
-    System.out.println(stdout.parseJson.prettyPrint)
+  it should "set job-reuse flag on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val extrasContent =
+      """|{
+         |  "ignoreReuse": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
 
+    // remove compile mode
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wfId = retval match {
+      case Main.SuccessfulTermination(x) => x
+      case _                             => throw new Exception("sanity")
+    }
+
+    // make sure the job reuse flag is set
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }

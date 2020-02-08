@@ -835,12 +835,21 @@ case class Native(dxWDLrtId: Option[String],
         "details" -> jsDetails,
         "hidden" -> JsBoolean(hidden)
     )
+    val ignoreReuse: Map[String, JsValue] = extras match {
+      case None => Map.empty
+      case Some(ext) =>
+        ext.ignoreReuse match {
+          case None       => Map.empty
+          case Some(flag) => Map("ignoreReuse" -> JsBoolean(flag))
+        }
+    }
     val accessField =
       if (access == JsNull) Map.empty
       else Map("access" -> access)
 
     // Add a checksum
-    checksumReq(applet.name, reqCore ++ accessField)
+    val reqCoreAll = reqCore ++ accessField ++ ignoreReuse
+    checksumReq(applet.name, reqCoreAll)
   }
 
   // Rebuild the applet if needed.
@@ -1061,8 +1070,17 @@ case class Native(dxWDLrtId: Option[String],
 
     val details = Map("details" -> JsObject(womSourceCodeField ++ dxLinks))
 
+    val ignoreReuse: Map[String, JsValue] = extras match {
+      case None => Map.empty
+      case Some(ext) =>
+        ext.ignoreReuse match {
+          case None       => Map.empty
+          case Some(flag) => Map("ignoreReuse" -> JsBoolean(flag))
+        }
+    }
+
     // pack all the arguments into a single API call
-    val reqFieldsAll = reqFields ++ wfInputOutput ++ details
+    val reqFieldsAll = reqFields ++ wfInputOutput ++ details ++ ignoreReuse
 
     // Add a checksum
     val (digest, reqWithChecksum) = checksumReq(wf.name, reqFieldsAll)

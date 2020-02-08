@@ -167,7 +167,7 @@ case class DxRunSpec(access: Option[DxAccess],
   }
 }
 
-case class DxAttrs(runSpec: Option[DxRunSpec], details: Option[DxDetails], ignoreReuse: Boolean) {
+case class DxAttrs(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
 
   def getRunSpecJson: Map[String, JsValue] = {
     val runSpecJson: Map[String, JsValue] = runSpec match {
@@ -265,7 +265,8 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry: Option[DockerRegistry],
-                  customReorgAttributes: Option[ReorgAttrs]) {
+                  customReorgAttributes: Option[ReorgAttrs],
+                  ignoreReuse: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
     defaultTaskDxAttributes match {
       case None => DxAccess.empty
@@ -305,7 +306,8 @@ object Extras {
                         "default_task_dx_attributes",
                         "per_task_dx_attributes",
                         "docker_registry",
-                        "custom_reorg")
+                        "custom_reorg",
+                        "ignoreReuse")
   val RUNTIME_ATTRS =
     Set("dx_instance_type", "memory", "disks", "cpu", "docker", "docker_registry", "custom_reorg")
   val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
@@ -319,7 +321,7 @@ object Extras {
                                                   "AppInternalError",
                                                   "JobTimeoutExceeded",
                                                   "*")
-  val TASK_DX_ATTRS = Set("runSpec", "details", "ignoreReuse")
+  val TASK_DX_ATTRS = Set("runSpec", "details")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
   private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
@@ -581,9 +583,8 @@ object Extras {
 
     val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     val details = parseDxDetails(checkedParseObjectField(fields, "details"))
-    val ignoreReuse = checkedParseBooleanField(fields, "ignoreReuse").getOrElse(false)
 
-    return Some(DxAttrs(runSpec, details, ignoreReuse))
+    return Some(DxAttrs(runSpec, details))
 
   }
 
@@ -748,7 +749,8 @@ object Extras {
         parseCustomReorgAttrs(
             checkedParseObjectField(fields, fieldName = "custom_reorg"),
             verbose
-        )
+        ),
+        checkedParseBooleanField(fields, fieldName = "ignoreReuse")
     )
 
   }
