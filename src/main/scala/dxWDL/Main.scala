@@ -609,6 +609,7 @@ object Main extends App {
                          dxPathConfig: DxPathConfig,
                          dxIoFunctions: DxIoFunctions,
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                         delayWorkspaceDestruction: Option[Boolean],
                          rtDebugLvl: Int): Termination = {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
@@ -623,15 +624,18 @@ object Main extends App {
 
     val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
-    val taskRunner = exec.TaskRunner(task,
-                                     taskSourceCode,
-                                     typeAliases,
-                                     instanceTypeDB,
-                                     dxPathConfig,
-                                     dxIoFunctions,
-                                     jobInputOutput,
-                                     defaultRuntimeAttributes,
-                                     rtDebugLvl)
+    val taskRunner = exec.TaskRunner(
+        task,
+        taskSourceCode,
+        typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        dxIoFunctions,
+        jobInputOutput,
+        defaultRuntimeAttributes,
+        delayWorkspaceDestruction,
+        rtDebugLvl
+    )
 
     // Running tasks
     op match {
@@ -682,6 +686,7 @@ object Main extends App {
                                  dxPathConfig: DxPathConfig,
                                  dxIoFunctions: DxIoFunctions,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                                 delayWorkspaceDestruction: Option[Boolean],
                                  rtDebugLvl: Int): Termination = {
     val dxProject = DxUtils.dxCrntProject
     //val dxProject = DxUtils.dxEnv.getProjectContext()
@@ -714,6 +719,7 @@ object Main extends App {
                                                  inputsRaw,
                                                  fragInputOutput,
                                                  defaultRuntimeAttributes,
+                                                 delayWorkspaceDestruction,
                                                  rtDebugLvl)
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
         case InternalOp.Collect =>
@@ -728,6 +734,7 @@ object Main extends App {
                                                  inputsRaw,
                                                  fragInputOutput,
                                                  defaultRuntimeAttributes,
+                                                 delayWorkspaceDestruction,
                                                  rtDebugLvl)
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case InternalOp.WfInputs =>
@@ -786,7 +793,7 @@ object Main extends App {
   // details field stored on the platform
   private def retrieveFromDetails(
       jobInfoPath: Path
-  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs]) = {
+  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
@@ -815,7 +822,13 @@ object Main extends App {
         case Some(JsNull) => None
         case Some(x)      => Some(x.convertTo[WdlRuntimeAttrs])
       }
-    (womSourceCode, instanceTypeDB, details, runtimeAttrs)
+
+    val delayWorkspaceDestruction: Option[Boolean] =
+      details.asJsObject.fields.get("delayWorkspaceDestruction") match {
+        case Some(JsBoolean(flag)) => Some(flag)
+        case None                  => None
+      }
+    (womSourceCode, instanceTypeDB, details, runtimeAttrs, delayWorkspaceDestruction)
   }
 
   // Make a list of all the files cloned for access by this applet.
@@ -854,7 +867,11 @@ object Main extends App {
 
         // Get the WOM source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WOM values.
-        val (womSourceCode, instanceTypeDB, metaInfo, defaultRuntimeAttrs) =
+        val (womSourceCode,
+             instanceTypeDB,
+             metaInfo,
+             defaultRuntimeAttrs,
+             delayWorkspaceDestruction) =
           retrieveFromDetails(jobInfoPath)
 
         try {
@@ -862,16 +879,19 @@ object Main extends App {
             case InternalOp.Collect | InternalOp.WfFragment | InternalOp.WfInputs |
                 InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
                 InternalOp.WfCustomReorgOutputs =>
-              workflowFragAction(op,
-                                 womSourceCode,
-                                 instanceTypeDB,
-                                 metaInfo,
-                                 jobInputPath,
-                                 jobOutputPath,
-                                 dxPathConfig,
-                                 dxIoFunctions,
-                                 defaultRuntimeAttrs,
-                                 rtDebugLvl)
+              workflowFragAction(
+                  op,
+                  womSourceCode,
+                  instanceTypeDB,
+                  metaInfo,
+                  jobInputPath,
+                  jobOutputPath,
+                  dxPathConfig,
+                  dxIoFunctions,
+                  defaultRuntimeAttrs,
+                  delayWorkspaceDestruction,
+                  rtDebugLvl
+              )
             case InternalOp.TaskCheckInstanceType | InternalOp.TaskEpilog | InternalOp.TaskProlog |
                 InternalOp.TaskRelaunch =>
               taskAction(op,
@@ -882,6 +902,7 @@ object Main extends App {
                          dxPathConfig,
                          dxIoFunctions,
                          defaultRuntimeAttrs,
+                         delayWorkspaceDestruction,
                          rtDebugLvl)
           }
         } catch {

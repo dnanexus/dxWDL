@@ -85,6 +85,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                       dxIoFunctions: DxIoFunctions,
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
+                      delayWorkspaceDestruction: Option[Boolean],
                       runtimeDebugLevel: Int) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val maxVerboseLevel = (runtimeDebugLevel == 2)
@@ -622,7 +623,12 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // Run a sub-job with the "body" entry point, and the required instance type
     val dxSubJob: DxJob =
-      DxUtils.runSubJob("body", Some(instanceType), originalInputs, Vector.empty, maxVerboseLevel)
+      DxUtils.runSubJob("body",
+                        Some(instanceType),
+                        originalInputs,
+                        Vector.empty,
+                        delayWorkspaceDestruction,
+                        maxVerboseLevel)
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.

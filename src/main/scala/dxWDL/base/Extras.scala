@@ -266,7 +266,8 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry: Option[DockerRegistry],
                   customReorgAttributes: Option[ReorgAttrs],
-                  ignoreReuse: Option[Boolean]) {
+                  ignoreReuse: Option[Boolean],
+                  delayWorkspaceDestruction: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
     defaultTaskDxAttributes match {
       case None => DxAccess.empty
@@ -302,12 +303,15 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
 object Extras {
   val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
   val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
-  val EXTRA_ATTRS = Set("default_runtime_attributes",
-                        "default_task_dx_attributes",
-                        "per_task_dx_attributes",
-                        "docker_registry",
-                        "custom_reorg",
-                        "ignoreReuse")
+  val EXTRA_ATTRS = Set(
+      "default_runtime_attributes",
+      "default_task_dx_attributes",
+      "per_task_dx_attributes",
+      "docker_registry",
+      "custom_reorg",
+      "ignoreReuse",
+      "delayWorkspaceDestruction"
+  )
   val RUNTIME_ATTRS =
     Set("dx_instance_type", "memory", "disks", "cpu", "docker", "docker_registry", "custom_reorg")
   val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
@@ -750,7 +754,8 @@ object Extras {
             checkedParseObjectField(fields, fieldName = "custom_reorg"),
             verbose
         ),
-        checkedParseBooleanField(fields, fieldName = "ignoreReuse")
+        checkedParseBooleanField(fields, fieldName = "ignoreReuse"),
+        checkedParseBooleanField(fields, fieldName = "delayWorkspaceDestruction")
     )
 
   }

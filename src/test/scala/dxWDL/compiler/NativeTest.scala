@@ -58,7 +58,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-  /*  override def beforeAll(): Unit = {
+  override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
     Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
@@ -82,7 +82,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         case _: Throwable =>
       }
     }
-  } */
+  }
 
   private def getAppletId(path: String): String = {
     val folder = Paths.get(path).getParent().toAbsolutePath().toString()
@@ -629,7 +629,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     trainsOutputVector.outputVars.size shouldBe 1
   }
 
-  it should "Set job-reuse flag" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Set job-reuse flag" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -656,7 +656,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
 
-  it should "set job-reuse flag on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "set job-reuse flag on workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{
@@ -680,6 +680,61 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val (stdout, stderr) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
-    ignoreReuseFlag shouldBe Some(JsBoolean(true))
+    ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
+
+  it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("compiler", "add_timeout.wdl")
+    val extrasContent =
+      """|{
+         |  "delayWorkspaceDestruction": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val appletId = retval match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+    }
+
+    // make sure the delayWorkspaceDestruction flag is set
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+    delayWD shouldBe Some(JsTrue)
+  }
+
+  it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val extrasContent =
+      """|{
+         |  "delayWorkspaceDestruction": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wfId = retval match {
+      case Main.SuccessfulTermination(x) => x
+      case _                             => throw new Exception("sanity")
+    }
+
+    // make sure the flag is set on the resulting workflow
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+    delayWD shouldBe Some(JsTrue)
+  }
+
 }
