@@ -84,9 +84,9 @@ case class GenerateIRTask(verbose: Verbose,
     case Some(MetaValueElementObject(obj)) => {
       // Use flatmap to get the "help" and "pattern" keys if they exist
       Some(obj.flatMap {
+        case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
-        // Try to parse the patterns key
-        // First see if it's an array
+        case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
           Some(IR.IOAttrPatterns(IR.PatternsReprArray(metaStringArrayToVec(array))))
         // See if it's an object, and if it is, parse out the optional key, class, and tag keys

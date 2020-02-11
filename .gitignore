@@ -38,3 +38,6 @@ metals.sbt
 
 # Bloop
 .bloop
+
+# editor files
+.vscode/
