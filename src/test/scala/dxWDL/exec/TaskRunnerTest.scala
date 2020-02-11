@@ -150,6 +150,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
                                 dxIoFunctions,
                                 jobInputOutput,
                                 Some(WdlRuntimeAttrs(Map.empty)),
+                                Some(false),
                                 0)
     val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {

@@ -97,8 +97,15 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     DXAPI.workflowClose(id, classOf[JsonNode], DxUtils.dxEnv)
   }
 
-  def newRun(input: JsValue, name: String): DxAnalysis = {
-    val request = JsObject("name" -> JsString(name), "input" -> input.asJsObject)
+  def newRun(name: String,
+             input: JsValue,
+             delayWorkspaceDestruction: Option[Boolean] = None): DxAnalysis = {
+    val req = Map("name" -> JsString(name), "input" -> input.asJsObject)
+    val dwd = delayWorkspaceDestruction match {
+      case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+      case _          => Map.empty
+    }
+    val request = JsObject(req ++ dwd)
     val response =
       DXAPI.workflowRun(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)

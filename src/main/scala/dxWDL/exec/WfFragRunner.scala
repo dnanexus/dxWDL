@@ -37,8 +37,6 @@ package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import spray.json._
 import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
@@ -65,6 +63,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                        delayWorkspaceDestruction: Option[Boolean],
                         runtimeDebugLevel: Int) {
   private val MAX_JOB_NAME = 50
   private val verbose = runtimeDebugLevel >= 1
@@ -76,6 +75,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
   private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                               inputsRaw,
                                               instanceTypeDB,
+                                              delayWorkspaceDestruction,
                                               runtimeDebugLevel,
                                               fragInputOutput.typeAliases)
   // The source code for all the tasks
@@ -367,6 +367,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                     dxIoFunctions,
                                     jobInputOutput,
                                     defaultRuntimeAttributes,
+                                    delayWorkspaceDestruction,
                                     runtimeDebugLevel)
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
@@ -397,52 +398,33 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
     // If this is a task that specifies the instance type
     // at runtime, launch it in the requested instance.
-    val instanceFields = instanceType match {
-      case None => Map.empty
-      case Some(iType) =>
-        Map(
-            "systemRequirements" -> JsObject(
-                "main" -> JsObject("instanceType" -> JsString(iType))
-            )
-        )
-    }
     val dxExec =
       if (dxExecId.startsWith("app-")) {
-        val fields = Map(
-            "name" -> JsString(dbgName),
-            "input" -> callInputs,
-            "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
+        val applet = DxApp.getInstance(dxExecId)
+        val dxJob = applet.newRun(
+            dbgName,
+            callInputs,
+            instanceType = instanceType,
+            properties = Map("seq_number" -> JsString(seqNum.toString)),
+            delayWorkspaceDestruction = delayWorkspaceDestruction
         )
-        val req = JsObject(fields ++ instanceFields)
-        val retval: JsonNode =
-          DXAPI.appRun(dxExecId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-        val info: JsValue = DxUtils.jsValueOfJsonNode(retval)
-        val id: String = info.asJsObject.fields.get("id") match {
-          case Some(JsString(x)) => x
-          case _ =>
-            throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
-        }
-        DxJob.getInstance(id)
+        dxJob
       } else if (dxExecId.startsWith("applet-")) {
         val applet = DxApplet.getInstance(dxExecId)
-        val fields = Map(
-            "name" -> JsString(dbgName),
-            "input" -> callInputs,
-            "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
+        val dxJob = applet.newRun(
+            dbgName,
+            callInputs,
+            instanceType = instanceType,
+            properties = Map("seq_number" -> JsString(seqNum.toString)),
+            delayWorkspaceDestruction = delayWorkspaceDestruction
         )
-        val req = JsObject(fields ++ instanceFields)
-        val retval: JsonNode =
-          DXAPI.appletRun(applet.getId, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-        val info: JsValue = DxUtils.jsValueOfJsonNode(retval)
-        val id: String = info.asJsObject.fields.get("id") match {
-          case Some(JsString(x)) => x
-          case _ =>
-            throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
-        }
-        DxJob.getInstance(id)
+        dxJob
       } else if (dxExecId.startsWith("workflow-")) {
         val workflow = DxWorkflow.getInstance(dxExecId)
-        val dxAnalysis: DxAnalysis = workflow.newRun(input = callInputs, name = dbgName)
+        val dxAnalysis: DxAnalysis = workflow.newRun(input = callInputs,
+                                                     name = dbgName,
+                                                     delayWorkspaceDestruction =
+                                                       delayWorkspaceDestruction)
         val props = Map("seq_number" -> seqNum.toString)
         dxAnalysis.setProperties(props)
         dxAnalysis
