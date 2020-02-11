@@ -49,14 +49,14 @@ object IR {
                                    klass: Option[String],
                                    tag: Option[Vector[String]])
       extends PatternsRepr
-
+  
   // Compile time representaiton of supported parameter_meta section
-  // information for the dxapp IO spec
+  // information for the dxapp IO spec.
   sealed abstract class IOAttr
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
-  final case class IOAttrPatterns(patterns: Vector[String]) extends IOAttr
+  final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.
