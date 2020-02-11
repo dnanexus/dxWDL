@@ -11,7 +11,9 @@
       "pattern": [
         "*.txt",
         "*.tsvj"
-      ]
+      ],
+      "label": "File A",
+      "group": "Common"
     },
     {
       "name": "b",
@@ -20,13 +22,17 @@
       "pattern": [
         "*.txt",
         "*.tsv"
-      ]
+      ],
+      "label": "File B",
+      "group": "Common"
     }
   ],
   "outputSpec": [
     {
       "name": "equality",
-      "class": "boolean"
+      "class": "boolean",
+      "label": "Files equal?",
+      "group": "Common"
     }
   ],
   "runSpec": {

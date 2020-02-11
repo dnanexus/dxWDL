@@ -1,6 +1,6 @@
 <a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
-dxWDL takes a bioinformatics pipeline written in the
+dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 WDL draft-2, version 1.0, and the development version are supported. Note

@@ -16,13 +16,19 @@ task pattern_params_obj_cgrep {
               name: ["*.txt", "*.tsv"],
               class: "file",
               tag: ["foo", "bar"]
-          }
+          },
+          group: "Common",
+          label: "Input file"
         }
         pattern: {
-          help: "The pattern to use to search in_file"
+          help: "The pattern to use to search in_file",
+          group: "Common",
+          label: "Search pattern"
         }
         out_file: {
-          patterns: ["*.txt", "*.tsv"]
+          patterns: ["*.txt", "*.tsv"],
+          group: "Common",
+          label: "Output file"
         }
     }
     command {

@@ -13,13 +13,19 @@ task help_output_params_cgrep {
     }
     parameter_meta {
         in_file : {
-          help: "The input file to be searched"
+          help: "The input file to be searched",
+          group: "Common",
+          label: "Input file"
         }
         pattern: {
-          help: "The pattern to use to search in_file"
+          help: "The pattern to use to search in_file",
+          group: "Common",
+          label: "Search pattern"
         }
         count: {
-          help: "The number of lines in the input file containing the pattern"
+          help: "The number of lines in the input file containing the pattern",
+          group: "Common",
+          label: "Line count"
         }
     }
     command {
@@ -37,13 +43,19 @@ task help_output_params_diff {
     }
     parameter_meta {
         a : {
-          help: "lefthand file"
+          help: "lefthand file",
+          group: "Files",
+          label: "File A"
         }
         b : {
-          help: "righthand file"
+          help: "righthand file",
+          group: "Files",
+          label: "File B"
         }
         result: {
-          help: "The number of different lines"
+          help: "The number of different lines",
+          group: "Common",
+          label: "Diff lines"
         }
     }
     runtime {

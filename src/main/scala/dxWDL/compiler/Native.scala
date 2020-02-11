@@ -115,8 +115,12 @@ case class Native(dxWDLrtId: Option[String],
         case None => Map.empty
         case Some(attributes) => {
           attributes.flatMap {
+            case IR.IOAttrGroup(text) =>
+              Some(IR.PARAM_META_GROUP -> JsString(text))
             case IR.IOAttrHelp(text) =>
               Some(IR.PARAM_META_HELP -> JsString(text))
+            case IR.IOAttrLabel(text) =>
+              Some(IR.PARAM_META_LABEL -> JsString(text))
             case IR.IOAttrPatterns(patternRepr) =>
               patternRepr match {
                 case IR.PatternsReprArray(patterns) =>
