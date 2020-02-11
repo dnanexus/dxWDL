@@ -367,7 +367,7 @@ The compiler will search for all the apps you can call, and create WDL
 tasks for them.
 
 
-# Debugging an applet
+## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to inspect
 it, use: ```dx get --omit-resources <applet path>```. This will
@@ -375,7 +375,7 @@ refrain from downloading the large resource files that go into the
 applet.
 
 
-# Setting dnanexus specific attributes for tasks
+## Setting dnanexus specific attributes for tasks
 
 When writing a dnanexus applet the user can specify options through
 the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL
