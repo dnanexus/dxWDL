@@ -1,3 +1,4 @@
 {
-  "ignoreReuse" : true
+  "ignoreReuse" : true,
+  "delayWorkspaceDestruction" : true
 }

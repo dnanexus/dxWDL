@@ -2,8 +2,6 @@ version 1.0
 
 import "add2.wdl" as A
 
-
-
 workflow add_many {
   input {
     Int a

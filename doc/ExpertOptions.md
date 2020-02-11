@@ -475,12 +475,16 @@ You are also able add citations or licenses information using for each task at t
 }
 ```
 
+## Job reuse
+
 By default, job results are [reused](https://documentation.dnanexus.com/user/running-apps-and-workflows/job-reuse). This is an optimization whereby when a job is run a second time, the results from the previous execution are returned, skipping job execution entirely. Sometimes, it is desirable to disable this behavior. To do so use:
 ```
 {
   "ignoreReuse" : true
 }
 ```
+
+## Delay workspace destruction
 
 By default, temporary workspaces hold the results of executed workflows and applets. Normally, these are garbage collected by the system. If you wish to leave them around longer for debugging purposes, please use:
 ```
@@ -489,7 +493,11 @@ By default, temporary workspaces hold the results of executed workflows and appl
 }
 ```
 This will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours.
+This is a runtime flag, so you will need to run the toplevel workflow with that flag:
 
+```
+dx run YOUR_WORKFLOW --delay-workspace-destruction
+```
 
 # Handling intermediate workflow outputs
 
