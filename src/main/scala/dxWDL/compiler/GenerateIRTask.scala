@@ -82,11 +82,13 @@ case class GenerateIRTask(verbose: Verbose,
   ): Option[Vector[IR.IOAttr]] = paramMeta match {
     case None => None
     case Some(MetaValueElementObject(obj)) => {
-      // Use flatmap to get the "help" and "pattern" keys if they exist
+      // Use flatmap to get the parameter metadata keys if they exist
       Some(obj.flatMap {
         case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
         case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
+        case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
+          Some(IR.IOAttrChoices(IR.Choices ()))
         // Try to parse the patterns key
         // First see if it's an array
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
