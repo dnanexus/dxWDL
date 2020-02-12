@@ -309,8 +309,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
+                    
                     IR.IOAttrHelp("The input file to be searched"),
-                    IR.IOAttrPatterns(IR.PatternsReprArray(Vector("*.txt", "*.tsv")))
+                    IR.IOAttrPatterns(IR.PatternsReprArray(Vector("*.txt", "*.tsv"))),
+                    IR.IOAttrGroup("Common"),
+                    IR.IOAttrLabel("Input file")
                 )
             )
         ),
@@ -318,7 +321,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+            Some(Vector(
+                IR.IOAttrHelp("The pattern to use to search in_file"),
+                IR.IOAttrGroup("Common"),
+                IR.IOAttrLabel("Search pattern")
+            ))
         )
     )
     cgrepApplet.outputs shouldBe Vector(
@@ -359,7 +366,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
                             Some("file"),
                             Some(Vector("foo", "bar"))
                         )
-                    )
+                    ),
+                    IR.IOAttrGroup("Common"),
+                    IR.IOAttrLabel("Input file")
                 )
             )
         ),
@@ -367,7 +376,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+            Some(Vector(
+                IR.IOAttrHelp("The pattern to use to search in_file"),
+                IR.IOAttrGroup("Common"),
+                IR.IOAttrLabel("Search pattern")
+            ))
         )
     )
     cgrepApplet.outputs shouldBe Vector(
@@ -405,13 +418,21 @@ class GenerateIRTest extends FlatSpec with Matchers {
                             MetaValueElement.MetaValueElementString("*.txt"),
                             MetaValueElement.MetaValueElementString("*.tsv")
                         )
-                    )
+                    ),
+                    "group" -> MetaValueElement
+                      .MetaValueElementString("Common"),
+                    "label" -> MetaValueElement
+                      .MetaValueElementString("Input file")
                 )
             ),
             "pattern" -> MetaValueElement.MetaValueElementObject(
                 Map(
                     "help" -> MetaValueElement
-                      .MetaValueElementString("The pattern to use to search in_file")
+                      .MetaValueElementString("The pattern to use to search in_file"),
+                    "group" -> MetaValueElement
+                      .MetaValueElementString("Common"),
+                    "label" -> MetaValueElement
+                      .MetaValueElementString("Search pattern")
                 )
             ),
             "out_file" -> MetaValueElement.MetaValueElementObject(
@@ -421,7 +442,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
                             MetaValueElement.MetaValueElementString("*.txt"),
                             MetaValueElement.MetaValueElementString("*.tsv")
                         )
-                    )
+                    ),
+                    "group" -> MetaValueElement.MetaValueElementString("Common"), 
+                    "label" -> MetaValueElement.MetaValueElementString("Output file")
                 )
             )
         )
@@ -430,6 +453,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     iDef.parameterMeta shouldBe (Some(
         MetaValueElement.MetaValueElementObject(
             Map(
+                "group" -> MetaValueElement
+                  .MetaValueElementString("Common"),
                 "help" -> MetaValueElement
                   .MetaValueElementString("The input file to be searched"),
                 "patterns" -> MetaValueElement.MetaValueElementArray(
@@ -437,7 +462,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
                         MetaValueElement.MetaValueElementString("*.txt"),
                         MetaValueElement.MetaValueElementString("*.tsv")
                     )
-                )
+                ),
+                "label" -> MetaValueElement
+                  .MetaValueElementString("Input file")
             )
         )
     ))
@@ -474,13 +501,21 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                        MetaValueElement.MetaValueElementString("*.tsv"))
                             )
                         )
-                    )
+                    ),
+                    "group" -> MetaValueElement
+                      .MetaValueElementString("Common"),
+                    "label" -> MetaValueElement
+                      .MetaValueElementString("Input file")
                 )
             ),
             "pattern" -> MetaValueElement.MetaValueElementObject(
                 Map(
                     "help" -> MetaValueElement
-                      .MetaValueElementString("The pattern to use to search in_file")
+                      .MetaValueElementString("The pattern to use to search in_file"),
+                    "group" -> MetaValueElement
+                      .MetaValueElementString("Common"),
+                    "label" -> MetaValueElement
+                      .MetaValueElementString("Search pattern")
                 )
             ),
             "out_file" -> MetaValueElement.MetaValueElementObject(
@@ -490,7 +525,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
                             MetaValueElement.MetaValueElementString("*.txt"),
                             MetaValueElement.MetaValueElementString("*.tsv")
                         )
-                    )
+                    ),
+                    "group" -> MetaValueElement.MetaValueElementString("Common"), 
+                    "label" -> MetaValueElement.MetaValueElementString("Output file")
                 )
             )
         )
@@ -499,6 +536,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     iDef.parameterMeta shouldBe (Some(
         MetaValueElement.MetaValueElementObject(
             Map(
+                "group" -> MetaValueElement
+                  .MetaValueElementString("Common"),
                 "help" -> MetaValueElement
                   .MetaValueElementString("The input file to be searched"),
                 "patterns" -> MetaValueElement.MetaValueElementObject(
@@ -513,7 +552,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                    MetaValueElement.MetaValueElementString("*.tsv"))
                         )
                     )
-                )
+                ),
+                "label" -> MetaValueElement
+                  .MetaValueElementString("Input file")
             )
         )
     ))
@@ -601,13 +642,21 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "in_file",
             WomSingleFileType,
             None,
-            Some(Vector(IR.IOAttrHelp("The input file to be searched")))
+            Some(Vector(
+              IR.IOAttrHelp("The input file to be searched"),
+              IR.IOAttrGroup("Common"),
+              IR.IOAttrLabel("Input file")
+            ))
         ),
         IR.CVar(
             "pattern",
             WomStringType,
             None,
-            Some(Vector(IR.IOAttrHelp("The pattern to use to search in_file")))
+            Some(Vector(
+              IR.IOAttrHelp("The pattern to use to search in_file"),
+              IR.IOAttrGroup("Common"),
+              IR.IOAttrLabel("Search pattern")
+            ))
         )
     )
   }

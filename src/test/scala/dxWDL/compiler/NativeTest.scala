@@ -324,8 +324,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
     pattern.help shouldBe Some("The pattern to use to search in_file")
     pattern.group shouldBe Some("Common")
-    pattern.label shouldBe Some("Input file")
+    pattern.label shouldBe Some("Search pattern")
     in_file.patterns shouldBe Some(IOParamterPatternArray(Vector("*.txt", "*.tsv")))
+    in_file.help shouldBe Some("The input file to be searched")
+    in_file.group shouldBe Some("Common")
+    in_file.label shouldBe Some("Input file")
     // out_file would be part of the outputSpec, but wom currently doesn't
     // support parameter_meta for output vars
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
@@ -350,12 +353,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
     pattern.help shouldBe Some("The pattern to use to search in_file")
     pattern.group shouldBe Some("Common")
-    pattern.label shouldBe Some("Input file")
+    pattern.label shouldBe Some("Search pattern")
     in_file.patterns shouldBe Some(
         IOParamterPatternObject(Some(Vector("*.txt", "*.tsv")),
                                 Some("file"),
                                 Some(Vector("foo", "bar")))
     )
+    in_file.help shouldBe Some("The input file to be searched")
+    in_file.group shouldBe Some("Common")
+    in_file.label shouldBe Some("Input file")
     // out_file would be part of the outputSpec, but wom currently doesn't
     // support parameter_meta for output vars
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
