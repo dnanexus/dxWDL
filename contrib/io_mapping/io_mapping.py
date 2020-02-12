@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, cast
 
 import autoclick
 import dxpy
+from xphyle import open_
 from WDL import Document, Tree, Type
 
 
@@ -27,9 +28,9 @@ def dx_io_map():
 
 @dx_io_map.command("inputs")
 def map_inputs(
-    cromwell_inputs: Path,
     wdl: Path,
-    dxwdl_inputs: Optional[Path] = None,
+    cromwell_inputs: str = "-",
+    dx_inputs: str = "-",
     task_name: Optional[str] = None,
     project_id: Optional[str] = None,
     folder: Optional[str] = None,
@@ -39,10 +40,9 @@ def map_inputs(
     Maps Cromwell-style inputs to DNAnexus inputs.
 
     Args:
-        cromwell_inputs: Path to Cromwell-style inputs JSON file.
         wdl: Path to the WDL file.
-        dxwdl_inputs: The output file; if not specified, the `cromwell_inputs` path is used with
-            a ".dx.json" extension.
+        cromwell_inputs: Path to Cromwell-style inputs JSON file. Defaults to "-" (stdin).
+        dx_inputs: The output file. Defaults to "-" (stdout).
         task_name: The task name; if not specified, it is assumed that the inputs are for the
             workflow.
         project_id: The ID of the DNAnexus project to search for any files that are provided as
@@ -54,69 +54,88 @@ def map_inputs(
         upload_missing: Whether to upload any files that are provided as local paths and are not
             found in the specified project and folder.
     """
-    wdl_doc = parse_wdl(wdl)
-    
-    with open(cromwell_inputs, "rt") as inp:
-        inputs_dict = json.load(inp)
-    
-    formatter = DxInputsFormatter(wdl_doc, task_name, project_id, folder, upload_missing)
-    dx_inputs_dict = formatter.format_inputs(inputs_dict)
-
-    if dxwdl_inputs is None:
-        dxwdl_inputs = cromwell_inputs.with_suffix(".dx.json")
-    
-    with open(dxwdl_inputs, "wt") as out:
-        json.dump(dx_inputs_dict, out)
+    with open_(cromwell_inputs, "rt") as inp, open_(dx_inputs, "wt") as out:
+        json.dump(
+            InputsFormatter(
+                wdl, task_name, project_id, folder, upload_missing
+            ).format_inputs(json.load(inp)),
+            out,
+            indent=2
+        )
 
 
 @dx_io_map.command(
     "outputs",
     validations={
-        ("analysis_id", "analysis_outputs"): autoclick.Mutex()
+        ("dx_id", "dx_outputs"): autoclick.Mutex()
     }
 )
 def map_outputs(
     wdl: Path,
-    analysis_id: Optional[str] = None,
-    analysis_outputs: Optional[Path] = None,
-    cromwell_outputs: Optional[Path] = None,
+    dx_id: Optional[str] = None,
+    dx_outputs: Optional[str] = None,
+    cromwell_outputs: str = "-",
+    task_name: Optional[str] = None
 ):
-    pass
+    """
+    Maps outputs from a DNAnexus job/analysis to Cromwell-style outputs JSON.
+
+    Args:
+        wdl: Path to the WDL file.
+        dx_id: The ID of the DNAnexus job/analysis.
+        dx_outputs: The outputs of a DNAnexus job/analysis in JSON format. Defaults to "-" if
+            no `dx_id` is specified. Only one of (`dx_id`, `dx_outputs`) may be specified.
+        cromwell_outputs: The output file. Defaults to "-" (stdout).
+        task_name: The name of the WDL task, if this is a task execution (i.e. a DNAnexus job);
+            otherwise it is assumed to be a workflow execution (i.e. a DNAnexus analysis).
+    """
+    if dx_id:
+        if task_name:
+            exe = dxpy.DXJob(dx_id)
+        else:
+            exe = dxpy.DXAnalysis(dx_id)
+        
+        desc = exe.describe()
+
+        if desc["state"] != "done":
+            raise ValueError(
+                f"DNAnexus execution {dx_id} is not in a successfully completed state"
+            )
+        
+        outputs_dict = desc["output"]
+    else:
+        with open(dx_outputs or "-", "rt") as inp:
+            outputs_dict = json.load(inp)
+    
+    with open(cromwell_outputs, "wt") as out:
+        json.dump(
+            OutputsFormatter(wdl, task_name).format_outputs(outputs_dict),
+            out,
+            indent=2
+        )
 
 
-def parse_wdl(
-    wdl_path: Path,
-    import_dirs: Optional[Sequence[Path]] = (),
-    check_quant: bool = False,
-) -> Document:
-    return Tree.load(
-        str(wdl_path),
-        path=[str(path) for path in import_dirs],
-        check_quant=check_quant
-    )
-
-
-class DxInputsFormatter:
+class InputsFormatter:
     def __init__(
         self,
-        wdl_doc: Document,
+        wdl_path: Path,
         task_name: Optional[str] = None,
         project_id: Optional[str] = None,
         folder: Optional[str] = None,
         upload_missing: bool = False
     ):
+        self._wdl_doc = parse_wdl(wdl_path)
+
         if not task_name:
-            target = wdl_doc.workflow
+            target = self._wdl_doc.workflow
         else:
-            for task in wdl_doc.tasks:
+            for task in self._wdl_doc.tasks:
                 if task.name == task_name:
                     target = task
                     break
             else:
                 raise ValueError(f"No such task {task_name} in WDL document")
         
-        self._data_file_links = set()
-        self._wdl_doc = wdl_doc
         self._wdl_decls = dict((d.name, d.value.type) for d in target.available_inputs)
         self._source_prefix = f"{target.name}."
         self._dest_prefix = self._source_prefix if task_name else "stage-common."
@@ -124,6 +143,7 @@ class DxInputsFormatter:
         self._folder = folder or "/",
         self._recurse = folder is not None
         self._upload_missing = upload_missing
+        self._data_file_links = set()
     
     def format_inputs(self, inputs_dict: dict) -> dict:
         formatted = {}
@@ -260,3 +280,57 @@ class DxInputsFormatter:
                 parents=True,
                 wait_on_close=True
             ))
+
+
+class OutputsFormatter:
+    def __init__(self, wdl_path: Path, task_name: Optional[str] = None):
+        self._wdl_doc = parse_wdl(wdl_path)
+        self._source_prefix = f"{task_name}." if task_name else "stage-outputs"
+        self._dest_prefix = f"{task_name or self._wdl_doc.workflow.name}."
+    
+    def format_outputs(self, outputs_dict: dict) -> dict:
+        formatted = {}
+
+        for key, value in outputs_dict.items():
+            if key.startswith(self._source_prefix):
+                key = key[len(self._source_prefix):]
+            
+            new_key = f"{self._dest_prefix}{key}"
+
+            formatted[new_key] = self.format_value(value, (key,))
+        
+        return formatted
+
+    def format_value(self, value: Any) -> Any:
+        if dxpy.is_dxlink(value):
+            link = cast(dict, value)[DX_LINK_KEY]
+
+            if isinstance(link, dict):
+                link_dict = cast(dict, link)
+                file_id = link_dict["id"]
+                if "project" in link_dict:
+                    return f"dx://{link_dict['project']}:{file_id}"
+            else:
+                file_id = cast(str, link)
+            
+            return f"dx://{file_id}"
+        
+        if isinstance(value, dict):
+            return dict((key, self.format_value(val)) for key, val in cast(dict, value).items())
+
+        if isinstance(value, Sequence) and not isinstance(value, str):
+            return [self.format_value(val) for val in cast(Sequence, value)]
+
+        return value
+            
+
+def parse_wdl(
+    wdl_path: Path,
+    import_dirs: Optional[Sequence[Path]] = (),
+    check_quant: bool = False,
+) -> Document:
+    return Tree.load(
+        str(wdl_path),
+        path=[str(path) for path in import_dirs],
+        check_quant=check_quant
+    )
