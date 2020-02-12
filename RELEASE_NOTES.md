@@ -4,9 +4,9 @@
 - Add support for additional parameter metadata:
   - group
   - label
-<!--
   - choices
   - suggestions
+<!--
   - dx_type
 -->
 

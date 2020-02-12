@@ -24,7 +24,7 @@ object IR {
 
   // Keywords for string pattern matching
   
-  val PARAM_META_CHOICES = "choices" // TODO
+  val PARAM_META_CHOICES = "choices"
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
@@ -56,6 +56,7 @@ object IR {
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
+  final case class IOAttrChoices(choices: ) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as
