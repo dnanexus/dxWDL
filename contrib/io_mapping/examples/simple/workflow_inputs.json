@@ -1,0 +1,5 @@
+{
+    "cat_file.in_txt": "dx://file-XXX",
+    "cat_file.in_int": 1,
+    "cat_file.fail": false
+}
