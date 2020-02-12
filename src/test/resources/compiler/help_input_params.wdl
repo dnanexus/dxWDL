@@ -13,10 +13,14 @@ task help_input_params_cgrep {
     }
     parameter_meta {
       in_file : {
-        help: "The input file to be searched"
+        help: "The input file to be searched",
+        group: "Common",
+        label: "Input file"
       }
       pattern: {
-        help: "The pattern to use to search in_file"
+        help: "The pattern to use to search in_file",
+        group: "Common",
+        label: "Search pattern"
       }
     }
     command {
@@ -33,11 +37,15 @@ task help_input_params_diff {
         File b
     }
     parameter_meta {
-        a: {
-          help: "lefthand file"
+        a : {
+          help: "lefthand file",
+          group: "Files",
+          label: "File A"
         }
         b : {
-          help: "righthand file"
+          help: "righthand file",
+          group: "Files",
+          label: "File B"
         }
     }
     runtime {

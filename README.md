@@ -1,6 +1,6 @@
 <a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
-dxWDL takes a bioinformatics pipeline written in the
+dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 WDL draft-2, version 1.0, and the development version are supported. Note
@@ -10,12 +10,12 @@ A high level list of changes between draft-2 and version 1.0 is
 provided [here](doc/WdlVersionChanges.md).
 
 ## Setup
+
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7/3.x.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
 `dx login`. Download the latest compiler jar file from the
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
-
 
 ## Example workflow
 

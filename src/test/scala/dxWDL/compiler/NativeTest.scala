@@ -323,7 +323,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
     pattern.help shouldBe Some("The pattern to use to search in_file")
+    pattern.group shouldBe Some("Common")
+    pattern.label shouldBe Some("Search pattern")
     in_file.patterns shouldBe Some(IOParamterPatternArray(Vector("*.txt", "*.tsv")))
+    in_file.help shouldBe Some("The input file to be searched")
+    in_file.group shouldBe Some("Common")
+    in_file.label shouldBe Some("Input file")
     // out_file would be part of the outputSpec, but wom currently doesn't
     // support parameter_meta for output vars
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
@@ -347,11 +352,16 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
     pattern.help shouldBe Some("The pattern to use to search in_file")
+    pattern.group shouldBe Some("Common")
+    pattern.label shouldBe Some("Search pattern")
     in_file.patterns shouldBe Some(
         IOParamterPatternObject(Some(Vector("*.txt", "*.tsv")),
                                 Some("file"),
                                 Some(Vector("foo", "bar")))
     )
+    in_file.help shouldBe Some("The input file to be searched")
+    in_file.group shouldBe Some("Common")
+    in_file.label shouldBe Some("Input file")
     // out_file would be part of the outputSpec, but wom currently doesn't
     // support parameter_meta for output vars
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
@@ -376,6 +386,48 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
     a.help shouldBe Some("lefthand side")
     b.help shouldBe Some("righthand side")
+  }
+
+  it should "be able to include group information in inputSpec" in {
+    val path = pathFromBasename("compiler", "add_group.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (a, b) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    a.group shouldBe Some("common")
+    b.group shouldBe Some("obscure")
+  }
+
+  it should "be able to include label information in inputSpec" in {
+    val path = pathFromBasename("compiler", "add_label.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (a, b) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    a.label shouldBe Some("A positive integer")
+    b.label shouldBe Some("A negative integer")
   }
 
   it should "be able to include license information in details" in {

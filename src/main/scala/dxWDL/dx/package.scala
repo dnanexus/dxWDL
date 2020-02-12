@@ -44,7 +44,9 @@ case class IOParameter(
     name: String,
     ioClass: DxIOClass.Value,
     optional: Boolean,
+    group: Option[String] = None,
     help: Option[String] = None,
+    label: Option[String] = None,
     patterns: Option[IOParameterPattern] = None
 )
 
@@ -94,10 +96,21 @@ object DxObject {
       case None               => false
     }
 
+    val group = jsv.asJsObject.fields.get("group") match {
+      case Some(JsString(s)) => Some(s)
+      case _                 => None
+    }
+
     val help = jsv.asJsObject.fields.get("help") match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
+
+    val label = jsv.asJsObject.fields.get("label") match {
+      case Some(JsString(s)) => Some(s)
+      case _                 => None
+    }
+
     val patterns = jsv.asJsObject.fields.get("patterns") match {
       case Some(JsArray(a)) =>
         Some(IOParamterPatternArray(a.flatMap {
@@ -129,7 +142,14 @@ object DxObject {
         Some(IOParamterPatternObject(name, klass, tag))
       case _ => None
     }
-    ioParam.copy(optional = optFlag, patterns = patterns, help = help)
+
+    ioParam.copy(
+      optional = optFlag,
+      group = group,
+      help = help,
+      label = label,
+      patterns = patterns
+    )
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {

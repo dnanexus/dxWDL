@@ -247,13 +247,21 @@ for limited support.
 
 # parameter_meta section
 
-The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#parameter-metadata-section) defines a `parameter_meta` section that may contain key value pairs to assoicate metadata with input and output variables. Currently, three keywords are supported:
+The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#parameter-metadata-section) defines a `parameter_meta` section that may contain key value pairs to assoicate metadata with input and output variables. Currently, the following keywords are supported:
 
-- `help`, which maps directly to the dxapp.json inputSpec.help field
-- `patterns`, which maps directly to the dxapp.json inputSpec.patterns field, both array and object form
 - `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
+- Direct mappings to [inputSpec and outputSpec keywords in dxapp.json](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications):
+  - `group`
+  - `help`
+  - `label`
+  - `patterns`
+<!--
+  - `choices`
+  - `suggestions`
+  - `dx_type` (maps to the `type` field in dxapp.json)
+-->
 
-More about `help` and `patterns` can be read [here](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications). Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input vars.
+Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 
 ## Example parameter_meta app
 

@@ -6,13 +6,17 @@
   "inputSpec": [
     {
       "name": "who",
-      "class": "string"
+      "class": "string",
+      "label": "Person's name",
+      "group": "Common"
     }
   ],
   "outputSpec": [
     {
       "name": "greeting",
-      "class": "string"
+      "class": "string",
+      "label": "Greeting",
+      "group": "Common"
     }
   ],
   "runSpec": {

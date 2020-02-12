@@ -1,5 +1,15 @@
 # Release Notes
 
+## dev
+- Add support for additional parameter metadata:
+  - group
+  - label
+<!--
+  - choices
+  - suggestions
+  - dx_type
+-->
+
 ## 1.43 11-Feb-2020
 - Providing a tree structure representing a compiled workflow via `--execTree pretty`
 - For the json structure use `--execTree json`
