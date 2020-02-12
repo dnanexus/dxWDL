@@ -1,7 +1,6 @@
 # Release Notes
 
 ## dev
-
 - Add support for additional parameter metadata:
   - group
   - label
@@ -11,10 +10,12 @@
   - dx_type
 -->
 
-## 1.43
+## 1.43 11-Feb-2020
 - Providing a tree structure representing a compiled workflow via `--execTree pretty`
 - For the json structure use `--execTree json`
-- Added support for the parameter_meta: patterns to take an object: [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section) 
+- Added support for the parameter_meta: patterns to take an object: [docs/ExpertOptions](doc/ExpertOptions.md#parameter_meta-section)
+- Support the `ignoreReuse` and `delayWorkflowDestruction` in the extras file. More details are in the [expert options](https://github.com/dnanexus/dxWDL/blob/DEVEX-1499-support-job-reuse-flag/doc/ExpertOptions.md#job-reuse).
+
 
 ## 1.42 23-Jan-2020
 - Providing a JSON structure representing a compiled workflow. This can be done with the command line flag `--execTree`. For example:

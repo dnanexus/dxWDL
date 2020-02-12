@@ -63,6 +63,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                       JsNull,
                                       fragInputOutput,
                                       Some(WdlRuntimeAttrs(Map.empty)),
+                                      Some(false),
                                       runtimeDebugLevel)
     (wf, fragRunner)
   }

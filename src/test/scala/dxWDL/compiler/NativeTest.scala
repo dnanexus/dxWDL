@@ -112,7 +112,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     tmp_extras.toString
   }
 
-  it should "Native compile a single WDL task" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a single WDL task" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
         path.toString :: "--execTree" :: "json" :: cFlags
@@ -136,7 +136,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   // linear workflow
-  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: "--execTree" :: "json" :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationTree]
@@ -182,7 +182,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
@@ -209,7 +209,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   // Can't strip out the escape characters that make the strings colored
   // TODO: add a pretty print nocolor option?
-  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, EdgeTest) in {
+  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
     val retval = Main.compile(
@@ -680,4 +680,113 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val trainsOutputVector: IR.Callable = bundle.allCallables("trains")
     trainsOutputVector.outputVars.size shouldBe 1
   }
+
+  it should "Set job-reuse flag" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("compiler", "add_timeout.wdl")
+    val extrasContent =
+      """|{
+         |  "ignoreReuse": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    // compile the task while
+    val retval = Main.compile(
+        path.toString :: "--extras" :: extrasPath.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val appletId = retval match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+    }
+
+    // make sure the job reuse flag is set
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
+    ignoreReuseFlag shouldBe Some(JsBoolean(true))
+  }
+
+  it should "set job-reuse flag on workflow" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val extrasContent =
+      """|{
+         |  "ignoreReuse": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    // remove compile mode
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wfId = retval match {
+      case Main.SuccessfulTermination(x) => x
+      case _                             => throw new Exception("sanity")
+    }
+
+    // make sure the job reuse flag is set
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+    val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
+    ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
+  }
+
+  it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("compiler", "add_timeout.wdl")
+    val extrasContent =
+      """|{
+         |  "delayWorkspaceDestruction": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val appletId = retval match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+    }
+
+    // make sure the delayWorkspaceDestruction flag is set
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+    delayWD shouldBe Some(JsTrue)
+  }
+
+  it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+    val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+    val extrasContent =
+      """|{
+         |  "delayWorkspaceDestruction": true
+         |}
+         |""".stripMargin
+    val extrasPath = createExtras(extrasContent)
+
+    val retval = Main.compile(
+        path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wfId = retval match {
+      case Main.SuccessfulTermination(x) => x
+      case _                             => throw new Exception("sanity")
+    }
+
+    // make sure the flag is set on the resulting workflow
+    val (stdout, stderr) =
+      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+    delayWD shouldBe Some(JsTrue)
+  }
+
 }
