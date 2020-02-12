@@ -3,11 +3,13 @@
 ## dev
 
 - Add support for additional parameter metadata:
-  - choices
   - group
   - label
+<!--
+  - choices
   - suggestions
   - dx_type
+-->
 
 ## 1.43
 - Providing a tree structure representing a compiled workflow via `--execTree pretty`

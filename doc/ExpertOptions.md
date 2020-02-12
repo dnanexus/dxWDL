@@ -251,13 +251,15 @@ The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#p
 
 - `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
 - Direct mappings to [inputSpec and outputSpec keywords in dxapp.json](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications):
-  - `choices`
   - `group`
   - `help`
   - `label`
   - `patterns`
+<!--
+  - `choices`
   - `suggestions`
   - `dx_type` (maps to the `type` field in dxapp.json)
+-->
 
 Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 
