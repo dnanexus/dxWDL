@@ -249,7 +249,7 @@ def map_outputs(
     strict: bool = False,
 ):
     """
-    Maps outputs from a DNAnexus job/analysis to Cromwell-style outputs JSON.
+    Maps DNAnexus job/analysis outputs to Cromwell-style outputs.
 
     At least one of 'wdl', 'workflow_name', and 'task_name' must be specified.
 
