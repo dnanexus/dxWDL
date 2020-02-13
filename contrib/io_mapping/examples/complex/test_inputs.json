@@ -1,0 +1,70 @@
+{
+  "test.str": "x",
+  "test.array_str": ["a", "b"],
+  "test.array_array_str": [
+    ["a"], ["b"]
+  ],
+  "test.array_file": [
+    "dx://file-Fk1Kp200jy8z7jY371y7Jp3z",
+    "dx://file-Fk1Kp200jy8z7jY371y7Jp3z"
+  ],
+  "test.map_str_str": {
+    "a": "b"
+  },
+  "test.struc": {
+    "str": "x",
+    "array_str": ["a", "b"],
+    "map_str_str": {
+      "a": "b"
+    }
+  },
+  "test.array_struc": [
+    {
+      "str": "x",
+      "array_str": ["a", "b"],
+      "map_str_str": {
+        "a": "b"
+      }
+    }
+  ],
+  "test.map_str_struc": {
+    "a": {
+      "str": "x",
+      "array_str": ["a", "b"],
+      "map_str_str": {
+        "a": "b"
+      }
+    }
+  },
+  "test.pair_string": {
+    "left": "x",
+    "right": "y"
+  },
+  "test.array_pair_string": [
+    {
+      "left": "x",
+      "right": "y"
+    }
+  ],
+  "test.array_pair_pair_string": [
+    {
+      "left": "a",
+      "right": {
+        "left": "x",
+        "right": "y"
+      }
+    }
+  ],
+  "test.map_str_pair_str_struc": {
+    "a": {
+      "left": "x",
+      "right": {
+        "str": "x",
+        "array_str": ["a", "b"],
+        "map_str_str": {
+          "a": "b"
+        }
+      }
+    }
+  }
+}

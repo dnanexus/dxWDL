@@ -1,0 +1,97 @@
+{
+  "stage-common.str": "x",
+  "stage-common.array_str": ["a", "b"],
+  "stage-common.array_array_str": {
+    "___": [["a"], ["b"]]
+  },
+  "stage-common.array_array_str___dxfiles": [],
+  "stage-common.array_file": [{
+    "$dnanexus_link": "file-Fk1Kp200jy8z7jY371y7Jp3z"
+  }, {
+    "$dnanexus_link": "file-Fk1Kp200jy8z7jY371y7Jp3z"
+  }]
+  "stage-common.map_str_str": {
+    "___": {
+      "keys": ["a"],
+      "values": ["b"]
+    }
+  },
+  "stage-common.map_str_str___dxfiles": [],
+  "stage-common.struc": {
+    "___": {
+      "array_str": ["a", "b"],
+      "map_str_str": {
+        "keys": ["a"],
+        "values": ["b"]
+      },
+      "str": "x"
+    }
+  },
+  "stage-common.struc___dxfiles": [],
+  "stage-common.array_struc": {
+    "___": [{
+      "array_str": ["a", "b"],
+      "map_str_str": {
+        "keys": ["a"],
+        "values": ["b"]
+      },
+      "str": "x"
+    }]
+  },
+  "stage-common.array_struc___dxfiles": [],
+  "stage-common.map_str_struc": {
+    "___": {
+      "keys": ["a"],
+      "values": [{
+        "array_str": ["a", "b"],
+        "map_str_str": {
+          "keys": ["a"],
+          "values": ["b"]
+        },
+        "str": "x"
+      }]
+    }
+  },
+  "stage-common.map_str_struc___dxfiles": [],
+  "stage-common.pair_string": {
+    "___": {
+      "left": "x",
+      "right": "y"
+    }
+  },
+  "stage-common.pair_string___dxfiles": [],
+  "stage-common.array_pair_string": {
+    "___": [{
+      "left": "x",
+      "right": "y"
+    }]
+  },
+  "stage-common.array_pair_string___dxfiles": [],
+  "stage-common.array_pair_pair_string": {
+    "___": [{
+      "left": "a",
+      "right": {
+        "left": "x",
+        "right": "y"
+      }
+    }]
+  },
+  "stage-common.array_pair_pair_string___dxfiles": [],
+  "stage-common.map_str_pair_str_struc": {
+    "___": {
+      "keys": ["a"],
+      "values": [{
+        "left": "x",
+        "right": {
+          "array_str": ["a", "b"],
+          "map_str_str": {
+            "keys": ["a"],
+            "values": ["b"]
+          },
+          "str": "x"
+        }
+      }]
+    }
+  },
+  "stage-common.map_str_pair_str_struc___dxfiles": []
+}
