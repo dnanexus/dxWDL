@@ -64,57 +64,6 @@ def map_inputs(
         )
 
 
-@dx_io_map.command(
-    "outputs",
-    validations={
-        ("dx_id", "dx_outputs"): autoclick.Mutex()
-    }
-)
-def map_outputs(
-    wdl: Path,
-    dx_id: Optional[str] = None,
-    dx_outputs: Optional[str] = None,
-    cromwell_outputs: str = "-",
-    task_name: Optional[str] = None
-):
-    """
-    Maps outputs from a DNAnexus job/analysis to Cromwell-style outputs JSON.
-
-    Args:
-        wdl: Path to the WDL file.
-        dx_id: The ID of the DNAnexus job/analysis.
-        dx_outputs: The outputs of a DNAnexus job/analysis in JSON format. Defaults to "-" if
-            no `dx_id` is specified. Only one of (`dx_id`, `dx_outputs`) may be specified.
-        cromwell_outputs: The output file. Defaults to "-" (stdout).
-        task_name: The name of the WDL task, if this is a task execution (i.e. a DNAnexus job);
-            otherwise it is assumed to be a workflow execution (i.e. a DNAnexus analysis).
-    """
-    if dx_id:
-        if task_name:
-            exe = dxpy.DXJob(dx_id)
-        else:
-            exe = dxpy.DXAnalysis(dx_id)
-        
-        desc = exe.describe()
-
-        if desc["state"] != "done":
-            raise ValueError(
-                f"DNAnexus execution {dx_id} is not in a successfully completed state"
-            )
-        
-        outputs_dict = desc["output"]
-    else:
-        with open(dx_outputs or "-", "rt") as inp:
-            outputs_dict = json.load(inp)
-    
-    with open(cromwell_outputs, "wt") as out:
-        json.dump(
-            OutputsFormatter(wdl, task_name).format_outputs(outputs_dict),
-            out,
-            indent=2
-        )
-
-
 class InputsFormatter:
     def __init__(
         self,
@@ -282,11 +231,92 @@ class InputsFormatter:
             ))
 
 
+@dx_io_map.command(
+    "outputs",
+    validations={
+        ("dx_id", "dx_outputs"): autoclick.Mutex(),
+        ("workflow_name", "task_name"): autoclick.Mutex(),
+        ("wdl", "workflow_name", "task_name"): autoclick.defined_ge(1)
+    }
+)
+def map_outputs(
+    dx_id: Optional[str] = None,
+    dx_outputs: Optional[str] = None,
+    cromwell_outputs: str = "-",
+    wdl: Optional[Path] = None,
+    workflow_name: Optional[str] = None,
+    task_name: Optional[str] = None,
+    strict: bool = False,
+):
+    """
+    Maps outputs from a DNAnexus job/analysis to Cromwell-style outputs JSON.
+
+    At least one of 'wdl', 'workflow_name', and 'task_name' must be specified.
+
+    Args:
+        wdl: Path to the WDL file.
+        dx_id: The ID of the DNAnexus job/analysis.
+        dx_outputs: The outputs of a DNAnexus job/analysis in JSON format. Defaults to "-" if
+            no `dx_id` is specified. Only one of (`dx_id`, `dx_outputs`) may be specified.
+        cromwell_outputs: The output file. Defaults to "-" (stdout).
+        workflow_name: The name of the WDL workflow, if this is a workflow execution (i.e. a
+            DNAnexus analysis).
+        task_name: The name of the WDL task, if this is a task execution (i.e. a DNAnexus job).
+        strict: Only map the outputs from the workflow output stage (i.e. those prefixed with
+            'stage-outputs').
+    """
+    is_workflow = dx_id.startswith("analysis-") if dx_id else None
+    
+    if not (workflow_name or task_name):
+        wdl_doc = parse_wdl(wdl)
+        
+        if wdl_doc.workflow and is_workflow is not False:
+            workflow_name = wdl_doc.workflow.name
+        elif wdl_doc.tasks and len(wdl_doc.tasks) == 1 and is_workflow is not True:
+            task_name = wdl_doc.tasks[0].name
+        else:
+            raise ValueError("The workflow or task name cannot be determined unambiguously")
+    elif workflow_name and is_workflow is False:
+        raise ValueError("'workflow_name' was given but 'dx_id' is not an analysis ID")
+    elif task_name and is_workflow is True:
+        raise ValueError("'task_name' was given but 'dx_id' is not an job ID")
+
+    if dx_id:
+        if task_name:
+            exe = dxpy.DXJob(dx_id)
+        else:
+            exe = dxpy.DXAnalysis(dx_id)
+        
+        desc = exe.describe()
+
+        if desc["state"] != "done":
+            raise ValueError(
+                f"DNAnexus execution {dx_id} is not in a successfully completed state"
+            )
+        
+        outputs_dict = desc["output"]
+    else:
+        with open_(dx_outputs or "-", "rt") as inp:
+            outputs_dict = json.load(inp)
+    
+    with open_(cromwell_outputs, "wt") as out:
+        json.dump(
+            OutputsFormatter(workflow_name, task_name, strict).format_outputs(outputs_dict),
+            out,
+            indent=2
+        )
+
+
 class OutputsFormatter:
-    def __init__(self, wdl_path: Path, task_name: Optional[str] = None):
-        self._wdl_doc = parse_wdl(wdl_path)
-        self._source_prefix = f"{task_name}." if task_name else "stage-outputs"
-        self._dest_prefix = f"{task_name or self._wdl_doc.workflow.name}."
+    def __init__(
+        self, 
+        workflow_name: Optional[str] = None, 
+        task_name: Optional[str] = None,
+        strict: bool = False,
+    ):
+        self._source_prefix = f"{task_name}." if task_name else "stage-outputs."
+        self._dest_prefix = f"{task_name or workflow_name}."
+        self._strict = strict
     
     def format_outputs(self, outputs_dict: dict) -> dict:
         formatted = {}
@@ -294,10 +324,12 @@ class OutputsFormatter:
         for key, value in outputs_dict.items():
             if key.startswith(self._source_prefix):
                 key = key[len(self._source_prefix):]
-            
+            elif self._strict:
+                continue
+
             new_key = f"{self._dest_prefix}{key}"
 
-            formatted[new_key] = self.format_value(value, (key,))
+            formatted[new_key] = self.format_value(value)
         
         return formatted
 
