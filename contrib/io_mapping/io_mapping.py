@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast
 
 import autoclick
 import dxpy
@@ -103,7 +103,7 @@ class InputsFormatter:
             
             new_key = f"{self._dest_prefix}{key}"
 
-            formatted[new_key] = self.format_value(value, (key,))
+            formatted[new_key] = self.format_value(value, (key,))[0]
 
             if self._data_file_links:
                 formatted[f"{new_key}{DX_FILES_SUFFIX}"] = list(self._data_file_links)
@@ -111,51 +111,77 @@ class InputsFormatter:
 
         return formatted
 
-    def format_value(self, value: Any, path: Tuple[str, ...]) -> Any:
+    def format_value(
+        self, value: Any, path: Tuple[str, ...], nested: bool = False
+    ) -> Tuple[Any, bool]:
         """
         Convert a primitive, DataFile, Sequence, or Dict to a JSON-serializable object.
         
         Args:
             value: The value to format.
             path: The path to the current value.
+            nested: Whether the value is nested within a complex type
         
         Returns:
-            The serializable value.
+            The tuple `(val, is_complex)`, where `val` is serializable value and
+            `is_complex` is True if the value is a complex type.
         """
         if self._is_wdl_type(path, Type.File):
             if isinstance(value, dict):
                 # it's already a dx link
-                return cast(dict, value)
+                return cast(dict, value), False
             else:
                 # it's a URL or local path
-                return self._format_file(cast(str, value))
-
-        if isinstance(value, dict):
-            return self._format_dict(cast(dict, value), path)
+                return self._format_file(cast(str, value)), False
 
         if isinstance(value, Sequence) and not isinstance(value, str):
-            return self._format_sequence(cast(Sequence, value), path)
+            return self._format_sequence(cast(Sequence, value), path, nested=nested), True
+        
+        if isinstance(value, dict):
+            return self._format_dict(cast(dict, value), path, nested=nested), True
+        
+        return value, False
 
-        return value
+    def _format_sequence(
+        self, s: Sequence, path: Tuple[str, ...], nested: bool = False
+    ) -> Union[list, dict]:
+        formatted_seq = []
+        is_complex = False
 
-    def _format_sequence(self, s: Sequence, path: Tuple[str, ...]) -> list:
-        return [self.format_value(val, path) for val in s]
+        for val in s:
+            formatted_val, val_is_complex = self.format_value(val, path, nested=True)
+            formatted_seq.append(formatted_val)
+            if val_is_complex:
+                is_complex = True
 
-    def _format_dict(self, d: dict, path: Tuple[str, ...]) -> dict:
+        if nested or not is_complex:
+            return formatted_seq
+        else:
+            return {DX_DICT_KEY: formatted_seq}
+
+    def _format_dict(
+        self, d: dict, path: Tuple[str, ...], nested: bool = False
+    ) -> dict:
         if self._is_wdl_type(path, Type.Map):
             formatted_dict = {"keys": [], "values": []}
 
             for key, val in d.items():
                 formatted_dict["keys"].append(key)
-                formatted_dict["values"].append(self.format_value(val, path + (key,)))
+                formatted_dict["values"].append(
+                    self.format_value(val, path + (key,), nested=True)[0]
+                )
         else:
-            # struct
+            # struct or pair
             formatted_dict = dict(
-                (key, self.format_value(val, path + (key,))) for key, val in d.items()
+                (key, self.format_value(val, path + (key,), nested=True)[0])
+                for key, val in d.items()
             )
 
-        return {DX_DICT_KEY: formatted_dict}
-
+        if nested:
+            return formatted_dict
+        else:
+            return {DX_DICT_KEY: formatted_dict}
+    
     def _is_wdl_type(self, path: Tuple[str, ...], wdl_type: Type) -> bool:
         wdl_decls = self._wdl_decls
         path_len = len(path)
@@ -171,7 +197,13 @@ class InputsFormatter:
                     if isinstance(type_, Type.Array):
                         type_ = cast(Type.Array, type_).item_type
 
-                    if isinstance(type_, Type.Map):
+                    if isinstance(type_, Type.Pair):
+                        pair_type = cast(Type.Pair, type_)
+                        wdl_decls: Dict = {
+                            "left": pair_type.left_type,
+                            "right": pair_type.right_type
+                        }
+                    elif isinstance(type_, Type.Map):
                         type_ = cast(Type.Map, type_).item_type[1]
                         # None matches any key
                         wdl_decls: Dict = {None: type_}
