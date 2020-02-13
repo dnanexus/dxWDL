@@ -76,9 +76,98 @@ case class GenerateIRTask(verbose: Verbose,
     }.toVector
   }
 
+  // Convert a WOM 
+  private def metaPatternsObjToIR(obj: Map[String, MetaValueElement]): IR.IOAttrPatterns = {
+    val name = obj.get("name") match {
+      case Some(MetaValueElementArray(array)) =>
+        Some(metaStringArrayToVec(array))
+      case _ => None
+    }
+    val klass = obj.get("class") match {
+      case Some(MetaValueElementString(value)) => Some(value)
+      case _                                   => None
+    }
+    val tag = obj.get("tag") match {
+      case Some(MetaValueElementArray(array)) =>
+        Some(metaStringArrayToVec(array))
+      case _ => None
+    }
+    // Even if all were None, create the IR.IOAttrPatterns object
+    // The all none is handled in the native generation
+    IR.IOAttrPatterns(IR.PatternsReprObj(name, klass, tag))
+  }
+
+  // Map of WomTypes allowed in choices and suggestions to compatible 
+  // (MetaValueElements, Scala type)
+  lazy val womToMetaMap: Map[WomType, Tuple2[MetaValueElement, AnyVal]] = Map(
+    WomStringType -> (MetaValueElementString, String),
+    WomIntegerType -> (MetaValueElementInteger, Int),
+    WomFloatType -> (MetaValueElementFloat, Float),
+    WomBooleanType -> (MetaValueElementBoolean, Boolean),
+    WomSingleFileType -> (MetaValueElementString, String)
+  )
+
+  // A choices array may contain either raw values or annotated values, which are hashes with
+  // required 'value' key and optional 'name' key. The DNAnexus API allows raw and annoted values 
+  // to be mixed, but dxWDL will impose the limitation that all elements of the choices array must 
+  // be of the same type. Each value must be of the same type as the parameter, unless the 
+  // parameter is an array, in which case choice values must be of the same type as the array's 
+  // contained type. For now, we only allow choices for primitive- and file-type parameters, 
+  // because there could be ambiguity (e.g. if a choice has a 'value' key, should we treat it as a 
+  // raw map value or as an annotated value?).
+  // 
+  // choices: [true, false]
+  // OR
+  // choices: [{'name': 'yes', 'value': true}, {'name': 'no', 'value': false}]
+  private def metaChoicesArrayToIR(array: Vector[MetaValueElement], 
+                                   womType: WomType): Option[IR.IOAttrChoices] = {
+    metaType, scalaType = womToMetaMap[womType]
+    if (array.isEmpty) {
+      Some(IR.IOAttrChoices(IR.ChoicesReprValArray[scalaType]([])))
+    } else {
+      headClass = array.head.getClass
+      if (!array.forall(_.getClass == headClass)) {
+        // TODO: log or exception?
+        // "All choices elements must be of the same type"
+        None
+      } else {
+        headClass match {
+          case MetaValueElementObject =>
+            if (!array.head.value.contains("value")) {
+              // TODO: log or exception?
+              // "Annotated choice must have a 'value' key"
+              None
+            } else if (!array.forall(_.value["value"].getClass == metaType)) {
+              // TODO: log or exception?
+              // "Mismatch between parameter type {womType} and choice type 
+              // {array.head.value["value"].getClass}"
+              None
+            } else {
+              Some(IR.IOAttrChoices(IR.ChoicesReprObjArray[scalaType](
+                array.map(e => IR.ChoicesReprObj[scalaType](
+                  name = e.value.getOrElse("name", None), 
+                  value = e.value["value"].value
+                ))
+              )))
+            }
+          case _ =>
+            if (headClass != metaType) {
+              // TODO: log or exception?
+              // "Mismatch between parameter type {womType} and choice type {headClass}"
+              None
+            } else 
+              Some(IR.IOAttrChoices(IR.ChoicesReprValArray[scalaType](array.map(e => e.value))))
+            }
+        }
+      }
+    }
+  }
+
   // Extract the parameter_meta info from the WOM structure
+  // The parameter's WomType is passed in since some parameter metadata values are required to 
+  // have the same type as the parameter.
   private def unwrapParamMeta(
-      paramMeta: Option[MetaValueElement]
+      paramMeta: Option[MetaValueElement], womType: WomType
   ): Option[Vector[IR.IOAttr]] = paramMeta match {
     case None => None
     case Some(MetaValueElementObject(obj)) => {
@@ -87,7 +176,6 @@ case class GenerateIRTask(verbose: Verbose,
         case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
         case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
-        case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
         // Try to parse the patterns key
         // First see if it's an array
         case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
@@ -95,25 +183,21 @@ case class GenerateIRTask(verbose: Verbose,
         // See if it's an object, and if it is, parse out the optional key, class, and tag keys
         // Note all three are optional
         case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
-          val name = obj.get("name") match {
-            case Some(MetaValueElementArray(array)) =>
-              Some(metaStringArrayToVec(array))
-            case _ => None
+          Some(metaPatternsObjToIR(obj))
+        // Try to parse the choices key, which will be an array of either values or objects
+        case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
+          wt = womType
+          while wt.isInstanceOf[WomArrayType] {
+            wt = wt.memberType
           }
-          val klass = obj.get("class") match {
-            case Some(MetaValueElementString(value)) => Some(value)
-            case _                                   => None
+          wt match {
+            case WomPrimitiveType | WomFileType => metaChoicesArrayToIR(array, wt)
+            case _ => 
+              // TODO: log or exception?
+              // "dxWDL only allows 'choices' in parameter_meta for parameters that are of
+              // primitive or file types"
+              None
           }
-          val tag = obj.get("tag") match {
-            case Some(MetaValueElementArray(array)) =>
-              Some(metaStringArrayToVec(array))
-            case _ => None
-          }
-          // Even if all were None, create the IR.IOAttrPatterns object
-          // The all none is handled in the native generation
-          Some(
-              IR.IOAttrPatterns(IR.PatternsReprObj(name, klass, tag))
-          )
         case _ => None
 
       }.toVector)
@@ -154,7 +238,7 @@ case class GenerateIRTask(verbose: Verbose,
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
       case RequiredInputDefinition(iName, womType, _, paramMeta) => {
-        val attr = unwrapParamMeta(paramMeta)
+        val attr = unwrapParamMeta(paramMeta, womType)
         Some(CVar(iName.value, womType, None, attr))
       }
 
@@ -167,7 +251,7 @@ case class GenerateIRTask(verbose: Verbose,
             // runtime system will evaluate it.
             None
           case Some(value) =>
-            val attr = unwrapParamMeta(paramMeta)
+            val attr = unwrapParamMeta(paramMeta, womType)
             Some(CVar(iName.value, womType, Some(value), attr))
         }
 
