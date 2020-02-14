@@ -19,7 +19,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
 dxda_version = "20190909212832_c28a2ad"
-dxfuse_version = "v0.17"
+dxfuse_version = "v0.19"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -150,16 +150,22 @@ def _download_dxda_into_resources(top_dir):
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
 
+
+
 def _add_dxfuse_to_resources(top_dir):
     # make sure the resources directory exists
     os.chdir(os.path.join(top_dir, "applet_resources"))
     if not os.path.exists("resources/usr/bin"):
         os.makedirs("resources/usr/bin")
-    subprocess.check_call([
-        "wget",
-        "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
-        "-O",
-        os.path.join("resources/usr/bin/dxfuse") ])
+        subprocess.check_call([
+            "wget",
+            "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
+            "-O",
+            os.path.join("resources/usr/bin/dxfuse") ])
+#    dxfuse_src="/go/bin/dxfuse"
+#    if not os.path.exists(dxfuse_src):
+#        raise Exception("dxfuse executable not found {}".format(dxfuse_src))
+#    shutil.copy(dxfuse_src, "resources/usr/bin/dxfuse")
     os.chmod("resources/usr/bin/dxfuse", 0o775)
 
 # Build a dx-asset from the runtime library.
