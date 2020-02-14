@@ -193,7 +193,6 @@ case class GenerateIRTask(verbose: Verbose,
           }
           metaChoicesArrayToIR(array, wt)
         case _ => None
-
       }.toVector)
     }
     case _ => None // TODO: or throw exception?
