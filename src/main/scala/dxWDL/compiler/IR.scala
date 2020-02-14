@@ -64,11 +64,11 @@ object IR {
     *   'choices': [true, false] // ChoicesReprValArray
     *  
   **/
-  sealed abstract class ChoicesRepr
-  final case class ChoicesReprValArray[T](choices: Vector[T]) extends ChoicesRepr
+  sealed abstract class ChoicesRepr[T]
+  final case class ChoicesReprValArray[T](choices: Vector[T]) extends ChoicesRepr[T]
   final case class ChoicesReprObj[T](name: Option[String], value: T)
   final case class ChoicesReprObjArray[T](choices: Vector[ChoicesReprObj[T]])
-      extends ChoicesRepr
+      extends ChoicesRepr[T]
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
