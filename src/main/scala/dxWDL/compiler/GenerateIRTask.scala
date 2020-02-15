@@ -1,7 +1,5 @@
 package dxWDL.compiler
 
-import scala.reflect.ClassTag
-
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import wom.callable.CallableTaskDefinition
@@ -111,58 +109,64 @@ case class GenerateIRTask(verbose: Verbose,
   // choices: [true, false]
   // OR
   // choices: [{'name': 'yes', 'value': true}, {'name': 'no', 'value': false}]
-  private def metaChoicesArrayToIR(array: Vector[MetaValueElement], 
-                                   womType: WomType): Option[IR.IOAttrChoices] = womType match {
-    case WomStringType | WomFileType =>
-      metaChoicesTypedArrayToIR[String, MetaValueElementString](array)
-    case WomIntegerType =>
-      metaChoicesTypedArrayToIR[Int, MetaValueElementInteger](array)
-    case WomFloatType =>
-      metaChoicesTypedArrayToIR[Float, MetaValueElementFloat](array)
-    case WomBooleanType =>
-      metaChoicesTypedArrayToIR[Boolean, MetaValueElementBoolean](array)
-    case _ =>
-      // TODO: log or exception?
-      // "dxWDL only allows 'choices' in parameter_meta for parameters that are of
-      // primitive or file types"
-      None
-  }
-
-  private def metaChoicesTypedArrayToIR[T, MT](array: Vector[MT])(implicit tag: ClassTag[MT]):     
-                                               Option[IR.IOAttrChoices] =
+  private def metaChoicesArrayToIR(
+      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] =
     if (array.isEmpty) {
-      Some(IR.IOAttrChoices(IR.ChoicesReprValArray[T]([])))
+      Some(IR.IOAttrChoices(IR.ChoicesReprArray(Vector())))
     } else {
-      array.head match {
-        case MetaValueElementObject =>
-          Some(IR.IOAttrChoices(IR.ChoicesReprObjArray[T](array.map {
-            case element: MetaValueElementObject =>
-              if (!element.value.contains("value")) {
-                throw Exception("Annotated choice must have a 'value' key")
-              } else {
-                IR.ChoicesReprObj[T](
-                  name = element.value.getOrElse("name", None), 
-                  value = element.value["value"].value
-                )                  
-              }
-            case _ => throw Exception(
-              "Choices array must contain only values or only annotated values"
+      try {
+        Some(IR.IOAttrChoices(IR.ChoicesReprArray(array.map {
+          case objElement: MetaValueElementObject =>
+            if (!objElement.value.contains("value")) {
+              throw new Exception("Annotated choice must have a 'value' key")
+            } else {
+              metaChoiceValueToIR(
+                name = objElement.value.get("name"),
+                value = objElement.value("value"),
+                womType = womType
+              )
+            }
+          case rawElement: MetaValueElement =>
+            metaChoiceValueToIR(value = rawElement, womType = womType)
+          case _ =>
+            throw new Exception(
+              "Choices array must contain only raw values or annotated values (hash with "
+              + "optional 'name' and required 'value' keys)"
             )
-          })))
-        case MT =>
-          Some(IR.IOAttrChoices(IR.ChoicesReprValArray[T](array.map {
-            case element: MT => element.value
-            case _ => throw Exception(
-              "Choices array must contain only values or only annotated values"
-            )
-          })))
-        case _ =>
-          // TODO: log or exception?
-          // "Mismatch between parameter type {womType} and choice type 
-          // {array.head.getClass}"
+        })))
+      } catch {
+        case ex: Exception =>
+          // TODO: log exception
           None
       }
     }
+
+private def metaChoiceValueToIR(
+    name: Option[MetaValueElement] = None, 
+    value: MetaValueElement, 
+    womType: WomType): IR.ChoicesRepr = {
+  val nameStr: Option[String] = name match {
+    case Some(mv: MetaValueElementString) => Some(mv.value)
+    case _ => None
+  }
+  (womType, value) match {
+    case (WomStringType, mv: MetaValueElementString) =>
+      IR.ChoicesReprString(name = nameStr, value = mv.value)
+    case (WomSingleFileType, mv: MetaValueElementString) =>
+      IR.ChoicesReprFile(name = nameStr, value = mv.value)
+    case (WomIntegerType, mv: MetaValueElementInteger) =>
+      IR.ChoicesReprInteger(name = nameStr, value = mv.value)
+    case (WomFloatType, mv: MetaValueElementFloat) =>
+      IR.ChoicesReprFloat(name = nameStr, value = mv.value)
+    case (WomBooleanType, mv: MetaValueElementBoolean) =>
+      IR.ChoicesReprBoolean(name = nameStr, value = mv.value)
+    case _ =>
+      throw new Exception(
+        "Choices keyword is only valid for primitive- and file-type parameters, and types must "
+        + "match between parameter and choices"
+      )
+  }
+}
 
   // Extract the parameter_meta info from the WOM structure
   // The parameter's WomType is passed in since some parameter metadata values are required to 
@@ -187,9 +191,9 @@ case class GenerateIRTask(verbose: Verbose,
           Some(metaPatternsObjToIR(obj))
         // Try to parse the choices key, which will be an array of either values or objects
         case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
-          wt = womType
-          while wt.isInstanceOf[WomArrayType] {
-            wt = wt.memberType
+          var wt = womType
+          while (wt.isInstanceOf[WomArrayType]) {
+            wt = wt.asInstanceOf[WomArrayType].memberType
           }
           metaChoicesArrayToIR(array, wt)
         case _ => None

@@ -51,24 +51,31 @@ object IR {
       extends PatternsRepr
   
   /** Compile time representation of the dxapp IO spec choices
-    *  Example:
-    *   'choices': [ // ChoicesReprObjArray
+    * Choices is an array of choice values, where each value can be raw (a primitive type)
+    * or annotated (a hash with optional 'name' key and required 'value' key). We represent
+    * both types of values as a class with 'name' and 'value' members. When translating to
+    * dxapp.json, we write a raw value if 'name' is None, and an annotated value if not.
+    *  Examples:
+    *   'choices': [
     *     {
     *       'name': "yes", 'value': true
     *     },
     *     {
     *       'name': "no", 'value': false
     *     }
-    *   ]
-    *     OR
-    *   'choices': [true, false] // ChoicesReprValArray
-    *  
+    *   ]  # => [{'name': "yes", 'value': true}, {'name': "no", 'value': false}]
+    *     
+    *   'choices': [true, false]  # => [true, false]
+    *
+    *   'choices': [{'value': 1}, {'value': 2}]  # => [1, 2]
   **/
-  sealed abstract class ChoicesRepr[T]
-  final case class ChoicesReprValArray[T](choices: Vector[T]) extends ChoicesRepr[T]
-  final case class ChoicesReprObj[T](name: Option[String], value: T)
-  final case class ChoicesReprObjArray[T](choices: Vector[ChoicesReprObj[T]])
-      extends ChoicesRepr[T]
+  sealed abstract class ChoicesRepr
+  final case class ChoicesReprString(name: Option[String], value: String) extends ChoicesRepr
+  final case class ChoicesReprInteger(name: Option[String], value: Int) extends ChoicesRepr
+  final case class ChoicesReprFloat(name: Option[String], value: Double) extends ChoicesRepr
+  final case class ChoicesReprBoolean(name: Option[String], value: Boolean) extends ChoicesRepr
+  final case class ChoicesReprFile(name: Option[String], value: String) extends ChoicesRepr
+  final case class ChoicesReprArray(choices: Vector[ChoicesRepr])
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
@@ -76,7 +83,7 @@ object IR {
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
-  final case class IOAttrChoices(choices: ChoicesRepr) extends IOAttr
+  final case class IOAttrChoices(choices: ChoicesReprArray) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as

@@ -106,40 +106,38 @@ case class Native(dxWDLrtId: Option[String],
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
-    // Create the IO Attributes, currently `patterns` and `help`
+    // Create the IO Attributes
     def jsMapFromAttrs(
-        help: Option[Vector[IR.IOAttr]]
-    ): Map[String, JsValue] = {
-
-      help match {
-        case None => Map.empty
-        case Some(attributes) => {
-          attributes.flatMap {
-            case IR.IOAttrGroup(text) =>
-              Some(IR.PARAM_META_GROUP -> JsString(text))
-            case IR.IOAttrHelp(text) =>
-              Some(IR.PARAM_META_HELP -> JsString(text))
-            case IR.IOAttrLabel(text) =>
-              Some(IR.PARAM_META_LABEL -> JsString(text))
-            case IR.IOAttrPatterns(patternRepr) =>
-              patternRepr match {
-                case IR.PatternsReprArray(patterns) =>
-                  Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
-                // If we have the alternative patterns object, extrac the values, if any at all
-                case IR.PatternsReprObj(name, klass, tags) =>
-                  val attrs: Map[String, JsValue] = List(
-                      if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
-                      else None,
-                      if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
-                      else None,
-                      if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
-                  ).flatten.toMap
-                  // If all three keys for the object version of patterns are None, return None
-                  if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
-              }
-            case _ => None
-          }.toMap
-        }
+        help: Option[Vector[IR.IOAttr]]): Map[String, JsValue] = help match {
+      case None => Map.empty
+      case Some(attributes) => {
+        attributes.flatMap {
+          case IR.IOAttrGroup(text) =>
+            Some(IR.PARAM_META_GROUP -> JsString(text))
+          case IR.IOAttrHelp(text) =>
+            Some(IR.PARAM_META_HELP -> JsString(text))
+          case IR.IOAttrLabel(text) =>
+            Some(IR.PARAM_META_LABEL -> JsString(text))
+          case IR.IOAttrPatterns(patternRepr) =>
+            patternRepr match {
+              case IR.PatternsReprArray(patterns) =>
+                Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+              // If we have the alternative patterns object, extrac the values, if any at all
+              case IR.PatternsReprObj(name, klass, tags) =>
+                val attrs: Map[String, JsValue] = List(
+                    if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
+                    else None,
+                    if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
+                    else None,
+                    if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
+                ).flatten.toMap
+                // If all three keys for the object version of patterns are None, return None
+                if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
+            }
+          //case IR.IOAttrChoices(choices) =>
+            
+          case _ => None
+        }.toMap
       }
     }
 
