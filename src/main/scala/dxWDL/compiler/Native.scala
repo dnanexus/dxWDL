@@ -134,8 +134,23 @@ case class Native(dxWDLrtId: Option[String],
                 // If all three keys for the object version of patterns are None, return None
                 if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
             }
-          //case IR.IOAttrChoices(choices) =>
-            
+          case IR.IOAttrChoices(choices) =>
+            Some(IR.PARAM_META_CHOICES -> JsArray(choices.map(choice => {
+              val value: JsValue = choice match {
+                case IR.ChoicesReprString(name, value) => JsString(value)
+                case IR.ChoicesReprInteger(name, value) => JsNumber(value)
+                case IR.ChoicesReprFloat(name, value) => JsNumber(value)
+                case IR.ChoicesReprBoolean(name, value) => JsBoolean(value)
+                case IR.ChoicesReprFile(name, value) => 
+                  // TODO: support project and record choices
+                  DxPath.resolveDxURLFile(value).getLinkAsJson
+              }
+              if (choice.name.isDefined) {
+                JsObject(Map("name" -> JsString(choice.name.get), "value" -> value))
+              } else {
+                value
+              }
+            })))
           case _ => None
         }.toMap
       }

@@ -69,13 +69,19 @@ object IR {
     *
     *   'choices': [{'value': 1}, {'value': 2}]  # => [1, 2]
   **/
-  sealed abstract class ChoicesRepr
-  final case class ChoicesReprString(name: Option[String], value: String) extends ChoicesRepr
-  final case class ChoicesReprInteger(name: Option[String], value: Int) extends ChoicesRepr
-  final case class ChoicesReprFloat(name: Option[String], value: Double) extends ChoicesRepr
-  final case class ChoicesReprBoolean(name: Option[String], value: Boolean) extends ChoicesRepr
-  final case class ChoicesReprFile(name: Option[String], value: String) extends ChoicesRepr
-  final case class ChoicesReprArray(choices: Vector[ChoicesRepr])
+  sealed trait ChoicesRepr {
+    def name: Option[String]
+  }
+  final case class ChoicesReprString(
+    override val name: Option[String], value: String) extends ChoicesRepr
+  final case class ChoicesReprInteger(
+    override val name: Option[String], value: Int) extends ChoicesRepr
+  final case class ChoicesReprFloat(
+    override val name: Option[String], value: Double) extends ChoicesRepr
+  final case class ChoicesReprBoolean(
+    override val name: Option[String], value: Boolean) extends ChoicesRepr
+  final case class ChoicesReprFile(
+    override val name: Option[String], value: String) extends ChoicesRepr
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
@@ -83,7 +89,7 @@ object IR {
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
-  final case class IOAttrChoices(choices: ChoicesReprArray) extends IOAttr
+  final case class IOAttrChoices(choices: Vector[ChoicesRepr]) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as

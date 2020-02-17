@@ -39,6 +39,19 @@ case class IOParamterPatternObject(name: Option[Vector[String]],
                                    tag: Option[Vector[String]])
     extends IOParameterPattern
 
+// Types for the IO choices section
+sealed trait IOParameterChoice {
+  def name: Option[String]
+}
+final case class IOParameterChoiceString(
+  override val name: Option[String], value: String) extends IOParameterChoice
+final case class IOParameterChoiceNumber(
+  override val name: Option[String], value: BigDecimal) extends IOParameterChoice
+final case class IOParameterChoiceBoolean(
+  override val name: Option[String], value: Boolean) extends IOParameterChoice
+final case class IOParameterChoiceFile(
+  override val name: Option[String], value: DxFile) extends IOParameterChoice
+
 // Representation of the IO spec
 case class IOParameter(
     name: String,
@@ -47,7 +60,8 @@ case class IOParameter(
     group: Option[String] = None,
     help: Option[String] = None,
     label: Option[String] = None,
-    patterns: Option[IOParameterPattern] = None
+    patterns: Option[IOParameterPattern] = None,
+    choices: Option[Vector[IOParameterChoice]] = None
 )
 
 // Extra fields for describe
@@ -143,13 +157,44 @@ object DxObject {
       case _ => None
     }
 
+    val choices = jsv.asJsObject.fields.get("choices") match {
+      case Some(JsArray(a)) => Some(a.map {
+        case o: JsObject => 
+          if (o.fields.contains("value")) {
+            // It's an annotated value
+            jsAsParameterChoice(name = o.fields.get("name"), value = o.fields("value"))
+          } else {
+            // It's a file
+            jsAsParameterChoice(name = None, value = o)
+          }
+        case j: JsValue => jsAsParameterChoice(name = None, value = j)
+      })
+      case _ => None
+    }
+
     ioParam.copy(
       optional = optFlag,
       group = group,
       help = help,
       label = label,
-      patterns = patterns
+      patterns = patterns,
+      choices = choices
     )
+  }
+
+  def jsAsParameterChoice(name: Option[JsValue] = None, value: JsValue): IOParameterChoice = {
+    val nameStr: Option[String] = name match {
+      case Some(JsString(s)) => Some(s)
+      case _ => None
+    }
+    value match {
+      case JsString(s) => IOParameterChoiceString(name = nameStr, value = s)
+      case JsNumber(n) => IOParameterChoiceNumber(name = nameStr, value = n)
+      case JsBoolean(b) => IOParameterChoiceBoolean(name = nameStr, value = b)
+      case o: JsObject => IOParameterChoiceFile(
+        name = nameStr, value = DxUtils.dxFileFromJsValue(o))
+      case _ => throw new Exception("Unsupported choice value")
+    }
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {

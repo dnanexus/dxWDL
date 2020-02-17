@@ -112,17 +112,17 @@ case class GenerateIRTask(verbose: Verbose,
   private def metaChoicesArrayToIR(
       array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] =
     if (array.isEmpty) {
-      Some(IR.IOAttrChoices(IR.ChoicesReprArray(Vector())))
+      Some(IR.IOAttrChoices(Vector()))
     } else {
       try {
-        Some(IR.IOAttrChoices(IR.ChoicesReprArray(array.map {
-          case objElement: MetaValueElementObject =>
-            if (!objElement.value.contains("value")) {
+        Some(IR.IOAttrChoices(array.map {
+          case MetaValueElementObject(fields) =>
+            if (!fields.contains("value")) {
               throw new Exception("Annotated choice must have a 'value' key")
             } else {
               metaChoiceValueToIR(
-                name = objElement.value.get("name"),
-                value = objElement.value("value"),
+                name = fields.get("name"),
+                value = fields("value"),
                 womType = womType
               )
             }
@@ -133,7 +133,7 @@ case class GenerateIRTask(verbose: Verbose,
               "Choices array must contain only raw values or annotated values (hash with "
               + "optional 'name' and required 'value' keys)"
             )
-        })))
+        }))
       } catch {
         case ex: Exception =>
           // TODO: log exception
@@ -146,20 +146,20 @@ private def metaChoiceValueToIR(
     value: MetaValueElement, 
     womType: WomType): IR.ChoicesRepr = {
   val nameStr: Option[String] = name match {
-    case Some(mv: MetaValueElementString) => Some(mv.value)
+    case Some(MetaValueElementString(str)) => Some(str)
     case _ => None
   }
   (womType, value) match {
-    case (WomStringType, mv: MetaValueElementString) =>
-      IR.ChoicesReprString(name = nameStr, value = mv.value)
-    case (WomSingleFileType, mv: MetaValueElementString) =>
-      IR.ChoicesReprFile(name = nameStr, value = mv.value)
-    case (WomIntegerType, mv: MetaValueElementInteger) =>
-      IR.ChoicesReprInteger(name = nameStr, value = mv.value)
-    case (WomFloatType, mv: MetaValueElementFloat) =>
-      IR.ChoicesReprFloat(name = nameStr, value = mv.value)
-    case (WomBooleanType, mv: MetaValueElementBoolean) =>
-      IR.ChoicesReprBoolean(name = nameStr, value = mv.value)
+    case (WomStringType, MetaValueElementString(str)) =>
+      IR.ChoicesReprString(name = nameStr, value = str)
+    case (WomSingleFileType, MetaValueElementString(str)) =>
+      IR.ChoicesReprFile(name = nameStr, value = str)
+    case (WomIntegerType, MetaValueElementInteger(i)) =>
+      IR.ChoicesReprInteger(name = nameStr, value = i)
+    case (WomFloatType, MetaValueElementFloat(f)) =>
+      IR.ChoicesReprFloat(name = nameStr, value = f)
+    case (WomBooleanType, MetaValueElementBoolean(b)) =>
+      IR.ChoicesReprBoolean(name = nameStr, value = b)
     case _ =>
       throw new Exception(
         "Choices keyword is only valid for primitive- and file-type parameters, and types must "
