@@ -597,8 +597,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(Vector(
                 IR.IOAttrChoices(Vector(
-                  IR.ChoiceReprString(name = None, value = "A"),
-                  IR.ChoiceReprString(name = None, value = "B"),
+                  IR.ChoiceReprString(value = "A"),
+                  IR.ChoiceReprString(value = "B"),
                 ))
             ))
         )
@@ -642,17 +642,139 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(Vector(
                 IR.IOAttrChoices(Vector(
-                  IR.ChoiceReprString(name = Some("pattern1"), value = "A"),
-                  IR.ChoiceReprString(name = Some("pattern2"), value = "B"),
+                  IR.ChoiceReprString(value = "A"),
+                  IR.ChoiceReprString(value = "B"),
                 ))
             ))
         )
     )
   }
 
-  // Check parameter_meta `choices` keyword with annotated values
+  // Check parameter_meta `suggestion` keyword fails when there is a type mismatch
   it should "throw exception when choice types don't match parameter types" in {
     val path = pathFromBasename("compiler", "choices_type_mismatch.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
+
+  // Check parameter_meta `suggestions` keyword
+  it should "recognize suggestions in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "suggestion_values.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrSuggestions(Vector(
+                      IR.SuggestionReprFile(
+                        name = None,
+                        value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                        project = None,
+                        path = None,
+                      ),
+                      IR.SuggestionReprFile(
+                        name = None,
+                        value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
+                        project = None,
+                        path = None,
+                      ),
+                    ))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(
+                IR.IOAttrSuggestions(Vector(
+                  IR.SuggestionReprString(value = "A"),
+                  IR.SuggestionReprString(value = "B"),
+                ))
+            ))
+        )
+    )
+  }
+
+  // Check parameter_meta `suggestions` keyword with annotated values
+  it should "recognize annotated suggestions in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "suggestion_obj_values.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrSuggestions(Vector(
+                      IR.SuggestionReprFile(
+                        name = Some("file1"),
+                        value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                        project = None,
+                        path = None,
+                      ),
+                      IR.SuggestionReprFile(
+                        name = Some("file2"),
+                        value = None,
+                        project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
+                        path = Some("/test_data/f2.txt.gz"),
+                      ),
+                    ))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(
+                IR.IOAttrSuggestions(Vector(
+                  IR.SuggestionReprString(value = "A"),
+                  IR.SuggestionReprString(value = "B"),
+                ))
+            ))
+        )
+    )
+  }
+
+  // Check parameter_meta `suggestions` keyword fails when there is a parameter mismatch
+  it should "throw exception when suggestion types don't match parameter types" in {
+    val path = pathFromBasename("compiler", "suggestions_type_mismatch.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
+
+  // Check parameter_meta `suggestions` keyword fails when there is a missing keyword
+  it should "throw exception when file suggestion is missing a keyword" in {
+    val path = pathFromBasename("compiler", "suggestions_missing_arg.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
     )

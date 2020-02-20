@@ -216,7 +216,7 @@ object DxObject {
       label = label,
       patterns = patterns,
       choices = choices,
-      suggestions = suggestions
+      suggestions = suggestions,
     )
   }
 

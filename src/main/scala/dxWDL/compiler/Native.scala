@@ -159,7 +159,8 @@ case class Native(dxWDLrtId: Option[String],
                 case IR.SuggestionReprInteger(value) => JsNumber(value)
                 case IR.SuggestionReprFloat(value) => JsNumber(value)
                 case IR.SuggestionReprBoolean(value) => JsBoolean(value)
-                case IR.SuggestionReprFile(value, name, project, path) =>
+                case IR.SuggestionReprFile(value, name, project, path) => {
+                  // TODO: support project and record suggestions
                   val dxLink: Option[JsValue] = value match {
                     case Some(str) => Some(DxPath.resolveDxURLFile(str).getLinkAsJson)
                     case None => None
@@ -179,6 +180,7 @@ case class Native(dxWDLrtId: Option[String],
                       "Either 'value' or 'project' + 'path' must be defined for suggestions"
                     )
                   }
+                }
               }
             })))
           case _ => None
