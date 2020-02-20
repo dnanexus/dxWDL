@@ -367,6 +367,67 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
   }
 
+  it should "be able to include choices information in inputSpec" in {
+    val path = pathFromBasename("compiler", "choice_values.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case _                        => throw new Exception("sanity")
+
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (in_file, pattern) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    pattern.choices shouldBe Some(Vector(
+      IOParameterChoiceString(name = None, value = "A"),
+      IOParameterChoiceString(name = None, value = "B"),
+    ))
+    in_file.choices shouldBe Some(Vector(
+      IOParameterChoiceFile(
+        name = None, value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+      ),
+      IOParameterChoiceFile(
+        name = None, value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+      ),
+    ))
+  }
+
+  it should "be able to include annotated choices information in inputSpec" in {
+    val path = pathFromBasename("compiler", "choice_obj_values.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (in_file, pattern) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    pattern.choices shouldBe Some(Vector(
+      IOParameterChoiceString(name = None, value = "A"),
+      IOParameterChoiceString(name = None, value = "B"),
+    ))
+    in_file.choices shouldBe Some(Vector(
+      IOParameterChoiceFile(
+        name = Some("file1"), value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+      ),
+      IOParameterChoiceFile(
+        name = Some("file2"), value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+      ),
+    ))
+  }
+
   it should "be able to include help information in inputSpec" in {
     val path = pathFromBasename("compiler", "add_help.wdl")
 

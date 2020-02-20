@@ -309,7 +309,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
-                    
                     IR.IOAttrHelp("The input file to be searched"),
                     IR.IOAttrPatterns(IR.PatternsReprArray(Vector("*.txt", "*.tsv"))),
                     IR.IOAttrGroup("Common"),
@@ -558,6 +557,107 @@ class GenerateIRTest extends FlatSpec with Matchers {
             )
         )
     ))
+  }
+
+
+  // Check parameter_meta `choices` keyword
+  it should "recognize choices in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "choice_values.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrChoices(Vector(
+                      IR.ChoicesReprFile(
+                        name = None, value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                      ),
+                      IR.ChoicesReprFile(
+                        name = None, value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
+                      ),
+                    ))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(
+                IR.IOAttrChoices(Vector(
+                  IR.ChoicesReprString(name = None, value = "A"),
+                  IR.ChoicesReprString(name = None, value = "B"),
+                ))
+            ))
+        )
+    )
+  }
+
+  // Check parameter_meta `choices` keyword with annotated values
+  it should "recognize annotated choices in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "choice_obj_values.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "in_file",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrChoices(Vector(
+                      IR.ChoicesReprFile(
+                        name = Some("file1"), value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                      ),
+                      IR.ChoicesReprFile(
+                        name = Some("file2"), value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
+                      ),
+                    ))
+                )
+            )
+        ),
+        IR.CVar(
+            "pattern",
+            WomStringType,
+            None,
+            Some(Vector(
+                IR.IOAttrChoices(Vector(
+                  IR.ChoicesReprString(name = Some("pattern1"), value = "A"),
+                  IR.ChoicesReprString(name = Some("pattern2"), value = "B"),
+                ))
+            ))
+        )
+    )
+  }
+
+  // Check parameter_meta `choices` keyword with annotated values
+  it should "throw exception when choice types don't match parameter types" in {
+    val path = pathFromBasename("compiler", "choices_type_mismatch.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
   }
 
   it should "recognize help, group, and label in parameters_meta via WOM" in {

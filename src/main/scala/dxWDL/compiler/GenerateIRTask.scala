@@ -114,31 +114,25 @@ case class GenerateIRTask(verbose: Verbose,
     if (array.isEmpty) {
       Some(IR.IOAttrChoices(Vector()))
     } else {
-      try {
-        Some(IR.IOAttrChoices(array.map {
-          case MetaValueElementObject(fields) =>
-            if (!fields.contains("value")) {
-              throw new Exception("Annotated choice must have a 'value' key")
-            } else {
-              metaChoiceValueToIR(
-                name = fields.get("name"),
-                value = fields("value"),
-                womType = womType
-              )
-            }
-          case rawElement: MetaValueElement =>
-            metaChoiceValueToIR(value = rawElement, womType = womType)
-          case _ =>
-            throw new Exception(
-              "Choices array must contain only raw values or annotated values (hash with "
-              + "optional 'name' and required 'value' keys)"
+      Some(IR.IOAttrChoices(array.map {
+        case MetaValueElementObject(fields) =>
+          if (!fields.contains("value")) {
+            throw new Exception("Annotated choice must have a 'value' key")
+          } else {
+            metaChoiceValueToIR(
+              name = fields.get("name"),
+              value = fields("value"),
+              womType = womType
             )
-        }))
-      } catch {
-        case ex: Exception =>
-          // TODO: log exception
-          None
-      }
+          }
+        case rawElement: MetaValueElement =>
+          metaChoiceValueToIR(value = rawElement, womType = womType)
+        case _ =>
+          throw new Exception(
+            "Choices array must contain only raw values or annotated values (hash with "
+            + "optional 'name' and required 'value' keys)"
+          )
+      }))
     }
 
 private def metaChoiceValueToIR(

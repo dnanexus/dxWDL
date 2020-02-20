@@ -136,19 +136,20 @@ case class Native(dxWDLrtId: Option[String],
             }
           case IR.IOAttrChoices(choices) =>
             Some(IR.PARAM_META_CHOICES -> JsArray(choices.map(choice => {
-              val value: JsValue = choice match {
+              choice match {
                 case IR.ChoicesReprString(name, value) => JsString(value)
                 case IR.ChoicesReprInteger(name, value) => JsNumber(value)
                 case IR.ChoicesReprFloat(name, value) => JsNumber(value)
                 case IR.ChoicesReprBoolean(name, value) => JsBoolean(value)
-                case IR.ChoicesReprFile(name, value) => 
+                case IR.ChoicesReprFile(name, value) => {
                   // TODO: support project and record choices
-                  DxPath.resolveDxURLFile(value).getLinkAsJson
-              }
-              if (choice.name.isDefined) {
-                JsObject(Map("name" -> JsString(choice.name.get), "value" -> value))
-              } else {
-                value
+                  val dxLink = DxPath.resolveDxURLFile(value).getLinkAsJson
+                  if (choice.name.isDefined) {
+                    JsObject(Map("name" -> JsString(choice.name.get), "value" -> dxLink))
+                  } else {
+                    dxLink
+                  }
+                }
               }
             })))
           case _ => None
