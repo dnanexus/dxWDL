@@ -29,7 +29,7 @@ object IR {
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
   val PARAM_META_PATTERNS = "patterns"
-  val PARAM_META_SUGGESTIONS = "suggestions" // TODO
+  val PARAM_META_SUGGESTIONS = "suggestions"
   val PARAM_META_TYPE = "dx_type" // TODO
 
   /** Compile time representation of the dxapp IO spec patterns
@@ -69,19 +69,24 @@ object IR {
     *
     *   'choices': [{'value': 1}, {'value': 2}]  # => [1, 2]
   **/
-  sealed trait ChoicesRepr {
-    def name: Option[String]
-  }
-  final case class ChoicesReprString(
-    override val name: Option[String], value: String) extends ChoicesRepr
-  final case class ChoicesReprInteger(
-    override val name: Option[String], value: Int) extends ChoicesRepr
-  final case class ChoicesReprFloat(
-    override val name: Option[String], value: Double) extends ChoicesRepr
-  final case class ChoicesReprBoolean(
-    override val name: Option[String], value: Boolean) extends ChoicesRepr
-  final case class ChoicesReprFile(
-    override val name: Option[String], value: String) extends ChoicesRepr
+  sealed abstract class ChoiceRepr
+  final case class ChoiceReprString(value: String) extends ChoiceRepr
+  final case class ChoiceReprInteger(value: Int) extends ChoiceRepr
+  final case class ChoiceReprFloat(value: Double) extends ChoiceRepr
+  final case class ChoiceReprBoolean(value: Boolean) extends ChoiceRepr
+  final case class ChoiceReprFile(value: String, name: Option[String]) extends ChoiceRepr
+
+  sealed abstract class SuggestionRepr
+  sealed case class SuggestionReprString(value: String) extends SuggestionRepr
+  sealed case class SuggestionReprInteger(value: Int) extends SuggestionRepr
+  sealed case class SuggestionReprFloat(value: Double) extends SuggestionRepr
+  sealed case class SuggestionReprBoolean(value: Boolean) extends SuggestionRepr
+  sealed case class SuggestionReprFile(
+    value: Option[String],
+    name: Option[String],
+    project: Option[String],
+    path: Option[String],
+  ) extends SuggestionRepr
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
@@ -89,8 +94,9 @@ object IR {
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
-  final case class IOAttrChoices(choices: Vector[ChoicesRepr]) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
+  final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr
+  final case class IOAttrSuggestions(suggestions: Vector[SuggestionRepr]) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.

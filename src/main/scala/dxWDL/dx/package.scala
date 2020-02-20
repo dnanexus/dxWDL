@@ -40,17 +40,23 @@ case class IOParamterPatternObject(name: Option[Vector[String]],
     extends IOParameterPattern
 
 // Types for the IO choices section
-sealed trait IOParameterChoice {
-  def name: Option[String]
-}
-final case class IOParameterChoiceString(
-  override val name: Option[String], value: String) extends IOParameterChoice
-final case class IOParameterChoiceNumber(
-  override val name: Option[String], value: BigDecimal) extends IOParameterChoice
-final case class IOParameterChoiceBoolean(
-  override val name: Option[String], value: Boolean) extends IOParameterChoice
+sealed abstract class IOParameterChoice
+final case class IOParameterChoiceString(value: String) extends IOParameterChoice
+final case class IOParameterChoiceNumber(value: BigDecimal) extends IOParameterChoice
+final case class IOParameterChoiceBoolean(value: Boolean) extends IOParameterChoice
 final case class IOParameterChoiceFile(
-  override val name: Option[String], value: DxFile) extends IOParameterChoice
+  value: DxFile, name: Option[String]) extends IOParameterChoice
+
+// Types for the IO suggestions section
+sealed abstract class IOParameterSuggestion
+final case class IOParameterSuggestionString(value: String) extends IOParameterSuggestion
+final case class IOParameterSuggestionNumber(value: BigDecimal) extends IOParameterSuggestion
+final case class IOParameterSuggestionBoolean(value: Boolean) extends IOParameterSuggestion
+final case class IOParameterSuggestionFile(
+  name: Option[String],
+  value: Option[DxFile],
+  project: Option[DxProject],
+  path: Option[String]) extends IOParameterSuggestion
 
 // Representation of the IO spec
 case class IOParameter(
@@ -61,7 +67,8 @@ case class IOParameter(
     help: Option[String] = None,
     label: Option[String] = None,
     patterns: Option[IOParameterPattern] = None,
-    choices: Option[Vector[IOParameterChoice]] = None
+    choices: Option[Vector[IOParameterChoice]] = None,
+    suggestions: Option[Vector[IOParameterSuggestion]] = None
 )
 
 // Extra fields for describe
@@ -159,15 +166,45 @@ object DxObject {
 
     val choices = jsv.asJsObject.fields.get("choices") match {
       case Some(JsArray(a)) => Some(a.map {
-        case o: JsObject => 
-          if (o.fields.contains("value")) {
-            // It's an annotated value
-            jsAsParameterChoice(name = o.fields.get("name"), value = o.fields("value"))
-          } else {
-            // It's a file
-            jsAsParameterChoice(name = None, value = o)
+        case JsObject(fields) => 
+          val nameStr: Option[String] = fields.get("name") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
           }
-        case j: JsValue => jsAsParameterChoice(name = None, value = j)
+          IOParameterChoiceFile(
+            name = nameStr, value = DxUtils.dxFileFromJsValue(fields("value")))
+        case JsString(s) => IOParameterChoiceString(s)
+        case JsNumber(n) => IOParameterChoiceNumber(n)
+        case JsBoolean(b) => IOParameterChoiceBoolean(b)
+        case _ => throw new Exception("Unsupported choice value")
+      })
+      case _ => None
+    }
+
+    val suggestions = jsv.asJsObject.fields.get("suggestions") match {
+      case Some(JsArray(a)) => Some(a.map {
+        case JsObject(fields) => 
+          val name: Option[String] = fields.get("name") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
+          }
+          val value: Option[DxFile] = fields.get("value") match {
+            case Some(v: JsValue) => Some(DxUtils.dxFileFromJsValue(v))
+            case _ => None
+          }
+          val project: Option[DxProject] = fields.get("project") match {
+            case Some(JsString(p)) => Some(DxProject(p))
+            case _ => None
+          }
+          val path: Option[String] = fields.get("path") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
+          }
+          IOParameterSuggestionFile(name, value, project, path)
+        case JsString(s) => IOParameterSuggestionString(s)
+        case JsNumber(n) => IOParameterSuggestionNumber(n)
+        case JsBoolean(b) => IOParameterSuggestionBoolean(b)
+        case _ => throw new Exception("Unsupported suggestion value")
       })
       case _ => None
     }
@@ -178,23 +215,9 @@ object DxObject {
       help = help,
       label = label,
       patterns = patterns,
-      choices = choices
+      choices = choices,
+      suggestions = suggestions
     )
-  }
-
-  def jsAsParameterChoice(name: Option[JsValue] = None, value: JsValue): IOParameterChoice = {
-    val nameStr: Option[String] = name match {
-      case Some(JsString(s)) => Some(s)
-      case _ => None
-    }
-    value match {
-      case JsString(s) => IOParameterChoiceString(name = nameStr, value = s)
-      case JsNumber(n) => IOParameterChoiceNumber(name = nameStr, value = n)
-      case JsBoolean(b) => IOParameterChoiceBoolean(name = nameStr, value = b)
-      case o: JsObject => IOParameterChoiceFile(
-        name = nameStr, value = DxUtils.dxFileFromJsValue(o))
-      case _ => throw new Exception("Unsupported choice value")
-    }
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {

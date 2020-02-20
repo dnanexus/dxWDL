@@ -76,7 +76,7 @@ case class GenerateIRTask(verbose: Verbose,
     }.toVector
   }
 
-  // Convert a WOM 
+  // Convert a patterns WOM object value to IR
   private def metaPatternsObjToIR(obj: Map[String, MetaValueElement]): IR.IOAttrPatterns = {
     val name = obj.get("name") match {
       case Some(MetaValueElementArray(array)) =>
@@ -97,18 +97,16 @@ case class GenerateIRTask(verbose: Verbose,
     IR.IOAttrPatterns(IR.PatternsReprObj(name, klass, tag))
   }
 
-  // A choices array may contain either raw values or annotated values, which are hashes with
-  // required 'value' key and optional 'name' key. The DNAnexus API allows raw and annoted values 
-  // to be mixed, but dxWDL will impose the limitation that all elements of the choices array must 
-  // be of the same type. Each value must be of the same type as the parameter, unless the 
-  // parameter is an array, in which case choice values must be of the same type as the array's 
-  // contained type. For now, we only allow choices for primitive- and file-type parameters, 
-  // because there could be ambiguity (e.g. if a choice has a 'value' key, should we treat it as a 
-  // raw map value or as an annotated value?).
+  // A choices array may contain either raw values or (for data object types) annotated values,
+  // which are hashes with required 'value' key and optional 'name' key. Each value must be of the 
+  // same type as the parameter, unless the parameter is an array, in which case choice values must
+  // be of the same type as the array's contained type. For now, we only allow choices for 
+  // primitive- and file-type parameters, because there could be ambiguity (e.g. if a choice has a 
+  // 'value' key, should we treat it as a raw map value or as an annotated value?).
   // 
   // choices: [true, false]
   // OR
-  // choices: [{'name': 'yes', 'value': true}, {'name': 'no', 'value': false}]
+  // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaChoicesArrayToIR(
       array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] =
     if (array.isEmpty) {
@@ -120,13 +118,13 @@ case class GenerateIRTask(verbose: Verbose,
             throw new Exception("Annotated choice must have a 'value' key")
           } else {
             metaChoiceValueToIR(
-              name = fields.get("name"),
+              womType = womType,
               value = fields("value"),
-              womType = womType
+              name = fields.get("name"),
             )
           }
         case rawElement: MetaValueElement =>
-          metaChoiceValueToIR(value = rawElement, womType = womType)
+          metaChoiceValueToIR(womType = womType, value = rawElement)
         case _ =>
           throw new Exception(
             "Choices array must contain only raw values or annotated values (hash with "
@@ -135,32 +133,120 @@ case class GenerateIRTask(verbose: Verbose,
       }))
     }
 
-private def metaChoiceValueToIR(
-    name: Option[MetaValueElement] = None, 
-    value: MetaValueElement, 
-    womType: WomType): IR.ChoicesRepr = {
-  val nameStr: Option[String] = name match {
-    case Some(MetaValueElementString(str)) => Some(str)
-    case _ => None
+  private def metaChoiceValueToIR(
+      womType: WomType,
+      value: MetaValueElement,
+      name: Option[MetaValueElement] = None): IR.ChoiceRepr = {
+    (womType, value) match {
+      case (WomStringType, MetaValueElementString(str)) =>
+        IR.ChoiceReprString(value = str)
+      case (WomIntegerType, MetaValueElementInteger(i)) =>
+        IR.ChoiceReprInteger(value = i)
+      case (WomFloatType, MetaValueElementFloat(f)) =>
+        IR.ChoiceReprFloat(value = f)
+      case (WomBooleanType, MetaValueElementBoolean(b)) =>
+        IR.ChoiceReprBoolean(value = b)
+      case (WomSingleFileType, MetaValueElementString(str)) =>
+        val nameStr: Option[String] = name match {
+          case Some(MetaValueElementString(str)) => Some(str)
+          case _ => None
+        }
+        IR.ChoiceReprFile(value = str, name = nameStr)
+      case _ =>
+        throw new Exception(
+          "Choices keyword is only valid for primitive- and file-type parameters, and types must "
+          + "match between parameter and choices"
+        )
+    }
   }
-  (womType, value) match {
-    case (WomStringType, MetaValueElementString(str)) =>
-      IR.ChoicesReprString(name = nameStr, value = str)
-    case (WomSingleFileType, MetaValueElementString(str)) =>
-      IR.ChoicesReprFile(name = nameStr, value = str)
-    case (WomIntegerType, MetaValueElementInteger(i)) =>
-      IR.ChoicesReprInteger(name = nameStr, value = i)
-    case (WomFloatType, MetaValueElementFloat(f)) =>
-      IR.ChoicesReprFloat(name = nameStr, value = f)
-    case (WomBooleanType, MetaValueElementBoolean(b)) =>
-      IR.ChoicesReprBoolean(name = nameStr, value = b)
-    case _ =>
-      throw new Exception(
-        "Choices keyword is only valid for primitive- and file-type parameters, and types must "
-        + "match between parameter and choices"
-      )
+
+  // A suggestions array may contain either raw values or (for data object types) annotated values,
+  // which are hashes. Each value must be of the same type as the parameter, unless the parameter 
+  // is an array, in which case choice values must be of the same type as the array's contained 
+  // type. For now, we only allow choices for primitive- and file-type parameters, because there 
+  // could be ambiguity (e.g. if a choice has a 'value' key, should we treat it as a raw map value 
+  // or as an annotated value?).
+  // 
+  // suggestions: [true, false]
+  // OR
+  // suggestions: [
+  //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
+  private def metaSuggestionsArrayToIR(
+      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrSuggestions] =
+    if (array.isEmpty) {
+      Some(IR.IOAttrSuggestions(Vector()))
+    } else {
+      Some(IR.IOAttrSuggestions(array.map {
+        case MetaValueElementObject(fields) =>
+          metaSuggestionValueToIR(
+            womType = womType,
+            name = fields.get("name"),
+            value = fields.get("value"),
+            project = fields.get("project"),
+            path = fields.get("path"),
+          )
+        case rawElement: MetaValueElement =>
+          metaSuggestionValueToIR(womType = womType, value = Some(rawElement))
+        case _ =>
+          throw new Exception(
+            "Suggestions array must contain only raw values or annotated (hash) values"
+          )
+      }))
+    }
+
+  private def metaSuggestionValueToIR(
+      womType: WomType,
+      value: Option[MetaValueElement], 
+      name: Option[MetaValueElement] = None,
+      project: Option[MetaValueElement] = None,
+      path: Option[MetaValueElement] = None): IR.SuggestionRepr = {
+    (womType, value) match {
+      case (WomStringType, Some(MetaValueElementString(str))) =>
+        IR.SuggestionReprString(value = str)
+      case (WomIntegerType, Some(MetaValueElementInteger(i))) =>
+        IR.SuggestionReprInteger(value = i)
+      case (WomFloatType, Some(MetaValueElementFloat(f))) =>
+        IR.SuggestionReprFloat(value = f)
+      case (WomBooleanType, Some(MetaValueElementBoolean(b))) =>
+        IR.SuggestionReprBoolean(value = b)
+      case (WomSingleFileType, Some(MetaValueElementString(file))) =>
+        createSuggestionFileIR(Some(file), name, project, path)
+      case (WomSingleFileType, None) =>
+        val s = createSuggestionFileIR(None, name, project, path)
+        if (s.project.isEmpty || s.path.isEmpty) {
+          throw new Exception(
+            "If 'value' is not defined for a file-type suggestion, then both 'project' and 'path' "
+            + "must be defined"
+          )
+        }
+        s
+      case _ =>
+        throw new Exception(
+          "Suggestion keyword is only valid for primitive- and file-type parameters, and types "
+          + "must match between parameter and choices"
+        )
+    }
   }
-}
+
+  private def createSuggestionFileIR(
+      file: Option[String],   
+      name: Option[MetaValueElement],
+      project: Option[MetaValueElement],
+      path: Option[MetaValueElement]): IR.SuggestionReprFile = {
+    val nameStr: Option[String] = name match {
+      case Some(MetaValueElementString(str)) => Some(str)
+      case _ => None
+    }
+    val projectStr: Option[String] = project match {
+      case Some(MetaValueElementString(str)) => Some(str)
+      case _ => None
+    }
+    val pathStr: Option[String] = path match {
+      case Some(MetaValueElementString(str)) => Some(str)
+      case _ => None
+    }
+    IR.SuggestionReprFile(file, nameStr, projectStr, pathStr)
+  }
 
   // Extract the parameter_meta info from the WOM structure
   // The parameter's WomType is passed in since some parameter metadata values are required to 
@@ -190,6 +276,12 @@ private def metaChoiceValueToIR(
             wt = wt.asInstanceOf[WomArrayType].memberType
           }
           metaChoicesArrayToIR(array, wt)
+        case (IR.PARAM_META_SUGGESTIONS, MetaValueElementArray(array)) =>
+          var wt = womType
+          while (wt.isInstanceOf[WomArrayType]) {
+            wt = wt.asInstanceOf[WomArrayType].memberType
+          }
+          metaSuggestionsArrayToIR(array, wt)
         case _ => None
       }.toVector)
     }

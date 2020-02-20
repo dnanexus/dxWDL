@@ -581,10 +581,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
             Some(
                 Vector(
                     IR.IOAttrChoices(Vector(
-                      IR.ChoicesReprFile(
+                      IR.ChoiceReprFile(
                         name = None, value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
                       ),
-                      IR.ChoicesReprFile(
+                      IR.ChoiceReprFile(
                         name = None, value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                       ),
                     ))
@@ -597,8 +597,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(Vector(
                 IR.IOAttrChoices(Vector(
-                  IR.ChoicesReprString(name = None, value = "A"),
-                  IR.ChoicesReprString(name = None, value = "B"),
+                  IR.ChoiceReprString(name = None, value = "A"),
+                  IR.ChoiceReprString(name = None, value = "B"),
                 ))
             ))
         )
@@ -626,10 +626,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
             Some(
                 Vector(
                     IR.IOAttrChoices(Vector(
-                      IR.ChoicesReprFile(
+                      IR.ChoiceReprFile(
                         name = Some("file1"), value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
                       ),
-                      IR.ChoicesReprFile(
+                      IR.ChoiceReprFile(
                         name = Some("file2"), value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                       ),
                     ))
@@ -642,8 +642,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(Vector(
                 IR.IOAttrChoices(Vector(
-                  IR.ChoicesReprString(name = Some("pattern1"), value = "A"),
-                  IR.ChoicesReprString(name = Some("pattern2"), value = "B"),
+                  IR.ChoiceReprString(name = Some("pattern1"), value = "A"),
+                  IR.ChoiceReprString(name = Some("pattern2"), value = "B"),
                 ))
             ))
         )
