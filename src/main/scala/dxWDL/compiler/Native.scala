@@ -183,6 +183,8 @@ case class Native(dxWDLrtId: Option[String],
                 }
               }
             })))
+          case IR.IOAttrType(constraint) =>
+            Some(IR.PARAM_META_TYPE =>
           case _ => None
         }.toMap
       }

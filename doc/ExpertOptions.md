@@ -257,9 +257,7 @@ The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#p
   - `patterns`
   - `choices`
   - `suggestions`
-<!--
   - `dx_type` (maps to the `type` field in dxapp.json)
--->
 
 Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 

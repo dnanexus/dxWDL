@@ -30,7 +30,7 @@ object IR {
   val PARAM_META_LABEL = "label"
   val PARAM_META_PATTERNS = "patterns"
   val PARAM_META_SUGGESTIONS = "suggestions"
-  val PARAM_META_TYPE = "dx_type" // TODO
+  val PARAM_META_TYPE = "dx_type"
 
   /** Compile time representation of the dxapp IO spec patterns
     *  Example:
@@ -88,6 +88,11 @@ object IR {
     path: Option[String],
   ) extends SuggestionRepr
 
+  sealed abstract class ConstraintRepr
+  sealed case class ConstraintReprString(constraint: String) extends ConstraintRepr
+  sealed case class ConstraintReprOper(oper: String, constraints: Vector[ConstraintRepr]) 
+      extends ConstraintRepr
+
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
   sealed abstract class IOAttr
@@ -97,7 +102,8 @@ object IR {
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
   final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr
   final case class IOAttrSuggestions(suggestions: Vector[SuggestionRepr]) extends IOAttr
-
+  final case class IOAttrType(constraint: ConstraintRepr) extends IOAttr
+  
   // Compile time representation of a variable. Used also as
   // an applet argument.
   //

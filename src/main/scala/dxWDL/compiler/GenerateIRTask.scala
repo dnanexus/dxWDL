@@ -108,11 +108,11 @@ case class GenerateIRTask(verbose: Verbose,
   // OR
   // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaChoicesArrayToIR(
-      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] =
+      array: Vector[MetaValueElement], womType: WomType): Vector[IR.ChoiceRepr] =
     if (array.isEmpty) {
-      Some(IR.IOAttrChoices(Vector()))
+      Vector()
     } else {
-      Some(IR.IOAttrChoices(array.map {
+      array.map {
         case MetaValueElementObject(fields) =>
           if (!fields.contains("value")) {
             throw new Exception("Annotated choice must have a 'value' key")
@@ -130,7 +130,7 @@ case class GenerateIRTask(verbose: Verbose,
             "Choices array must contain only raw values or annotated values (hash with "
             + "optional 'name' and required 'value' keys)"
           )
-      }))
+      }
     }
 
   private def metaChoiceValueToIR(
@@ -172,11 +172,11 @@ case class GenerateIRTask(verbose: Verbose,
   // suggestions: [
   //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaSuggestionsArrayToIR(
-      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrSuggestions] =
+      array: Vector[MetaValueElement], womType: WomType): Vector[IR.SuggestionRepr] =
     if (array.isEmpty) {
-      Some(IR.IOAttrSuggestions(Vector()))
+      Vector()
     } else {
-      Some(IR.IOAttrSuggestions(array.map {
+      array.map {
         case MetaValueElementObject(fields) =>
           metaSuggestionValueToIR(
             womType = womType,
@@ -191,7 +191,7 @@ case class GenerateIRTask(verbose: Verbose,
           throw new Exception(
             "Suggestions array must contain only raw values or annotated (hash) values"
           )
-      }))
+      }
     }
 
   private def metaSuggestionValueToIR(
@@ -248,6 +248,33 @@ case class GenerateIRTask(verbose: Verbose,
     IR.SuggestionReprFile(file, nameStr, projectStr, pathStr)
   }
 
+  private def metaConstraintToIR(
+      constraint: MetaValueElement): IR.ConstraintRepr = constraint match {
+    case MetaValueElementObject(obj: Map[String, MetaValueElement]) =>
+      if (obj.size != 1) {
+        throw new Exception("Constraint hash must have exaclty one 'and_' or 'or_' key")
+      }
+      obj.head match {
+        case ("and_", MetaValueElementArray(array)) => 
+          IR.ConstraintReprOper("and", array.map(metaConstraintToIR))
+        case ("or_", MetaValueElementArray(array)) =>
+          IR.ConstraintReprOper("or", array.map(metaConstraintToIR))
+        case _ => throw new Exception(
+          "Constraint must have key 'and_' or 'or_' and an array value"
+        )
+      }
+    case MetaValueElementString(s) => IR.ConstraintReprString(s)
+    case _ => throw new Exception("'dx_type' constraints must be either strings or hashes")
+  }
+
+  private def unwrapWomArrayType(womType: WomType): WomType = {
+    var wt = womType
+    while (wt.isInstanceOf[WomArrayType]) {
+      wt = wt.asInstanceOf[WomArrayType].memberType
+    }
+    wt
+  }
+
   // Extract the parameter_meta info from the WOM structure
   // The parameter's WomType is passed in since some parameter metadata values are required to 
   // have the same type as the parameter.
@@ -271,17 +298,18 @@ case class GenerateIRTask(verbose: Verbose,
           Some(metaPatternsObjToIR(obj))
         // Try to parse the choices key, which will be an array of either values or objects
         case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
-          var wt = womType
-          while (wt.isInstanceOf[WomArrayType]) {
-            wt = wt.asInstanceOf[WomArrayType].memberType
-          }
-          metaChoicesArrayToIR(array, wt)
+          val wt = unwrapWomArrayType(womType)
+          Some(IR.IOAttrChoices(metaChoicesArrayToIR(array, wt)))
         case (IR.PARAM_META_SUGGESTIONS, MetaValueElementArray(array)) =>
-          var wt = womType
-          while (wt.isInstanceOf[WomArrayType]) {
-            wt = wt.asInstanceOf[WomArrayType].memberType
+          val wt = unwrapWomArrayType(womType)
+          Some(IR.IOAttrSuggestions(metaSuggestionsArrayToIR(array, wt)))
+        case (IR.PARAM_META_TYPE, dx_type: MetaValueElement) => 
+          val wt = unwrapWomArrayType(womType)
+          if (wt.isInstanceOf[WomSingleFileType]) {
+            Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
+          } else {
+            throw new Exception("'dx_type' can only be specified for File parameters")
           }
-          metaSuggestionsArrayToIR(array, wt)
         case _ => None
       }.toVector)
     }
