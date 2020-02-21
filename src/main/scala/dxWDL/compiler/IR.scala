@@ -22,7 +22,7 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
-  // Keywords for string pattern matching
+  // Keywords for string pattern matching in parameter_meta
   
   val PARAM_META_CHOICES = "choices"
   val PARAM_META_GROUP = "group"
@@ -51,23 +51,20 @@ object IR {
       extends PatternsRepr
   
   /** Compile time representation of the dxapp IO spec choices
-    * Choices is an array of choice values, where each value can be raw (a primitive type)
-    * or annotated (a hash with optional 'name' key and required 'value' key). We represent
-    * both types of values as a class with 'name' and 'value' members. When translating to
-    * dxapp.json, we write a raw value if 'name' is None, and an annotated value if not.
+    * Choices is an array of suggested values, where each value can be raw (a primitive type)
+    * or, for file parameters, an annotated value (a hash with optional 'name' key and required 
+    * 'value' key).
     *  Examples:
-    *   'choices': [
+    *   choices: [
     *     {
-    *       'name': "yes", 'value': true
+    *       name: "file1", value: "dx://file-XXX"
     *     },
     *     {
-    *       'name': "no", 'value': false
+    *       name: "file2", value: "dx://file-YYY"
     *     }
-    *   ]  # => [{'name': "yes", 'value': true}, {'name': "no", 'value': false}]
+    *   ]
     *     
-    *   'choices': [true, false]  # => [true, false]
-    *
-    *   'choices': [{'value': 1}, {'value': 2}]  # => [1, 2]
+    *   choices: [true, false]  # => [true, false]
   **/
   sealed abstract class ChoiceRepr
   final case class ChoiceReprString(value: String) extends ChoiceRepr
@@ -76,6 +73,22 @@ object IR {
   final case class ChoiceReprBoolean(value: Boolean) extends ChoiceRepr
   final case class ChoiceReprFile(value: String, name: Option[String]) extends ChoiceRepr
 
+  /** Compile time representation of the dxapp IO spec suggestions
+    * Suggestions is an array of suggested values, where each value can be raw (a primitive type)
+    * or, for file parameters, an annotated value (a hash with optional 'name', 'value', 
+    * 'project', and 'path' keys).
+    *  Examples:
+    *   suggestions: [
+    *     {
+    *       name: "file1", value: "dx://file-XXX"
+    *     },
+    *     {
+    *       name: "file2", project: "project-XXX", path: "/foo/bar.txt"
+    *     }
+    *   ]
+    *     
+    *   suggestions: [1, 2, 3]
+  **/
   sealed abstract class SuggestionRepr
   sealed case class SuggestionReprString(value: String) extends SuggestionRepr
   sealed case class SuggestionReprInteger(value: Int) extends SuggestionRepr

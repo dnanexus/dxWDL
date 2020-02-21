@@ -252,40 +252,41 @@ case class GenerateIRTask(verbose: Verbose,
   // The parameter's WomType is passed in since some parameter metadata values are required to 
   // have the same type as the parameter.
   private def unwrapParamMeta(
-      paramMeta: Option[MetaValueElement], womType: WomType
-  ): Option[Vector[IR.IOAttr]] = paramMeta match {
-    case None => None
-    case Some(MetaValueElementObject(obj)) => {
-      // Use flatmap to get the parameter metadata keys if they exist
-      Some(obj.flatMap {
-        case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
-        case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
-        case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
-        // Try to parse the patterns key
-        // First see if it's an array
-        case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
-          Some(IR.IOAttrPatterns(IR.PatternsReprArray(metaStringArrayToVec(array))))
-        // See if it's an object, and if it is, parse out the optional key, class, and tag keys
-        // Note all three are optional
-        case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
-          Some(metaPatternsObjToIR(obj))
-        // Try to parse the choices key, which will be an array of either values or objects
-        case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
-          var wt = womType
-          while (wt.isInstanceOf[WomArrayType]) {
-            wt = wt.asInstanceOf[WomArrayType].memberType
-          }
-          metaChoicesArrayToIR(array, wt)
-        case (IR.PARAM_META_SUGGESTIONS, MetaValueElementArray(array)) =>
-          var wt = womType
-          while (wt.isInstanceOf[WomArrayType]) {
-            wt = wt.asInstanceOf[WomArrayType].memberType
-          }
-          metaSuggestionsArrayToIR(array, wt)
-        case _ => None
-      }.toVector)
+      paramMeta: Option[MetaValueElement], womType: WomType): Option[Vector[IR.IOAttr]] = {
+    paramMeta match {
+      case None => None
+      case Some(MetaValueElementObject(obj)) => {
+        // Use flatmap to get the parameter metadata keys if they exist
+        Some(obj.flatMap {
+          case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
+          case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
+          case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
+          // Try to parse the patterns key
+          // First see if it's an array
+          case (IR.PARAM_META_PATTERNS, MetaValueElementArray(array)) =>
+            Some(IR.IOAttrPatterns(IR.PatternsReprArray(metaStringArrayToVec(array))))
+          // See if it's an object, and if it is, parse out the optional key, class, and tag keys
+          // Note all three are optional
+          case (IR.PARAM_META_PATTERNS, MetaValueElementObject(obj)) =>
+            Some(metaPatternsObjToIR(obj))
+          // Try to parse the choices key, which will be an array of either values or objects
+          case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
+            var wt = womType
+            while (wt.isInstanceOf[WomArrayType]) {
+              wt = wt.asInstanceOf[WomArrayType].memberType
+            }
+            metaChoicesArrayToIR(array, wt)
+          case (IR.PARAM_META_SUGGESTIONS, MetaValueElementArray(array)) =>
+            var wt = womType
+            while (wt.isInstanceOf[WomArrayType]) {
+              wt = wt.asInstanceOf[WomArrayType].memberType
+            }
+            metaSuggestionsArrayToIR(array, wt)
+          case _ => None
+        }.toVector)
+      }
+      case _ => None // TODO: or throw exception?
     }
-    case _ => None // TODO: or throw exception?
   }
 
   // Process a docker image, if there is one
