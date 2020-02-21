@@ -21,12 +21,12 @@ object IR {
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
-  
+
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of WDL, and
   // will be parsed out and used when generating the native app.
   //  Example:
-  //  
+  //
   //  task {
   //    inputs {
   //      File sorted_bams
@@ -78,10 +78,10 @@ object IR {
                                    klass: Option[String],
                                    tag: Option[Vector[String]])
       extends PatternsRepr
-  
+
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
-    * or, for file parameters, an annotated value (a hash with optional 'name' key and required 
+    * or, for file parameters, an annotated value (a hash with optional 'name' key and required
     * 'value' key).
     *  Examples:
     *   choices: [
@@ -92,7 +92,7 @@ object IR {
     *       name: "file2", value: "dx://file-YYY"
     *     }
     *   ]
-    *     
+    *
     *   choices: [true, false]  # => [true, false]
   **/
   sealed abstract class ChoiceRepr
@@ -104,7 +104,7 @@ object IR {
 
   /** Compile time representation of the dxapp IO spec suggestions
     * Suggestions is an array of suggested values, where each value can be raw (a primitive type)
-    * or, for file parameters, an annotated value (a hash with optional 'name', 'value', 
+    * or, for file parameters, an annotated value (a hash with optional 'name', 'value',
     * 'project', and 'path' keys).
     *  Examples:
     *   suggestions: [
@@ -115,7 +115,7 @@ object IR {
     *       name: "file2", project: "project-XXX", path: "/foo/bar.txt"
     *     }
     *   ]
-    *     
+    *
     *   suggestions: [1, 2, 3]
   **/
   sealed abstract class SuggestionRepr
@@ -124,10 +124,10 @@ object IR {
   sealed case class SuggestionReprFloat(value: Double) extends SuggestionRepr
   sealed case class SuggestionReprBoolean(value: Boolean) extends SuggestionRepr
   sealed case class SuggestionReprFile(
-    value: Option[String],
-    name: Option[String],
-    project: Option[String],
-    path: Option[String],
+      value: Option[String],
+      name: Option[String],
+      project: Option[String],
+      path: Option[String]
   ) extends SuggestionRepr
 
   // Compile time representaiton of supported parameter_meta section

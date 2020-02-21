@@ -563,7 +563,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
     ))
   }
 
-
   // Check parameter_meta `choices` keyword
   it should "recognize choices in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "choice_values.wdl")
@@ -584,14 +583,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(Vector(
-                      IR.ChoiceReprFile(
-                        name = None, value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
-                      ),
-                      IR.ChoiceReprFile(
-                        name = None, value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
-                      ),
-                    ))
+                    IR.IOAttrChoices(
+                        Vector(
+                            IR.ChoiceReprFile(
+                                name = None,
+                                value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                            ),
+                            IR.ChoiceReprFile(
+                                name = None,
+                                value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
+                            )
+                        )
+                    )
                 )
             )
         ),
@@ -599,12 +602,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(
-                IR.IOAttrChoices(Vector(
-                  IR.ChoiceReprString(value = "A"),
-                  IR.ChoiceReprString(value = "B"),
-                ))
-            ))
+            Some(
+                Vector(
+                    IR.IOAttrChoices(
+                        Vector(
+                            IR.ChoiceReprString(value = "A"),
+                            IR.ChoiceReprString(value = "B")
+                        )
+                    )
+                )
+            )
         )
     )
   }
@@ -629,14 +636,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(Vector(
-                      IR.ChoiceReprFile(
-                        name = Some("file1"), value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
-                      ),
-                      IR.ChoiceReprFile(
-                        name = Some("file2"), value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
-                      ),
-                    ))
+                    IR.IOAttrChoices(
+                        Vector(
+                            IR.ChoiceReprFile(
+                                name = Some("file1"),
+                                value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                            ),
+                            IR.ChoiceReprFile(
+                                name = Some("file2"),
+                                value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
+                            )
+                        )
+                    )
                 )
             )
         ),
@@ -644,12 +655,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(
-                IR.IOAttrChoices(Vector(
-                  IR.ChoiceReprString(value = "A"),
-                  IR.ChoiceReprString(value = "B"),
-                ))
-            ))
+            Some(
+                Vector(
+                    IR.IOAttrChoices(
+                        Vector(
+                            IR.ChoiceReprString(value = "A"),
+                            IR.ChoiceReprString(value = "B")
+                        )
+                    )
+                )
+            )
         )
     )
   }
@@ -684,20 +699,22 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(Vector(
-                      IR.SuggestionReprFile(
-                        name = None,
-                        value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
-                        project = None,
-                        path = None,
-                      ),
-                      IR.SuggestionReprFile(
-                        name = None,
-                        value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
-                        project = None,
-                        path = None,
-                      ),
-                    ))
+                    IR.IOAttrSuggestions(
+                        Vector(
+                            IR.SuggestionReprFile(
+                                name = None,
+                                value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                                project = None,
+                                path = None
+                            ),
+                            IR.SuggestionReprFile(
+                                name = None,
+                                value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
+                                project = None,
+                                path = None
+                            )
+                        )
+                    )
                 )
             )
         ),
@@ -705,12 +722,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(
-                IR.IOAttrSuggestions(Vector(
-                  IR.SuggestionReprString(value = "A"),
-                  IR.SuggestionReprString(value = "B"),
-                ))
-            ))
+            Some(
+                Vector(
+                    IR.IOAttrSuggestions(
+                        Vector(
+                            IR.SuggestionReprString(value = "A"),
+                            IR.SuggestionReprString(value = "B")
+                        )
+                    )
+                )
+            )
         )
     )
   }
@@ -735,20 +756,22 @@ class GenerateIRTest extends FlatSpec with Matchers {
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(Vector(
-                      IR.SuggestionReprFile(
-                        name = Some("file1"),
-                        value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
-                        project = None,
-                        path = None,
-                      ),
-                      IR.SuggestionReprFile(
-                        name = Some("file2"),
-                        value = None,
-                        project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
-                        path = Some("/test_data/f2.txt.gz"),
-                      ),
-                    ))
+                    IR.IOAttrSuggestions(
+                        Vector(
+                            IR.SuggestionReprFile(
+                                name = Some("file1"),
+                                value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                                project = None,
+                                path = None
+                            ),
+                            IR.SuggestionReprFile(
+                                name = Some("file2"),
+                                value = None,
+                                project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
+                                path = Some("/test_data/f2.txt.gz")
+                            )
+                        )
+                    )
                 )
             )
         ),
@@ -756,12 +779,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
             "pattern",
             WomStringType,
             None,
-            Some(Vector(
-                IR.IOAttrSuggestions(Vector(
-                  IR.SuggestionReprString(value = "A"),
-                  IR.SuggestionReprString(value = "B"),
-                ))
-            ))
+            Some(
+                Vector(
+                    IR.IOAttrSuggestions(
+                        Vector(
+                            IR.SuggestionReprString(value = "A"),
+                            IR.SuggestionReprString(value = "B")
+                        )
+                    )
+                )
+            )
         )
     )
   }
