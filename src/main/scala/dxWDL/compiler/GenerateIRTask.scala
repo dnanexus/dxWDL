@@ -223,7 +223,7 @@ case class GenerateIRTask(verbose: Verbose,
       case _ =>
         throw new Exception(
             "Suggestion keyword is only valid for primitive- and file-type parameters, and types "
-              + "must match between parameter and choices"
+              + "must match between parameter and suggestions"
         )
     }
   }
@@ -247,7 +247,7 @@ case class GenerateIRTask(verbose: Verbose,
     IR.SuggestionReprFile(file, nameStr, projectStr, pathStr)
   }
 
-  private def metaConstraintToIR(constraint: MetaValueElement): IR.ConstraintRepr =
+  private def metaConstraintToIR(constraint: MetaValueElement): IR.ConstraintRepr = {
     constraint match {
       case MetaValueElementObject(obj: Map[String, MetaValueElement]) =>
         if (obj.size != 1) {
@@ -266,6 +266,30 @@ case class GenerateIRTask(verbose: Verbose,
       case MetaValueElementString(s) => IR.ConstraintReprString(s)
       case _                         => throw new Exception("'dx_type' constraints must be either strings or hashes")
     }
+  }
+
+  private def metaDefaultToIR(value: MetaValueElement, womType: WomType): IR.DefaultRepr = {
+    (womType, value) match {
+      case (WomStringType, MetaValueElementString(str)) =>
+        IR.DefaultReprString(value = str)
+      case (WomIntegerType, MetaValueElementInteger(i)) =>
+        IR.DefaultReprInteger(value = i)
+      case (WomFloatType, MetaValueElementFloat(f)) =>
+        IR.DefaultReprFloat(value = f)
+      case (WomBooleanType, MetaValueElementBoolean(b)) =>
+        IR.DefaultReprBoolean(value = b)
+      case (WomSingleFileType, MetaValueElementString(file)) =>
+        IR.DefaultReprFile(value = file)
+      case (womArrayType: WomArrayType, MetaValueElementArray(array)) =>
+        def helper(wt: WomType)(mv: MetaValueElement) = metaDefaultToIR(mv, wt)
+        IR.DefaultReprArray(array.map(helper(womArrayType.memberType)))
+      case _ =>
+        throw new Exception(
+            "Default keyword is only valid for primitive-, file-, and array-type parameters, and "
+              + "types must match between parameter and default"
+        )
+    }
+  }
 
   private def unwrapWomArrayType(womType: WomType): WomType = {
     var wt = womType
@@ -316,6 +340,8 @@ case class GenerateIRTask(verbose: Verbose,
               case WomSingleFileType => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
               case _                 => throw new Exception("'dx_type' can only be specified for File parameters")
             }
+          case (IR.PARAM_META_DEFAULT, default: MetaValueElement) =>
+            Some(IR.IOAttrDefault(metaDefaultToIR(default, womType)))
           case _ => None
         }.toVector)
       }
@@ -356,6 +382,8 @@ case class GenerateIRTask(verbose: Verbose,
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
       case RequiredInputDefinition(iName, womType, _, paramMeta) => {
+        // This is a task "input" parameter declaration of the form:
+        //     Int y
         val attr = unwrapParamMeta(paramMeta, womType)
         Some(CVar(iName.value, womType, None, attr))
       }
@@ -363,12 +391,14 @@ case class GenerateIRTask(verbose: Verbose,
       case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, paramMeta) =>
         WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
-            // This is a task "input" of the form:
+            // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
             // We consider it an expression, and not an input. The
             // runtime system will evaluate it.
             None
           case Some(value) =>
+            // This is a task "input" parameter definition of the form:
+            //    Int y = 3
             val attr = unwrapParamMeta(paramMeta, womType)
             Some(CVar(iName.value, womType, Some(value), attr))
         }
@@ -378,8 +408,9 @@ case class GenerateIRTask(verbose: Verbose,
       case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
         None
 
-      case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
-        Some(CVar(iName.value, WomOptionalType(womType), None))
+      case OptionalInputDefinition(iName, WomOptionalType(womType), _, paramMeta) =>
+        val attr = unwrapParamMeta(paramMeta, womType)
+        Some(CVar(iName.value, WomOptionalType(womType), None, attr))
     }.toVector
 
     // create dx:applet outputs

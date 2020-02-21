@@ -54,7 +54,7 @@ object IR {
 
   // Keywords for string pattern matching in WDL parameter_meta
   val PARAM_META_CHOICES = "choices"
-  val PARAM_META_DEFAULT = "default" // TODO
+  val PARAM_META_DEFAULT = "default"
   val PARAM_META_DESCRIPTION = "description" // accepted as a synonym to 'help'
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
@@ -149,6 +149,20 @@ object IR {
                                        constraints: Vector[ConstraintRepr])
       extends ConstraintRepr
 
+  /** Compile-time representation of the dxapp IO spec 'default' value.
+    * The default value can be specified when defining the parameter. If it is not (for example,
+    * if the parameter is optional and a separate variable is defined using select_first()), then
+    * the default value can be specified in paramter_meta and will be used when the dxapp.json
+    * is generated.
+  **/
+  sealed abstract class DefaultRepr
+  final case class DefaultReprString(value: String) extends DefaultRepr
+  final case class DefaultReprInteger(value: Int) extends DefaultRepr
+  final case class DefaultReprFloat(value: Double) extends DefaultRepr
+  final case class DefaultReprBoolean(value: Boolean) extends DefaultRepr
+  final case class DefaultReprFile(value: String) extends DefaultRepr
+  final case class DefaultReprArray(array: Vector[DefaultRepr]) extends DefaultRepr
+
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
   sealed abstract class IOAttr
@@ -159,6 +173,7 @@ object IR {
   final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr
   final case class IOAttrSuggestions(suggestions: Vector[SuggestionRepr]) extends IOAttr
   final case class IOAttrType(constraint: ConstraintRepr) extends IOAttr
+  final case class IOAttrDefault(value: DefaultRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.

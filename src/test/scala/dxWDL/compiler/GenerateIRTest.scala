@@ -6,6 +6,7 @@ import org.scalatest.Inside._
 import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
 import wom.types._
+import wom.values._
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx._
@@ -867,6 +868,45 @@ class GenerateIRTest extends FlatSpec with Matchers {
   // Check parameter_meta `dx_type` keyword fails when specified for a non-file parameter
   it should "throw exception when dx_type is used on non-file parameter" in {
     val path = pathFromBasename("compiler", "dx_type_nonfile.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
+
+  // Check parameter_meta `default` keyword
+  it should "recognize default in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "add_default.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_default", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "a",
+            WomIntegerType,
+            Some(WomInteger(1)),
+            None
+        ),
+        IR.CVar(
+            "b",
+            WomOptionalType(WomIntegerType),
+            None,
+            Some(Vector(IR.IOAttrDefault(IR.DefaultReprInteger(2))))
+        )
+    )
+  }
+
+  // Check parameter_meta `default` keyword fails when there is a type mismatch
+  it should "throw exception when default types don't match parameter types" in {
+    val path = pathFromBasename("compiler", "default_type_mismatch.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
     )

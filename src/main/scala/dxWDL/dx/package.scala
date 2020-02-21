@@ -31,10 +31,11 @@ object DxIOClass extends Enumeration {
   }
 }
 
-object DxInputSpec {
+object DxIOSpec {
   val NAME = "name"
   val CLASS = "class"
   val OPTIONAL = "optional"
+  val DEFAULT = "default"
   val CHOICES = "choices"
   val GROUP = "group"
   val HELP = "help"
@@ -132,7 +133,7 @@ object DxObject {
   }
 
   def parseIoParam(jsv: JsValue): IOParameter = {
-    val ioParam = jsv.asJsObject.getFields(DxInputSpec.NAME, DxInputSpec.CLASS) match {
+    val ioParam = jsv.asJsObject.getFields(DxIOSpec.NAME, DxIOSpec.CLASS) match {
       case Seq(JsString(name), JsString(klass)) =>
         val ioClass = DxIOClass.fromString(klass)
         IOParameter(name, ioClass, false)
@@ -140,27 +141,27 @@ object DxObject {
         throw new Exception(s"Malformed io spec ${other}")
     }
 
-    val optFlag = jsv.asJsObject.fields.get(DxInputSpec.OPTIONAL) match {
+    val optFlag = jsv.asJsObject.fields.get(DxIOSpec.OPTIONAL) match {
       case Some(JsBoolean(b)) => b
       case None               => false
     }
 
-    val group = jsv.asJsObject.fields.get(DxInputSpec.GROUP) match {
+    val group = jsv.asJsObject.fields.get(DxIOSpec.GROUP) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val help = jsv.asJsObject.fields.get(DxInputSpec.HELP) match {
+    val help = jsv.asJsObject.fields.get(DxIOSpec.HELP) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val label = jsv.asJsObject.fields.get(DxInputSpec.LABEL) match {
+    val label = jsv.asJsObject.fields.get(DxIOSpec.LABEL) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val patterns = jsv.asJsObject.fields.get(DxInputSpec.PATTERNS) match {
+    val patterns = jsv.asJsObject.fields.get(DxIOSpec.PATTERNS) match {
       case Some(JsArray(a)) =>
         Some(IOParamterPatternArray(a.flatMap {
           case JsString(s) => Some(s)
@@ -192,7 +193,7 @@ object DxObject {
       case _ => None
     }
 
-    val choices = jsv.asJsObject.fields.get(DxInputSpec.CHOICES) match {
+    val choices = jsv.asJsObject.fields.get(DxIOSpec.CHOICES) match {
       case Some(JsArray(a)) =>
         Some(a.map {
           case JsObject(fields) =>
@@ -210,7 +211,7 @@ object DxObject {
       case _ => None
     }
 
-    val suggestions = jsv.asJsObject.fields.get(DxInputSpec.SUGGESTIONS) match {
+    val suggestions = jsv.asJsObject.fields.get(DxIOSpec.SUGGESTIONS) match {
       case Some(JsArray(a)) =>
         Some(a.map {
           case JsObject(fields) =>
@@ -239,7 +240,7 @@ object DxObject {
       case _ => None
     }
 
-    val dx_type = jsv.asJsObject.fields.get(DxInputSpec.TYPE) match {
+    val dx_type = jsv.asJsObject.fields.get(DxIOSpec.TYPE) match {
       case Some(v: JsValue) => Some(ioParamTypeFromJs(v))
       case _                => None
     }

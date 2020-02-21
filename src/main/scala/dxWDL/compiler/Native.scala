@@ -96,6 +96,17 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
+  private def jsValueFromDefault(value: IR.DefaultRepr): JsValue = {
+    value match {
+      case IR.DefaultReprString(s)    => JsString(s)
+      case IR.DefaultReprInteger(i)   => JsNumber(i)
+      case IR.DefaultReprFloat(f)     => JsNumber(f)
+      case IR.DefaultReprBoolean(b)   => JsBoolean(b)
+      case IR.DefaultReprFile(f)      => DxPath.resolveDxURLFile(f).getLinkAsJson
+      case IR.DefaultReprArray(array) => JsArray(array.map(jsValueFromDefault))
+    }
+  }
+
   // For primitive types, and arrays of such types, we can map directly
   // to the equivalent dx types. For example,
   //   Int  -> int
@@ -120,21 +131,22 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // Create the IO Attributes
-    def jsMapFromAttrs(help: Option[Vector[IR.IOAttr]]): Map[String, JsValue] = {
+    def jsMapFromAttrs(help: Option[Vector[IR.IOAttr]],
+                       hasDefault: Boolean): Map[String, JsValue] = {
       help match {
         case None => Map.empty
         case Some(attributes) => {
           attributes.flatMap {
             case IR.IOAttrGroup(text) =>
-              Some(DxInputSpec.GROUP -> JsString(text))
+              Some(DxIOSpec.GROUP -> JsString(text))
             case IR.IOAttrHelp(text) =>
-              Some(DxInputSpec.HELP -> JsString(text))
+              Some(DxIOSpec.HELP -> JsString(text))
             case IR.IOAttrLabel(text) =>
-              Some(DxInputSpec.LABEL -> JsString(text))
+              Some(DxIOSpec.LABEL -> JsString(text))
             case IR.IOAttrPatterns(patternRepr) =>
               patternRepr match {
                 case IR.PatternsReprArray(patterns) =>
-                  Some(DxInputSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
+                  Some(DxIOSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
                 // If we have the alternative patterns object, extrac the values, if any at all
                 case IR.PatternsReprObj(name, klass, tags) =>
                   val attrs: Map[String, JsValue] = List(
@@ -145,10 +157,10 @@ case class Native(dxWDLrtId: Option[String],
                       if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                   ).flatten.toMap
                   // If all three keys for the object version of patterns are None, return None
-                  if (attrs.isEmpty) None else Some(DxInputSpec.PATTERNS -> JsObject(attrs))
+                  if (attrs.isEmpty) None else Some(DxIOSpec.PATTERNS -> JsObject(attrs))
               }
             case IR.IOAttrChoices(choices) =>
-              Some(DxInputSpec.CHOICES -> JsArray(choices.map(choice => {
+              Some(DxIOSpec.CHOICES -> JsArray(choices.map(choice => {
                 choice match {
                   case IR.ChoiceReprString(value)  => JsString(value)
                   case IR.ChoiceReprInteger(value) => JsNumber(value)
@@ -166,7 +178,7 @@ case class Native(dxWDLrtId: Option[String],
                 }
               })))
             case IR.IOAttrSuggestions(suggestions) =>
-              Some(DxInputSpec.SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
+              Some(DxIOSpec.SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
                 suggestion match {
                   case IR.SuggestionReprString(value)  => JsString(value)
                   case IR.SuggestionReprInteger(value) => JsNumber(value)
@@ -197,7 +209,11 @@ case class Native(dxWDLrtId: Option[String],
                 }
               })))
             case IR.IOAttrType(constraint) =>
-              Some(DxInputSpec.TYPE -> jsValueFromConstraint(constraint))
+              Some(DxIOSpec.TYPE -> jsValueFromConstraint(constraint))
+            case IR.IOAttrDefault(value) if !hasDefault =>
+              // The default was specified in parameter_meta and was not specified in the
+              // parameter declaration
+              Some(DxIOSpec.DEFAULT -> jsValueFromDefault(value))
             case _ => None
           }.toMap
         }
@@ -224,7 +240,7 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString(dxType))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
-                ++ jsMapFromAttrs(attrs)
+                ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           )
       )
     }
@@ -234,7 +250,7 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString("array:" ++ dxType))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
-                ++ jsMapFromAttrs(attrs)
+                ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           )
       )
     }
@@ -246,7 +262,7 @@ case class Native(dxWDLrtId: Option[String],
               Map("name" -> JsString(name), "class" -> JsString("hash"))
                 ++ jsMapFromOptional(optional)
                 ++ jsMapFromDefault(name)
-                ++ jsMapFromAttrs(attrs)
+                ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           ),
           JsObject(
               Map(
@@ -255,7 +271,7 @@ case class Native(dxWDLrtId: Option[String],
                   "optional" -> JsBoolean(true)
               )
                 ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)
-                ++ jsMapFromAttrs(attrs)
+                ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           )
       )
     }
