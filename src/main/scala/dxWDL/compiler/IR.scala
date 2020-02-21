@@ -22,8 +22,37 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
   
-  // Keywords for string pattern matching in parameter_meta
+  // The following keywords/types correspond to attributes of inputSpec/outputSpec from
+  // dxapp.json. These attributes can be used in the parameter_meta section of WDL, and
+  // will be parsed out and used when generating the native app.
+  //  Example:
+  //  
+  //  task {
+  //    inputs {
+  //      File sorted_bams
+  //    }
+  //    parameter_meta {
+  //      sorted_bams: {
+  //        label: "Sorted mappings",
+  //        help: "A set of coordinate-sorted BAM files to be merged.",
+  //        patterns: ["*.bam"]
+  //      }
+  //    }
+  //  }
+  //
+  //  will be turned into:
+  //
+  //  "inputSpec": {
+  //    "myparam": {
+  //      "name": "sorted_bams",
+  //      "label": "Sorted mappings",
+  //      "help": "A set of coordinate-sorted BAM files to be merged.",
+  //      "class": "array:file",
+  //      "patterns": ["*.bam"]
+  //    }
+  //  }
 
+  // Keywords for string pattern matching in parameter_meta
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"

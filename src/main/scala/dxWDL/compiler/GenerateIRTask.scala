@@ -108,7 +108,7 @@ case class GenerateIRTask(verbose: Verbose,
   // OR
   // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaChoicesArrayToIR(
-      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] =
+      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrChoices] = {
     if (array.isEmpty) {
       Some(IR.IOAttrChoices(Vector()))
     } else {
@@ -132,6 +132,7 @@ case class GenerateIRTask(verbose: Verbose,
           )
       }))
     }
+  }
 
   private def metaChoiceValueToIR(
       womType: WomType,
@@ -172,7 +173,7 @@ case class GenerateIRTask(verbose: Verbose,
   // suggestions: [
   //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaSuggestionsArrayToIR(
-      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrSuggestions] =
+      array: Vector[MetaValueElement], womType: WomType): Option[IR.IOAttrSuggestions] = {
     if (array.isEmpty) {
       Some(IR.IOAttrSuggestions(Vector()))
     } else {
@@ -193,7 +194,8 @@ case class GenerateIRTask(verbose: Verbose,
           )
       }))
     }
-
+  }
+  
   private def metaSuggestionValueToIR(
       womType: WomType,
       value: Option[MetaValueElement], 
