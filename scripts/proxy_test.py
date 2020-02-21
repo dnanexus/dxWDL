@@ -101,12 +101,6 @@ def compile(project, folder, version_id, proxy = None):
     return oid.decode("ascii")
 
 
-def build_dirs(project, version_id):
-    base_folder = "/builds/{}".format(version_id)
-    folder = base_folder + "/proxy"
-    project.new_folder(folder, parents=True)
-    return folder
-
 # test 1:
 # The squid configuration has a deny-all. The compiler should fail.
 def test_deny(project, folder, version_id):
@@ -266,7 +260,7 @@ def main():
     project = util.get_project(args.project)
     if project is None:
         raise RuntimeError("Could not find project {}".format(args.project))
-    folder = build_dirs(project, version_id)
+    folder = util.build_dirs(project, version_id)
     print("project: {} ({})".format(project.name, project.get_id()))
     print("folder: {}".format(folder))
 

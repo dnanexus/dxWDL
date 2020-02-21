@@ -160,6 +160,7 @@ test_unlocked=["array_structs",
                "path_not_taken",
                "optionals",
                "shapes"]
+test_project_wide_reuse=['add2', "add_many"]
 
 test_import_dirs=["A"]
 TestMetaData = namedtuple('TestMetaData', ['name','kind'])
@@ -498,6 +499,8 @@ def compiler_per_test_flags(tname):
         flags.append("-locked")
     if tname in test_reorg:
         flags.append("-reorg")
+    if tname in test_project_wide_reuse:
+        flags.append("-projectWideReuse")
     if tname in test_defaults:
         flags.append("-defaults")
         flags.append(desc.wdl_input)
@@ -674,6 +677,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
+    argparser.add_argument("--project-wide-reuse", help="look for existing applets in the entire project",
+                           action="store_true", default=False)
     argparser.add_argument("--stream-all-files", help="Stream all input files with dxfs2",
                            action="store_true", default=False)
     argparser.add_argument("--runtime-debug-level",
@@ -746,6 +751,8 @@ def main():
             compiler_flags += ["-verboseKey", key]
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
+    if args.project_wide_reuse:
+        compiler_flags.append("-projectWideReuse")
 
     #  is "native" included in one of the test names?
     if ("call_native" in test_names or
