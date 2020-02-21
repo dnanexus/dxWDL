@@ -83,6 +83,19 @@ case class Native(dxWDLrtId: Option[String],
         )
     }
 
+  private def jsValueFromConstraint(constraint: IR.ConstraintRepr): JsValue = {
+    constraint match {
+      case IR.ConstraintReprString(s) => JsString(s)
+      case IR.ConstraintReprOper(oper, constraints) =>
+        val dxOper = oper match {
+          case ConstraintOper.AND => DxConstraint.AND
+          case ConstraintOper.OR  => DxConstraint.OR
+          case _                  => throw new Exception(s"Invalid operation ${oper}")
+        }
+        JsObject(Map(dxOper -> JsArray(constraints.map(jsValueFromConstraint))))
+    }
+  }
+
   // For primitive types, and arrays of such types, we can map directly
   // to the equivalent dx types. For example,
   //   Int  -> int
@@ -107,22 +120,21 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // Create the IO Attributes
-    def jsMapFromAttrs(
-        help: Option[Vector[IR.IOAttr]]): Map[String, JsValue] = {
+    def jsMapFromAttrs(help: Option[Vector[IR.IOAttr]]): Map[String, JsValue] = {
       help match {
         case None => Map.empty
         case Some(attributes) => {
           attributes.flatMap {
             case IR.IOAttrGroup(text) =>
-              Some(IR.PARAM_META_GROUP -> JsString(text))
+              Some(DxInputSpec.GROUP -> JsString(text))
             case IR.IOAttrHelp(text) =>
-              Some(IR.PARAM_META_HELP -> JsString(text))
+              Some(DxInputSpec.HELP -> JsString(text))
             case IR.IOAttrLabel(text) =>
-              Some(IR.PARAM_META_LABEL -> JsString(text))
+              Some(DxInputSpec.LABEL -> JsString(text))
             case IR.IOAttrPatterns(patternRepr) =>
               patternRepr match {
                 case IR.PatternsReprArray(patterns) =>
-                  Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+                  Some(DxInputSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
                 // If we have the alternative patterns object, extrac the values, if any at all
                 case IR.PatternsReprObj(name, klass, tags) =>
                   val attrs: Map[String, JsValue] = List(
@@ -133,14 +145,14 @@ case class Native(dxWDLrtId: Option[String],
                       if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                   ).flatten.toMap
                   // If all three keys for the object version of patterns are None, return None
-                  if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
+                  if (attrs.isEmpty) None else Some(DxInputSpec.PATTERNS -> JsObject(attrs))
               }
             case IR.IOAttrChoices(choices) =>
-              Some(IR.PARAM_META_CHOICES -> JsArray(choices.map(choice => {
+              Some(DxInputSpec.CHOICES -> JsArray(choices.map(choice => {
                 choice match {
-                  case IR.ChoiceReprString(value) => JsString(value)
+                  case IR.ChoiceReprString(value)  => JsString(value)
                   case IR.ChoiceReprInteger(value) => JsNumber(value)
-                  case IR.ChoiceReprFloat(value) => JsNumber(value)
+                  case IR.ChoiceReprFloat(value)   => JsNumber(value)
                   case IR.ChoiceReprBoolean(value) => JsBoolean(value)
                   case IR.ChoiceReprFile(value, name) => {
                     // TODO: support project and record choices
@@ -154,36 +166,38 @@ case class Native(dxWDLrtId: Option[String],
                 }
               })))
             case IR.IOAttrSuggestions(suggestions) =>
-              Some(IR.PARAM_META_SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
+              Some(DxInputSpec.SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
                 suggestion match {
-                  case IR.SuggestionReprString(value) => JsString(value)
+                  case IR.SuggestionReprString(value)  => JsString(value)
                   case IR.SuggestionReprInteger(value) => JsNumber(value)
-                  case IR.SuggestionReprFloat(value) => JsNumber(value)
+                  case IR.SuggestionReprFloat(value)   => JsNumber(value)
                   case IR.SuggestionReprBoolean(value) => JsBoolean(value)
                   case IR.SuggestionReprFile(value, name, project, path) => {
                     // TODO: support project and record suggestions
                     val dxLink: Option[JsValue] = value match {
                       case Some(str) => Some(DxPath.resolveDxURLFile(str).getLinkAsJson)
-                      case None => None
+                      case None      => None
                     }
                     if (name.isDefined || project.isDefined || path.isDefined) {
                       val attrs: Map[String, JsValue] = List(
-                        if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
-                        if (name.isDefined) Some("name" -> JsString(name.get)) else None,
-                        if (project.isDefined) Some("project" -> JsString(project.get)) else None,
-                        if (path.isDefined) Some("path" -> JsString(path.get)) else None,
+                          if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
+                          if (name.isDefined) Some("name" -> JsString(name.get)) else None,
+                          if (project.isDefined) Some("project" -> JsString(project.get)) else None,
+                          if (path.isDefined) Some("path" -> JsString(path.get)) else None
                       ).flatten.toMap
                       JsObject(attrs)
                     } else if (dxLink.isDefined) {
                       dxLink.get
                     } else {
                       throw new Exception(
-                        "Either 'value' or 'project' + 'path' must be defined for suggestions"
+                          "Either 'value' or 'project' + 'path' must be defined for suggestions"
                       )
                     }
                   }
                 }
               })))
+            case IR.IOAttrType(constraint) =>
+              Some(DxInputSpec.TYPE -> jsValueFromConstraint(constraint))
             case _ => None
           }.toMap
         }

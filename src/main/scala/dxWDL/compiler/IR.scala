@@ -13,7 +13,7 @@ import wom.types.WomType
 import wom.values.WomValue
 
 import dxWDL.base.Utils
-import dxWDL.dx.{DxFile, DxWorkflowStage}
+import dxWDL.dx.{ConstraintOper, DxFile, DxWorkflowStage}
 
 object IR {
   // stages that the compiler uses in generated DNAx workflows
@@ -21,12 +21,12 @@ object IR {
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
-  
+
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of WDL, and
   // will be parsed out and used when generating the native app.
   //  Example:
-  //  
+  //
   //  task {
   //    inputs {
   //      File sorted_bams
@@ -52,14 +52,19 @@ object IR {
   //    }
   //  }
 
-  // Keywords for string pattern matching in parameter_meta
+  // Keywords for string pattern matching in WDL parameter_meta
+  val PARAM_META_CHOICES = "choices"
+  val PARAM_META_DEFAULT = "default" // TODO
+  val PARAM_META_DESCRIPTION = "description" // accepted as a synonym to 'help'
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
   val PARAM_META_PATTERNS = "patterns"
-  val PARAM_META_CHOICES = "choices"
   val PARAM_META_SUGGESTIONS = "suggestions"
-  val PARAM_META_TYPE = "dx_type" // TODO
+  val PARAM_META_TYPE = "dx_type"
+
+  val PARAM_META_CONSTRAINT_AND = "and"
+  val PARAM_META_CONSTRAINT_OR = "or"
 
   /** Compile time representation of the dxapp IO spec patterns
     *  Example:
@@ -78,10 +83,10 @@ object IR {
                                    klass: Option[String],
                                    tag: Option[Vector[String]])
       extends PatternsRepr
-  
+
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
-    * or, for file parameters, an annotated value (a hash with optional 'name' key and required 
+    * or, for file parameters, an annotated value (a hash with optional 'name' key and required
     * 'value' key).
     *  Examples:
     *   choices: [
@@ -92,7 +97,7 @@ object IR {
     *       name: "file2", value: "dx://file-YYY"
     *     }
     *   ]
-    *     
+    *
     *   choices: [true, false]  # => [true, false]
   **/
   sealed abstract class ChoiceRepr
@@ -104,7 +109,7 @@ object IR {
 
   /** Compile time representation of the dxapp IO spec suggestions
     * Suggestions is an array of suggested values, where each value can be raw (a primitive type)
-    * or, for file parameters, an annotated value (a hash with optional 'name', 'value', 
+    * or, for file parameters, an annotated value (a hash with optional 'name', 'value',
     * 'project', and 'path' keys).
     *  Examples:
     *   suggestions: [
@@ -115,7 +120,7 @@ object IR {
     *       name: "file2", project: "project-XXX", path: "/foo/bar.txt"
     *     }
     *   ]
-    *     
+    *
     *   suggestions: [1, 2, 3]
   **/
   sealed abstract class SuggestionRepr
@@ -124,11 +129,25 @@ object IR {
   sealed case class SuggestionReprFloat(value: Double) extends SuggestionRepr
   sealed case class SuggestionReprBoolean(value: Boolean) extends SuggestionRepr
   sealed case class SuggestionReprFile(
-    value: Option[String],
-    name: Option[String],
-    project: Option[String],
-    path: Option[String],
+      value: Option[String],
+      name: Option[String],
+      project: Option[String],
+      path: Option[String]
   ) extends SuggestionRepr
+
+  /** Compile-time representation of the dxapp IO spec 'type' value.
+    * Type is either a string or a boolean "expression" represented as a hash value with a single
+    * key ('$and' or '$or') and an array value that contains two or more expressions.
+    *  Examples:
+    *   type: "fastq"
+    *
+    *   type: { and: [ "fastq", { or: ["Read1", "Read2"] } ] }
+  **/
+  sealed abstract class ConstraintRepr
+  sealed case class ConstraintReprString(constraint: String) extends ConstraintRepr
+  sealed case class ConstraintReprOper(oper: ConstraintOper.Value,
+                                       constraints: Vector[ConstraintRepr])
+      extends ConstraintRepr
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
@@ -139,6 +158,7 @@ object IR {
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
   final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr
   final case class IOAttrSuggestions(suggestions: Vector[SuggestionRepr]) extends IOAttr
+  final case class IOAttrType(constraint: ConstraintRepr) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.

@@ -384,18 +384,24 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Some(x) => (x(0), x(1))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
-    pattern.choices shouldBe Some(Vector(
-      IOParameterChoiceString(value = "A"),
-      IOParameterChoiceString(value = "B"),
-    ))
-    in_file.choices shouldBe Some(Vector(
-      IOParameterChoiceFile(
-        name = None, value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
-      ),
-      IOParameterChoiceFile(
-        name = None, value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
-      ),
-    ))
+    pattern.choices shouldBe Some(
+        Vector(
+            IOParameterChoiceString(value = "A"),
+            IOParameterChoiceString(value = "B")
+        )
+    )
+    in_file.choices shouldBe Some(
+        Vector(
+            IOParameterChoiceFile(
+                name = None,
+                value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+            ),
+            IOParameterChoiceFile(
+                name = None,
+                value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+            )
+        )
+    )
   }
 
   it should "be able to include annotated choices information in inputSpec" in {
@@ -405,7 +411,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
-      case other => throw new Exception(s"Unexpected result ${other}")
+      case other                    => throw new Exception(s"Unexpected result ${other}")
     }
 
     val dxApplet = DxApplet.getInstance(appId)
@@ -414,18 +420,24 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Some(x) => (x(0), x(1))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
-    pattern.choices shouldBe Some(Vector(
-      IOParameterChoiceString(value = "A"),
-      IOParameterChoiceString(value = "B"),
-    ))
-    in_file.choices shouldBe Some(Vector(
-      IOParameterChoiceFile(
-        name = Some("file1"), value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
-      ),
-      IOParameterChoiceFile(
-        name = Some("file2"), value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
-      ),
-    ))
+    pattern.choices shouldBe Some(
+        Vector(
+            IOParameterChoiceString(value = "A"),
+            IOParameterChoiceString(value = "B")
+        )
+    )
+    in_file.choices shouldBe Some(
+        Vector(
+            IOParameterChoiceFile(
+                name = Some("file1"),
+                value = DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+            ),
+            IOParameterChoiceFile(
+                name = Some("file2"),
+                value = DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+            )
+        )
+    )
   }
 
   it should "be able to include suggestion information in inputSpec" in {
@@ -445,24 +457,28 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Some(x) => (x(0), x(1))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
-    pattern.suggestions shouldBe Some(Vector(
-      IOParameterSuggestionString(value = "A"),
-      IOParameterSuggestionString(value = "B"),
-    ))
-    in_file.suggestions shouldBe Some(Vector(
-      IOParameterSuggestionFile(
-        name = None,
-        value = Some(DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
-        project = None,
-        path = None,
-      ),
-      IOParameterSuggestionFile(
-        name = None, 
-        value = Some(DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")),
-        project = None,
-        path = None,
-      ),
-    ))
+    pattern.suggestions shouldBe Some(
+        Vector(
+            IOParameterSuggestionString(value = "A"),
+            IOParameterSuggestionString(value = "B")
+        )
+    )
+    in_file.suggestions shouldBe Some(
+        Vector(
+            IOParameterSuggestionFile(
+                name = None,
+                value = Some(DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
+                project = None,
+                path = None
+            ),
+            IOParameterSuggestionFile(
+                name = None,
+                value = Some(DxFile.getInstance("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")),
+                project = None,
+                path = None
+            )
+        )
+    )
   }
 
   it should "be able to include annotated suggestion information in inputSpec" in {
@@ -472,7 +488,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
-      case other => throw new Exception(s"Unexpected result ${other}")
+      case other                    => throw new Exception(s"Unexpected result ${other}")
     }
 
     val dxApplet = DxApplet.getInstance(appId)
@@ -481,24 +497,62 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Some(x) => (x(0), x(1))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
-    pattern.suggestions shouldBe Some(Vector(
-      IOParameterSuggestionString(value = "A"),
-      IOParameterSuggestionString(value = "B"),
-    ))
-    in_file.suggestions shouldBe Some(Vector(
-      IOParameterSuggestionFile(
-        name = Some("file1"),
-        value = Some(DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
-        project = None,
-        path = None,
-      ),
-      IOParameterSuggestionFile(
-        name = Some("file2"),
-        value = None,
-        project = Some(DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v")),
-        path = Some("/test_data/f2.txt.gz")
-      ),
-    ))
+    pattern.suggestions shouldBe Some(
+        Vector(
+            IOParameterSuggestionString(value = "A"),
+            IOParameterSuggestionString(value = "B")
+        )
+    )
+    in_file.suggestions shouldBe Some(
+        Vector(
+            IOParameterSuggestionFile(
+                name = Some("file1"),
+                value = Some(DxFile.getInstance("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
+                project = None,
+                path = None
+            ),
+            IOParameterSuggestionFile(
+                name = Some("file2"),
+                value = None,
+                project = Some(DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v")),
+                path = Some("/test_data/f2.txt.gz")
+            )
+        )
+    )
+  }
+
+  it should "be able to include dx_type information in inputSpec" in {
+    val path = pathFromBasename("compiler", "add_dx_type.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (file_a, file_b) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    file_a.dx_type shouldBe Some(IOParameterTypeConstraintString("fastq"))
+    file_b.dx_type shouldBe Some(
+        IOParameterTypeConstraintOper(
+            ConstraintOper.AND,
+            Vector(
+                IOParameterTypeConstraintString("fastq"),
+                IOParameterTypeConstraintOper(
+                    ConstraintOper.OR,
+                    Vector(
+                        IOParameterTypeConstraintString("Read1"),
+                        IOParameterTypeConstraintString("Read2")
+                    )
+                )
+            )
+        )
+    )
   }
 
   it should "be able to include help information in inputSpec" in {
@@ -514,12 +568,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     val dxApplet = DxApplet.getInstance(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
-    val (a, b) = inputSpec.inputSpec match {
-      case Some(x) => (x(0), x(1))
+    val (a, b, c, d, e) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1), x(2), x(3), x(4))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
     a.help shouldBe Some("lefthand side")
     b.help shouldBe Some("righthand side")
+    c.help shouldBe Some("Use this")
+    d.help shouldBe Some("Use this")
+    e.help shouldBe Some("Use this")
   }
 
   it should "be able to include group information in inputSpec" in {

@@ -10,6 +10,7 @@ task help_input_params_cgrep {
     input {
         String pattern
         File in_file
+        String s
     }
     parameter_meta {
       in_file : {
@@ -18,10 +19,11 @@ task help_input_params_cgrep {
         label: "Input file"
       }
       pattern: {
-        help: "The pattern to use to search in_file",
+        description: "The pattern to use to search in_file",
         group: "Common",
         label: "Search pattern"
       }
+      s: "This is help for s"
     }
     command {
         grep '${pattern}' ${in_file} | wc -l
