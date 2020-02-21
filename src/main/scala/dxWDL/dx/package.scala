@@ -144,11 +144,11 @@ object DxObject {
     }
 
     ioParam.copy(
-      optional = optFlag,
-      group = group,
-      help = help,
-      label = label,
-      patterns = patterns
+        optional = optFlag,
+        group = group,
+        help = help,
+        label = label,
+        patterns = patterns
     )
   }
 

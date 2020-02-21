@@ -23,7 +23,7 @@ object IR {
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
   // Keywords for string pattern matching
-  
+
   val PARAM_META_CHOICES = "choices" // TODO
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
@@ -49,7 +49,7 @@ object IR {
                                    klass: Option[String],
                                    tag: Option[Vector[String]])
       extends PatternsRepr
-  
+
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
   sealed abstract class IOAttr
