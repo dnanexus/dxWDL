@@ -21,15 +21,44 @@ object IR {
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
+  
+  // The following keywords/types correspond to attributes of inputSpec/outputSpec from
+  // dxapp.json. These attributes can be used in the parameter_meta section of WDL, and
+  // will be parsed out and used when generating the native app.
+  //  Example:
+  //  
+  //  task {
+  //    inputs {
+  //      File sorted_bams
+  //    }
+  //    parameter_meta {
+  //      sorted_bams: {
+  //        label: "Sorted mappings",
+  //        help: "A set of coordinate-sorted BAM files to be merged.",
+  //        patterns: ["*.bam"]
+  //      }
+  //    }
+  //  }
+  //
+  //  will be turned into:
+  //
+  //  "inputSpec": {
+  //    "myparam": {
+  //      "name": "sorted_bams",
+  //      "label": "Sorted mappings",
+  //      "help": "A set of coordinate-sorted BAM files to be merged.",
+  //      "class": "array:file",
+  //      "patterns": ["*.bam"]
+  //    }
+  //  }
 
-  // Keywords for string pattern matching
-
-  val PARAM_META_CHOICES = "choices" // TODO
+  // Keywords for string pattern matching in parameter_meta
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
   val PARAM_META_PATTERNS = "patterns"
-  val PARAM_META_SUGGESTIONS = "suggestions" // TODO
+  val PARAM_META_CHOICES = "choices"
+  val PARAM_META_SUGGESTIONS = "suggestions"
   val PARAM_META_TYPE = "dx_type" // TODO
 
   /** Compile time representation of the dxapp IO spec patterns
@@ -49,6 +78,57 @@ object IR {
                                    klass: Option[String],
                                    tag: Option[Vector[String]])
       extends PatternsRepr
+  
+  /** Compile time representation of the dxapp IO spec choices
+    * Choices is an array of suggested values, where each value can be raw (a primitive type)
+    * or, for file parameters, an annotated value (a hash with optional 'name' key and required 
+    * 'value' key).
+    *  Examples:
+    *   choices: [
+    *     {
+    *       name: "file1", value: "dx://file-XXX"
+    *     },
+    *     {
+    *       name: "file2", value: "dx://file-YYY"
+    *     }
+    *   ]
+    *     
+    *   choices: [true, false]  # => [true, false]
+  **/
+  sealed abstract class ChoiceRepr
+  final case class ChoiceReprString(value: String) extends ChoiceRepr
+  final case class ChoiceReprInteger(value: Int) extends ChoiceRepr
+  final case class ChoiceReprFloat(value: Double) extends ChoiceRepr
+  final case class ChoiceReprBoolean(value: Boolean) extends ChoiceRepr
+  final case class ChoiceReprFile(value: String, name: Option[String]) extends ChoiceRepr
+
+  /** Compile time representation of the dxapp IO spec suggestions
+    * Suggestions is an array of suggested values, where each value can be raw (a primitive type)
+    * or, for file parameters, an annotated value (a hash with optional 'name', 'value', 
+    * 'project', and 'path' keys).
+    *  Examples:
+    *   suggestions: [
+    *     {
+    *       name: "file1", value: "dx://file-XXX"
+    *     },
+    *     {
+    *       name: "file2", project: "project-XXX", path: "/foo/bar.txt"
+    *     }
+    *   ]
+    *     
+    *   suggestions: [1, 2, 3]
+  **/
+  sealed abstract class SuggestionRepr
+  sealed case class SuggestionReprString(value: String) extends SuggestionRepr
+  sealed case class SuggestionReprInteger(value: Int) extends SuggestionRepr
+  sealed case class SuggestionReprFloat(value: Double) extends SuggestionRepr
+  sealed case class SuggestionReprBoolean(value: Boolean) extends SuggestionRepr
+  sealed case class SuggestionReprFile(
+    value: Option[String],
+    name: Option[String],
+    project: Option[String],
+    path: Option[String],
+  ) extends SuggestionRepr
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.
@@ -57,6 +137,8 @@ object IR {
   final case class IOAttrHelp(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
+  final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr
+  final case class IOAttrSuggestions(suggestions: Vector[SuggestionRepr]) extends IOAttr
 
   // Compile time representation of a variable. Used also as
   // an applet argument.

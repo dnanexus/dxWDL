@@ -39,6 +39,25 @@ case class IOParamterPatternObject(name: Option[Vector[String]],
                                    tag: Option[Vector[String]])
     extends IOParameterPattern
 
+// Types for the IO choices section
+sealed abstract class IOParameterChoice
+final case class IOParameterChoiceString(value: String) extends IOParameterChoice
+final case class IOParameterChoiceNumber(value: BigDecimal) extends IOParameterChoice
+final case class IOParameterChoiceBoolean(value: Boolean) extends IOParameterChoice
+final case class IOParameterChoiceFile(
+  value: DxFile, name: Option[String]) extends IOParameterChoice
+
+// Types for the IO suggestions section
+sealed abstract class IOParameterSuggestion
+final case class IOParameterSuggestionString(value: String) extends IOParameterSuggestion
+final case class IOParameterSuggestionNumber(value: BigDecimal) extends IOParameterSuggestion
+final case class IOParameterSuggestionBoolean(value: Boolean) extends IOParameterSuggestion
+final case class IOParameterSuggestionFile(
+  name: Option[String],
+  value: Option[DxFile],
+  project: Option[DxProject],
+  path: Option[String]) extends IOParameterSuggestion
+
 // Representation of the IO spec
 case class IOParameter(
     name: String,
@@ -47,7 +66,9 @@ case class IOParameter(
     group: Option[String] = None,
     help: Option[String] = None,
     label: Option[String] = None,
-    patterns: Option[IOParameterPattern] = None
+    patterns: Option[IOParameterPattern] = None,
+    choices: Option[Vector[IOParameterChoice]] = None,
+    suggestions: Option[Vector[IOParameterSuggestion]] = None
 )
 
 // Extra fields for describe
@@ -143,12 +164,59 @@ object DxObject {
       case _ => None
     }
 
+    val choices = jsv.asJsObject.fields.get("choices") match {
+      case Some(JsArray(a)) => Some(a.map {
+        case JsObject(fields) => 
+          val nameStr: Option[String] = fields.get("name") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
+          }
+          IOParameterChoiceFile(
+            name = nameStr, value = DxUtils.dxFileFromJsValue(fields("value")))
+        case JsString(s) => IOParameterChoiceString(s)
+        case JsNumber(n) => IOParameterChoiceNumber(n)
+        case JsBoolean(b) => IOParameterChoiceBoolean(b)
+        case _ => throw new Exception("Unsupported choice value")
+      })
+      case _ => None
+    }
+
+    val suggestions = jsv.asJsObject.fields.get("suggestions") match {
+      case Some(JsArray(a)) => Some(a.map {
+        case JsObject(fields) => 
+          val name: Option[String] = fields.get("name") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
+          }
+          val value: Option[DxFile] = fields.get("value") match {
+            case Some(v: JsValue) => Some(DxUtils.dxFileFromJsValue(v))
+            case _ => None
+          }
+          val project: Option[DxProject] = fields.get("project") match {
+            case Some(JsString(p)) => Some(DxProject(p))
+            case _ => None
+          }
+          val path: Option[String] = fields.get("path") match {
+            case Some(JsString(s)) => Some(s)
+            case _ => None
+          }
+          IOParameterSuggestionFile(name, value, project, path)
+        case JsString(s) => IOParameterSuggestionString(s)
+        case JsNumber(n) => IOParameterSuggestionNumber(n)
+        case JsBoolean(b) => IOParameterSuggestionBoolean(b)
+        case _ => throw new Exception("Unsupported suggestion value")
+      })
+      case _ => None
+    }
+
     ioParam.copy(
-        optional = optFlag,
-        group = group,
-        help = help,
-        label = label,
-        patterns = patterns
+      optional = optFlag,
+      group = group,
+      help = help,
+      label = label,
+      patterns = patterns,
+      choices = choices,
+      suggestions = suggestions,
     )
   }
 

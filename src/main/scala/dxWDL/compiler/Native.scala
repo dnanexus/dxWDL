@@ -106,11 +106,9 @@ case class Native(dxWDLrtId: Option[String],
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
-    // Create the IO Attributes, currently `patterns` and `help`
+    // Create the IO Attributes
     def jsMapFromAttrs(
-        help: Option[Vector[IR.IOAttr]]
-    ): Map[String, JsValue] = {
-
+        help: Option[Vector[IR.IOAttr]]): Map[String, JsValue] = {
       help match {
         case None => Map.empty
         case Some(attributes) => {
@@ -137,6 +135,55 @@ case class Native(dxWDLrtId: Option[String],
                   // If all three keys for the object version of patterns are None, return None
                   if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
               }
+            case IR.IOAttrChoices(choices) =>
+              Some(IR.PARAM_META_CHOICES -> JsArray(choices.map(choice => {
+                choice match {
+                  case IR.ChoiceReprString(value) => JsString(value)
+                  case IR.ChoiceReprInteger(value) => JsNumber(value)
+                  case IR.ChoiceReprFloat(value) => JsNumber(value)
+                  case IR.ChoiceReprBoolean(value) => JsBoolean(value)
+                  case IR.ChoiceReprFile(value, name) => {
+                    // TODO: support project and record choices
+                    val dxLink = DxPath.resolveDxURLFile(value).getLinkAsJson
+                    if (name.isDefined) {
+                      JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
+                    } else {
+                      dxLink
+                    }
+                  }
+                }
+              })))
+            case IR.IOAttrSuggestions(suggestions) =>
+              Some(IR.PARAM_META_SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
+                suggestion match {
+                  case IR.SuggestionReprString(value) => JsString(value)
+                  case IR.SuggestionReprInteger(value) => JsNumber(value)
+                  case IR.SuggestionReprFloat(value) => JsNumber(value)
+                  case IR.SuggestionReprBoolean(value) => JsBoolean(value)
+                  case IR.SuggestionReprFile(value, name, project, path) => {
+                    // TODO: support project and record suggestions
+                    val dxLink: Option[JsValue] = value match {
+                      case Some(str) => Some(DxPath.resolveDxURLFile(str).getLinkAsJson)
+                      case None => None
+                    }
+                    if (name.isDefined || project.isDefined || path.isDefined) {
+                      val attrs: Map[String, JsValue] = List(
+                        if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
+                        if (name.isDefined) Some("name" -> JsString(name.get)) else None,
+                        if (project.isDefined) Some("project" -> JsString(project.get)) else None,
+                        if (path.isDefined) Some("path" -> JsString(path.get)) else None,
+                      ).flatten.toMap
+                      JsObject(attrs)
+                    } else if (dxLink.isDefined) {
+                      dxLink.get
+                    } else {
+                      throw new Exception(
+                        "Either 'value' or 'project' + 'path' must be defined for suggestions"
+                      )
+                    }
+                  }
+                }
+              })))
             case _ => None
           }.toMap
         }

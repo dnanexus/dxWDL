@@ -255,9 +255,9 @@ The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#p
   - `help`
   - `label`
   - `patterns`
-<!--
   - `choices`
   - `suggestions`
+<!--
   - `dx_type` (maps to the `type` field in dxapp.json)
 -->
 
