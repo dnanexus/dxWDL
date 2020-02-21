@@ -25,6 +25,8 @@ object IR {
   // Keywords for string pattern matching used in in WDL parameter_meta
   
   val PARAM_META_CHOICES = "choices"
+  val PARAM_META_DEFAULT = "default"
+  val PARAM_META_DESCRIPTION = "description"  // accepted as a synonym to 'help'
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
@@ -101,6 +103,7 @@ object IR {
   sealed abstract class IOAttr
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
+  final case class IOAttrDescription(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
   final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr

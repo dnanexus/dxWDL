@@ -287,6 +287,8 @@ case class GenerateIRTask(verbose: Verbose,
       Some(obj.flatMap {
         case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
+        case (IR.PARAM_META_DESCRIPTION, MetaValueElementString(text)) => 
+          Some(IR.IOAttrDescription(text))
         case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
         // Try to parse the patterns key
         // First see if it's an array
