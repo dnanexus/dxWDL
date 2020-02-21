@@ -21,14 +21,14 @@ object IR {
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
-
-  // Keywords for string pattern matching in parameter_meta
   
-  val PARAM_META_CHOICES = "choices"
+  // Keywords for string pattern matching in parameter_meta
+
   val PARAM_META_GROUP = "group"
   val PARAM_META_HELP = "help"
   val PARAM_META_LABEL = "label"
   val PARAM_META_PATTERNS = "patterns"
+  val PARAM_META_CHOICES = "choices"
   val PARAM_META_SUGGESTIONS = "suggestions"
   val PARAM_META_TYPE = "dx_type" // TODO
 

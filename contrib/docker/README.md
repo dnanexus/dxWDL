@@ -10,7 +10,7 @@ container](https://hub.docker.com/r/vanessa/dx-toolkit/) directly from Docker Hu
 
 ```bash
 docker pull vanessa/dx-toolkit
-docker tag vanessa/dx-toolkit dnanexus/dxdwl
+docker tag vanessa/dx-toolkit dnanexus/dxwdl
 ```
 If you have any issues with the container or would like to request updates or changes,
 please [open an issue](https://www.github.com/dnanexus/dxWDL/issues) and tag [@vsoch](https://www.github.com/vsoch) and she will be

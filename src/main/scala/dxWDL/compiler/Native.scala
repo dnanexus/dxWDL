@@ -548,7 +548,7 @@ case class Native(dxWDLrtId: Option[String],
     dxObjDir.lookupOtherVersions(name, digest) match {
       case None => ()
       case Some((dxObj, desc)) =>
-        dxObj match {
+        desc match {
           case a: DxAppDescribe =>
             Utils.trace(verbose.on, s"Found existing version of app ${name}")
           case apl: DxAppletDescribe =>

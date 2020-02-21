@@ -75,7 +75,7 @@ case class GenerateIRTask(verbose: Verbose,
       case _                           => None
     }.toVector
   }
-
+  
   // Convert a patterns WOM object value to IR
   private def metaPatternsObjToIR(obj: Map[String, MetaValueElement]): IR.IOAttrPatterns = {
     val name = obj.get("name") match {
