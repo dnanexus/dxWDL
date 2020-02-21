@@ -282,13 +282,18 @@ case class GenerateIRTask(verbose: Verbose,
       paramMeta: Option[MetaValueElement], womType: WomType
   ): Option[Vector[IR.IOAttr]] = paramMeta match {
     case None => None
+    // If the parameter metadata is a string, treat it as help
+    case Some(MetaValueElementString(text)) => Some(Vector(IR.IOAttrHelp(text)))
     case Some(MetaValueElementObject(obj)) => {
+      // Whether to use 'description' in place of help
+      val noHelp = !obj.contains(IR.PARAM_META_HELP)
       // Use flatmap to get the parameter metadata keys if they exist
       Some(obj.flatMap {
         case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
         case (IR.PARAM_META_HELP, MetaValueElementString(text)) => Some(IR.IOAttrHelp(text))
-        case (IR.PARAM_META_DESCRIPTION, MetaValueElementString(text)) => 
-          Some(IR.IOAttrDescription(text))
+        // Use 'description' in place of 'help' if the former is present and the latter is not
+        case (IR.PARAM_META_DESCRIPTION, MetaValueElementString(text)) if noHelp => 
+          Some(IR.IOAttrHelp(text))
         case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
         // Try to parse the patterns key
         // First see if it's an array

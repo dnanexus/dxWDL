@@ -103,7 +103,6 @@ object IR {
   sealed abstract class IOAttr
   final case class IOAttrGroup(text: String) extends IOAttr
   final case class IOAttrHelp(text: String) extends IOAttr
-  final case class IOAttrDescription(text: String) extends IOAttr
   final case class IOAttrLabel(text: String) extends IOAttr
   final case class IOAttrPatterns(patternRepr: PatternsRepr) extends IOAttr
   final case class IOAttrChoices(choices: Vector[ChoiceRepr]) extends IOAttr

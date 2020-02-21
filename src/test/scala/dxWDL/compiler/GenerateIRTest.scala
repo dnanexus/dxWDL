@@ -863,12 +863,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
             ),
             "pattern" -> MetaValueElement.MetaValueElementObject(
                 Map(
-                    "help" -> MetaValueElement
+                    "description" -> MetaValueElement
                       .MetaValueElementString("The pattern to use to search in_file"),
                     "group" -> MetaValueElement.MetaValueElementString("Common"),
                     "label" -> MetaValueElement.MetaValueElementString("Search pattern")
                 )
-            )
+            ),
+            "s" -> MetaValueElement.MetaValueElementString("This is help for s")
         )
     )
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
@@ -917,6 +918,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
     cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+          "s",
+          WomStringType,
+          None,
+          Some(Vector(
+            IR.IOAttrHelp("This is help for s")
+          ))
+        ),
         IR.CVar(
             "in_file",
             WomSingleFileType,

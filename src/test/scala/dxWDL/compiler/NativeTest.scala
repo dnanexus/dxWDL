@@ -548,12 +548,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     val dxApplet = DxApplet.getInstance(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
-    val (a, b) = inputSpec.inputSpec match {
-      case Some(x) => (x(0), x(1))
+    val (a, b, c, d, e) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1), x(2), x(3), x(4))
       case other   => throw new Exception(s"Unexpected result ${other}")
     }
     a.help shouldBe Some("lefthand side")
     b.help shouldBe Some("righthand side")
+    c.help shouldBe Some("Use this")
+    d.help shouldBe Some("Use this")
+    e.help shouldBe Some("Use this")
   }
 
   it should "be able to include group information in inputSpec" in {
