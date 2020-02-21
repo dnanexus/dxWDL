@@ -13,7 +13,7 @@ import wom.types.WomType
 import wom.values.WomValue
 
 import dxWDL.base.Utils
-import dxWDL.dx.{DxFile, DxWorkflowStage}
+import dxWDL.dx.{ConstraintOper, DxFile, DxWorkflowStage}
 
 object IR {
   // stages that the compiler uses in generated DNAx workflows
@@ -22,7 +22,7 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
-  // Keywords for string pattern matching
+  // Keywords for string pattern matching used in in WDL parameter_meta
   
   val PARAM_META_CHOICES = "choices"
   val PARAM_META_GROUP = "group"
@@ -31,6 +31,9 @@ object IR {
   val PARAM_META_PATTERNS = "patterns"
   val PARAM_META_SUGGESTIONS = "suggestions"
   val PARAM_META_TYPE = "dx_type"
+  
+  val PARAM_META_CONSTRAINT_AND = "and"
+  val PARAM_META_CONSTRAINT_OR = "or"
 
   /** Compile time representation of the dxapp IO spec patterns
     *  Example:
@@ -90,8 +93,8 @@ object IR {
 
   sealed abstract class ConstraintRepr
   sealed case class ConstraintReprString(constraint: String) extends ConstraintRepr
-  sealed case class ConstraintReprOper(oper: String, constraints: Vector[ConstraintRepr]) 
-      extends ConstraintRepr
+  sealed case class ConstraintReprOper(
+    oper: ConstraintOper.Value, constraints: Vector[ConstraintRepr]) extends ConstraintRepr
 
   // Compile time representaiton of supported parameter_meta section
   // information for the dxapp IO spec.

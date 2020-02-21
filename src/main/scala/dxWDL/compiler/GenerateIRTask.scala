@@ -252,15 +252,15 @@ case class GenerateIRTask(verbose: Verbose,
       constraint: MetaValueElement): IR.ConstraintRepr = constraint match {
     case MetaValueElementObject(obj: Map[String, MetaValueElement]) =>
       if (obj.size != 1) {
-        throw new Exception("Constraint hash must have exaclty one 'and_' or 'or_' key")
+        throw new Exception("Constraint hash must have exactly one 'and' or 'or' key")
       }
       obj.head match {
-        case ("and_", MetaValueElementArray(array)) => 
-          IR.ConstraintReprOper("and", array.map(metaConstraintToIR))
-        case ("or_", MetaValueElementArray(array)) =>
-          IR.ConstraintReprOper("or", array.map(metaConstraintToIR))
+        case (IR.PARAM_META_CONSTRAINT_AND, MetaValueElementArray(array)) => 
+          IR.ConstraintReprOper(ConstraintOper.AND, array.map(metaConstraintToIR))
+        case (IR.PARAM_META_CONSTRAINT_OR, MetaValueElementArray(array)) =>
+          IR.ConstraintReprOper(ConstraintOper.OR, array.map(metaConstraintToIR))
         case _ => throw new Exception(
-          "Constraint must have key 'and_' or 'or_' and an array value"
+          "Constraint must have key 'and' or 'or' and an array value"
         )
       }
     case MetaValueElementString(s) => IR.ConstraintReprString(s)
@@ -305,10 +305,9 @@ case class GenerateIRTask(verbose: Verbose,
           Some(IR.IOAttrSuggestions(metaSuggestionsArrayToIR(array, wt)))
         case (IR.PARAM_META_TYPE, dx_type: MetaValueElement) => 
           val wt = unwrapWomArrayType(womType)
-          if (wt.isInstanceOf[WomSingleFileType]) {
-            Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
-          } else {
-            throw new Exception("'dx_type' can only be specified for File parameters")
+          wt match {
+            case WomSingleFileType => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
+            case _ => throw new Exception("'dx_type' can only be specified for File parameters")
           }
         case _ => None
       }.toVector)

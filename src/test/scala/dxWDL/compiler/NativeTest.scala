@@ -501,6 +501,40 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ))
   }
 
+  it should "be able to include dx_type information in inputSpec" in {
+    val path = pathFromBasename("compiler", "add_dx_type.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val inputSpec = dxApplet.describe(Set(Field.InputSpec))
+    val (file_a, file_b) = inputSpec.inputSpec match {
+      case Some(x) => (x(0), x(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    file_a.dx_type shouldBe Some(IOParameterTypeConstraintString("fastq"))
+    file_b.dx_type shouldBe Some(
+      IOParameterTypeConstraintOper(
+        ConstraintOper.AND,
+        Vector(
+          IOParameterTypeConstraintString("fastq"),
+          IOParameterTypeConstraintOper(
+            ConstraintOper.OR,
+            Vector(
+              IOParameterTypeConstraintString("Read1"),
+              IOParameterTypeConstraintString("Read2"),
+            )
+          )
+        )
+      )
+    )
+  }
+
   it should "be able to include help information in inputSpec" in {
     val path = pathFromBasename("compiler", "add_help.wdl")
 

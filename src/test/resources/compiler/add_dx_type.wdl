@@ -1,6 +1,6 @@
 version 1.0
 
-task add_group {
+task add_dx_type {
     input {
         File a
         File b
@@ -16,10 +16,10 @@ task add_group {
         }
         b: {
             dx_type: {
-                and_: [
+                and: [
                     "fastq", 
                     {
-                        or_: ["Read1", "Read2"]
+                        or: ["Read1", "Read2"]
                     }
                 ]
             }

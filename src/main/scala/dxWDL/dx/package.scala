@@ -31,6 +31,19 @@ object DxIOClass extends Enumeration {
   }
 }
 
+object DxInputSpec {
+  val NAME = "name"
+  val CLASS = "class"
+  val OPTIONAL = "optional"
+  val CHOICES = "choices"
+  val GROUP = "group"
+  val HELP = "help"
+  val LABEL = "label"
+  val PATTERNS = "patterns"
+  val SUGGESTIONS = "suggestions"
+  val TYPE = "type"
+}
+
 // Types for the IO spec pattern section
 sealed abstract class IOParameterPattern
 case class IOParamterPatternArray(patterns: Vector[String]) extends IOParameterPattern
@@ -58,6 +71,20 @@ final case class IOParameterSuggestionFile(
   project: Option[DxProject],
   path: Option[String]) extends IOParameterSuggestion
 
+final object DxConstraint {
+  val AND = "$and"
+  val OR = "$or"
+}
+final object ConstraintOper extends Enumeration {
+  val AND, OR = Value
+}
+sealed abstract class IOParameterTypeConstraint
+sealed case class IOParameterTypeConstraintString(constraint: String) 
+  extends IOParameterTypeConstraint
+sealed case class IOParameterTypeConstraintOper(
+  oper: ConstraintOper.Value,
+  constraints: Vector[IOParameterTypeConstraint]) extends IOParameterTypeConstraint
+
 // Representation of the IO spec
 case class IOParameter(
     name: String,
@@ -68,7 +95,8 @@ case class IOParameter(
     label: Option[String] = None,
     patterns: Option[IOParameterPattern] = None,
     choices: Option[Vector[IOParameterChoice]] = None,
-    suggestions: Option[Vector[IOParameterSuggestion]] = None
+    suggestions: Option[Vector[IOParameterSuggestion]] = None,
+    dx_type: Option[IOParameterTypeConstraint] = None,
 )
 
 // Extra fields for describe
@@ -104,7 +132,7 @@ object DxObject {
   }
 
   def parseIoParam(jsv: JsValue): IOParameter = {
-    val ioParam = jsv.asJsObject.getFields("name", "class") match {
+    val ioParam = jsv.asJsObject.getFields(DxInputSpec.NAME, DxInputSpec.CLASS) match {
       case Seq(JsString(name), JsString(klass)) =>
         val ioClass = DxIOClass.fromString(klass)
         IOParameter(name, ioClass, false)
@@ -112,27 +140,27 @@ object DxObject {
         throw new Exception(s"Malformed io spec ${other}")
     }
 
-    val optFlag = jsv.asJsObject.fields.get("optional") match {
+    val optFlag = jsv.asJsObject.fields.get(DxInputSpec.OPTIONAL) match {
       case Some(JsBoolean(b)) => b
       case None               => false
     }
 
-    val group = jsv.asJsObject.fields.get("group") match {
+    val group = jsv.asJsObject.fields.get(DxInputSpec.GROUP) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val help = jsv.asJsObject.fields.get("help") match {
+    val help = jsv.asJsObject.fields.get(DxInputSpec.HELP) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val label = jsv.asJsObject.fields.get("label") match {
+    val label = jsv.asJsObject.fields.get(DxInputSpec.LABEL) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val patterns = jsv.asJsObject.fields.get("patterns") match {
+    val patterns = jsv.asJsObject.fields.get(DxInputSpec.PATTERNS) match {
       case Some(JsArray(a)) =>
         Some(IOParamterPatternArray(a.flatMap {
           case JsString(s) => Some(s)
@@ -164,7 +192,7 @@ object DxObject {
       case _ => None
     }
 
-    val choices = jsv.asJsObject.fields.get("choices") match {
+    val choices = jsv.asJsObject.fields.get(DxInputSpec.CHOICES) match {
       case Some(JsArray(a)) => Some(a.map {
         case JsObject(fields) => 
           val nameStr: Option[String] = fields.get("name") match {
@@ -181,7 +209,7 @@ object DxObject {
       case _ => None
     }
 
-    val suggestions = jsv.asJsObject.fields.get("suggestions") match {
+    val suggestions = jsv.asJsObject.fields.get(DxInputSpec.SUGGESTIONS) match {
       case Some(JsArray(a)) => Some(a.map {
         case JsObject(fields) => 
           val name: Option[String] = fields.get("name") match {
@@ -209,6 +237,11 @@ object DxObject {
       case _ => None
     }
 
+    val dx_type = jsv.asJsObject.fields.get(DxInputSpec.TYPE) match {
+      case Some(v: JsValue) => Some(ioParamTypeFromJs(v))
+      case _ => None
+    }
+
     ioParam.copy(
       optional = optFlag,
       group = group,
@@ -217,7 +250,28 @@ object DxObject {
       patterns = patterns,
       choices = choices,
       suggestions = suggestions,
+      dx_type = dx_type,
     )
+  }
+
+  def ioParamTypeFromJs(value: JsValue): IOParameterTypeConstraint = {
+    value match {
+      case JsString(s) => IOParameterTypeConstraintString(s)
+      case JsObject(fields) =>
+        if (fields.size != 1) {
+          throw new Exception("Constraint hash must have exactly one '$and' or '$or' key")
+        }
+        fields.head match {
+          case (DxConstraint.AND, JsArray(array)) => 
+            IOParameterTypeConstraintOper(ConstraintOper.AND, array.map(ioParamTypeFromJs))
+          case (DxConstraint.OR, JsArray(array)) =>
+            IOParameterTypeConstraintOper(ConstraintOper.OR, array.map(ioParamTypeFromJs))
+          case _ => throw new Exception(
+            "Constraint must have key '$and' or '$or' and an array value"
+          )
+        }
+      case _ => throw new Exception(s"Invalid paramter type value ${value}")
+    }
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {

@@ -781,6 +781,63 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
+  
+  // Check parameter_meta `dx_type` keyword
+  it should "recognize dx_type in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "add_dx_type.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_dx_type", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "a",
+            WomSingleFileType,
+            None,
+            Some(Vector(
+              IR.IOAttrType(IR.ConstraintReprString("fastq"))
+            ))
+        ),
+        IR.CVar(
+            "b",
+            WomSingleFileType,
+            None,
+            Some(Vector(
+              IR.IOAttrType(
+                IR.ConstraintReprOper(
+                  ConstraintOper.AND,
+                  Vector(
+                    IR.ConstraintReprString("fastq"),
+                    IR.ConstraintReprOper(
+                      ConstraintOper.OR,
+                      Vector(
+                        IR.ConstraintReprString("Read1"),
+                        IR.ConstraintReprString("Read2")
+                      )
+                    )
+                  )
+                )
+              )
+            ))
+        )
+    )
+  }
+
+  // Check parameter_meta `dx_type` keyword fails when specified for a non-file parameter
+  it should "throw exception when dx_type is used on non-file parameter" in {
+    val path = pathFromBasename("compiler", "dx_type_nonfile.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
 
   it should "recognize help, group, and label in parameters_meta via WOM" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")

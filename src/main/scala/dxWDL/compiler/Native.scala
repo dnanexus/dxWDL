@@ -83,6 +83,19 @@ case class Native(dxWDLrtId: Option[String],
         )
     }
 
+  private def jsValueFromConstraint(constraint: IR.ConstraintRepr): JsValue = {
+    constraint match {
+      case IR.ConstraintReprString(s) => JsString(s)
+      case IR.ConstraintReprOper(oper, constraints) =>
+        val dxOper = oper match {
+          case ConstraintOper.AND => DxConstraint.AND
+          case ConstraintOper.OR => DxConstraint.OR
+          case _ => throw new Exception(s"Invalid operation ${oper}")
+        }
+        JsObject(Map(dxOper -> JsArray(constraints.map(jsValueFromConstraint))))
+    }
+  }
+
   // For primitive types, and arrays of such types, we can map directly
   // to the equivalent dx types. For example,
   //   Int  -> int
@@ -113,15 +126,15 @@ case class Native(dxWDLrtId: Option[String],
       case Some(attributes) => {
         attributes.flatMap {
           case IR.IOAttrGroup(text) =>
-            Some(IR.PARAM_META_GROUP -> JsString(text))
+            Some(DxInputSpec.GROUP -> JsString(text))
           case IR.IOAttrHelp(text) =>
-            Some(IR.PARAM_META_HELP -> JsString(text))
+            Some(DxInputSpec.HELP -> JsString(text))
           case IR.IOAttrLabel(text) =>
-            Some(IR.PARAM_META_LABEL -> JsString(text))
+            Some(DxInputSpec.LABEL -> JsString(text))
           case IR.IOAttrPatterns(patternRepr) =>
             patternRepr match {
               case IR.PatternsReprArray(patterns) =>
-                Some(IR.PARAM_META_PATTERNS -> JsArray(patterns.map(JsString(_))))
+                Some(DxInputSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
               // If we have the alternative patterns object, extrac the values, if any at all
               case IR.PatternsReprObj(name, klass, tags) =>
                 val attrs: Map[String, JsValue] = List(
@@ -132,10 +145,10 @@ case class Native(dxWDLrtId: Option[String],
                     if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                 ).flatten.toMap
                 // If all three keys for the object version of patterns are None, return None
-                if (attrs.isEmpty) None else Some(IR.PARAM_META_PATTERNS -> JsObject(attrs))
+                if (attrs.isEmpty) None else Some(DxInputSpec.PATTERNS -> JsObject(attrs))
             }
           case IR.IOAttrChoices(choices) =>
-            Some(IR.PARAM_META_CHOICES -> JsArray(choices.map(choice => {
+            Some(DxInputSpec.CHOICES -> JsArray(choices.map(choice => {
               choice match {
                 case IR.ChoiceReprString(value) => JsString(value)
                 case IR.ChoiceReprInteger(value) => JsNumber(value)
@@ -153,7 +166,7 @@ case class Native(dxWDLrtId: Option[String],
               }
             })))
           case IR.IOAttrSuggestions(suggestions) =>
-            Some(IR.PARAM_META_SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
+            Some(DxInputSpec.SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
               suggestion match {
                 case IR.SuggestionReprString(value) => JsString(value)
                 case IR.SuggestionReprInteger(value) => JsNumber(value)
@@ -184,7 +197,7 @@ case class Native(dxWDLrtId: Option[String],
               }
             })))
           case IR.IOAttrType(constraint) =>
-            Some(IR.PARAM_META_TYPE =>
+            Some(DxInputSpec.TYPE -> jsValueFromConstraint(constraint))
           case _ => None
         }.toMap
       }
