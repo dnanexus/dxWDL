@@ -9,7 +9,7 @@ By default, temporary workspaces hold the results of executed workflows and appl
   "delayWorkspaceDestruction" : true
 }
 ```
-This option will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours. Also, run the toplevel workflow (or applet) with the flag set:
+This is a runtime option that will be passed down through the entire tree of sub-workflows and tasks. Workspaces will remain intact for 72 hours. You also need to run the toplevel workflow (or applet) as follows:
 
 ```
 dx run YOUR_WORKFLOW --delay-workspace-destruction

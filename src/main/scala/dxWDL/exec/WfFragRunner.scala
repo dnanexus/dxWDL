@@ -372,6 +372,24 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
+    private def analysisSetProperties(dxAnalysis : DXAnalysis,
+                                      props : Map[String, JsValue]) : DXAnalysis = {
+        val id = dxAnalysis.getId
+        val req = JsObject("properties" -> JsObject(props))
+        val retval: JsonNode = DXAPI.analysisSetProperties(id,
+                                                           DxUtils.jsonNodeOfJsValue(req),
+                                                           classOf[JsonNode])
+        val info: JsValue =  DxUtils.jsValueOfJsonNode(retval)
+        info.asJsObject.fields.get("id") match {
+            case Some(JsString(x)) =>
+                if (x != id)
+                    throw new Exception("new id returned from set-properties")
+            case _ => throw new AppInternalException(
+                s"Bad format returned from analysis-set-properties ${info.prettyPrint}")
+        }
+        dxAnalysis
+    }
+
     private def execDNAxExecutable(dxExecId: String,
                                    dbgName: String,
                                    callInputs : JsValue,
@@ -435,18 +453,30 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
                 DXJob.getInstance(id)
             } else if (dxExecId.startsWith("workflow-")) {
-                // FIXME
-                // need to figure out how to pass the argument at runtime to the workflow.
-                // 1) we can't use the dxjava API call.
-                // 2) we can't use the putProperty option
-                assert(false)
-                val workflow = DXWorkflow.getInstance(dxExecId)
-                val dxAnalysis :DXAnalysis = workflow.newRun()
-                    .setRawInput(DxUtils.jsonNodeOfJsValue(callInputs))
-                    .setName(dbgName)
-                    .putProperty("seq_number", seqNum.toString)
-                    .run()
-                dxAnalysis
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs
+                )
+                val dwd = delayWorkspaceDestruction match {
+                    case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+                    case _          => Map.empty
+                }
+                val req = JsObject(fields ++ dwd)
+                val retval : JsonNode = DXAPI.workflowRun(dxExecId,
+                                                          DxUtils.jsonNodeOfJsValue(req),
+                                                          classOf[JsonNode],
+                                                          DxUtils.dxEnv)
+                val info: JsValue = DxUtils.jsValueOfJsonNode(retval)
+                val id : String = info.asJsObject.fields.get("id") match {
+                    case None =>
+                        throw new Exception("id not returned in response")
+                    case Some(JsString(x)) => x
+                    case Some(other) =>
+                        throw new Exception(s"malformed json response ${other}")
+                }
+                val dxAnalysis = DXAnalysis.getInstance(id)
+                analysisSetProperties(dxAnalysis,
+                                      Map("seq_number" -> JsString(seqNum.toString)))
             } else {
                 throw new Exception(s"Unsupported execution ${dxExecId}")
             }
