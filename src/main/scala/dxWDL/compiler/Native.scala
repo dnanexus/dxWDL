@@ -741,12 +741,21 @@ case class Native(dxWDLrtId: Option[String],
             ("link_" + name) -> JsObject(
                 "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
         }.toMap
-        val (runSpec : JsValue, details: Map[String, JsValue]) =
+        val (runSpec : JsValue, baseDetails: Map[String, JsValue]) =
             calcRunSpec(applet,
                         auxInfo ++ dxLinks ++ metaInfo,
                         bashScript)
-        val detailsWithLicense: Map[String, JsValue] = addLicences(applet)
-        val jsDetails: JsValue = JsObject(details ++ detailsWithLicense)
+        val license: Map[String, JsValue] = addLicences(applet)
+
+        val delayWD: Map[String, JsValue] = extras match {
+            case None => Map.empty
+            case Some(ext) =>
+                ext.delayWorkspaceDestruction match {
+                    case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+                    case _          => Map.empty
+                }
+        }
+        val details: Map[String, JsValue] = baseDetails ++ license ++ delayWD
         val access : JsValue = calcAccess(applet)
 
         // A fragemnt is hidden, not visible under default settings. This
@@ -766,7 +775,7 @@ case class Native(dxWDLrtId: Option[String],
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL")),
-            "details" -> jsDetails,
+            "details" -> JsObject(details),
             "hidden" -> JsBoolean(hidden)
         )
         val accessField =
@@ -992,7 +1001,15 @@ case class Native(dxWDLrtId: Option[String],
                     "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
         }.toMap
 
-        val details = Map("details" -> JsObject(womSourceCodeField ++ dxLinks))
+        val delayWD: Map[String, JsValue] = extras match {
+            case None => Map.empty
+            case Some(ext) =>
+                ext.delayWorkspaceDestruction match {
+                    case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+                    case _          => Map.empty
+	        }
+        }
+        val details = Map("details" -> JsObject(womSourceCodeField ++ dxLinks ++ delayWD))
 
         // pack all the arguments into a single API call
         val reqFieldsAll = reqFields ++ wfInputOutput ++ details

@@ -433,4 +433,58 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         val trainsOutputVector: IR.Callable = bundle.allCallables("trains")
         trainsOutputVector.outputVars.size shouldBe 1
     }
+
+    it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "add_timeout.wdl")
+        val extrasContent =
+            """|{
+               |  "delayWorkspaceDestruction": true
+               |}
+               |""".stripMargin
+        val extrasPath = createExtras(extrasContent)
+
+        val retval = Main.compile(
+	    path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+        )
+        retval shouldBe a[Main.SuccessfulTermination]
+
+        val appletId = retval match {
+            case SuccessfulTermination(x) => x
+            case _                        => throw new Exception("sanity")
+        }
+
+        // make sure the delayWorkspaceDestruction flag is set
+        val (stdout, stderr) =
+            Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+        val details = stdout.parseJson.asJsObject.fields.get("details").get
+        val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+        delayWD shouldBe Some(JsTrue)
+    }
+
+    it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
+        val extrasContent =
+            """|{
+               |  "delayWorkspaceDestruction": true
+               |}
+               |""".stripMargin
+        val extrasPath = createExtras(extrasContent)
+
+        val retval = Main.compile(
+	    path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+        )
+        retval shouldBe a[Main.SuccessfulTermination]
+
+        val wfId = retval match {
+            case Main.SuccessfulTermination(x) => x
+            case _                             => throw new Exception("sanity")
+        }
+
+        // make sure the flag is set on the resulting workflow
+        val (stdout, stderr) =
+            Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+        val details = stdout.parseJson.asJsObject.fields.get("details").get
+        val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
+        delayWD shouldBe Some(JsTrue)
+    }
 }

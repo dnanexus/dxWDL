@@ -148,10 +148,16 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         // from the platform, we may not need to access them.
         val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
         val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
-        val taskRunner = TaskRunner(task, taskSourceCode, womBundle.typeAliases,
+        val taskRunner = TaskRunner(task,
+                                    taskSourceCode,
+                                    womBundle.typeAliases,
                                     instanceTypeDB,
-                                    dxPathConfig, dxIoFunctions, jobInputOutput,
-                                    Some(WdlRuntimeAttrs(Map.empty)), 0)
+                                    dxPathConfig,
+                                    dxIoFunctions,
+                                    jobInputOutput,
+                                    Some(WdlRuntimeAttrs(Map.empty)),
+                                    Some(false),
+                                    0)
         val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
         val inputs = inputsRelPaths.map{
             case (inpDef, value) => (inpDef, addBaseDir(value))

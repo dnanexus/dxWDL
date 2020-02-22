@@ -131,7 +131,12 @@ ci_test_list = [
     "files"
 ]
 
-medium_test_list= wdl_v1_list + docker_test_list
+special_flags_list = [
+    "add2",      # test the ignoreReuse flag
+    "add_many"   # tests the delayWorkflowDestruction flag
+]
+
+medium_test_list= wdl_v1_list + docker_test_list + special_flags_list
 large_test_list= draft2_test_list + wdl_v1_list + docker_test_list + single_tasks_list
 
 test_suites = {

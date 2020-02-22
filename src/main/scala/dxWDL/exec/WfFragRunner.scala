@@ -65,6 +65,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         inputsRaw : JsValue,
                         fragInputOutput : WfFragInputOutput,
                         defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
+                        delayWorkspaceDestruction: Option[Boolean],
                         runtimeDebugLevel: Int) {
     private val MAX_JOB_NAME = 50
     private val verbose = runtimeDebugLevel >= 1
@@ -77,6 +78,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                                 inputsRaw,
                                                 instanceTypeDB,
+                                                delayWorkspaceDestruction,
                                                 runtimeDebugLevel,
                                                 fragInputOutput.typeAliases)
     // The source code for all the tasks
@@ -352,6 +354,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                         dxIoFunctions,
                                         jobInputOutput,
                                         defaultRuntimeAttributes,
+                                        delayWorkspaceDestruction,
                                         runtimeDebugLevel)
         try {
             val iType = taskRunner.calcInstanceType(taskInputs)
@@ -394,7 +397,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     "input" -> callInputs,
                     "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
                 )
-                val req = JsObject(fields ++ instanceFields)
+                val dwd = delayWorkspaceDestruction match {
+                    case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+                    case _          => Map.empty
+                }
+                val req = JsObject(fields ++ instanceFields ++ dwd)
                 val retval: JsonNode = DXAPI.appRun(dxExecId,
                                                     DxUtils.jsonNodeOfJsValue(req),
                                                     classOf[JsonNode])
@@ -412,7 +419,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     "input" -> callInputs,
                     "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
                 )
-                val req = JsObject(fields ++ instanceFields)
+                val dwd = delayWorkspaceDestruction match {
+                    case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+                    case _          => Map.empty
+                }
+                val req = JsObject(fields ++ instanceFields ++ dwd)
                 val retval: JsonNode = DXAPI.appletRun(applet.getId,
                                                        DxUtils.jsonNodeOfJsValue(req),
                                                        classOf[JsonNode])
@@ -424,6 +435,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
                 DXJob.getInstance(id)
             } else if (dxExecId.startsWith("workflow-")) {
+                // FIXME
+                // need to figure out how to pass the argument at runtime to the workflow.
+                // 1) we can't use the dxjava API call.
+                // 2) we can't use the putProperty option
+                assert(false)
                 val workflow = DXWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DXAnalysis = workflow.newRun()
                     .setRawInput(DxUtils.jsonNodeOfJsValue(callInputs))

@@ -1,5 +1,20 @@
 # Release Notes
 
+## 1.37.2 21-Feb-2020
+Support the `delayWorkflowDestruction` in the extras file.
+
+By default, temporary workspaces hold the results of executed workflows and applets. Normally, these are garbage collected by the system. If you wish to leave them around longer for debugging purposes, please use:
+```
+{
+  "delayWorkspaceDestruction" : true
+}
+```
+This option will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours. Also, run the toplevel workflow (or applet) with the flag set:
+
+```
+dx run YOUR_WORKFLOW --delay-workspace-destruction
+```
+
 ## 1.37.1 18-Dec-2019
 - Bug fix for calling a task inside a scatter with an optional that is not provided.
 

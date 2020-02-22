@@ -52,7 +52,9 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                                     null /*dxProject*/,
                                                     runtimeDebugLevel,
                                                     typeAliases)
-        val fragRunner = new WfFragRunner(wf, taskDir, typeAliases,
+        val fragRunner = new WfFragRunner(wf,
+                                          taskDir,
+                                          typeAliases,
                                           wfSourceCode,
                                           instanceTypeDB,
                                           Map.empty[String, ExecLinkInfo],
@@ -61,6 +63,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                           JsNull,
                                           fragInputOutput,
                                           Some(WdlRuntimeAttrs(Map.empty)),
+                                          Some(false),
                                           runtimeDebugLevel)
         (wf, fragRunner)
     }

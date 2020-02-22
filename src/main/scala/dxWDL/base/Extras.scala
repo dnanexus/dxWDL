@@ -267,7 +267,8 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry : Option[DockerRegistry],
-                  customReorgAttributes: Option[ReorgAttrs]) {
+                  customReorgAttributes: Option[ReorgAttrs],
+                  delayWorkspaceDestruction: Option[Boolean]) {
     def getDefaultAccess : DxAccess = {
         defaultTaskDxAttributes match {
             case None => DxAccess.empty
@@ -303,7 +304,8 @@ object Extras {
                           "default_task_dx_attributes",
                           "per_task_dx_attributes",
                           "docker_registry",
-                          "custom_reorg")
+                          "custom_reorg",
+                          "delayWorkspaceDestruction")
     val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker",
                           "docker_registry",
                           "custom_reorg")
@@ -741,11 +743,11 @@ object Extras {
                parseDockerRegistry(
                    checkedParseObjectField(fields, "docker_registry"),
                    verbose),
-                parseCustomReorgAttrs(
-                    checkedParseObjectField(fields, fieldName = "custom_reorg"), verbose
-                )
+               parseCustomReorgAttrs(
+                   checkedParseObjectField(fields, fieldName = "custom_reorg"),
+                   verbose
+               ),
+               checkedParseBooleanField(fields, fieldName = "delayWorkspaceDestruction")
         )
-
-
     }
 }

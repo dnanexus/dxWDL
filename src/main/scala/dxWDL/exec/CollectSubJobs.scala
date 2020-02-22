@@ -78,6 +78,7 @@ case class ChildExecDesc(execName: String,
 case class CollectSubJobs(jobInputOutput : JobInputOutput,
                           inputsRaw : JsValue,
                           instanceTypeDB : InstanceTypeDB,
+                          delayWorkspaceDestruction: Option[Boolean],
                           runtimeDebugLevel: Int,
                           typeAliases: Map[String, WomType]) {
     //private val verbose = runtimeDebugLevel >= 1
@@ -96,6 +97,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                                                  Some(instanceTypeDB.defaultInstanceType),
                                                  inputsRaw,
                                                  childJobs,
+                                                 delayWorkspaceDestruction,
                                                  maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job

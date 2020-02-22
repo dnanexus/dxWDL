@@ -433,6 +433,21 @@ You are also able add citations or licenses information using for each task at t
 ```
 
 
+## Delay workspace destruction
+
+By default, temporary workspaces hold the results of executed workflows and applets. Normally, these are garbage collected by the system. If you wish to leave them around longer for debugging purposes, please use:
+```
+{
+  "delayWorkspaceDestruction" : true
+}
+```
+This will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours.
+This is a runtime flag, so you will need to run the toplevel workflow with that flag:
+
+```
+dx run YOUR_WORKFLOW --delay-workspace-destruction
+```
+
 # Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant
