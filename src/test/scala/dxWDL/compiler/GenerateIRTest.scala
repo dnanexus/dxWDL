@@ -6,6 +6,7 @@ import org.scalatest.Inside._
 import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
 import wom.types._
+import wom.values._
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx._
@@ -813,6 +814,106 @@ class GenerateIRTest extends FlatSpec with Matchers {
     // TODO: make assertion about exception message
   }
 
+  // Check parameter_meta `dx_type` keyword
+  it should "recognize dx_type in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "add_dx_type.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_dx_type", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "a",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrType(IR.ConstraintReprString("fastq"))
+                )
+            )
+        ),
+        IR.CVar(
+            "b",
+            WomSingleFileType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrType(
+                        IR.ConstraintReprOper(
+                            ConstraintOper.AND,
+                            Vector(
+                                IR.ConstraintReprString("fastq"),
+                                IR.ConstraintReprOper(
+                                    ConstraintOper.OR,
+                                    Vector(
+                                        IR.ConstraintReprString("Read1"),
+                                        IR.ConstraintReprString("Read2")
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+  }
+
+  // Check parameter_meta `dx_type` keyword fails when specified for a non-file parameter
+  it should "throw exception when dx_type is used on non-file parameter" in {
+    val path = pathFromBasename("compiler", "dx_type_nonfile.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
+
+  // Check parameter_meta `default` keyword
+  it should "recognize default in parameters_meta via CVar for input CVars" in {
+    val path = pathFromBasename("compiler", "add_default.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_default", bundle)
+    cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "a",
+            WomIntegerType,
+            Some(WomInteger(1)),
+            None
+        ),
+        IR.CVar(
+            "b",
+            WomOptionalType(WomIntegerType),
+            None,
+            Some(Vector(IR.IOAttrDefault(IR.DefaultReprInteger(2))))
+        )
+    )
+  }
+
+  // Check parameter_meta `default` keyword fails when there is a type mismatch
+  it should "throw exception when default types don't match parameter types" in {
+    val path = pathFromBasename("compiler", "default_type_mismatch.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.UnsuccessfulTermination]
+    // TODO: make assertion about exception message
+  }
+
   it should "recognize help, group, and label in parameters_meta via WOM" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")
     val retval = Main.compile(
@@ -837,12 +938,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
             ),
             "pattern" -> MetaValueElement.MetaValueElementObject(
                 Map(
-                    "help" -> MetaValueElement
+                    "description" -> MetaValueElement
                       .MetaValueElementString("The pattern to use to search in_file"),
                     "group" -> MetaValueElement.MetaValueElementString("Common"),
                     "label" -> MetaValueElement.MetaValueElementString("Search pattern")
                 )
-            )
+            ),
+            "s" -> MetaValueElement.MetaValueElementString("This is help for s")
         )
     )
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
@@ -891,6 +993,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
     cgrepApplet.inputs shouldBe Vector(
+        IR.CVar(
+            "s",
+            WomStringType,
+            None,
+            Some(
+                Vector(
+                    IR.IOAttrHelp("This is help for s")
+                )
+            )
+        ),
         IR.CVar(
             "in_file",
             WomSingleFileType,

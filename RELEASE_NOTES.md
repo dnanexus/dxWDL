@@ -6,6 +6,7 @@
   - label
   - choices
   - suggestions
+  - dx_type
 - Fixed bug in project-wide-reuse option.
 
 ## 1.43 11-Feb-2020

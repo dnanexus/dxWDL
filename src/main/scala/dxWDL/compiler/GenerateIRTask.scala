@@ -108,11 +108,11 @@ case class GenerateIRTask(verbose: Verbose,
   // OR
   // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaChoicesArrayToIR(array: Vector[MetaValueElement],
-                                   womType: WomType): Option[IR.IOAttrChoices] = {
+                                   womType: WomType): Vector[IR.ChoiceRepr] = {
     if (array.isEmpty) {
-      Some(IR.IOAttrChoices(Vector()))
+      Vector()
     } else {
-      Some(IR.IOAttrChoices(array.map {
+      array.map {
         case MetaValueElementObject(fields) =>
           if (!fields.contains("value")) {
             throw new Exception("Annotated choice must have a 'value' key")
@@ -130,7 +130,7 @@ case class GenerateIRTask(verbose: Verbose,
               "Choices array must contain only raw values or annotated values (hash with "
                 + "optional 'name' and required 'value' keys)"
           )
-      }))
+      }
     }
   }
 
@@ -172,11 +172,11 @@ case class GenerateIRTask(verbose: Verbose,
   // suggestions: [
   //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaSuggestionsArrayToIR(array: Vector[MetaValueElement],
-                                       womType: WomType): Option[IR.IOAttrSuggestions] = {
+                                       womType: WomType): Vector[IR.SuggestionRepr] = {
     if (array.isEmpty) {
-      Some(IR.IOAttrSuggestions(Vector()))
+      Vector()
     } else {
-      Some(IR.IOAttrSuggestions(array.map {
+      array.map {
         case MetaValueElementObject(fields) =>
           metaSuggestionValueToIR(
               womType = womType,
@@ -191,7 +191,7 @@ case class GenerateIRTask(verbose: Verbose,
           throw new Exception(
               "Suggestions array must contain only raw values or annotated (hash) values"
           )
-      }))
+      }
     }
   }
 
@@ -223,7 +223,7 @@ case class GenerateIRTask(verbose: Verbose,
       case _ =>
         throw new Exception(
             "Suggestion keyword is only valid for primitive- and file-type parameters, and types "
-              + "must match between parameter and choices"
+              + "must match between parameter and suggestions"
         )
     }
   }
@@ -247,6 +247,58 @@ case class GenerateIRTask(verbose: Verbose,
     IR.SuggestionReprFile(file, nameStr, projectStr, pathStr)
   }
 
+  private def metaConstraintToIR(constraint: MetaValueElement): IR.ConstraintRepr = {
+    constraint match {
+      case MetaValueElementObject(obj: Map[String, MetaValueElement]) =>
+        if (obj.size != 1) {
+          throw new Exception("Constraint hash must have exactly one 'and' or 'or' key")
+        }
+        obj.head match {
+          case (IR.PARAM_META_CONSTRAINT_AND, MetaValueElementArray(array)) =>
+            IR.ConstraintReprOper(ConstraintOper.AND, array.map(metaConstraintToIR))
+          case (IR.PARAM_META_CONSTRAINT_OR, MetaValueElementArray(array)) =>
+            IR.ConstraintReprOper(ConstraintOper.OR, array.map(metaConstraintToIR))
+          case _ =>
+            throw new Exception(
+                "Constraint must have key 'and' or 'or' and an array value"
+            )
+        }
+      case MetaValueElementString(s) => IR.ConstraintReprString(s)
+      case _                         => throw new Exception("'dx_type' constraints must be either strings or hashes")
+    }
+  }
+
+  private def metaDefaultToIR(value: MetaValueElement, womType: WomType): IR.DefaultRepr = {
+    (womType, value) match {
+      case (WomStringType, MetaValueElementString(str)) =>
+        IR.DefaultReprString(value = str)
+      case (WomIntegerType, MetaValueElementInteger(i)) =>
+        IR.DefaultReprInteger(value = i)
+      case (WomFloatType, MetaValueElementFloat(f)) =>
+        IR.DefaultReprFloat(value = f)
+      case (WomBooleanType, MetaValueElementBoolean(b)) =>
+        IR.DefaultReprBoolean(value = b)
+      case (WomSingleFileType, MetaValueElementString(file)) =>
+        IR.DefaultReprFile(value = file)
+      case (womArrayType: WomArrayType, MetaValueElementArray(array)) =>
+        def helper(wt: WomType)(mv: MetaValueElement) = metaDefaultToIR(mv, wt)
+        IR.DefaultReprArray(array.map(helper(womArrayType.memberType)))
+      case _ =>
+        throw new Exception(
+            "Default keyword is only valid for primitive-, file-, and array-type parameters, and "
+              + "types must match between parameter and default"
+        )
+    }
+  }
+
+  private def unwrapWomArrayType(womType: WomType): WomType = {
+    var wt = womType
+    while (wt.isInstanceOf[WomArrayType]) {
+      wt = wt.asInstanceOf[WomArrayType].memberType
+    }
+    wt
+  }
+
   // Extract the parameter_meta info from the WOM structure
   // The parameter's WomType is passed in since some parameter metadata values are required to
   // have the same type as the parameter.
@@ -254,11 +306,18 @@ case class GenerateIRTask(verbose: Verbose,
                               womType: WomType): Option[Vector[IR.IOAttr]] = {
     paramMeta match {
       case None => None
+      // If the parameter metadata is a string, treat it as help
+      case Some(MetaValueElementString(text)) => Some(Vector(IR.IOAttrHelp(text)))
       case Some(MetaValueElementObject(obj)) => {
+        // Whether to use 'description' in place of help
+        val noHelp = !obj.contains(IR.PARAM_META_HELP)
         // Use flatmap to get the parameter metadata keys if they exist
         Some(obj.flatMap {
           case (IR.PARAM_META_GROUP, MetaValueElementString(text)) => Some(IR.IOAttrGroup(text))
           case (IR.PARAM_META_HELP, MetaValueElementString(text))  => Some(IR.IOAttrHelp(text))
+          // Use 'description' in place of 'help' if the former is present and the latter is not
+          case (IR.PARAM_META_DESCRIPTION, MetaValueElementString(text)) if noHelp =>
+            Some(IR.IOAttrHelp(text))
           case (IR.PARAM_META_LABEL, MetaValueElementString(text)) => Some(IR.IOAttrLabel(text))
           // Try to parse the patterns key
           // First see if it's an array
@@ -270,17 +329,19 @@ case class GenerateIRTask(verbose: Verbose,
             Some(metaPatternsObjToIR(obj))
           // Try to parse the choices key, which will be an array of either values or objects
           case (IR.PARAM_META_CHOICES, MetaValueElementArray(array)) =>
-            var wt = womType
-            while (wt.isInstanceOf[WomArrayType]) {
-              wt = wt.asInstanceOf[WomArrayType].memberType
-            }
-            metaChoicesArrayToIR(array, wt)
+            val wt = unwrapWomArrayType(womType)
+            Some(IR.IOAttrChoices(metaChoicesArrayToIR(array, wt)))
           case (IR.PARAM_META_SUGGESTIONS, MetaValueElementArray(array)) =>
-            var wt = womType
-            while (wt.isInstanceOf[WomArrayType]) {
-              wt = wt.asInstanceOf[WomArrayType].memberType
+            val wt = unwrapWomArrayType(womType)
+            Some(IR.IOAttrSuggestions(metaSuggestionsArrayToIR(array, wt)))
+          case (IR.PARAM_META_TYPE, dx_type: MetaValueElement) =>
+            val wt = unwrapWomArrayType(womType)
+            wt match {
+              case WomSingleFileType => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
+              case _                 => throw new Exception("'dx_type' can only be specified for File parameters")
             }
-            metaSuggestionsArrayToIR(array, wt)
+          case (IR.PARAM_META_DEFAULT, default: MetaValueElement) =>
+            Some(IR.IOAttrDefault(metaDefaultToIR(default, womType)))
           case _ => None
         }.toVector)
       }
@@ -321,6 +382,8 @@ case class GenerateIRTask(verbose: Verbose,
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
       case RequiredInputDefinition(iName, womType, _, paramMeta) => {
+        // This is a task "input" parameter declaration of the form:
+        //     Int y
         val attr = unwrapParamMeta(paramMeta, womType)
         Some(CVar(iName.value, womType, None, attr))
       }
@@ -328,12 +391,14 @@ case class GenerateIRTask(verbose: Verbose,
       case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, paramMeta) =>
         WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
-            // This is a task "input" of the form:
+            // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
             // We consider it an expression, and not an input. The
             // runtime system will evaluate it.
             None
           case Some(value) =>
+            // This is a task "input" parameter definition of the form:
+            //    Int y = 3
             val attr = unwrapParamMeta(paramMeta, womType)
             Some(CVar(iName.value, womType, Some(value), attr))
         }
@@ -343,8 +408,9 @@ case class GenerateIRTask(verbose: Verbose,
       case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
         None
 
-      case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
-        Some(CVar(iName.value, WomOptionalType(womType), None))
+      case OptionalInputDefinition(iName, WomOptionalType(womType), _, paramMeta) =>
+        val attr = unwrapParamMeta(paramMeta, womType)
+        Some(CVar(iName.value, WomOptionalType(womType), None, attr))
     }.toVector
 
     // create dx:applet outputs

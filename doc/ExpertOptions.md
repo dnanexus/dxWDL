@@ -251,15 +251,14 @@ The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#p
 
 - `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
 - Direct mappings to [inputSpec and outputSpec keywords in dxapp.json](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications):
-  - `group`
-  - `help`
-  - `label`
-  - `patterns`
-  - `choices`
-  - `suggestions`
-<!--
-  - `dx_type` (maps to the `type` field in dxapp.json)
--->
+  - `help` - `description` is also accepted as an alias for `help`; if the parameter definition is a string rather than a hash, the string is used as `help`.
+  - `group` - parameter grouping (used in the DNAnexus web UI).
+  - `label` - human-readable label for the parameter (used in the DNAnexus web UI).
+  - `patterns` - accepted filename patterns (applies to `File`-type parameters only).
+  - `choices` - allowed parameter values; currently, this is limited to primitive (`String`, `Int`, `Float`, `Boolean`) and `File` types parameters (and `Array`s of these types), i.e. it is not allowed for `Map` or `Struct` parameters.
+  - `suggestions` - suggested parameter values; currently has the same limitations as `choices`.
+  - `dx_type` - maps to the `type` field in dxapp.json; can be either a `String` value or a boolean "expression" (see example below). Applies to `File`-type parameters only.
+  - `default` - a default value for the parameter. This is ignored if the parameter's default value is defined in the `inputs` section.
 
 Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 
@@ -270,23 +269,36 @@ task cgrep {
     input {
         String pattern
         File in_file
+        Int? multiplier
     }
+    Int actual_multiplier = select_first([multiplier, 1])
+
     parameter_meta {
         in_file: {
           help: "The input file to be searched",
+          group: "Basic",
           patterns: ["*.txt", "*.tsv"],
+          dx_type: { and: [ "fastq", { or: ["Read1", "Read2"] } ] },
           stream: true
         }
         pattern: {
-          help: "The pattern to use to search in_file"
+          help: "The pattern to use to search in_file",
+          group: "Advanced"
+        }
+        multiplier: {
+          help: "Number by which to multiply the count",
+          choices: [1, 2, 3],
+          default: 1
         }
     }
+
     command {
         grep '${pattern}' ${in_file} | wc -l
         cp ${in_file} out_file
     }
+
     output {
-        Int count = read_int(stdout())
+        Int count = read_int(stdout()) * actual_multiplier
         File out_file = "out_file"
     }
 }
