@@ -145,7 +145,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       callables: Map[String, IR.Callable],
       language: Language.Value,
       locked: Boolean,
-      reorg: Either[Boolean, ReorgAttrs]
+      reorg: Either[Boolean, ReorgAttrs],
+      adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]
   ): (IR.Callable, Vector[IR.Callable]) = {
     def compileTask2(task: CallableTaskDefinition) = {
       val taskSourceCode = taskDir.get(task.name) match {
@@ -153,7 +154,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         case Some(x) => x
       }
       GenerateIRTask(verbose, typeAliases, language, defaultRuntimeAttrs)
-        .apply(task, taskSourceCode)
+        .apply(task, taskSourceCode, adjunctFiles)
     }
     callable match {
       case exec: ExecutableTaskDefinition =>
@@ -180,7 +181,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
             allSources: Map[String, WorkflowSource],
             language: Language.Value,
             locked: Boolean,
-            reorg: Either[Boolean, ReorgAttrs]): IR.Bundle = {
+            reorg: Either[Boolean, ReorgAttrs],
+            adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]): IR.Bundle = {
     Utils.trace(verbose.on, s"IR pass")
     Utils.traceLevelInc()
 
@@ -236,7 +238,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
                                                  allCallables,
                                                  language,
                                                  isLocked(callable),
-                                                 reorg)
+                                                 reorg,
+                                                 adjunctFiles)
       allCallables = allCallables ++ (auxCallables.map { apl =>
         apl.name -> apl
       }.toMap)

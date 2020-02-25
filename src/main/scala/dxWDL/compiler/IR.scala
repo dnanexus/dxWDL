@@ -22,8 +22,21 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
+  // The following keywords/types correspond to app(let) attributes from dxapp.json (except for
+  // inputSpec/outputSpec attributes, which are defined separately). These attributes can be used
+  // in the meta section of task WDL, and will be parsed out and used when generating the native
+  // app.
+  val META_DESCRIPTION = "description"
+  val META_DEVELOPER_NOTES = "developer_notes"
+  val META_TYPE = "type"
+  val META_ID = "id"
+
+  sealed abstract class AppAttr
+  final case class AppAttrDescription(text: String) extends AppAttr
+  final case class AppAttrDeveloperNotes(text: String) extends AppAttr
+
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
-  // dxapp.json. These attributes can be used in the parameter_meta section of WDL, and
+  // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
   // will be parsed out and used when generating the native app.
   //  Example:
   //
@@ -277,6 +290,7 @@ object IR {
     * @param kind          Kind of applet: task, scatter, ...
     * @param task          Task definition
     * @param womSourceCode WDL/CWL source code for task.
+    * @param meta          Additional app(let) metadata
     */
   case class Applet(name: String,
                     inputs: Vector[CVar],
@@ -284,7 +298,8 @@ object IR {
                     instanceType: InstanceType,
                     docker: DockerImage,
                     kind: AppletKind,
-                    womSourceCode: String)
+                    womSourceCode: String,
+                    meta: Option[Vector[AppAttr]] = None)
       extends Callable {
     def inputVars = inputs
     def outputVars = outputs

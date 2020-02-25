@@ -130,7 +130,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, verbose)
     dxPathConfig.createCleanDirs()
 
-    val (language, womBundle: WomBundle, allSources, _) =
+    val (language, womBundle: WomBundle, allSources, _, _) =
       ParseWomSourceFile(false).apply(wdlCode, List.empty)
     val task: CallableTaskDefinition = ParseWomSourceFile(false).getMainTask(womBundle)
     assert(allSources.size == 1)

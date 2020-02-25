@@ -333,7 +333,7 @@ task Add {
             accu
           } else {
             val sourceCode = callable match {
-              case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
+              case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode, _) =>
                 // This is a task, include its source code, instead of a header.
                 val taskDir = ParseWomSourceFile(false).scanForTasks(taskSourceCode)
                 assert(taskDir.size == 1)

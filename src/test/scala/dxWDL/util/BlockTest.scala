@@ -153,7 +153,7 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "categorize correctly calls to subworkflows" taggedAs (EdgeTest) in {
     val path = pathFromBasename("subworkflows", "trains.wdl")
-    val (_, womBundle, sources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (_, womBundle, sources, _, _) = parseWomSourceFile.apply(path, List.empty)
     val (_, wfSourceCode) = sources.find {
       case (key, wdlCode) =>
         key.endsWith("trains.wdl")
@@ -172,7 +172,7 @@ class BlockTest extends FlatSpec with Matchers {
   it should "get subblocks" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Utils.readFileContent(path)
-    val (_, womBundle, sources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (_, womBundle, sources, _, _) = parseWomSourceFile.apply(path, List.empty)
     val (wf: WorkflowDefinition, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
     // sort from low to high according to the source lines.
@@ -201,7 +201,8 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "handle calls to imported modules II" in {
     val path = pathFromBasename("draft2", "block_category.wdl")
-    val (language, womBundle: WomBundle, allSources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (language, womBundle: WomBundle, allSources, _, _) =
+      parseWomSourceFile.apply(path, List.empty)
 
     val (_, wfSource) = allSources.find {
       case (name, _) => name.endsWith("block_category.wdl")
@@ -219,7 +220,8 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "handle calls to imported modules" in {
     val path = pathFromBasename("draft2", "conditionals1.wdl")
-    val (language, womBundle: WomBundle, allSources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (language, womBundle: WomBundle, allSources, _, _) =
+      parseWomSourceFile.apply(path, List.empty)
 
     val (_, wfSource) = allSources.find {
       case (name, _) => name.endsWith("conditionals1.wdl")
@@ -245,7 +247,8 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "compile a workflow calling a subworkflow as a direct call" in {
     val path = pathFromBasename("draft2", "movies.wdl")
-    val (language, womBundle: WomBundle, allSources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (language, womBundle: WomBundle, allSources, _, _) =
+      parseWomSourceFile.apply(path, List.empty)
 
     val (_, wfSource) = allSources.find {
       case (name, _) => name.endsWith("movies.wdl")
@@ -292,7 +295,7 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "find the correct number of scatters" in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
-    val (_, womBundle: WomBundle, allSources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (_, womBundle: WomBundle, allSources, _, _) = parseWomSourceFile.apply(path, List.empty)
 
     val (_, wfSource) = allSources.find {
       case (name, _) => name.endsWith("conditionals_base.wdl")
@@ -311,7 +314,8 @@ class BlockTest extends FlatSpec with Matchers {
 
   it should "sort a subblock properly" in {
     val path = pathFromBasename("draft2", "conditionals4.wdl")
-    val (language, womBundle: WomBundle, allSources, _) = parseWomSourceFile.apply(path, List.empty)
+    val (language, womBundle: WomBundle, allSources, _, _) =
+      parseWomSourceFile.apply(path, List.empty)
     val (_, wfSource) = allSources.find {
       case (name, _) => name.endsWith("conditionals4.wdl")
     }.get

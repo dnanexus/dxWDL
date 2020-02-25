@@ -1326,4 +1326,53 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
+  it should "handle adjunct files in workflows and tasks" in {
+    val path = pathFromBasename("compiler", "wf_readme.wdl")
+    val retval = Main.compile(path.toString :: cFlags)
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    // val workflow = bundle.primaryCallable match {
+    //   case Some(wf: IR.Workflow) => wf
+    //   case _ => throw new Exception("primaryCallable is not a workflow")
+    // }
+    // TODO: test workflow readme
+
+    val addApp = getAppletByName("add", bundle)
+    addApp.meta match {
+      case Some(v: Vector[IR.AppAttr]) =>
+        v.size shouldBe 2
+        v.foreach {
+          case IR.AppAttrDescription(text) =>
+            text shouldBe "This is the readme for the wf_linear add task."
+          case IR.AppAttrDeveloperNotes(text) =>
+            text shouldBe "Developer notes defined in WDL"
+          case other => throw new Exception(s"Invalid AppAttr for add task ${other}")
+        }
+      case _ => throw new Exception("meta is None or is not a Vector of AppAttr for add task")
+    }
+
+    val mulApp = getAppletByName("mul", bundle)
+    mulApp.meta match {
+      case Some(v: Vector[IR.AppAttr]) =>
+        v.size shouldBe 1
+        v.foreach {
+          case IR.AppAttrDescription(text) =>
+            text shouldBe "Description defined in WDL"
+          case other => throw new Exception(s"Invalid AppAttr for mul task ${other}")
+        }
+      case _ => throw new Exception("meta is None or is not a Vector of AppAttr for mul task")
+    }
+
+    val incApp = getAppletByName("inc", bundle)
+    incApp.meta match {
+      case Some(v: Vector[IR.AppAttr]) => v.size shouldBe 0
+      case None                        => None
+      case other                       => throw new Exception("meta is not None or empty for inc task")
+    }
+  }
 }

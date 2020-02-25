@@ -8,12 +8,11 @@ import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder}
 import cromwell.languages.LanguageFactory
 import cromwell.languages.util.ImportResolver._
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import languages.cwl.CwlV1_0LanguageFactory
 import languages.wdl.draft2.WdlDraft2LanguageFactory
 import languages.wdl.draft3.WdlDraft3LanguageFactory
 import languages.wdl.biscayne.WdlBiscayneLanguageFactory
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
@@ -94,14 +93,24 @@ case class ParseWomSourceFile(verbose: Boolean) {
   private def getBundle(
       mainFile: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Map[String, Vector[Adjuncts.AdjunctFile]],
+      Vector[WomBundle]
+  ) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
     val allSources = HashMap.empty[String, WorkflowSource]
 
     val absPath = Paths.get(mainFile.toAbsolutePath.toString)
-    val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
+    val mainFileContents = Utils.readFileContent2(absPath)
+
+    // Find any adjunct files
+    // TODO: find adjunct files for sub-bundles
+    val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
 
     // We need to get all the WDL sources, so we could analyze them
     val mainFileResolvers =
@@ -187,20 +196,26 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
 
     allSources(mainFile.toString) = mainFileContents
-    (lang, bundle, allSources.toMap, subBundles.values.toVector)
+    (lang, bundle, allSources.toMap, adjunctFiles, subBundles.values.toVector)
   }
 
   def apply(
       sourcePath: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
-    val (lang, bundle, allSources, subBundles) = getBundle(sourcePath, imports)
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Map[String, Vector[Adjuncts.AdjunctFile]],
+      Vector[WomBundle]
+  ) = {
+    val (lang, bundle, allSources, adjunctFiles, subBundles) = getBundle(sourcePath, imports)
     lang match {
       case Language.CWLv1_0 =>
         throw new Exception("CWL is not handled at the moment, only WDL is supported")
       case _ => ()
     }
-    (lang, bundle, allSources, subBundles)
+    (lang, bundle, allSources, adjunctFiles, subBundles)
   }
 
   // Look for the first task in the sequence of lines. If not found, return None.

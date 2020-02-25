@@ -371,11 +371,39 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  private def unwrapTaskMeta(
+      meta: Map[String, MetaValueElement],
+      adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
+  ): Vector[IR.AppAttr] = {
+    val appAttr = meta.flatMap {
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) =>
+        Some(IR.AppAttrDescription(text))
+      case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
+        Some(IR.AppAttrDeveloperNotes(text))
+      case _ => None
+    }.toVector
+
+    // Fill in missing attributes from adjunct files
+    adjunctFiles match {
+      case Some(adj) =>
+        appAttr ++ adj.flatMap {
+          case Adjuncts.Readme(text) if !meta.contains(IR.META_DESCRIPTION) =>
+            Some(IR.AppAttrDescription(text))
+          case Adjuncts.DeveloperNotes(text) if !meta.contains(IR.META_DEVELOPER_NOTES) =>
+            Some(IR.AppAttrDeveloperNotes(text))
+          case _ => None
+        }.toVector
+      case None => appAttr
+    }
+  }
+
   // Compile a WDL task into an applet.
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
   // native applet.
-  def apply(task: CallableTaskDefinition, taskSourceCode: String): IR.Applet = {
+  def apply(task: CallableTaskDefinition,
+            taskSourceCode: String,
+            adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
@@ -442,6 +470,9 @@ case class GenerateIRTask(verbose: Verbose,
           IR.AppletKindTask(task)
       }
 
+    // Parse any task metadata (other than 'type' and 'id', which are handled above)
+    val appAttr = unwrapTaskMeta(task.meta, adjunctFiles.get(task.name))
+
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
 
@@ -469,6 +500,13 @@ case class GenerateIRTask(verbose: Verbose,
         }
       case other => other
     }
-    IR.Applet(task.name, inputs, outputs, instanceType, dockerFinal, kind, selfContainedSourceCode)
+    IR.Applet(task.name,
+              inputs,
+              outputs,
+              instanceType,
+              dockerFinal,
+              kind,
+              selfContainedSourceCode,
+              Some(appAttr))
   }
 }

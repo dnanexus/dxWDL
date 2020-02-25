@@ -102,6 +102,11 @@ object Utils {
     sb.toString
   }
 
+  // This one seems more idiomatic
+  def readFileContent2(path: Path): String = {
+    Files.readAllLines(path).asScala.mkString(System.lineSeparator())
+  }
+
   def exceptionToString(e: Throwable): String = {
     val sw = new java.io.StringWriter
     e.printStackTrace(new java.io.PrintWriter(sw))
