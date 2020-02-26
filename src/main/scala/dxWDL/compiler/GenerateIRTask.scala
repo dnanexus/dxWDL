@@ -395,12 +395,12 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.AppAttrVersion(text))
       case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
         val change_log: Option[IR.ChangesRepr] = fields.get("change_log") match {
-          case None                         => None
-          case MetaValueElementString(text) => Some(IR.ChangesReprString(text))
-          case MetaValueElementArray(eltArray) =>
+          case None                               => None
+          case Some(MetaValueElementString(text)) => Some(IR.ChangesReprString(text))
+          case Some(MetaValueElementArray(eltArray)) =>
             Some(IR.ChangesReprList(eltArray.map {
               case MetaValueElementObject(fields) =>
-                IR.VersionChanges(fields("version"),
+                IR.VersionChanges(unwrapMetaValueElementString(fields("version")),
                                   unwrapMetaValueElementStringArray(fields("changes")))
               case other =>
                 throw new Exception(s"Unexpected value for 'change_log' element: ${other}")
@@ -417,7 +417,7 @@ case class GenerateIRTask(verbose: Verbose,
                 change_log
             )
         )
-      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.AppAttrBoolean(b))
+      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.AppAttrOpenSource(b))
       case _                                                 => None
     }.toVector
   }

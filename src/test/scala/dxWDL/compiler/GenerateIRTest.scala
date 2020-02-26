@@ -1055,6 +1055,45 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
+  it should "recognize app metadata" in {
+    val path = pathFromBasename("compiler", "add_app_meta.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_app_meta", bundle)
+    cgrepApplet.meta shouldBe Some(
+        Vector(
+            IR.AppAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
+            IR.AppAttrDescription("This app adds together two integers and returns the sum"),
+            IR.AppAttrOpenSource(true),
+            IR.AppAttrVersion("1.0"),
+            IR.AppAttrDetails(
+                Some("joe@dev.com"),
+                Some("1.0"),
+                Some("Joe Developer"),
+                Some("https://dev.com/joe"),
+                Some(Vector("MIT")),
+                Some(
+                    IR.ChangesReprList(
+                        Vector(IR.VersionChanges("1.1",
+                                                 Vector("Added paramter --foo",
+                                                        "Added cowsay easter-egg")),
+                               IR.VersionChanges("1.0", Vector("Intial version")))
+                    )
+                )
+            ),
+            IR.AppAttrTitle("Add Ints"),
+            IR.AppAttrSummary("Adds two int together")
+        )
+    )
+  }
+
   it should "handle streaming files" in {
     val path = pathFromBasename("compiler", "streaming_files.wdl")
     val retval = Main.compile(
