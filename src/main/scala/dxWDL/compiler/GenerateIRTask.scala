@@ -371,6 +371,57 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  private def unwrapMetaValueElementString(element: MetaValueElement): String = {
+    element match {
+      case MetaValueElementString(text) => text
+      case _                            => throw new Exception(s"Expected MetaValueElement, got ${element}")
+    }
+  }
+
+  private def unwrapMetaValueElementStringArray(element: MetaValueElement): Vector[String] = {
+    element match {
+      case MetaValueElementArray(array) => array.map(unwrapMetaValueElementString)
+      case _                            => throw new Exception(s"Expected MetaValueElementArray, got ${element}")
+    }
+  }
+
+  private def unwrapTaskMeta(meta: Map[String, MetaValueElement]): Vector[IR.AppAttr] = {
+    meta.flatMap {
+      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.AppAttrTitle(text))
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.AppAttrDescription(text))
+      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.AppAttrSummary(text))
+      case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
+        Some(IR.AppAttrDeveloperNotes(text))
+      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.AppAttrVersion(text))
+      case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
+        val change_log: Option[IR.ChangesRepr] = fields.get("change_log") match {
+          case None                         => None
+          case MetaValueElementString(text) => Some(IR.ChangesReprString(text))
+          case MetaValueElementArray(eltArray) =>
+            Some(IR.ChangesReprList(eltArray.map {
+              case MetaValueElementObject(fields) =>
+                IR.VersionChanges(fields("version"),
+                                  unwrapMetaValueElementStringArray(fields("changes")))
+              case other =>
+                throw new Exception(s"Unexpected value for 'change_log' element: ${other}")
+            }))
+          case other => throw new Exception(s"Unexpected value for 'change_log': ${other}")
+        }
+        Some(
+            IR.AppAttrDetails(
+                fields.get("contact_email").map(unwrapMetaValueElementString),
+                fields.get("upstream_version").map(unwrapMetaValueElementString),
+                fields.get("upstream_author").map(unwrapMetaValueElementString),
+                fields.get("upstream_url").map(unwrapMetaValueElementString),
+                fields.get("upstream_licenses").map(unwrapMetaValueElementStringArray),
+                change_log
+            )
+        )
+      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.AppAttrBoolean(b))
+      case _                                                 => None
+    }.toVector
+  }
+
   // Compile a WDL task into an applet.
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
@@ -442,6 +493,9 @@ case class GenerateIRTask(verbose: Verbose,
           IR.AppletKindTask(task)
       }
 
+    // Parse any task metadata (other than 'type' and 'id', which are handled above)
+    val appAttr = unwrapTaskMeta(task.meta)
+
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
 
@@ -469,6 +523,13 @@ case class GenerateIRTask(verbose: Verbose,
         }
       case other => other
     }
-    IR.Applet(task.name, inputs, outputs, instanceType, dockerFinal, kind, selfContainedSourceCode)
+    IR.Applet(task.name,
+              inputs,
+              outputs,
+              instanceType,
+              dockerFinal,
+              kind,
+              selfContainedSourceCode,
+              Some(appAttr))
   }
 }
