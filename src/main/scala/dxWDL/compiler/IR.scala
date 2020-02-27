@@ -50,6 +50,8 @@ object IR {
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
+  final case class TaskAttrTags(tags: Vector[String]) extends TaskAttr
+  final case class TaskAttrProperties(properties: Map[String, String]) extends TaskAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and

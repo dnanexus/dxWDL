@@ -682,7 +682,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             Field.Description,
             Field.Details,
             Field.DeveloperNotes,
+            Field.Properties,
             Field.Summary,
+            Field.Tags,
             Field.Title,
             Field.Types
         )
@@ -710,7 +712,13 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other => throw new Exception(s"Unexpected result ${other}")
     }
     desc.developerNotes shouldBe Some("Check out my sick bash expression! Three dolla signs!!!")
+    desc.properties match {
+      case Some(m) =>
+        (m -- Set(Utils.VERSION_PROP, Utils.CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+      case _ => throw new Exception("No properties")
+    }
     desc.summary shouldBe Some("Adds two int together")
+    desc.tags shouldBe Some(Vector("add", "ints", "dxWDL"))
     desc.title shouldBe Some("Add Ints")
     desc.types shouldBe Some(Vector("Adder"))
   }

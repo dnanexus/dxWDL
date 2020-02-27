@@ -404,6 +404,16 @@ case class GenerateIRTask(verbose: Verbose,
           case MetaValueElementString(text) => text
           case other                        => throw new Exception(s"Invalid type: ${other}")
         }))
+      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrTags(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
+        Some(IR.TaskAttrProperties(fields.mapValues {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid property value: ${other}")
+        }))
       case _ => None
     }.toVector
   }

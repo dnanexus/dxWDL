@@ -33,7 +33,7 @@ task add {
         }
         tags: ["add", "ints"]
         properties: {
-            
+            foo: "bar"
         }
     }
     

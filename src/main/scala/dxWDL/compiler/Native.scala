@@ -698,9 +698,13 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Convert the applet meta to JS, and overlay details from task-specific extras
-  private def getTaskMetadata(applet: IR.Applet): (Map[String, JsValue], Map[String, JsValue]) = {
+  private def getTaskMetadata(
+      applet: IR.Applet,
+      defaultTags: Vector[JsString]
+  ): (Map[String, JsValue], Map[String, JsValue]) = {
     val metaDefaults = Map(
-        "title" -> JsString(applet.name)
+        "title" -> JsString(applet.name),
+        "tags" -> JsArray(defaultTags)
         // These are currently ignored because they only apply to apps
         //"version" -> JsString("0.0.1"),
         //"openSource" -> JsBoolean(false),
@@ -715,6 +719,11 @@ case class Native(dxWDLrtId: Option[String],
             case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
             case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
             case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
+            case IR.TaskAttrTags(array)          =>
+              // merge default and user-specified tags
+              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+            case IR.TaskAttrProperties(props) =>
+              Some("properties" -> JsObject(props.mapValues(anyToJs)))
             case IR.TaskAttrDetails(details) =>
               Some("details" -> JsObject(details.mapValues(anyToJs)))
             // These are currently ignored because they only apply to apps
@@ -984,13 +993,8 @@ case class Native(dxWDLrtId: Option[String],
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
     }
 
-    // Get the metadata from the task meta section, but override with any details specified in
-    // task-specific extras. taskMeta contains top-level metadata to be merged with the request,
-    // while taskDetails is to be merged with all the other details maps.
-    if (applet.name == "add" && !applet.meta.isDefined) {
-      throw new Exception("no meta")
-    }
-    val (taskMeta, taskDetails) = getTaskMetadata(applet)
+    val defaultTags = Vector(JsString("dxWDL"))
+    val (taskMeta, taskDetails) = getTaskMetadata(applet, defaultTags)
 
     // Compute all the bits that get merged together into 'details'
 
@@ -1039,7 +1043,6 @@ case class Native(dxWDLrtId: Option[String],
         "outputSpec" -> JsArray(outputSpec),
         "runSpec" -> runSpec,
         "dxapi" -> JsString("1.0.0"),
-        "tags" -> JsArray(JsString("dxWDL")),
         "details" -> JsObject(details),
         "hidden" -> JsBoolean(hidden)
     )

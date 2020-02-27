@@ -1073,8 +1073,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.TaskAttrDescription(
                 "Adds two int together. This app adds together two integers and returns the sum"
             ),
+            IR.TaskAttrTags(Vector("add", "ints")),
             IR.TaskAttrOpenSource(true),
             IR.TaskAttrVersion("1.0"),
+            IR.TaskAttrProperties(Map("foo" -> "bar")),
             IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
