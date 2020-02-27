@@ -1070,9 +1070,12 @@ class GenerateIRTest extends FlatSpec with Matchers {
     cgrepApplet.meta shouldBe Some(
         Vector(
             IR.TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
-            IR.TaskAttrDescription("This app adds together two integers and returns the sum"),
+            IR.TaskAttrDescription(
+                "Adds two int together. This app adds together two integers and returns the sum"
+            ),
             IR.TaskAttrOpenSource(true),
             IR.TaskAttrVersion("1.0"),
+            IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
                     "contactEmail" -> "joe@dev.com",
@@ -1083,17 +1086,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
                     "whatsNew" -> Vector(
                         Map(
                             "version" -> "1.1",
-                            "changes" -> Vector("Added paramter --foo", "Added cowsay easter-egg")
+                            "changes" -> Vector("Added parameter --foo", "Added cowsay easter-egg")
                         ),
                         Map(
                             "version" -> "1.0",
-                            "changes" -> Vector("Intial version")
+                            "changes" -> Vector("Initial version")
                         )
                     )
                 )
             ),
             IR.TaskAttrTitle("Add Ints"),
-            IR.TaskAttrSummary("Adds two int together")
+            IR.TaskAttrTypes(Vector("Adder"))
         )
     )
   }

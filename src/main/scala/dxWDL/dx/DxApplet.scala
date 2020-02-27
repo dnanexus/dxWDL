@@ -18,7 +18,8 @@ case class DxAppletDescribe(project: String,
                             description: Option[String] = None,
                             developerNotes: Option[String] = None,
                             summary: Option[String] = None,
-                            title: Option[String] = None)
+                            title: Option[String] = None,
+                            types: Option[Vector[String]] = None)
     extends DxObjectDescribe
 
 case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -75,18 +76,27 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
     val developerNotes = descJs.asJsObject.fields.get("developerNotes").flatMap(unwrapString)
     val summary = descJs.asJsObject.fields.get("summary").flatMap(unwrapString)
     val title = descJs.asJsObject.fields.get("title").flatMap(unwrapString)
+    val types = descJs.asJsObject.fields.get("types").flatMap(unwrapStringArray)
     desc.copy(details = details,
               properties = props,
               description = description,
               developerNotes = developerNotes,
               summary = summary,
-              title = title)
+              title = title,
+              types = types)
   }
 
   def unwrapString(jsValue: JsValue): Option[String] = {
     jsValue match {
       case JsString(value) => Some(value)
       case _               => None
+    }
+  }
+
+  def unwrapStringArray(jsValue: JsValue): Option[Vector[String]] = {
+    jsValue match {
+      case JsArray(array) => Some(array.flatMap(unwrapString))
+      case _              => None
     }
   }
 

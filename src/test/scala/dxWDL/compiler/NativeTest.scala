@@ -673,8 +673,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
-      case _                        => throw new Exception("sanity")
-
+      case other                    => throw new Exception(s"Unexpected result ${other}")
     }
 
     val dxApplet = DxApplet.getInstance(appId)
@@ -684,11 +683,14 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             Field.Details,
             Field.DeveloperNotes,
             Field.Summary,
-            Field.Title
+            Field.Title,
+            Field.Types
         )
     )
 
-    desc.description shouldBe Some("This app adds together two integers and returns the sum")
+    desc.description shouldBe Some(
+        "Adds two int together. This app adds together two integers and returns the sum"
+    )
     desc.details match {
       case Some(JsObject(fields)) =>
         fields.foreach {
@@ -710,6 +712,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     desc.developerNotes shouldBe Some("Check out my sick bash expression! Three dolla signs!!!")
     desc.summary shouldBe Some("Adds two int together")
     desc.title shouldBe Some("Add Ints")
+    desc.types shouldBe Some(Vector("Adder"))
   }
 
   it should "deep nesting" taggedAs (NativeTestXX) in {

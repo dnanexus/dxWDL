@@ -394,7 +394,17 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
         Some(IR.TaskAttrDetails(fields.mapValues(unwrapAny)))
       case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
-      case _                                                 => None
+      case (IR.META_CATEGORIES, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrCategories(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid category: ${other}")
+        }))
+      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrTypes(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case _ => None
     }.toVector
   }
 
@@ -470,7 +480,7 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Parse any task metadata (other than 'type' and 'id', which are handled above)
-    val TaskAttr = unwrapTaskMeta(task.meta)
+    val taskAttr = unwrapTaskMeta(task.meta)
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
@@ -506,6 +516,6 @@ case class GenerateIRTask(verbose: Verbose,
               dockerFinal,
               kind,
               selfContainedSourceCode,
-              Some(TaskAttr))
+              Some(taskAttr))
   }
 }

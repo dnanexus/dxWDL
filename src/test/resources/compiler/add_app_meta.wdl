@@ -8,11 +8,12 @@ task add {
 
     meta {
         title: "Add Ints"
-        summary: "Adds two int together"
-        description: "This app adds together two integers and returns the sum"
+        description: "Adds two int together. This app adds together two integers and returns the sum"
         developer_notes: "Check out my sick bash expression! Three dolla signs!!!"
+        categories: ["Assembly"]
         version: "1.0"
         open_source: true
+        types: ["Adder"]
         details: {
             contactEmail: "joe@dev.com",
             upstreamVersion: "1.0",
@@ -29,6 +30,10 @@ task add {
                     changes: ["Initial version"]
                 }
             ]
+        }
+        tags: ["add", "ints"]
+        properties: {
+            
         }
     }
     

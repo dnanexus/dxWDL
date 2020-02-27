@@ -26,15 +26,19 @@ object IR {
   // inputSpec/outputSpec attributes, which are defined separately). These attributes can be used
   // in the meta section of task WDL, and will be parsed out and used when generating the native
   // app.
-  val META_TITLE = "title"
-  val META_DESCRIPTION = "description"
-  val META_SUMMARY = "summary"
-  val META_DEVELOPER_NOTES = "developer_notes"
-  val META_VERSION = "version"
-  val META_DETAILS = "details"
-  val META_OPEN_SOURCE = "open_source"
   val META_TYPE = "type"
   val META_ID = "id"
+  val META_CATEGORIES = "categories"
+  val META_DESCRIPTION = "description"
+  val META_DETAILS = "details"
+  val META_DEVELOPER_NOTES = "developer_notes"
+  val META_OPEN_SOURCE = "open_source"
+  val META_PROPERTIES = "properties"
+  val META_SUMMARY = "summary"
+  val META_TAGS = "tags"
+  val META_TITLE = "title"
+  val META_TYPES = "types"
+  val META_VERSION = "version"
 
   sealed abstract class TaskAttr
   final case class TaskAttrTitle(text: String) extends TaskAttr
@@ -44,6 +48,8 @@ object IR {
   final case class TaskAttrVersion(text: String) extends TaskAttr
   final case class TaskAttrDetails(details: Map[String, Any]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
+  final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
+  final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and

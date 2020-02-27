@@ -662,21 +662,27 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Match everything up to the first period; truncate after 50 characters.
-  lazy val firstLineRegex = "^([^.]{1,50})".r
+  lazy val firstLineRegex = "^([^.]{1,50}).*".r
 
-  private def getFirstLine(text: JsValue): Option[JsString] = {
-    text match {
-      case JsString(value) if value.length() > 0 =>
-        value match {
-          case firstLineRegex(line) =>
-            if (line.length() == 50 && !line.endsWith(".")) {
-              Some(JsString(line + "..."))
-            } else {
-              Some(JsString(line))
+  private def calcSummary(description: Option[JsValue],
+                          summary: Option[JsValue]): Map[String, JsValue] = {
+    summary match {
+      case Some(JsString(text)) if text.length() > 0 => Map("summary" -> summary.get)
+      case _ =>
+        description match {
+          case Some(JsString(text)) if text.length() > 0 =>
+            text match {
+              case firstLineRegex(line) =>
+                val descSummary = if (line.length() == 50 && !line.endsWith(".")) {
+                  line + "..."
+                } else {
+                  line
+                }
+                Map("summary" -> JsString(descSummary))
+              case _ => Map.empty
             }
-          case _ => None
+          case other => Map.empty
         }
-      case _ => None
     }
   }
 
@@ -695,11 +701,12 @@ case class Native(dxWDLrtId: Option[String],
   private def getTaskMetadata(applet: IR.Applet): (Map[String, JsValue], Map[String, JsValue]) = {
     val metaDefaults = Map(
         "title" -> JsString(applet.name)
-        //"version" -> JsString("0.0.1"),  version currently ignored - only applies to apps
-        //"openSource" -> JsBoolean(false),  openSource currently ignored - only applies to apps
+        // These are currently ignored because they only apply to apps
+        //"version" -> JsString("0.0.1"),
+        //"openSource" -> JsBoolean(false),
     )
 
-    var meta: Map[String, JsValue] = metaDefaults ++ (applet.meta match {
+    var meta: Map[String, JsValue] = applet.meta match {
       case Some(appAttrs) =>
         appAttrs
           .map {
@@ -707,24 +714,24 @@ case class Native(dxWDLrtId: Option[String],
             case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
             case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
             case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
-            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
-            //case IR.TaskAttrOpenSource(isOpenSource) => Some("openSource" -> JsBoolean(isOpenSource))
+            case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
             case IR.TaskAttrDetails(details) =>
               Some("details" -> JsObject(details.mapValues(anyToJs)))
+            // These are currently ignored because they only apply to apps
+            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
+            //case IR.TaskAttrOpenSource(isOpenSource) =>
+            //  Some("openSource" -> JsBoolean(isOpenSource))
+            //case IR.TaskAttrCategories(categories) =>
+            //  Some("categories" -> categories.mapValues(anyToJs))
             case _ => None
           }
           .flatten
           .toMap
       case None => Map.empty
-    })
+    }
 
     // Default 'summary' to be the first line of 'description'
-    if (meta.contains("description") && !meta.contains("summary")) {
-      meta = meta ++ (getFirstLine(meta("description")) match {
-        case Some(s) => Map("summary" -> s)
-        case _       => Map.empty
-      })
-    }
+    val summary = calcSummary(meta.get("description"), meta.get("summary"))
 
     val metaDetails: Map[String, JsValue] = meta.get("details") match {
       case Some(JsObject(fields)) =>
@@ -774,7 +781,7 @@ case class Native(dxWDLrtId: Option[String],
         Map.empty
       }
 
-    (meta, metaDetails ++ whatsNew ++ taskSpecificDetails)
+    (metaDefaults ++ meta ++ summary, metaDetails ++ whatsNew ++ taskSpecificDetails)
   }
 
   // Set the run spec.
@@ -980,6 +987,9 @@ case class Native(dxWDLrtId: Option[String],
     // Get the metadata from the task meta section, but override with any details specified in
     // task-specific extras. taskMeta contains top-level metadata to be merged with the request,
     // while taskDetails is to be merged with all the other details maps.
+    if (applet.name == "add" && !applet.meta.isDefined) {
+      throw new Exception("no meta")
+    }
     val (taskMeta, taskDetails) = getTaskMetadata(applet)
 
     // Compute all the bits that get merged together into 'details'
