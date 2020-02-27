@@ -113,8 +113,9 @@ case class IOParameter(
 
 // Extra fields for describe
 object Field extends Enumeration {
-  val Analysis, Applet, ArchivalState, Created, Details, Folder, Id, InputSpec, Modified, Name,
-      OutputSpec, ParentJob, Parts, Project, Properties, Size, Stages = Value
+  val Analysis, Applet, ArchivalState, Created, Description, Details, DeveloperNotes, Folder, Id,
+      InputSpec, Modified, Name, OutputSpec, ParentJob, Parts, Project, Properties, Size, Stages,
+      Summary, Tags, Title = Value
 }
 
 trait DxObjectDescribe {
@@ -329,23 +330,27 @@ object DxObject {
 
   def requestFields(fields: Set[Field.Value]): JsValue = {
     val fieldStrings = fields.map {
-      case Field.Analysis      => "analysis"
-      case Field.Applet        => "applet"
-      case Field.ArchivalState => "archivalState"
-      case Field.Created       => "created"
-      case Field.Details       => "details"
-      case Field.Folder        => "folder"
-      case Field.Id            => "id"
-      case Field.InputSpec     => "inputSpec"
-      case Field.Modified      => "modified"
-      case Field.Name          => "name"
-      case Field.OutputSpec    => "outputSpec"
-      case Field.ParentJob     => "parentJob"
-      case Field.Parts         => "parts"
-      case Field.Project       => "project"
-      case Field.Properties    => "properties"
-      case Field.Size          => "size"
-      case Field.Stages        => "stages"
+      case Field.Analysis       => "analysis"
+      case Field.Applet         => "applet"
+      case Field.ArchivalState  => "archivalState"
+      case Field.Created        => "created"
+      case Field.Description    => "description"
+      case Field.DeveloperNotes => "developerNotes"
+      case Field.Details        => "details"
+      case Field.Folder         => "folder"
+      case Field.Id             => "id"
+      case Field.InputSpec      => "inputSpec"
+      case Field.Modified       => "modified"
+      case Field.Name           => "name"
+      case Field.OutputSpec     => "outputSpec"
+      case Field.ParentJob      => "parentJob"
+      case Field.Parts          => "parts"
+      case Field.Project        => "project"
+      case Field.Properties     => "properties"
+      case Field.Size           => "size"
+      case Field.Stages         => "stages"
+      case Field.Summary        => "summary"
+      case Field.Title          => "title"
     }.toVector
     val m: Map[String, JsValue] = fieldStrings.map { x =>
       x -> JsTrue

@@ -8,7 +8,6 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
-import DefaultJsonProtocol._
 
 import wom.types._
 import wom.values._
@@ -254,6 +253,7 @@ case class Native(dxWDLrtId: Option[String],
           )
       )
     }
+
     def mkComplex(optional: Boolean): Vector[JsValue] = {
       // A large JSON structure passed as a hash, and a
       // vector of platform files.
@@ -275,6 +275,7 @@ case class Native(dxWDLrtId: Option[String],
           )
       )
     }
+
     def handleType(wdlType: WomType, optional: Boolean): Vector[JsValue] = {
       wdlType match {
         // primitive types
@@ -660,30 +661,125 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  private def addLicences(applet: IR.Applet): Map[String, JsValue] = {
+  // Match everything up to the first period; truncate after 50 characters.
+  lazy val firstLineRegex = "^([^.]{1,50})".r
 
-    val taskSpecificDetails: Map[String, JsValue] =
-      if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
-        // A task can override the default dx attributes
-        extras match {
-          case None => Map.empty
-          case Some(ext) =>
-            ext.perTaskDxAttributes.get(applet.name) match {
-              case None      => Map.empty
-              case Some(dta) => dta.getDetailsJson
+  private def getFirstLine(text: JsValue): Option[JsString] = {
+    text match {
+      case JsString(value) if value.length() > 0 =>
+        value match {
+          case firstLineRegex(line) =>
+            if (line.length() == 50 && !line.endsWith(".")) {
+              Some(JsString(line + "..."))
+            } else {
+              Some(JsString(line))
             }
+          case _ => None
+        }
+      case _ => None
+    }
+  }
+
+  private def anyToJs(value: Any): JsValue = {
+    value match {
+      case s: String    => JsString(s)
+      case i: Int       => JsNumber(i)
+      case f: Double    => JsNumber(f)
+      case b: Boolean   => JsBoolean(b)
+      case a: Vector[_] => JsArray(a.map(anyToJs))
+      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
+    }
+  }
+
+  // Convert the applet meta to JS, and overlay details from task-specific extras
+  private def getTaskMetadata(applet: IR.Applet): (Map[String, JsValue], Map[String, JsValue]) = {
+    val metaDefaults = Map(
+        "title" -> JsString(applet.name)
+        //"version" -> JsString("0.0.1"),  version currently ignored - only applies to apps
+        //"openSource" -> JsBoolean(false),  openSource currently ignored - only applies to apps
+    )
+
+    var meta: Map[String, JsValue] = metaDefaults ++ (applet.meta match {
+      case Some(appAttrs) =>
+        appAttrs
+          .map {
+            case IR.TaskAttrTitle(text)          => Some("title" -> JsString(text))
+            case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
+            case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
+            case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
+            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
+            //case IR.TaskAttrOpenSource(isOpenSource) => Some("openSource" -> JsBoolean(isOpenSource))
+            case IR.TaskAttrDetails(details) =>
+              Some("details" -> JsObject(details.mapValues(anyToJs)))
+            case _ => None
+          }
+          .flatten
+          .toMap
+      case None => Map.empty
+    })
+
+    // Default 'summary' to be the first line of 'description'
+    if (meta.contains("description") && !meta.contains("summary")) {
+      meta = meta ++ (getFirstLine(meta("description")) match {
+        case Some(s) => Map("summary" -> s)
+        case _       => Map.empty
+      })
+    }
+
+    val metaDetails: Map[String, JsValue] = meta.get("details") match {
+      case Some(JsObject(fields)) =>
+        meta -= "details"
+        fields
+      case _ => Map.empty
+    }
+
+    // If whatsNew is in array format, convert it to a string
+    val whatsNew: Map[String, JsValue] = metaDetails.get("whatsNew") match {
+      case Some(JsArray(array)) =>
+        val changelog = array
+          .map {
+            case JsObject(fields) =>
+              val formattedFields = fields
+                .map {
+                  case ("version", JsString(value)) => Some("version" -> value)
+                  case ("changes", JsArray(array)) =>
+                    Some("changes",
+                         array
+                           .map {
+                             case JsString(item) => s"* ${item}"
+                             case other =>
+                               throw new Exception(s"Invalid change list item: ${other}")
+                           }
+                           .mkString("\n"))
+                  case _ => None
+                }
+                .flatten
+                .toMap
+              s"### Version ${formattedFields("version")}\n${formattedFields("changes")}"
+            case other => throw new Exception(s"Invalid whatsNew ${other}")
+          }
+          .mkString("\n")
+        Map("whatsNew" -> JsString(s"## Changelog\n${changelog}"))
+      case _ => Map.empty
+    }
+
+    // Default and WDL-specified details can be overridden in task-specific extras
+    val taskSpecificDetails: Map[String, JsValue] =
+      if (applet.kind.isInstanceOf[IR.AppletKindTask] && extras.isDefined) {
+        extras.get.perTaskDxAttributes.get(applet.name) match {
+          case None      => Map.empty
+          case Some(dta) => dta.getDetailsJson
         }
       } else {
-        Map("test" -> "something".toJson)
+        Map.empty
       }
 
-    return taskSpecificDetails
+    (meta, metaDetails ++ whatsNew ++ taskSpecificDetails)
   }
 
   // Set the run spec.
   //
   private def calcRunSpec(applet: IR.Applet,
-                          details: Map[String, JsValue],
                           bashScript: String): (JsValue, Map[String, JsValue]) = {
     // find the dxWDL asset
     val instanceType: String = applet.instanceType match {
@@ -757,12 +853,12 @@ case class Native(dxWDLrtId: Option[String],
     }
     val runSpecEverything = JsObject(runSpecWithExtras ++ bundledDepends)
 
-    val details2 = dockerFile match {
-      case None => details
-      case Some(dxfile) =>
-        details + ("docker-image" -> DxUtils.dxFileToJsValue(dxfile))
+    val details: Map[String, JsValue] = dockerFile match {
+      case None         => Map.empty
+      case Some(dxfile) => Map("docker-image" -> DxUtils.dxFileToJsValue(dxfile))
     }
-    (runSpecEverything, details2)
+
+    (runSpecEverything, details)
   }
 
   def calcAccess(applet: IR.Applet): JsValue = {
@@ -880,6 +976,14 @@ case class Native(dxWDLrtId: Option[String],
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
     }
+
+    // Get the metadata from the task meta section, but override with any details specified in
+    // task-specific extras. taskMeta contains top-level metadata to be merged with the request,
+    // while taskDetails is to be merged with all the other details maps.
+    val (taskMeta, taskDetails) = getTaskMetadata(applet)
+
+    // Compute all the bits that get merged together into 'details'
+
     val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
                       "instanceTypeDB" -> JsString(dbOpaqueInstance),
                       "runtimeAttrs" -> runtimeAttrs)
@@ -890,9 +994,9 @@ case class Native(dxWDLrtId: Option[String],
       case (name, execLinkInfo) =>
         ("link_" + name) -> JsObject("$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
     }.toMap
-    val (runSpec: JsValue, baseDetails: Map[String, JsValue]) =
-      calcRunSpec(applet, auxInfo ++ dxLinks ++ metaInfo, bashScript)
-    val license: Map[String, JsValue] = addLicences(applet)
+
+    val (runSpec: JsValue, runSpecDetails: Map[String, JsValue]) =
+      calcRunSpec(applet, bashScript)
 
     val delayWD: Map[String, JsValue] = extras match {
       case None => Map.empty
@@ -902,7 +1006,11 @@ case class Native(dxWDLrtId: Option[String],
           case _          => Map.empty
         }
     }
-    val details: Map[String, JsValue] = baseDetails ++ license ++ delayWD
+
+    // merge all the separate details maps
+    val details: Map[String, JsValue] =
+      taskDetails ++ auxInfo ++ dxLinks ++ metaInfo ++ runSpecDetails ++ delayWD
+
     val access: JsValue = calcAccess(applet)
 
     // A fragemnt is hidden, not visible under default settings. This
@@ -938,7 +1046,7 @@ case class Native(dxWDLrtId: Option[String],
       else Map("access" -> access)
 
     // Add a checksum
-    val reqCoreAll = reqCore ++ accessField ++ ignoreReuse
+    val reqCoreAll = taskMeta ++ reqCore ++ accessField ++ ignoreReuse
     checksumReq(applet.name, reqCoreAll)
   }
 

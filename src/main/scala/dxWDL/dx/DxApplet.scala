@@ -14,7 +14,11 @@ case class DxAppletDescribe(project: String,
                             properties: Option[Map[String, String]],
                             details: Option[JsValue],
                             inputSpec: Option[Vector[IOParameter]],
-                            outputSpec: Option[Vector[IOParameter]])
+                            outputSpec: Option[Vector[IOParameter]],
+                            description: Option[String] = None,
+                            developerNotes: Option[String] = None,
+                            summary: Option[String] = None,
+                            title: Option[String] = None)
     extends DxObjectDescribe
 
 case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -67,7 +71,23 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
 
     val details = descJs.asJsObject.fields.get("details")
     val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    desc.copy(details = details, properties = props)
+    val description = descJs.asJsObject.fields.get("description").flatMap(unwrapString)
+    val developerNotes = descJs.asJsObject.fields.get("developerNotes").flatMap(unwrapString)
+    val summary = descJs.asJsObject.fields.get("summary").flatMap(unwrapString)
+    val title = descJs.asJsObject.fields.get("title").flatMap(unwrapString)
+    desc.copy(details = details,
+              properties = props,
+              description = description,
+              developerNotes = developerNotes,
+              summary = summary,
+              title = title)
+  }
+
+  def unwrapString(jsValue: JsValue): Option[String] = {
+    jsValue match {
+      case JsString(value) => Some(value)
+      case _               => None
+    }
   }
 
   def newRun(name: String,

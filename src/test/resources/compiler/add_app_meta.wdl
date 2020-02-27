@@ -1,6 +1,6 @@
 version 1.0
 
-task add_app_meta {
+task add {
     input {
         Int a
         Int b
@@ -14,19 +14,19 @@ task add_app_meta {
         version: "1.0"
         open_source: true
         details: {
-            contact_email: "joe@dev.com",
-            upstream_version: "1.0",
-            upstream_author: "Joe Developer",
-            upstream_url: "https://dev.com/joe",
-            upstream_licenses: ["MIT"],
-            change_log: [
+            contactEmail: "joe@dev.com",
+            upstreamVersion: "1.0",
+            upstreamAuthor: "Joe Developer",
+            upstreamUrl: "https://dev.com/joe",
+            upstreamLicenses: ["MIT"],
+            whatsNew: [
                 { 
                     version: "1.1", 
-                    changes: ["Added paramter --foo", "Added cowsay easter-egg"] 
+                    changes: ["Added parameter --foo", "Added cowsay easter-egg"] 
                 },
                 {
                     version: "1.0", 
-                    changes: ["Intial version"]
+                    changes: ["Initial version"]
                 }
             ]
         }

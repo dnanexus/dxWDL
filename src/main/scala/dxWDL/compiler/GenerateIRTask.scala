@@ -371,53 +371,29 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapMetaValueElementString(element: MetaValueElement): String = {
+  private def unwrapAny(element: MetaValueElement): Any = {
     element match {
-      case MetaValueElementString(text) => text
-      case _                            => throw new Exception(s"Expected MetaValueElement, got ${element}")
+      case MetaValueElementString(text)   => text
+      case MetaValueElementInteger(i)     => i
+      case MetaValueElementFloat(f)       => f
+      case MetaValueElementBoolean(b)     => b
+      case MetaValueElementArray(array)   => array.map(unwrapAny)
+      case MetaValueElementObject(fields) => fields.mapValues(unwrapAny)
+      case _                              => throw new Exception(s"Expected MetaValueElement, got ${element}")
     }
   }
 
-  private def unwrapMetaValueElementStringArray(element: MetaValueElement): Vector[String] = {
-    element match {
-      case MetaValueElementArray(array) => array.map(unwrapMetaValueElementString)
-      case _                            => throw new Exception(s"Expected MetaValueElementArray, got ${element}")
-    }
-  }
-
-  private def unwrapTaskMeta(meta: Map[String, MetaValueElement]): Vector[IR.AppAttr] = {
+  private def unwrapTaskMeta(meta: Map[String, MetaValueElement]): Vector[IR.TaskAttr] = {
     meta.flatMap {
-      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.AppAttrTitle(text))
-      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.AppAttrDescription(text))
-      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.AppAttrSummary(text))
+      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.TaskAttrTitle(text))
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.TaskAttrDescription(text))
+      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
       case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
-        Some(IR.AppAttrDeveloperNotes(text))
-      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.AppAttrVersion(text))
+        Some(IR.TaskAttrDeveloperNotes(text))
+      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.TaskAttrVersion(text))
       case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
-        val change_log: Option[IR.ChangesRepr] = fields.get("change_log") match {
-          case None                               => None
-          case Some(MetaValueElementString(text)) => Some(IR.ChangesReprString(text))
-          case Some(MetaValueElementArray(eltArray)) =>
-            Some(IR.ChangesReprList(eltArray.map {
-              case MetaValueElementObject(fields) =>
-                IR.VersionChanges(unwrapMetaValueElementString(fields("version")),
-                                  unwrapMetaValueElementStringArray(fields("changes")))
-              case other =>
-                throw new Exception(s"Unexpected value for 'change_log' element: ${other}")
-            }))
-          case other => throw new Exception(s"Unexpected value for 'change_log': ${other}")
-        }
-        Some(
-            IR.AppAttrDetails(
-                fields.get("contact_email").map(unwrapMetaValueElementString),
-                fields.get("upstream_version").map(unwrapMetaValueElementString),
-                fields.get("upstream_author").map(unwrapMetaValueElementString),
-                fields.get("upstream_url").map(unwrapMetaValueElementString),
-                fields.get("upstream_licenses").map(unwrapMetaValueElementStringArray),
-                change_log
-            )
-        )
-      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.AppAttrOpenSource(b))
+        Some(IR.TaskAttrDetails(fields.mapValues(unwrapAny)))
+      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
       case _                                                 => None
     }.toVector
   }
@@ -494,7 +470,7 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Parse any task metadata (other than 'type' and 'id', which are handled above)
-    val appAttr = unwrapTaskMeta(task.meta)
+    val TaskAttr = unwrapTaskMeta(task.meta)
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
@@ -530,6 +506,6 @@ case class GenerateIRTask(verbose: Verbose,
               dockerFinal,
               kind,
               selfContainedSourceCode,
-              Some(appAttr))
+              Some(TaskAttr))
   }
 }

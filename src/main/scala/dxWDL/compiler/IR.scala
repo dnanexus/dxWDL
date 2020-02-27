@@ -36,33 +36,14 @@ object IR {
   val META_TYPE = "type"
   val META_ID = "id"
 
-  // Two different way to specify change log. If given the second form, dxWDL turns it into a
-  // nicely markdown-formatted change list when generating the dxapp.
-  //  change_log: "## Changelog\n* Optionally markdown formated"
-  //
-  //  change_log: [
-  //    { version: "1.1", changes: ["Added paramter --foo", "Added cowsay easter-egg"] },
-  //    { version: "1.0", changes: ["Intial version"] }
-  //  ]
-  sealed abstract class ChangesRepr
-  final case class ChangesReprString(text: String) extends ChangesRepr
-  final case class VersionChanges(version: String, changes: Vector[String])
-  final case class ChangesReprList(changes: Vector[VersionChanges]) extends ChangesRepr
-
-  sealed abstract class AppAttr
-  final case class AppAttrTitle(text: String) extends AppAttr
-  final case class AppAttrDescription(text: String) extends AppAttr
-  final case class AppAttrSummary(text: String) extends AppAttr
-  final case class AppAttrDeveloperNotes(text: String) extends AppAttr
-  final case class AppAttrVersion(text: String) extends AppAttr
-  final case class AppAttrDetails(contact_email: Option[String] = None,
-                                  upstream_version: Option[String] = None,
-                                  upstream_author: Option[String] = None,
-                                  upstream_url: Option[String] = None,
-                                  upstream_licenses: Option[Vector[String]] = None,
-                                  change_log: Option[ChangesRepr] = None)
-      extends AppAttr
-  final case class AppAttrOpenSource(isOpenSource: Boolean) extends AppAttr
+  sealed abstract class TaskAttr
+  final case class TaskAttrTitle(text: String) extends TaskAttr
+  final case class TaskAttrDescription(text: String) extends TaskAttr
+  final case class TaskAttrSummary(text: String) extends TaskAttr
+  final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
+  final case class TaskAttrVersion(text: String) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, Any]) extends TaskAttr
+  final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
@@ -328,7 +309,7 @@ object IR {
                     docker: DockerImage,
                     kind: AppletKind,
                     womSourceCode: String,
-                    meta: Option[Vector[AppAttr]] = None)
+                    meta: Option[Vector[TaskAttr]] = None)
       extends Callable {
     def inputVars = inputs
     def outputVars = outputs
