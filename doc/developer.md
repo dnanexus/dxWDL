@@ -68,7 +68,7 @@ You need to have a DNAnexus account and be logged into DNAnexus via the command 
 
 Integration tests actually build and run apps/workflows on DNAnexus. These tests take much longer to run than the unit tests, and so typically you only run them before submitting a pull request.
 
-First, you need to an account on the DNAnexus staging environment, and you need to be added to the projects that have been setup for testing; @orodeh can set this up for you. Next, log into the DNAnexus staging environment using dx-toolkit: `dx login --staging`.
+First, you need to an account on the DNAnexus staging environment, and you need to be added to the projects that have been setup for testing; @orodeh can set this up for you. Next, log into the DNAnexus staging environment using dx-toolkit: `dx login --staging`. Note that very often your login will timeout while the integration tests are running unless you are actively using the platform in another session, and this will cause the tests to fail. To avoid, this, generate a token via the web UI and use that token to log in on the command line: `dx login --staging --token <token>`.
 
 Next, delete any existing build artifacts using the following commands:
 
@@ -76,6 +76,12 @@ Next, delete any existing build artifacts using the following commands:
 $ sbt clean
 $ sbt cleanFiles
 $ find . -name target | xargs rm -rf
+```
+
+You may also need to delete artifiacts that have been cached on the platform:
+
+```
+$ dx rm -r dxWDL_playground:/builds/<username>/<version>
 ```
 
 Next, you need to build the dxWDL JAR file. Run `sbt assembly`, then move the JAR file from the `target` folder to the root dxWDL folder, e.g. `mv target/dxWDL.jar ./dxWDL-1.44.jar`.
