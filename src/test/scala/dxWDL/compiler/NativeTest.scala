@@ -641,8 +641,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     b.label shouldBe Some("A negative integer")
   }
 
-  it should "be able to include license information in details" in {
-    val expected =
+  it should "be able to include information from task meta and extras" in {
+    val expectedUpstreamProjects =
       """
         |[
         |  {
@@ -656,7 +656,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         |]
             """.stripMargin.parseJson
 
-    val path = pathFromBasename("compiler", "add.wdl")
+    val expectedWhatsNew =
+      """## Changelog
+        |### Version 1.1
+        |* Added parameter --foo
+        |* Added cowsay easter-egg
+        |### Version 1.0
+        |* Initial version""".stripMargin
+
+    val path = pathFromBasename("compiler", "add_app_meta.wdl")
     val extraPath = pathFromBasename("compiler/extras", "extras_license.json")
 
     val appId = Main.compile(
@@ -665,23 +673,54 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case SuccessfulTermination(x) => x
-      case _                        => throw new Exception("sanity")
-
+      case other                    => throw new Exception(s"Unexpected result ${other}")
     }
 
     val dxApplet = DxApplet.getInstance(appId)
-    val desc = dxApplet.describe(Set(Field.Details))
-    val license = desc.details match {
-      case Some(JsObject(x)) =>
-        x.get("upstreamProjects") match {
-          case None    => List.empty
-          case Some(s) => s
+    val desc = dxApplet.describe(
+        Set(
+            Field.Description,
+            Field.Details,
+            Field.DeveloperNotes,
+            Field.Properties,
+            Field.Summary,
+            Field.Tags,
+            Field.Title,
+            Field.Types
+        )
+    )
 
+    desc.description shouldBe Some(
+        "Adds two int together. This app adds together two integers and returns the sum"
+    )
+    desc.details match {
+      case Some(JsObject(fields)) =>
+        fields.foreach {
+          case ("contactEmail", JsString(value))    => value shouldBe "joe@dev.com"
+          case ("upstreamVersion", JsString(value)) => value shouldBe "1.0"
+          case ("upstreamAuthor", JsString(value))  => value shouldBe "Joe Developer"
+          case ("upstreamUrl", JsString(value))     => value shouldBe "https://dev.com/joe"
+          case ("upstreamLicenses", JsArray(array)) => array shouldBe Vector(JsString("MIT"))
+          case ("upstreamProjects", array: JsArray) =>
+            array shouldBe expectedUpstreamProjects
+          case ("whatsNew", JsString(value))       => value shouldBe expectedWhatsNew
+          case ("instanceTypeDB", JsString(value)) => Unit // ignore
+          case ("runtimeAttrs", JsObject(fields))  => Unit // ignore
+          case ("womSourceCode", JsString(value))  => Unit // ignore
+          case other                               => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")
     }
-
-    license shouldBe expected
+    desc.developerNotes shouldBe Some("Check out my sick bash expression! Three dolla signs!!!")
+    desc.properties match {
+      case Some(m) =>
+        (m -- Set(Utils.VERSION_PROP, Utils.CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+      case _ => throw new Exception("No properties")
+    }
+    desc.summary shouldBe Some("Adds two int together")
+    desc.tags shouldBe Some(Vector("add", "ints", "dxWDL"))
+    desc.title shouldBe Some("Add Ints")
+    desc.types shouldBe Some(Vector("Adder"))
   }
 
   it should "deep nesting" taggedAs (NativeTestXX) in {

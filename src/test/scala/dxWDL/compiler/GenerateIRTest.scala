@@ -1055,6 +1055,54 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
+  it should "recognize app metadata" in {
+    val path = pathFromBasename("compiler", "add_app_meta.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add", bundle)
+    cgrepApplet.meta shouldBe Some(
+        Vector(
+            IR.TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
+            IR.TaskAttrDescription(
+                "Adds two int together. This app adds together two integers and returns the sum"
+            ),
+            IR.TaskAttrTags(Vector("add", "ints")),
+            IR.TaskAttrOpenSource(true),
+            IR.TaskAttrVersion("1.0"),
+            IR.TaskAttrProperties(Map("foo" -> "bar")),
+            IR.TaskAttrCategories(Vector("Assembly")),
+            IR.TaskAttrDetails(
+                Map(
+                    "contactEmail" -> "joe@dev.com",
+                    "upstreamVersion" -> "1.0",
+                    "upstreamAuthor" -> "Joe Developer",
+                    "upstreamUrl" -> "https://dev.com/joe",
+                    "upstreamLicenses" -> Vector("MIT"),
+                    "whatsNew" -> Vector(
+                        Map(
+                            "version" -> "1.1",
+                            "changes" -> Vector("Added parameter --foo", "Added cowsay easter-egg")
+                        ),
+                        Map(
+                            "version" -> "1.0",
+                            "changes" -> Vector("Initial version")
+                        )
+                    )
+                )
+            ),
+            IR.TaskAttrTitle("Add Ints"),
+            IR.TaskAttrTypes(Vector("Adder"))
+        )
+    )
+  }
+
   it should "handle streaming files" in {
     val path = pathFromBasename("compiler", "streaming_files.wdl")
     val retval = Main.compile(

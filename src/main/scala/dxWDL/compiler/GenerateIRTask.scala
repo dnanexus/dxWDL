@@ -371,6 +371,53 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  private def unwrapAny(element: MetaValueElement): Any = {
+    element match {
+      case MetaValueElementString(text)   => text
+      case MetaValueElementInteger(i)     => i
+      case MetaValueElementFloat(f)       => f
+      case MetaValueElementBoolean(b)     => b
+      case MetaValueElementArray(array)   => array.map(unwrapAny)
+      case MetaValueElementObject(fields) => fields.mapValues(unwrapAny)
+      case _                              => throw new Exception(s"Expected MetaValueElement, got ${element}")
+    }
+  }
+
+  private def unwrapTaskMeta(meta: Map[String, MetaValueElement]): Vector[IR.TaskAttr] = {
+    meta.flatMap {
+      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.TaskAttrTitle(text))
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.TaskAttrDescription(text))
+      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
+      case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
+        Some(IR.TaskAttrDeveloperNotes(text))
+      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.TaskAttrVersion(text))
+      case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
+        Some(IR.TaskAttrDetails(fields.mapValues(unwrapAny)))
+      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
+      case (IR.META_CATEGORIES, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrCategories(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid category: ${other}")
+        }))
+      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrTypes(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+        Some(IR.TaskAttrTags(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
+        Some(IR.TaskAttrProperties(fields.mapValues {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid property value: ${other}")
+        }))
+      case _ => None
+    }.toVector
+  }
+
   // Compile a WDL task into an applet.
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
@@ -442,6 +489,9 @@ case class GenerateIRTask(verbose: Verbose,
           IR.AppletKindTask(task)
       }
 
+    // Parse any task metadata (other than 'type' and 'id', which are handled above)
+    val taskAttr = unwrapTaskMeta(task.meta)
+
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
 
@@ -469,6 +519,13 @@ case class GenerateIRTask(verbose: Verbose,
         }
       case other => other
     }
-    IR.Applet(task.name, inputs, outputs, instanceType, dockerFinal, kind, selfContainedSourceCode)
+    IR.Applet(task.name,
+              inputs,
+              outputs,
+              instanceType,
+              dockerFinal,
+              kind,
+              selfContainedSourceCode,
+              Some(taskAttr))
   }
 }
