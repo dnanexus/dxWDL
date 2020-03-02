@@ -14,7 +14,13 @@ case class DxAppletDescribe(project: String,
                             properties: Option[Map[String, String]],
                             details: Option[JsValue],
                             inputSpec: Option[Vector[IOParameter]],
-                            outputSpec: Option[Vector[IOParameter]])
+                            outputSpec: Option[Vector[IOParameter]],
+                            description: Option[String] = None,
+                            developerNotes: Option[String] = None,
+                            summary: Option[String] = None,
+                            title: Option[String] = None,
+                            types: Option[Vector[String]] = None,
+                            tags: Option[Vector[String]] = None)
     extends DxObjectDescribe
 
 case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -65,9 +71,37 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
         throw new Exception(s"Malformed JSON ${descJs}")
     }
 
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    desc.copy(details = details, properties = props)
+    val descFields: Map[String, JsValue] = descJs.asJsObject.fields
+    val details = descFields.get("details")
+    val props = descFields.get("properties").map(DxObject.parseJsonProperties)
+    val description = descFields.get("description").flatMap(unwrapString)
+    val developerNotes = descFields.get("developerNotes").flatMap(unwrapString)
+    val summary = descFields.get("summary").flatMap(unwrapString)
+    val title = descFields.get("title").flatMap(unwrapString)
+    val types = descFields.get("types").flatMap(unwrapStringArray)
+    val tags = descFields.get("tags").flatMap(unwrapStringArray)
+    desc.copy(details = details,
+              properties = props,
+              description = description,
+              developerNotes = developerNotes,
+              summary = summary,
+              title = title,
+              types = types,
+              tags = tags)
+  }
+
+  def unwrapString(jsValue: JsValue): Option[String] = {
+    jsValue match {
+      case JsString(value) => Some(value)
+      case _               => None
+    }
+  }
+
+  def unwrapStringArray(jsValue: JsValue): Option[Vector[String]] = {
+    jsValue match {
+      case JsArray(array) => Some(array.flatMap(unwrapString))
+      case _              => None
+    }
   }
 
   def newRun(name: String,

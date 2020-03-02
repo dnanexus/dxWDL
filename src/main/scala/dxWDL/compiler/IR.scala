@@ -26,14 +26,33 @@ object IR {
   // inputSpec/outputSpec attributes, which are defined separately). These attributes can be used
   // in the meta section of task WDL, and will be parsed out and used when generating the native
   // app.
-  val META_DESCRIPTION = "description"
-  val META_DEVELOPER_NOTES = "developer_notes"
+
   val META_TYPE = "type"
   val META_ID = "id"
+  val META_CATEGORIES = "categories"
+  val META_DESCRIPTION = "description"
+  val META_DETAILS = "details"
+  val META_DEVELOPER_NOTES = "developer_notes"
+  val META_OPEN_SOURCE = "open_source"
+  val META_PROPERTIES = "properties"
+  val META_SUMMARY = "summary"
+  val META_TAGS = "tags"
+  val META_TITLE = "title"
+  val META_TYPES = "types"
+  val META_VERSION = "version"
 
-  sealed abstract class AppAttr
-  final case class AppAttrDescription(text: String) extends AppAttr
-  final case class AppAttrDeveloperNotes(text: String) extends AppAttr
+  sealed abstract class TaskAttr
+  final case class TaskAttrTitle(text: String) extends TaskAttr
+  final case class TaskAttrDescription(text: String) extends TaskAttr
+  final case class TaskAttrSummary(text: String) extends TaskAttr
+  final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
+  final case class TaskAttrVersion(text: String) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, Any]) extends TaskAttr
+  final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
+  final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
+  final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
+  final case class TaskAttrTags(tags: Vector[String]) extends TaskAttr
+  final case class TaskAttrProperties(properties: Map[String, String]) extends TaskAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
@@ -290,7 +309,7 @@ object IR {
     * @param kind          Kind of applet: task, scatter, ...
     * @param task          Task definition
     * @param womSourceCode WDL/CWL source code for task.
-    * @param meta          Additional app(let) metadata
+    * @param meta          Additional applet metadata
     */
   case class Applet(name: String,
                     inputs: Vector[CVar],
@@ -299,7 +318,7 @@ object IR {
                     docker: DockerImage,
                     kind: AppletKind,
                     womSourceCode: String,
-                    meta: Option[Vector[AppAttr]] = None)
+                    meta: Option[Vector[TaskAttr]] = None)
       extends Callable {
     def inputVars = inputs
     def outputVars = outputs
