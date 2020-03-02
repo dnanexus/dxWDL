@@ -1419,8 +1419,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     val incApp = getAppletByName("inc", bundle)
     incApp.meta match {
       case Some(v: Vector[IR.TaskAttr]) => v.size shouldBe 0
-      case None                        => None
-      case other                       => throw new Exception("meta is not None or empty for inc task")
+      case None                         => None
+      case other                        => throw new Exception("meta is not None or empty for inc task")
     }
   }
 }
