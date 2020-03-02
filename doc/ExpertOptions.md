@@ -5,7 +5,6 @@ some experience using the [DNAnexus](http://www.dnanexus.com) platform.
 *dxWDL* takes a bioinformatics pipeline written in WDL, and statically
 compiles it to an equivalent workflow on the DNAnexus platform.
 
-
 # Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
@@ -177,7 +176,6 @@ task fileSize {
 }
 ```
 
-
 # Task and workflow inputs
 
 WDL assumes that a task declaration can be overriden
@@ -242,78 +240,52 @@ workflow math {
 }
 ```
 
-Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md)
-for limited support.
+Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md) for limited support.
 
-# parameter_meta section
+# Task metadata
 
-The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#parameter-metadata-section) defines a `parameter_meta` section that may contain key value pairs to assoicate metadata with input and output variables. Currently, the following keywords are supported:
+A WDL task has two sections where metadata can be specified:
 
-- `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
-- Direct mappings to [inputSpec and outputSpec keywords in dxapp.json](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications):
-  - `help` - `description` is also accepted as an alias for `help`; if the parameter definition is a string rather than a hash, the string is used as `help`.
-  - `group` - parameter grouping (used in the DNAnexus web UI).
-  - `label` - human-readable label for the parameter (used in the DNAnexus web UI).
-  - `patterns` - accepted filename patterns (applies to `File`-type parameters only).
-  - `choices` - allowed parameter values; currently, this is limited to primitive (`String`, `Int`, `Float`, `Boolean`) and `File` types parameters (and `Array`s of these types), i.e. it is not allowed for `Map` or `Struct` parameters.
-  - `suggestions` - suggested parameter values; currently has the same limitations as `choices`.
-  - `dx_type` - maps to the `type` field in dxapp.json; can be either a `String` value or a boolean "expression" (see example below). Applies to `File`-type parameters only.
-  - `default` - a default value for the parameter. This is ignored if the parameter's default value is defined in the `inputs` section.
+* meta: Provides overall metadata about the task
+* parameter_meta: Provides metadata for each of the input parameters
 
-Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
+Both of these sections allow arbitrary keys and values; unrecognized keys must be ignored by the workflow engine. dxWDL recognized specific keys in each section that are used when generating the native DNAnexus applets. The purpose of these keys is to provide the same information that can be specified in the [dxapp.json](https://documentation.dnanexus.com/developer/apps/app-metadata) file. 
 
-## Example parameter_meta app
+## meta section
 
-```wdl
-task cgrep {
-    input {
-        String pattern
-        File in_file
-        Int? multiplier
-    }
-    Int actual_multiplier = select_first([multiplier, 1])
+The following keys are recognized:
 
-    parameter_meta {
-        in_file: {
-          help: "The input file to be searched",
-          group: "Basic",
-          patterns: ["*.txt", "*.tsv"],
-          dx_type: { and: [ "fastq", { or: ["Read1", "Read2"] } ] },
-          stream: true
-        }
-        pattern: {
-          help: "The pattern to use to search in_file",
-          group: "Advanced"
-        }
-        multiplier: {
-          help: "Number by which to multiply the count",
-          choices: [1, 2, 3],
-          default: 1
-        }
-    }
+* `title`: A short title for the applet. If not specified, the task name is used as the title.
+* `summary`: A short description of the applet. If not specified, the first line of the description is used (up to 50 characters or the first period, whichever comes first).
+* `description`: A longer description of the applet.
+* `developer_notes`: Notes specifically for developers of the task.
+* `types`: An array of DNAnexus [types](https://documentation.dnanexus.com/developer/api/data-object-lifecycle/types).
+* `tags`: An array of strings that will be added as tags on the generated applet.
+* `properties`: A hash of key-value pairs that will be added as properties on the generated applet. Both keys and values must be strings.
+* `details`: An object with an arbitrary set of details about the applet. The following keys are specifically recognized and used by the platform:
+  * advancedInputs
+  * citations
+  * contactEmail
+  * contactOrg
+  * contactUrl
+  * exampleProject
+  * repoUrl
+  * upstreamLicenses
+  * upstreamUrl
+  * upstreamVersion
+  * whatsNew: The task's change log. There are two different formats that are accepted:
+    * A (possibly Markdown-formatted) string
+    * An array of versions, where each version is a hash with two keys: `version`, a version string, and `changes`, an array of change description strings. This object will be formatted into a Markdown string upon compilation.
 
-    command {
-        grep '${pattern}' ${in_file} | wc -l
-        cp ${in_file} out_file
-    }
+The following keys are also recognized but currently unused, as they only apply to DNAnexus Apps (not Applets):
 
-    output {
-        Int count = read_int(stdout()) * actual_multiplier
-        File out_file = "out_file"
-    }
-}
-```
+* `categories`: A list of DNAnexus [categories](https://documentation.dnanexus.com/developer/apps/app-metadata#categories-user-browseable-categories)
+* `open_source`: Whether the generated app should be open-source
+* `version`: The app version
 
-* Note the comma seperating the members of the object for `in_file`
+### Calling existing applets
 
-# Calling existing applets
-
-Sometimes, it is desirable to call an existing dx:applet from a WDL
-workflow. For example, when porting a native workflow, we can leave
-the applets as is, without rewriting them in WDL. The `dxni`
-subcommand, short for *Dx Native Interface*, is dedicated to this use
-case. It searchs a platform folder and generates a WDL wrapper task for each
-applet. For example, the command:
+Sometimes, it is desirable to call an existing dx:applet from a WDL workflow. For example, when porting a native workflow, we can leave the applets as is, without rewriting them in WDL. The `dxni` subcommand, short for *Dx Native Interface*, is dedicated to this use case. It searchs a platform folder and generates a WDL wrapper task for each applet. For example, the command:
 
 ```console
 $ java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
@@ -345,6 +317,7 @@ applet has the `dxapp.json` signature:
 ```
 
 The WDL definition file will be:
+
 ```wdl
 task concat {
   String a
@@ -359,6 +332,7 @@ task concat {
   }
 }
 ```
+
 The meta section includes the applet-id, which will be called at runtime. A WDL file can
 call the `concat` task as follows:
 
@@ -375,7 +349,7 @@ workflow w {
 }
 ```
 
-## Calling apps
+### Calling apps
 
 To call apps instead of applets, use
 
@@ -386,23 +360,83 @@ $ java -jar dxWDL.jar dxni -apps -o my_apps.wdl
 The compiler will search for all the apps you can call, and create WDL
 tasks for them.
 
+## parameter_meta section
 
-## Debugging an applet
+The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#parameter-metadata-section) defines a `parameter_meta` section that may contain key value pairs to assoicate metadata with input and output variables. Currently, the following keywords are supported:
 
-If you build an applet on the platform with dxWDL, and want to inspect
-it, use: ```dx get --omit-resources <applet path>```. This will
-refrain from downloading the large resource files that go into the
-applet.
+- `stream`, indicates whether or not an input file should be streamed. See [here](#Streaming) for more details
+- Direct mappings to [inputSpec and outputSpec keywords in dxapp.json](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications):
+  - `help` - `description` is also accepted as an alias for `help`; if the parameter definition is a string rather than a hash, the string is used as `help`.
+  - `group` - parameter grouping (used in the DNAnexus web UI).
+  - `label` - human-readable label for the parameter (used in the DNAnexus web UI).
+  - `patterns` - accepted filename patterns (applies to `File`-type parameters only).
+  - `choices` - allowed parameter values; currently, this is limited to primitive (`String`, `Int`, `Float`, `Boolean`) and `File` types parameters (and `Array`s of these types), i.e. it is not allowed for `Map` or `Struct` parameters.
+  - `suggestions` - suggested parameter values; currently has the same limitations as `choices`.
+  - `dx_type` - maps to the `type` field in dxapp.json; can be either a `String` value or a boolean "expression" (see example below). Applies to `File`-type parameters only.
+  - `default` - a default value for the parameter. This is ignored if the parameter's default value is defined in the `inputs` section.
 
+Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 
-## Setting dnanexus specific attributes for tasks
+## Example task with DNAnexus-specific metadata
 
-When writing a dnanexus applet the user can specify options through
-the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL
-equivalent is the *extras* file, specified with the
-`extras` command line option. The extras file has a `default_task_dx_attributes`
-section where runtime specification, timeout policies, and access control can
-be set.
+```wdl
+version 1.0
+
+task cgrep {
+    input {
+        String pattern
+        File in_file
+        Int? max_results
+    }
+    Int actual_max_results = select_first([max_results, 3])
+
+    meta {
+        title: "Search in File"
+        tags: ["search", "grep"]
+        details: {
+          whatsNew: [
+            { version: "1.1", changes: ["Added max_results", "Switched to WDL v1.0"]},
+            { version: "1.0", changes: ["Initial release"]}
+          ]
+        }
+    }
+
+    parameter_meta {
+        in_file: {
+          help: "The input file to be searched",
+          group: "Basic",
+          patterns: ["*.txt", "*.tsv"],
+          dx_type: { and: [ "fastq", { or: ["Read1", "Read2"] } ] },
+          stream: true
+        }
+        pattern: {
+          help: "The pattern to use to search in_file",
+          group: "Advanced"
+        }
+        max_results: {
+          help: "Maximum number of results to return",
+          choices: [1, 2, 3],
+          default: 3
+        }
+    }
+
+    command <<<
+        grep -m~{actual_max_results} '~{pattern}' ~{in_file} | wc -l
+        cp ~{in_file} out_file
+    >>>
+
+    output {
+        Int count = read_int(stdout())
+        File out_file = "out_file"
+    }
+}
+```
+
+\* Note the comma seperating the members of the objects within meta and paramter_meta
+
+# Setting DNAnexus-specific attributes in extras.json
+
+When writing a dnanexus applet the user can specify options through the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL equivalent is the *extras* file, specified with the `extras` command line option. The extras file has a `default_task_dx_attributes` section where runtime specification, timeout policies, and access control can be set.
 
 ```
 {
@@ -494,6 +528,15 @@ You are also able add citations or licenses information using for each task at t
   }
 }
 ```
+
+Note that `details` specified in `per_task_dx_attributes` override those that are set in the task's `meta` section.
+
+# Debugging an applet
+
+If you build an applet on the platform with dxWDL, and want to inspect
+it, use: ```dx get --omit-resources <applet path>```. This will
+refrain from downloading the large resource files that go into the
+applet.
 
 ## Job reuse
 
