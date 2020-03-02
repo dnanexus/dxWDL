@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.45
+- Upgrade packages to:
+  - dxfuse v20
+  - dx-download-agent with support for symbolic links
+  - Cromwell v49
+
+-
+
 ## 1.44 21-Feb-2020
 - Added support for additional parameter metadata:
   - group

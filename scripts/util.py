@@ -18,8 +18,8 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
-dxda_version = "20190909212832_c28a2ad"
-dxfuse_version = "v0.19"
+dxda_version = "20200228193423_a907620"
+dxfuse_version = "v0.20"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -88,7 +88,7 @@ def make_asset_file(version_id, top_dir):
             { "name": "bzip2" },
             { "name": "jq" }
         ],
-        "instanceType": "mem1_ssd1_x2",
+        "instanceType": "mem1_ssd1_v2_x4",
         "description": "Prerequisits for running WDL workflows compiled to the platform"
     }
     with open(os.path.join(top_dir, "applet_resources/dxasset.json"), 'w') as fd:
