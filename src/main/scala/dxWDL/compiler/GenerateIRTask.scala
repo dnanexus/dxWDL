@@ -383,9 +383,10 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapTaskMeta(meta: Map[String, MetaValueElement],
-                             adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): 
-                             Vector[IR.TaskAttr] = {
+  private def unwrapTaskMeta(
+      meta: Map[String, MetaValueElement],
+      adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
+  ): Vector[IR.TaskAttr] = {
     val appAttrs = meta.flatMap {
       case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.TaskAttrTitle(text))
       case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.TaskAttrDescription(text))
