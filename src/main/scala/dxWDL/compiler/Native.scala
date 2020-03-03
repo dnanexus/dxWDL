@@ -360,6 +360,7 @@ case class Native(dxWDLrtId: Option[String],
             |      break
             |   fi
             |   i=$$((i + 1))
+            |   sleep 3
             |   echo "retry docker login ($$i)"
             |done
             |set +e
