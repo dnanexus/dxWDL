@@ -133,7 +133,8 @@ ci_test_list = [
 
 special_flags_list = [
     "add2",      # test the ignoreReuse flag
-    "add_many"   # tests the delayWorkflowDestruction flag
+    "add_many",  # tests the delayWorkspaceDestruction flag
+    "inc_range"  # check that runtime call to job/analysis pass the delayWorkspaceDestruction flag
 ]
 
 medium_test_list= wdl_v1_list + docker_test_list + special_flags_list
@@ -358,7 +359,7 @@ def wait_for_completion(test_exec_objs):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_executable(project, test_folder, tname, oid, debug_flag):
+def run_executable(project, test_folder, tname, oid, debug_flag, delay_workspace_destruction):
     def once():
         try:
             desc = test_files[tname]
@@ -382,6 +383,8 @@ def run_executable(project, test_folder, tname, oid, debug_flag):
                     "debug": {"debugOn": ['AppError', 'AppInternalError', 'ExecutionError'] },
                     "allow_ssh" : [ "*" ]
                 }
+            if delay_workspace_destruction:
+                run_kwargs["delay_workspace_destruction"] = True
 
             return exec_obj.run(inputs,
                                 project=project.get_id(),
@@ -419,13 +422,13 @@ def extract_outputs(tname, exec_obj):
     else:
         raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-def run_test_subset(project, runnable, test_folder, debug_flag):
+def run_test_subset(project, runnable, test_folder, debug_flag, delay_workspace_destruction):
     # Run the workflows
     test_exec_objs=[]
     for tname, oid in runnable.items():
         desc = test_files[tname]
         print("Running {} {} {}".format(desc.kind, desc.name, oid))
-        anl = run_executable(project, test_folder, tname, oid, debug_flag)
+        anl = run_executable(project, test_folder, tname, oid, debug_flag, delay_workspace_destruction)
         test_exec_objs.append(anl)
     print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
 
@@ -580,6 +583,17 @@ def native_call_setup(project, applet_folder, version_id, verbose):
     native_one_call_dxni(project, applet_folder + "/native_concat", version_id, verbose)
     native_call_dxni(project, applet_folder, version_id, verbose)
 
+    # check if providing an applet-id in the path argument works
+    first_applet = native_applets[0]
+    applet = dxpy.bindings.search.find_one_data_object(classname= "applet",
+                                                       name= first_applet,
+                                                       folder= applet_folder,
+                                                       project= project.get_id())
+    if applet is None:
+        raise RuntimeError("Could not find applet {}".format(first_applet))
+    native_one_call_dxni(project, applet.get_id(), version_id, verbose)
+
+
 def native_call_app_setup(version_id, verbose):
     app_name = "native_hello"
 
@@ -629,30 +643,6 @@ def compile_tests_to_project(trg_proj,
 
 
 ######################################################################
-# Copy a workflow to an alternate project, and run it there.
-def copy_wf_test(tname, src_proj, src_folder, debug_flag):
-    alt_proj_name = "dxWDL_playground_2"
-    trg_proj = util.get_project(alt_proj_name)
-    if trg_proj is None:
-        raise RuntimeError("Could not find project {}".format(alt_proj_name))
-    test_folder = "/test"
-
-    # clean up target
-    print("cleaning up target")
-    trg_proj.remove_folder(test_folder, recurse=True)
-    trg_proj.new_folder(test_folder, parents=True)
-
-    # copy to alternate project
-    src_wf_id = lookup_dataobj(tname, src_proj, src_folder)
-    print("copy {} to alternate project".format(src_wf_id))
-    wf = dxpy.DXWorkflow(dxid=src_wf_id)
-    wf2 = wf.clone(trg_proj.get_id(), folder=test_folder)
-
-    # Run the workflow, and wait for completion
-    runnable = {tname : wf2.get_id()}
-    run_test_subset(trg_proj, runnable, test_folder, debug_flag)
-
-######################################################################
 ## Program entry point
 def main():
     global test_unlocked
@@ -663,6 +653,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--debug", help="Run applets with debug-hold, and allow ssh",
+                           action="store_true", default=False)
+    argparser.add_argument("--delay-workspace-destruction", help="Run applets with delayWorkspaceDestruction",
                            action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
@@ -770,7 +762,7 @@ def main():
                                             version_id,
                                             args.lazy)
         if not args.compile_only:
-            run_test_subset(project, runnable, test_folder, args.debug)
+            run_test_subset(project, runnable, test_folder, args.debug, args.delay_workspace_destruction)
     finally:
         print("Completed running tasks in {}".format(args.project))
 

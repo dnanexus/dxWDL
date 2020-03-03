@@ -348,7 +348,23 @@ case class Native(dxWDLrtId: Option[String],
             |    exit 1
             |fi
             |dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
-            |cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
+            |creds=$$(cat $${HOME}/docker_credentials)
+            |
+            |# Log into docker. Retry several times.
+            |set -e
+            |i=0
+            |while [[ $$i -le 5 ]]; do
+            |   docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} -p $${creds}
+            |   rc=$$?
+            |   if [[ $$rc == 0 ]]; then
+            |      break
+            |   fi
+            |   i=$$((i + 1))
+            |   sleep 3
+            |   echo "retry docker login ($$i)"
+            |done
+            |set +e
+            |
             |rm -f $${HOME}/docker_credentials
             |""".stripMargin
     }

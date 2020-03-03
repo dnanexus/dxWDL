@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.45 3-Mar-2020
+- Upgrade packages to:
+  - dxfuse v20
+  - dx-download-agent with support for symbolic links
+  - Cromwell v49
+- Retry `docker login` if it fails
+- Allow DxNI to work with an [app](https://github.com/dnanexus/dxWDL/issues/364)
+
 ## 1.44 21-Feb-2020
 - Added support for additional parameter metadata:
   - group

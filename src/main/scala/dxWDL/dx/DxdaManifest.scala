@@ -18,12 +18,7 @@ object DxdaManifest {
 
    val fileA = JsObject("id" -> JsString("file-FGqFGBQ0ffPPkYP19gBvFkZy"),
                          "name" -> JsString("fileA"),
-                         "folder" -> JsString("/test_data")
-                         "parts" -> JsObject(
-                         "1" -> JsObject(
-                                  "size" -> JsNumber(42),
-                                  "md5" -> JsString("71565d7f4dc0760457eb252a31d45964")
- )))
+                         "folder" -> JsString("/test_data"))
 
   JsObject(
       projId1 -> JsArray(fileA, ...),
@@ -34,22 +29,12 @@ object DxdaManifest {
 
   // create a manifest for a single file
   private def processFile(desc: DxFileDescribe, destination: Path): JsValue = {
-    val partsRaw: Map[Int, DxFilePart] = desc.parts match {
-      case None    => throw new Exception(s"""|No options for file ${desc.id},
-                                           |name=${desc.name} folder=${desc.folder}""".stripMargin)
-      case Some(x) => x
-    }
-    val parts: Map[String, JsValue] = partsRaw.map {
-      case (i, part) =>
-        i.toString -> JsObject("size" -> JsNumber(part.size), "md5" -> JsString(part.md5))
-    }
     val destinationFile: java.io.File = destination.toFile()
     val name = destinationFile.getName()
     val folder = destinationFile.getParent().toString
     JsObject("id" -> JsString(desc.id),
              "name" -> JsString(name),
-             "folder" -> JsString(folder),
-             "parts" -> JsObject(parts))
+             "folder" -> JsString(folder))
   }
 
   // The project is just a hint. The files don't have to actually reside in it.
@@ -58,7 +43,7 @@ object DxdaManifest {
     val files: Vector[DxFile] = file2LocalMapping.values.map(_._1).toVector
     val fileDescs: Map[String, (DxFile, DxFileDescribe)] =
       DxFile
-        .bulkDescribe(files, Set(Field.Parts))
+        .bulkDescribe(files)
         .map {
           case (dxFile, desc) => dxFile.id -> (dxFile, desc)
         }

@@ -177,13 +177,8 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       .toVector
   }
 
-  private def fullPath(dxProject: DxProject, path: String): Option[String] = {
-    val dxObj: DxDataObject = DxPath.resolveOnePath(path, dxProject)
-    if (!dxObj.isInstanceOf[DxApplet])
-      return None
-    val applet = dxObj.asInstanceOf[DxApplet]
-    val desc = applet.describe(Set(Field.Properties))
-    val isWdlApplet = desc.properties match {
+  private def isWdl(properties : Option[Map[String, String]]) : Boolean = {
+    properties match {
       case None => false
       case Some(props) =>
         props.get(Utils.CHECKSUM_PROP) match {
@@ -191,9 +186,35 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           case None    => false
         }
     }
-    if (isWdlApplet)
-      return None
-    createAppletWdlHeader(desc)
+  }
+
+  private def path(dxProject: DxProject, path: String): Option[String] = {
+    val dxObj = path match {
+      case id if path.startsWith("app-") => DxApp.getInstance(id)
+      case id if id.startsWith("applet-") => DxApplet.getInstance(id)
+      case _ =>
+        val fullPath = Utils.DX_URL_PREFIX + "/" + path
+        DxPath.resolveOnePath(fullPath, dxProject)
+    }
+    dxObj match {
+      // an applet
+      case applet : DxApplet =>
+        val desc = applet.describe(Set(Field.Properties))
+        if (isWdl(desc.properties))
+          None
+        else
+          createAppletWdlHeader(desc)
+
+      case app : DxApp =>
+        // an app
+        val desc = app.describe(Set(Field.Properties))
+        if (isWdl(desc.properties))
+          None
+        else
+          Some(appToWdlInterface(desc))
+
+      case _ => None
+    }
   }
 
   private def checkedGetJsString(jsv: JsValue, fieldName: String): String = {
@@ -381,7 +402,7 @@ object DxNI {
     val dxni = new DxNI(verbose, language)
     val dxNativeTasks: Vector[String] = folderOrPath match {
       case Left(folder) => dxni.search(dxProject, folder, recursive)
-      case Right(path)  => dxni.fullPath(dxProject, Utils.DX_URL_PREFIX + "/" + path).toVector
+      case Right(path)  => dxni.path(dxProject, path).toVector
     }
 
     val folderOrPathRepr = folderOrPath match {

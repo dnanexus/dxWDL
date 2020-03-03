@@ -250,7 +250,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX) in {
+  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX, EdgeTest) in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
         List("--force",
@@ -281,13 +281,42 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ))
   }
 
-  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX) in {
+  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX, EdgeTest) in {
     val outputPath = "/tmp/dx_extern_one.wdl"
     Main.dxni(
         List("--force",
              "--quiet",
              "--path",
              s"/${unitTestsPath}/applets/native_sum",
+             "--project",
+             dxTestProject.getId,
+             "--language",
+             "wdl_1_0",
+             "--output",
+             outputPath)
+    ) shouldBe a[Main.SuccessfulTermination]
+
+    // check that the generated file contains the correct tasks
+    val content = Source.fromFile(outputPath).getLines.mkString("\n")
+
+    val tasks: Map[String, String] =
+      ParseWomSourceFile(false).scanForTasks(content)
+
+    tasks.keys shouldBe (Set("native_sum"))
+  }
+
+  it should "be able to build an interface an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
+    val dxObj = DxPath.resolveDxPath(
+      s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum")
+    dxObj shouldBe a[DxApplet]
+    val applet = dxObj.asInstanceOf[DxApplet]
+
+    val outputPath = "/tmp/dx_extern_one.wdl"
+    Main.dxni(
+        List("--force",
+             "--quiet",
+             "--path",
+             applet.id,
              "--project",
              dxTestProject.getId,
              "--language",
@@ -985,7 +1014,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
 
-  it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -1012,7 +1041,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     delayWD shouldBe Some(JsTrue)
   }
 
-  it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{
