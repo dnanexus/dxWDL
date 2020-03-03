@@ -7,6 +7,26 @@
   - Cromwell v49
 - Retry `docker login` if it fails
 - Allow DxNI to work with an [app](https://github.com/dnanexus/dxWDL/issues/364)
+- DNAx symbolic links can now be used as input files, the dx-download-agent is able to download them. You will need to specifically allow network access to applets that use symbolic links, otherwise they will won't be able to reach external URLs. For example, the `extras.json` file below sets the timeout policy to 8 hours and allows network access.
+
+```
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+      "timeoutPolicy": {
+        "*": {
+          "hours": 8
+        }
+      },
+      "access" : {
+        "network": [
+          "*"
+        ]
+      }
+    }
+  }
+}
+```
 
 ## 1.44 21-Feb-2020
 - Added support for additional parameter metadata:
