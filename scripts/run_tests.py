@@ -583,6 +583,17 @@ def native_call_setup(project, applet_folder, version_id, verbose):
     native_one_call_dxni(project, applet_folder + "/native_concat", version_id, verbose)
     native_call_dxni(project, applet_folder, version_id, verbose)
 
+    # check if providing an applet-id in the path argument works
+    first_applet = native_applets[0]
+    applet = dxpy.bindings.search.find_one_data_object(classname= "applet",
+                                                       name= first_applet,
+                                                       folder= applet_folder,
+                                                       project= project.get_id())
+    if applet is None:
+        raise RuntimeError("Could not find applet {}".format(first_applet))
+    native_one_call_dxni(project, applet.get_id(), version_id, verbose)
+
+
 def native_call_app_setup(version_id, verbose):
     app_name = "native_hello"
 
