@@ -27,7 +27,9 @@ object DxPath {
 
   private def parse(dxPath: String): DxPathComponents = {
     // strip the prefix
-    assert(dxPath.startsWith(DX_URL_PREFIX))
+    if (!dxPath.startsWith(DX_URL_PREFIX)) {
+      throw new Exception(s"Path ${dxPath} does not start with prefix ${DX_URL_PREFIX}")
+    }
     val s = dxPath.substring(DX_URL_PREFIX.length)
 
     // take out the project, if it is specified
@@ -229,7 +231,7 @@ object DxPath {
     found.values.head
   }
 
-  private def resolveDxPath(dxPath: String): DxDataObject = {
+  def resolveDxPath(dxPath: String): DxDataObject = {
     val components = parse(dxPath)
     components.projName match {
       case None =>
