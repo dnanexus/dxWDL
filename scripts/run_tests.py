@@ -118,7 +118,8 @@ single_tasks_list = [
     "add3",
     "diff2files",
     "empty_stdout",
-    "sort_file"
+    "sort_file",
+    "symlinks_wc"
 ]
 
 # Tests run in continuous integration. We remove the native app test,
@@ -544,7 +545,7 @@ def native_call_dxni(project, applet_folder, version_id, verbose: bool):
     subprocess.check_output(cmdline_v1)
 
 
-def native_one_call_dxni(project, path, version_id, verbose):
+def dxni_call_with_path(project, path, version_id, verbose):
     # build WDL wrapper tasks in test/dx_extern.wdl
     cmdline_common = [ "java", "-jar",
                        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
@@ -580,21 +581,21 @@ def native_call_setup(project, applet_folder, version_id, verbose):
             print(" ".join(cmdline))
             subprocess.check_output(cmdline)
 
-    native_one_call_dxni(project, applet_folder + "/native_concat", version_id, verbose)
+    dxni_call_with_path(project, applet_folder + "/native_concat", version_id, verbose)
     native_call_dxni(project, applet_folder, version_id, verbose)
 
     # check if providing an applet-id in the path argument works
     first_applet = native_applets[0]
-    applet = dxpy.bindings.search.find_one_data_object(classname= "applet",
-                                                       name= first_applet,
-                                                       folder= applet_folder,
-                                                       project= project.get_id())
-    if applet is None:
+    results = dxpy.bindings.search.find_one_data_object(classname= "applet",
+                                                        name= first_applet,
+                                                        folder= applet_folder,
+                                                        project= project.get_id())
+    if results is None:
         raise RuntimeError("Could not find applet {}".format(first_applet))
-    native_one_call_dxni(project, applet.get_id(), version_id, verbose)
+    dxni_call_with_path(project, results["id"], version_id, verbose)
 
 
-def native_call_app_setup(version_id, verbose):
+def native_call_app_setup(project, version_id, verbose):
     app_name = "native_hello"
 
     # Check if they already exist
@@ -620,6 +621,12 @@ def native_call_app_setup(version_id, verbose):
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 
+
+    # check if providing an applet-id in the path argument works
+    results = dxpy.bindings.search.find_one_app(name=app_name, zero_ok=True, more_ok=False)
+    if results is None:
+        raise RuntimeError("Could not find app {}".format(app_name))
+    dxni_call_with_path(project, results["id"], version_id, verbose)
 
 ######################################################################
 # Compile the WDL files to dx:workflows and dx:applets
@@ -751,7 +758,7 @@ def main():
         "call_native_v1" in test_names):
         native_call_setup(project, applet_folder, version_id, args.verbose)
     if "call_native_app" in test_names:
-        native_call_app_setup(version_id, args.verbose)
+        native_call_app_setup(project, version_id, args.verbose)
 
     try:
         # Compile the WDL files to dx:workflows and dx:applets

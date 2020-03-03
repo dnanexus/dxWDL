@@ -60,8 +60,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "/reorg_tests")
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:${unitTestsPath}", quiet = true)
-    Utils.execCommand(s"dx rm -r ${TEST_PROJECT}:/${unitTestsPath}", quiet = true)
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/${unitTestsPath}/applets/", quiet = true)
 
     // building necessary applets before starting the tests
@@ -305,7 +303,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     tasks.keys shouldBe (Set("native_sum"))
   }
 
-  it should "be able to build an interface an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
     val dxObj = DxPath.resolveDxPath(
       s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum")
     dxObj shouldBe a[DxApplet]
@@ -333,6 +331,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     tasks.keys shouldBe (Set("native_sum"))
   }
+
 
   it should "be able to include pattern information in inputSpec" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
