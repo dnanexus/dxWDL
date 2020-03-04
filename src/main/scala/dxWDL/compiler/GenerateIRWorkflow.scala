@@ -709,10 +709,10 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
   private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
     val wfAttrs = wf.meta.flatMap {
-      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.WorkflowAttrTitle(text))
-      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => 
+      case (IR.META_TITLE, MetaValueElementString(text)) => Some(IR.WorkflowAttrTitle(text))
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_SUMMARY, MetaValueElementString(text)) => Some(IR.WorkflowAttrSummary(text))
       case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.WorkflowAttrVersion(text))
       case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
         Some(IR.WorkflowAttrDetails(fields.mapValues(WomMetaSerialization.unwrapAny)))
@@ -804,7 +804,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
       val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
       val irwf =
-        IR.Workflow(wfName, allWfInputs, simpleWfOutputs, stages, wfSourceCode, true, level, Some(wfAttr))
+        IR.Workflow(wfName,
+                    allWfInputs,
+                    simpleWfOutputs,
+                    stages,
+                    wfSourceCode,
+                    true,
+                    level,
+                    Some(wfAttr))
       (irwf, auxCallables.flatten, simpleWfOutputs)
     } else {
       // Some of the outputs are expressions. We need an extra applet+stage

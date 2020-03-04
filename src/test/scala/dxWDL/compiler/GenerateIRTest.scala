@@ -1386,17 +1386,19 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
-      case _ => throw new Exception("primaryCallable is not a workflow")
+      case _                     => throw new Exception("primaryCallable is not a workflow")
     }
-    workflow.meta shouldBe Some(Vector(
-      IR.WorkflowAttrDescription("This is a workflow that defines some metadata"),
-      IR.WorkflowAttrTags(Vector("foo", "bar")),
-      IR.WorkflowAttrVersion("1.0"),
-      IR.WorkflowAttrProperties(Map("foo" -> "bar")),
-      IR.WorkflowAttrDetails(Map("whatsNew" -> "v1.0: First release")),
-      IR.WorkflowAttrTitle("Workflow with metadata"),
-      IR.WorkflowAttrSummary("A workflow that defines some metadata")
-    ))
+    workflow.meta shouldBe Some(
+        Vector(
+            IR.WorkflowAttrDescription("This is a workflow that defines some metadata"),
+            IR.WorkflowAttrTags(Vector("foo", "bar")),
+            IR.WorkflowAttrVersion("1.0"),
+            IR.WorkflowAttrProperties(Map("foo" -> "bar")),
+            IR.WorkflowAttrDetails(Map("whatsNew" -> "v1.0: First release")),
+            IR.WorkflowAttrTitle("Workflow with metadata"),
+            IR.WorkflowAttrSummary("A workflow that defines some metadata")
+        )
+    )
   }
 
   it should "handle adjunct files in workflows and tasks" in {

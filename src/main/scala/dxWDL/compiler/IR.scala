@@ -22,9 +22,9 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
-  // The following keywords/types correspond to app(let) and workflow attributes from dxapp.json 
-  // (except for inputSpec/outputSpec attributes, which are defined separately). These attributes 
-  // can be used in the meta section of task WDL, and will be parsed out and used when generating 
+  // The following keywords/types correspond to app(let) and workflow attributes from dxapp.json
+  // (except for inputSpec/outputSpec attributes, which are defined separately). These attributes
+  // can be used in the meta section of task WDL, and will be parsed out and used when generating
   // the native app.
 
   val META_TYPE = "type"
