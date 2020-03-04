@@ -21,7 +21,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               language: Language.Value,
                               verbose: Verbose,
                               locked: Boolean,
-                              reorg: Either[Boolean, ReorgAttrs]) {
+                              reorg: Either[Boolean, ReorgAttrs],
+                              adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
   private case class LinkedVar(cVar: CVar, sArg: SArg)

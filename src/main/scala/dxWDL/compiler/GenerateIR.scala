@@ -97,7 +97,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       callables: Map[String, IR.Callable],
       language: Language.Value,
       locked: Boolean,
-      reorg: Either[Boolean, ReorgAttrs]
+      reorg: Either[Boolean, ReorgAttrs],
+      adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Workflow, Vector[IR.Callable]) = {
     // sort from low to high according to the source lines.
     val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
@@ -132,7 +133,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
                                      language,
                                      verbose,
                                      locked,
-                                     reorg)
+                                     reorg,
+                                     adjunctFiles)
     gir.apply()
   }
 
@@ -146,7 +148,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       language: Language.Value,
       locked: Boolean,
       reorg: Either[Boolean, ReorgAttrs],
-      adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]
+      adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Callable, Vector[IR.Callable]) = {
     def compileTask2(task: CallableTaskDefinition) = {
       val taskSourceCode = taskDir.get(task.name) match {
@@ -167,7 +169,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
           case None =>
             throw new Exception(s"Did not find sources for workflow ${wf.name}")
           case Some(wfSource) =>
-            compileWorkflow(wf, typeAliases, wfSource, callables, language, locked, reorg)
+            compileWorkflow(wf,
+                            typeAliases,
+                            wfSource,
+                            callables,
+                            language,
+                            locked,
+                            reorg,
+                            adjunctFiles)
         }
       case x =>
         throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
@@ -208,6 +217,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     }
     Utils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
     Utils.traceLevelInc()
+
     val depOrder: Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
     Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
     Utils.traceLevelDec()
@@ -239,7 +249,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
                                                  language,
                                                  isLocked(callable),
                                                  reorg,
-                                                 adjunctFiles)
+                                                 adjunctFiles.get(callable.name))
       allCallables = allCallables ++ (auxCallables.map { apl =>
         apl.name -> apl
       }.toMap)

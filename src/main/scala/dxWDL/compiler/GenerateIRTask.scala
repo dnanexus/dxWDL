@@ -440,7 +440,7 @@ case class GenerateIRTask(verbose: Verbose,
   // native applet.
   def apply(task: CallableTaskDefinition,
             taskSourceCode: String,
-            adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
+            adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
@@ -508,7 +508,7 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Parse any task metadata (other than 'type' and 'id', which are handled above)
-    val taskAttr = unwrapTaskMeta(task.meta, adjunctFiles.get(task.name))
+    val taskAttr = unwrapTaskMeta(task.meta, adjunctFiles)
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))

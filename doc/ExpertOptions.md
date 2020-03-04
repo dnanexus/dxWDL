@@ -263,17 +263,17 @@ The following keys are recognized:
 * `tags`: An array of strings that will be added as tags on the generated applet.
 * `properties`: A hash of key-value pairs that will be added as properties on the generated applet. Both keys and values must be strings.
 * `details`: An object with an arbitrary set of details about the applet. The following keys are specifically recognized and used by the platform:
-  * advancedInputs
-  * citations
-  * contactEmail
-  * contactOrg
-  * contactUrl
-  * exampleProject
-  * repoUrl
-  * upstreamLicenses
-  * upstreamUrl
-  * upstreamVersion
-  * whatsNew: The task's change log. There are two different formats that are accepted:
+  * `advancedInputs`
+  * `citations`
+  * `contactEmail`
+  * `contactOrg`
+  * `contactUrl`
+  * `exampleProject`
+  * `repoUrl`
+  * `upstreamLicenses`
+  * `upstreamUrl`
+  * `upstreamVersion`
+  * `whatsNew`: The task's change log. There are two different formats that are accepted:
     * A (possibly Markdown-formatted) string
     * An array of versions, where each version is a hash with two keys: `version`, a version string, and `changes`, an array of change description strings. This object will be formatted into a Markdown string upon compilation.
 

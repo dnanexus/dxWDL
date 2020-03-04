@@ -11,7 +11,19 @@ object Adjuncts {
   final case class Readme(text: String) extends AdjunctFile
   final case class DeveloperNotes(text: String) extends AdjunctFile
 
+  // Given the path to a primary (WDL file), search in the same directory (the path's parent)
+  // for adjunct files. The currently recognizd adjuncts are:
+  // * readme.<wdlname>.<task|workflow>.md
+  // * readme.developer.<wdlname>.<task|workflow>.md
+  //
+  // Note: we rely on the restriction, imposed by Top.mergeIntoOneBundle, that all task/workflow
+  // names are unique; otherwise, we would need for the key in the returned map to be
+  // (file_name, callable_name) to ensure uniqueness.
   def findAdjunctFiles(path: Path): Map[String, Vector[AdjunctFile]] = {
+    if (!path.isAbsolute) {
+      throw new Exception(s"path is not absolute: ${path}")
+    }
+
     val file = path.toFile
     val parentDir = file.getParentFile
     var wdlName = file.getName
