@@ -731,6 +731,13 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
           case MetaValueElementString(text) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
         }))
+      case (IR.META_CALL_NAMES, MetaValueElementObject(fields)) =>
+        Some(IR.WorkflowAttrCallNames(fields.mapValues {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid call name value: ${other}")
+        }))
+      case (IR.META_RUN_ON_SINGLE_NODE, MetaValueElementBoolean(value)) =>
+        Some(IR.WorkflowAttrRunOnSingleNode(value))
       case _ => None
     }.toVector
 

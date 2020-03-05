@@ -40,6 +40,8 @@ object IR {
   val META_TITLE = "title"
   val META_TYPES = "types"
   val META_VERSION = "version"
+  val META_VERSION = "call_names"
+  val META_RUN_ON_SINGLE_NODE = "run_on_single_node"
 
   sealed abstract class TaskAttr
   final case class TaskAttrTitle(text: String) extends TaskAttr
@@ -63,6 +65,8 @@ object IR {
   final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
+  final case class WorkflowAttrCallNames(mapping: Map[String, String]) extends WorkflowAttr
+  final case class WorkflowAttrRunOnSingleNode(value: Boolean) extends WorkflowAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
