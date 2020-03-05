@@ -272,6 +272,10 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     translateFiles(womValue, translation)
   }
 
+  val PARAM_META_STREAM = "stream"
+  val PARAM_META_DX_STREAM = "dx_stream"
+  val PARAM_META_LOCALIZATION_OPTIONAL = "localizationOptional"
+
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, MetaValueElement],
                            inputs: Map[InputDefinition, WomValue]): Set[Furl] = {
@@ -284,18 +288,22 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
             // This is better than "iDef.parameterMeta", but it does not
             // work on draft2.
             parameterMeta.get(iDef.name) match {
-              case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
+              case Some(MetaValueElement.MetaValueElementString(PARAM_META_STREAM)) =>
                 findFiles(womValue)
-              case (Some(MetaValueElement.MetaValueElementObject(value))) =>
+              case Some(MetaValueElement.MetaValueElementObject(value)) =>
                 // This enables the stream annotation in the object form of metadata value, e.g.
                 // bam_file : {
                 //   stream : true
                 // }
-                if (value.contains("stream") &&
-                    value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
-                  findFiles(womValue)
-                } else {
-                  Vector.empty
+                // We also support two aliases, dx_stream and localizationOptional
+                val streamAttr = value
+                  .filterKeys(
+                      Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
+                  )
+                  .headOption
+                streamAttr match {
+                  case Some(MetaValueElement.MetaValueElementBoolean(b)) if b => findFiles(womValue)
+                  case _                                                      => Vector.empty
                 }
               case _ =>
                 Vector.empty
