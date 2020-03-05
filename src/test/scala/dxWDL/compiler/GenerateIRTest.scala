@@ -1414,13 +1414,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
-      case _ => throw new Exception("primaryCallable is not a workflow")
+      case _                     => throw new Exception("primaryCallable is not a workflow")
     }
     workflow.meta match {
-      case Some(array) => 
+      case Some(array) =>
         array.size shouldBe 1
         array.foreach({
-          case IR.WorkflowAttrDescription(desc) => desc shouldBe "This is the readme for the wf_linear workflow."
+          case IR.WorkflowAttrDescription(desc) =>
+            desc shouldBe "This is the readme for the wf_linear workflow."
           case other => throw new Exception(s"Unexpected workflow meta ${other}")
         })
       case other => throw new Exception("Expected workflow meta")
