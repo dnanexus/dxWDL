@@ -381,7 +381,7 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
       case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
         Some(IR.TaskAttrDeveloperNotes(text))
-      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.TaskAttrVersion(text))
+      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.TaskAttrVersion(text))
       case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.TaskAttrDetails(fields))
       case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
       case (IR.META_CATEGORIES, MetaValueElementArray(array)) =>

@@ -1085,24 +1085,36 @@ class GenerateIRTest extends FlatSpec with Matchers {
                     "upstreamVersion" -> MetaValueElementString("1.0"),
                     "upstreamAuthor" -> MetaValueElementString("Joe Developer"),
                     "upstreamUrl" -> MetaValueElementString("https://dev.com/joe"),
-                    "upstreamLicenses" -> MetaValueElementArray(Vector(
-                      MetaValueElementString("MIT")
-                    )),
-                    "whatsNew" -> MetaValueElementArray(Vector(
-                        MetaValueElementObject(Map(
-                            "version" -> MetaValueElementString("1.1"),
-                            "changes" -> MetaValueElementArray(Vector(
-                              MetaValueElementString("Added parameter --foo"), 
-                              MetaValueElementString("Added cowsay easter-egg")
-                            ))
-                        )),
-                        MetaValueElementObject(Map(
-                            "version" -> MetaValueElementString("1.0"),
-                            "changes" -> MetaValueElementArray(Vector(
-                              MetaValueElementString("Initial version")
-                            ))
-                        ))
-                    ))
+                    "upstreamLicenses" -> MetaValueElementArray(
+                        Vector(
+                            MetaValueElementString("MIT")
+                        )
+                    ),
+                    "whatsNew" -> MetaValueElementArray(
+                        Vector(
+                            MetaValueElementObject(
+                                Map(
+                                    "version" -> MetaValueElementString("1.1"),
+                                    "changes" -> MetaValueElementArray(
+                                        Vector(
+                                            MetaValueElementString("Added parameter --foo"),
+                                            MetaValueElementString("Added cowsay easter-egg")
+                                        )
+                                    )
+                                )
+                            ),
+                            MetaValueElementObject(
+                                Map(
+                                    "version" -> MetaValueElementString("1.0"),
+                                    "changes" -> MetaValueElementArray(
+                                        Vector(
+                                            MetaValueElementString("Initial version")
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
                 )
             ),
             IR.TaskAttrTitle("Add Ints"),
@@ -1402,7 +1414,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.WorkflowAttrTags(Vector("foo", "bar")),
             IR.WorkflowAttrVersion("1.0"),
             IR.WorkflowAttrProperties(Map("foo" -> "bar")),
-            IR.WorkflowAttrDetails(Map("whatsNew" -> MetaValueElementString("v1.0: First release"))),
+            IR.WorkflowAttrDetails(
+                Map("whatsNew" -> MetaValueElementString("v1.0: First release"))
+            ),
             IR.WorkflowAttrTitle("Workflow with metadata"),
             IR.WorkflowAttrTypes(Vector("calculator")),
             IR.WorkflowAttrSummary("A workflow that defines some metadata")
