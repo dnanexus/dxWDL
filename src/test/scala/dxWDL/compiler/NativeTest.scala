@@ -742,10 +742,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             Field.Summary,
             Field.Tags,
             Field.Title,
-            Field.Types,
+            Field.Types
         )
-      )
-    
+    )
 
     desc.description shouldBe Some("This is a workflow that defines some metadata")
     desc.details match {

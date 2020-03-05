@@ -1215,10 +1215,11 @@ case class Native(dxWDLrtId: Option[String],
 
   private def buildWorkflowMetadata(
       wf: IR.Workflow,
-      defaultTags: Vector[JsString]): (Map[String, JsValue], Map[String, JsValue]) = {
+      defaultTags: Vector[JsString]
+  ): (Map[String, JsValue], Map[String, JsValue]) = {
     val metaDefaults = Map(
         "title" -> JsString(wf.name),
-        "tags"  -> JsArray(defaultTags),
+        "tags" -> JsArray(defaultTags)
         //"version" -> JsString("0.0.1")
     )
 
@@ -1230,7 +1231,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.WorkflowAttrDescription(text) => Some("description" -> JsString(text))
             case IR.WorkflowAttrSummary(text)     => Some("summary" -> JsString(text))
             case IR.WorkflowAttrTypes(array)      => Some("types" -> JsArray(array.map(anyToJs)))
-            case IR.WorkflowAttrTags(array)       => 
+            case IR.WorkflowAttrTags(array) =>
               Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
             case IR.WorkflowAttrProperties(props) =>
               Some("properties" -> JsObject(props.mapValues(anyToJs)))
@@ -1238,7 +1239,7 @@ case class Native(dxWDLrtId: Option[String],
               Some("details" -> JsObject(details.mapValues(anyToJs)))
             // These are currently ignored because they only apply to apps
             //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
-            case _                            => None
+            case _ => None
           }
           .flatten
           .toMap

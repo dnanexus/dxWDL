@@ -52,14 +52,16 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
                             Field.Name,
                             Field.Folder,
                             Field.Created,
-                            Field.Modified,
+                            Field.Modified
                             //Field.InputSpec,
                             //Field.OutputSpec
-                            )
+    )
     val allFields = fields ++ defaultFields
-    val request = JsObject(projSpec 
-      + ("fields" -> DxObject.requestFields(allFields))
-      + ("defaultFields" -> JsBoolean(true)))
+    val request = JsObject(
+        projSpec
+          + ("fields" -> DxObject.requestFields(allFields))
+          + ("defaultFields" -> JsBoolean(true))
+    )
     val response = DXAPI.workflowDescribe(id,
                                           DxUtils.jsonNodeOfJsValue(request),
                                           classOf[JsonNode],
