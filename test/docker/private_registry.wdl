@@ -3,9 +3,9 @@ version 1.0
 # Test that it is possible to use a private docker registry.
 #
 task private_registry {
-    command <<<
+    command {
         echo "Major Major"
-    >>>
+    }
     runtime {
         docker : "docker.io/orodeh/dxwdl_test:1.0"
     }
