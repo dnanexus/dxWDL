@@ -1240,9 +1240,9 @@ case class Native(dxWDLrtId: Option[String],
             // These are currently ignored because they only apply to apps
             //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
             // These will be implemented in a future PR
-            case IR.WorkflowAttrCallNames(mappings) => None
+            case IR.WorkflowAttrCallNames(mappings)    => None
             case IR.WorkflowAttrRunOnSingleNode(value) => None
-            case _ => None
+            case _                                     => None
           }
           .flatten
           .toMap
