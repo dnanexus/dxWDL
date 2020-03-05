@@ -40,7 +40,7 @@ object IR {
   val META_TITLE = "title"
   val META_TYPES = "types"
   val META_VERSION = "version"
-  val META_VERSION = "call_names"
+  val META_CALL_NAMES = "call_names"
   val META_RUN_ON_SINGLE_NODE = "run_on_single_node"
 
   sealed abstract class TaskAttr
