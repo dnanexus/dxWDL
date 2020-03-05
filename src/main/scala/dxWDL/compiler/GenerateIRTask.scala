@@ -371,18 +371,6 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapAny(element: MetaValueElement): Any = {
-    element match {
-      case MetaValueElementString(text)   => text
-      case MetaValueElementInteger(i)     => i
-      case MetaValueElementFloat(f)       => f
-      case MetaValueElementBoolean(b)     => b
-      case MetaValueElementArray(array)   => array.map(unwrapAny)
-      case MetaValueElementObject(fields) => fields.mapValues(unwrapAny)
-      case _                              => throw new Exception(s"Expected MetaValueElement, got ${element}")
-    }
-  }
-
   private def unwrapTaskMeta(
       meta: Map[String, MetaValueElement],
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
@@ -393,9 +381,8 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
       case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
         Some(IR.TaskAttrDeveloperNotes(text))
-      case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.TaskAttrVersion(text))
-      case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
-        Some(IR.TaskAttrDetails(fields.mapValues(unwrapAny)))
+      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.TaskAttrVersion(text))
+      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.TaskAttrDetails(fields))
       case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
       case (IR.META_CATEGORIES, MetaValueElementArray(array)) =>
         Some(IR.TaskAttrCategories(array.map {
@@ -410,7 +397,7 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_TAGS, MetaValueElementArray(array)) =>
         Some(IR.TaskAttrTags(array.map {
           case MetaValueElementString(text) => text
-          case other                        => throw new Exception(s"Invalid type: ${other}")
+          case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
       case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
         Some(IR.TaskAttrProperties(fields.mapValues {

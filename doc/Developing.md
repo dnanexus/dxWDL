@@ -42,7 +42,12 @@ downloads all required packages.
   * Add the following lines
     ```bash
     #!/bin/bash
-    sbt scalafmtAll
+    check=$(sbt scalafmtCheckAll)
+    if [[ "$?" -ne "0" ]]; then
+      echo "Reformatting; please commit again"
+      sbt scalafmtAll
+      exit $check
+    fi
     ```
   * Make the file executable (e.g. `chmod +x .git/hooks/pre-commit`)
   * This hook runs the code formatter before committing code. You can run this command manually, but it is easiest just to have it run automatically.

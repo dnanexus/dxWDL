@@ -5,6 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
+import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
 import dxWDL.Main
@@ -1080,19 +1081,38 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
-                    "contactEmail" -> "joe@dev.com",
-                    "upstreamVersion" -> "1.0",
-                    "upstreamAuthor" -> "Joe Developer",
-                    "upstreamUrl" -> "https://dev.com/joe",
-                    "upstreamLicenses" -> Vector("MIT"),
-                    "whatsNew" -> Vector(
-                        Map(
-                            "version" -> "1.1",
-                            "changes" -> Vector("Added parameter --foo", "Added cowsay easter-egg")
-                        ),
-                        Map(
-                            "version" -> "1.0",
-                            "changes" -> Vector("Initial version")
+                    "contactEmail" -> MetaValueElementString("joe@dev.com"),
+                    "upstreamVersion" -> MetaValueElementString("1.0"),
+                    "upstreamAuthor" -> MetaValueElementString("Joe Developer"),
+                    "upstreamUrl" -> MetaValueElementString("https://dev.com/joe"),
+                    "upstreamLicenses" -> MetaValueElementArray(
+                        Vector(
+                            MetaValueElementString("MIT")
+                        )
+                    ),
+                    "whatsNew" -> MetaValueElementArray(
+                        Vector(
+                            MetaValueElementObject(
+                                Map(
+                                    "version" -> MetaValueElementString("1.1"),
+                                    "changes" -> MetaValueElementArray(
+                                        Vector(
+                                            MetaValueElementString("Added parameter --foo"),
+                                            MetaValueElementString("Added cowsay easter-egg")
+                                        )
+                                    )
+                                )
+                            ),
+                            MetaValueElementObject(
+                                Map(
+                                    "version" -> MetaValueElementString("1.0"),
+                                    "changes" -> MetaValueElementArray(
+                                        Vector(
+                                            MetaValueElementString("Initial version")
+                                        )
+                                    )
+                                )
+                            )
                         )
                     )
                 )
@@ -1374,6 +1394,36 @@ class GenerateIRTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
+  it should "recognize workflow metadata" in {
+    val path = pathFromBasename("compiler", "wf_meta.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+    val workflow = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf
+      case _                     => throw new Exception("primaryCallable is not a workflow")
+    }
+    workflow.meta shouldBe Some(
+        Vector(
+            IR.WorkflowAttrDescription("This is a workflow that defines some metadata"),
+            IR.WorkflowAttrTags(Vector("foo", "bar")),
+            IR.WorkflowAttrVersion("1.0"),
+            IR.WorkflowAttrProperties(Map("foo" -> "bar")),
+            IR.WorkflowAttrDetails(
+                Map("whatsNew" -> MetaValueElementString("v1.0: First release"))
+            ),
+            IR.WorkflowAttrTitle("Workflow with metadata"),
+            IR.WorkflowAttrTypes(Vector("calculator")),
+            IR.WorkflowAttrSummary("A workflow that defines some metadata")
+        )
+    )
+  }
+
   it should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
     val retval = Main.compile(path.toString :: cFlags)
@@ -1384,11 +1434,20 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
 
-    // val workflow = bundle.primaryCallable match {
-    //   case Some(wf: IR.Workflow) => wf
-    //   case _ => throw new Exception("primaryCallable is not a workflow")
-    // }
-    // TODO: test workflow readme
+    val workflow = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf
+      case _                     => throw new Exception("primaryCallable is not a workflow")
+    }
+    workflow.meta match {
+      case Some(array) =>
+        array.size shouldBe 1
+        array.foreach({
+          case IR.WorkflowAttrDescription(desc) =>
+            desc shouldBe "This is the readme for the wf_linear workflow."
+          case other => throw new Exception(s"Unexpected workflow meta ${other}")
+        })
+      case other => throw new Exception("Expected workflow meta")
+    }
 
     val addApp = getAppletByName("add", bundle)
     addApp.meta match {

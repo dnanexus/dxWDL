@@ -3,6 +3,7 @@
 package dxWDL.compiler
 
 import wom.callable.WorkflowDefinition
+import wom.callable.MetaValueElement._
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
@@ -706,6 +707,51 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs, Vector.empty[CVar]), applet)
   }
 
+  private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
+    val wfAttrs = wf.meta.flatMap {
+      case (IR.META_TITLE, MetaValueElementString(text)) => Some(IR.WorkflowAttrTitle(text))
+      case (IR.META_DESCRIPTION, MetaValueElementString(text)) =>
+        Some(IR.WorkflowAttrDescription(text))
+      case (IR.META_SUMMARY, MetaValueElementString(text))   => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
+      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+        Some(IR.WorkflowAttrTypes(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+        Some(IR.WorkflowAttrTags(array.map {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid tag: ${other}")
+        }))
+      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
+        Some(IR.WorkflowAttrProperties(fields.mapValues {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid property value: ${other}")
+        }))
+      case (IR.META_CALL_NAMES, MetaValueElementObject(fields)) =>
+        Some(IR.WorkflowAttrCallNames(fields.mapValues {
+          case MetaValueElementString(text) => text
+          case other                        => throw new Exception(s"Invalid call name value: ${other}")
+        }))
+      case (IR.META_RUN_ON_SINGLE_NODE, MetaValueElementBoolean(value)) =>
+        Some(IR.WorkflowAttrRunOnSingleNode(value))
+      case _ => None
+    }.toVector
+
+    // Fill in missing attributes from adjunct files
+    wfAttrs ++ (adjunctFiles match {
+      case Some(adj) =>
+        adj.flatMap {
+          case Adjuncts.Readme(text) if !wf.meta.contains(IR.META_DESCRIPTION) =>
+            Some(IR.WorkflowAttrDescription(text))
+          case _ => None
+        }.toVector
+      case None => Vector.empty
+    })
+  }
+
   private def compileWorkflowLocked(
       wfName: String,
       inputNodes: Vector[GraphInputNode],
@@ -742,6 +788,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
     val (allStageInfo, env) = assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, true)
     val (stages, auxCallables) = allStageInfo.unzip
+    val wfAttr = unwrapWorkflowMeta()
 
     // Handle outputs that are constants or variables, we can output them directly.
     //
@@ -763,7 +810,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
       val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
       val irwf =
-        IR.Workflow(wfName, allWfInputs, simpleWfOutputs, stages, wfSourceCode, true, level)
+        IR.Workflow(wfName,
+                    allWfInputs,
+                    simpleWfOutputs,
+                    stages,
+                    wfSourceCode,
+                    true,
+                    level,
+                    Some(wfAttr))
       (irwf, auxCallables.flatten, simpleWfOutputs)
     } else {
       // Some of the outputs are expressions. We need an extra applet+stage
@@ -779,7 +833,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                              stages :+ outputStage,
                              wfSourceCode,
                              true,
-                             level)
+                             level,
+                             Some(wfAttr))
       (irwf, auxCallables.flatten :+ outputApplet, wfOutputs)
     }
   }
@@ -818,13 +873,15 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     val wfOutputs = outputStage.outputs.map { cVar =>
       (cVar, IR.SArgLink(outputStage.id, cVar))
     }
+    val wfAttr = unwrapWorkflowMeta()
     val irwf = IR.Workflow(wf.name,
                            wfInputs.toVector,
                            wfOutputs.toVector,
                            commonStg +: stages :+ outputStage,
                            wfSourceCode,
                            false,
-                           IR.Level.Top)
+                           IR.Level.Top,
+                           Some(wfAttr))
     (irwf, commonApplet +: auxCallables.flatten :+ outputApplet, wfOutputs)
   }
 

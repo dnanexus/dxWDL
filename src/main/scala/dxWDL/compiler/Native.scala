@@ -9,6 +9,8 @@ import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
 
+import wom.callable.MetaValueElement
+import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
 
@@ -16,6 +18,7 @@ import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
+import java.io.EOFException
 
 // The end result of the compiler
 object Native {
@@ -702,71 +705,9 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  private def anyToJs(value: Any): JsValue = {
-    value match {
-      case s: String    => JsString(s)
-      case i: Int       => JsNumber(i)
-      case f: Double    => JsNumber(f)
-      case b: Boolean   => JsBoolean(b)
-      case a: Vector[_] => JsArray(a.map(anyToJs))
-      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
-    }
-  }
-
-  // Convert the applet meta to JS, and overlay details from task-specific extras
-  private def getTaskMetadata(
-      applet: IR.Applet,
-      defaultTags: Vector[JsString]
-  ): (Map[String, JsValue], Map[String, JsValue]) = {
-    val metaDefaults = Map(
-        "title" -> JsString(applet.name),
-        "tags" -> JsArray(defaultTags)
-        // These are currently ignored because they only apply to apps
-        //"version" -> JsString("0.0.1"),
-        //"openSource" -> JsBoolean(false),
-    )
-
-    var meta: Map[String, JsValue] = applet.meta match {
-      case Some(appAttrs) =>
-        appAttrs
-          .map {
-            case IR.TaskAttrTitle(text)          => Some("title" -> JsString(text))
-            case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
-            case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
-            case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
-            case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
-            case IR.TaskAttrTags(array)          =>
-              // merge default and user-specified tags
-              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
-            case IR.TaskAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs)))
-            case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(anyToJs)))
-            // These are currently ignored because they only apply to apps
-            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
-            //case IR.TaskAttrOpenSource(isOpenSource) =>
-            //  Some("openSource" -> JsBoolean(isOpenSource))
-            //case IR.TaskAttrCategories(categories) =>
-            //  Some("categories" -> categories.mapValues(anyToJs))
-            case _ => None
-          }
-          .flatten
-          .toMap
-      case None => Map.empty
-    }
-
-    // Default 'summary' to be the first line of 'description'
-    val summary = calcSummary(meta.get("description"), meta.get("summary"))
-
-    val metaDetails: Map[String, JsValue] = meta.get("details") match {
-      case Some(JsObject(fields)) =>
-        meta -= "details"
-        fields
-      case _ => Map.empty
-    }
-
-    // If whatsNew is in array format, convert it to a string
-    val whatsNew: Map[String, JsValue] = metaDetails.get("whatsNew") match {
+  // If whatsNew is in array format, convert it to a string
+  private def calcWhatsNew(whatsNew: Option[JsValue]): Map[String, JsValue] = {
+    whatsNew match {
       case Some(JsArray(array)) =>
         val changelog = array
           .map {
@@ -794,6 +735,87 @@ case class Native(dxWDLrtId: Option[String],
         Map("whatsNew" -> JsString(s"## Changelog\n${changelog}"))
       case _ => Map.empty
     }
+  }
+
+  private def metaValueToJs(value: MetaValueElement): JsValue = {
+    value match {
+      case MetaValueElementString(text)   => JsString(text)
+      case MetaValueElementInteger(i)     => JsNumber(i)
+      case MetaValueElementFloat(f)       => JsNumber(f)
+      case MetaValueElementBoolean(b)     => JsBoolean(b)
+      case MetaValueElementArray(array)   => JsArray(array.map(metaValueToJs))
+      case MetaValueElementObject(fields) => JsObject(fields.mapValues(metaValueToJs))
+      case MetaValueElementNull           => JsNull
+      case other                          => throw new Exception(s"Expected MetaValueElement, got ${other}")
+    }
+  }
+
+  private def anyToJs(value: Any): JsValue = {
+    value match {
+      case s: String    => JsString(s)
+      case i: Int       => JsNumber(i)
+      case f: Double    => JsNumber(f)
+      case b: Boolean   => JsBoolean(b)
+      case a: Vector[_] => JsArray(a.map(anyToJs))
+      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
+      case other        => throw new EOFException(s"Unsupported value ${other}")
+    }
+  }
+
+  // Convert the applet meta to JS, and overlay details from task-specific extras
+  private def buildTaskMetadata(
+      applet: IR.Applet,
+      defaultTags: Vector[JsString]
+  ): (Map[String, JsValue], Map[String, JsValue]) = {
+    val metaDefaults = Map(
+        "title" -> JsString(applet.name),
+        "tags" -> JsArray(defaultTags)
+        // These are currently ignored because they only apply to apps
+        //"version" -> JsString("0.0.1"),
+        //"openSource" -> JsBoolean(false),
+    )
+
+    var meta: Map[String, JsValue] = applet.meta match {
+      case Some(appAttrs) =>
+        appAttrs
+          .map {
+            case IR.TaskAttrTitle(text)          => Some("title" -> JsString(text))
+            case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
+            case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
+            case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
+            case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
+            case IR.TaskAttrTags(array)          =>
+              // merge default and user-specified tags
+              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+            case IR.TaskAttrProperties(props) =>
+              Some("properties" -> JsObject(props.mapValues(anyToJs)))
+            case IR.TaskAttrDetails(details) =>
+              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
+            // These are currently ignored because they only apply to apps
+            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
+            //case IR.TaskAttrOpenSource(isOpenSource) =>
+            //  Some("openSource" -> JsBoolean(isOpenSource))
+            //case IR.TaskAttrCategories(categories) =>
+            //  Some("categories" -> categories.mapValues(anyToJs))
+            case _ => None
+          }
+          .flatten
+          .toMap
+      case None => Map.empty
+    }
+
+    // Default 'summary' to be the first line of 'description'
+    val summary = calcSummary(meta.get("description"), meta.get("summary"))
+
+    val metaDetails: Map[String, JsValue] = meta.get("details") match {
+      case Some(JsObject(fields)) =>
+        meta -= "details"
+        fields
+      case _ => Map.empty
+    }
+
+    // If whatsNew is in array format, convert it to a string
+    val whatsNew: Map[String, JsValue] = calcWhatsNew(metaDetails.get("whatsNew"))
 
     // Default and WDL-specified details can be overridden in task-specific extras
     val taskSpecificDetails: Map[String, JsValue] =
@@ -1010,7 +1032,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     val defaultTags = Vector(JsString("dxWDL"))
-    val (taskMeta, taskDetails) = getTaskMetadata(applet, defaultTags)
+    val (taskMeta, taskDetails) = buildTaskMetadata(applet, defaultTags)
 
     // Compute all the bits that get merged together into 'details'
 
@@ -1224,6 +1246,58 @@ case class Native(dxWDLrtId: Option[String],
     }.toVector
   }
 
+  private def buildWorkflowMetadata(
+      wf: IR.Workflow,
+      defaultTags: Vector[JsString]
+  ): (Map[String, JsValue], Map[String, JsValue]) = {
+    val metaDefaults = Map(
+        "title" -> JsString(wf.name),
+        "tags" -> JsArray(defaultTags)
+        //"version" -> JsString("0.0.1")
+    )
+
+    var meta: Map[String, JsValue] = wf.meta match {
+      case Some(appAttrs) =>
+        appAttrs
+          .map {
+            case IR.WorkflowAttrTitle(text)       => Some("title" -> JsString(text))
+            case IR.WorkflowAttrDescription(text) => Some("description" -> JsString(text))
+            case IR.WorkflowAttrSummary(text)     => Some("summary" -> JsString(text))
+            case IR.WorkflowAttrTypes(array)      => Some("types" -> JsArray(array.map(anyToJs)))
+            case IR.WorkflowAttrTags(array) =>
+              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+            case IR.WorkflowAttrProperties(props) =>
+              Some("properties" -> JsObject(props.mapValues(anyToJs)))
+            case IR.WorkflowAttrDetails(details) =>
+              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
+            // These are currently ignored because they only apply to apps
+            //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
+            // These will be implemented in a future PR
+            case IR.WorkflowAttrCallNames(mappings)    => None
+            case IR.WorkflowAttrRunOnSingleNode(value) => None
+            case _                                     => None
+          }
+          .flatten
+          .toMap
+      case None => Map.empty
+    }
+
+    // Default 'summary' to be the first line of 'description'
+    val summary = calcSummary(meta.get("description"), meta.get("summary"))
+
+    val metaDetails: Map[String, JsValue] = meta.get("details") match {
+      case Some(JsObject(fields)) =>
+        meta -= "details"
+        fields
+      case _ => Map.empty
+    }
+
+    // If whatsNew is in array format, convert it to a string
+    val whatsNew: Map[String, JsValue] = calcWhatsNew(metaDetails.get("whatsNew"))
+
+    (metaDefaults ++ meta ++ summary, metaDetails ++ whatsNew)
+  }
+
   // Create a request for a workflow encapsulated in single API call.
   // Prepare the list of stages, and the checksum in advance.
   private def workflowNewReq(wf: IR.Workflow,
@@ -1260,7 +1334,6 @@ case class Native(dxWDLrtId: Option[String],
     // pack all the arguments into a single API call
     val reqFields = Map("name" -> JsString(wf.name),
                         "stages" -> JsArray(stagesReq),
-                        "tags" -> JsArray(JsString("dxWDL")),
                         "hidden" -> JsBoolean(hidden))
 
     val wfInputOutput: Map[String, JsValue] =
@@ -1303,7 +1376,13 @@ case class Native(dxWDLrtId: Option[String],
           case _          => Map.empty
         }
     }
-    val details = Map("details" -> JsObject(womSourceCodeField ++ dxLinks ++ delayWD))
+
+    val defaultTags = Vector(JsString("dxWDL"))
+    val (wfMeta, wfMetaDetails) = buildWorkflowMetadata(wf, defaultTags)
+
+    val details = Map(
+        "details" -> JsObject(wfMetaDetails ++ womSourceCodeField ++ dxLinks ++ delayWD)
+    )
 
     val ignoreReuse: Map[String, JsValue] = extras match {
       case None => Map.empty
@@ -1318,7 +1397,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // pack all the arguments into a single API call
-    val reqFieldsAll = reqFields ++ wfInputOutput ++ details ++ ignoreReuse
+    val reqFieldsAll = wfMeta ++ reqFields ++ wfInputOutput ++ details ++ ignoreReuse
 
     // Add a checksum
     val (digest, reqWithChecksum) = checksumReq(wf.name, reqFieldsAll)

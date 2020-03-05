@@ -751,6 +751,53 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     desc.types shouldBe Some(Vector("Adder"))
   }
 
+  it should "be able to include information from workflow meta" in {
+    val path = pathFromBasename("compiler", "wf_meta.wdl")
+
+    val wfId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxWorkflow = DxWorkflow.getInstance(wfId)
+    val desc = dxWorkflow.describe(
+        Set(
+            Field.Description,
+            Field.Details,
+            Field.Properties,
+            Field.Summary,
+            Field.Tags,
+            Field.Title,
+            Field.Types
+        )
+    )
+
+    desc.description shouldBe Some("This is a workflow that defines some metadata")
+    desc.details match {
+      case Some(JsObject(fields)) =>
+        fields.foreach {
+          case ("whatsNew", JsString(value))                   => value shouldBe "v1.0: First release"
+          case ("womSourceCode", JsString(value))              => Unit // ignore
+          case ("delayWorkspaceDestruction", JsBoolean(value)) => Unit // ignore
+          case ("link_inc", JsObject(fields))                  => Unit // ignore
+          case ("link_mul", JsObject(fields))                  => Unit // ignore
+          case other                                           => throw new Exception(s"Unexpected result ${other}")
+        }
+      case other => throw new Exception(s"Unexpected result ${other}")
+    }
+    desc.properties match {
+      case Some(m) =>
+        (m -- Set(Utils.VERSION_PROP, Utils.CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+      case _ => throw new Exception("No properties")
+    }
+    desc.summary shouldBe Some("A workflow that defines some metadata")
+    desc.tags shouldBe Some(Vector("foo", "bar", "dxWDL"))
+    desc.title shouldBe Some("Workflow with metadata")
+    desc.types shouldBe Some(Vector("calculator"))
+  }
+
   it should "deep nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(

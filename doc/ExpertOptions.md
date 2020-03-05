@@ -562,6 +562,18 @@ This is a runtime flag, so you will need to run the toplevel workflow with that 
 dx run YOUR_WORKFLOW --delay-workspace-destruction
 ```
 
+# Workflow metadata
+
+Similar to tasks, workflows can also have `meta` sections that contain arbitrary workflow-level metadata. dxWDL recognizes the following attributes and uses them when generating the native DNAnexus workflow:
+
+* `title`: A short title for the applet. If not specified, the task name is used as the title.
+* `summary`: A short description of the applet. If not specified, the first line of the description is used (up to 50 characters or the first period, whichever comes first).
+* `description`: A longer description of the applet.
+* `types`: An array of DNAnexus [types](https://documentation.dnanexus.com/developer/api/data-object-lifecycle/types).
+* `tags`: An array of strings that will be added as tags on the generated applet.
+* `properties`: A hash of key-value pairs that will be added as properties on the generated applet. Both keys and values must be strings.
+* `details`: A hash of workflow details. The only key that is specifically recogized is `whatsNew`, and the formatting is handled for workflows the same way as it is for tasks.
+
 # Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant

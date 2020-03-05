@@ -8,7 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, MetaValueElement}
 import wom.types.WomType
 import wom.values.WomValue
 
@@ -22,10 +22,10 @@ object IR {
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
 
-  // The following keywords/types correspond to app(let) attributes from dxapp.json (except for
-  // inputSpec/outputSpec attributes, which are defined separately). These attributes can be used
-  // in the meta section of task WDL, and will be parsed out and used when generating the native
-  // app.
+  // The following keywords/types correspond to app(let) and workflow attributes from dxapp.json
+  // (except for inputSpec/outputSpec attributes, which are defined separately). These attributes
+  // can be used in the meta section of task WDL, and will be parsed out and used when generating
+  // the native app.
 
   val META_TYPE = "type"
   val META_ID = "id"
@@ -40,6 +40,8 @@ object IR {
   val META_TITLE = "title"
   val META_TYPES = "types"
   val META_VERSION = "version"
+  val META_CALL_NAMES = "call_names"
+  val META_RUN_ON_SINGLE_NODE = "run_on_single_node"
 
   sealed abstract class TaskAttr
   final case class TaskAttrTitle(text: String) extends TaskAttr
@@ -47,12 +49,24 @@ object IR {
   final case class TaskAttrSummary(text: String) extends TaskAttr
   final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
   final case class TaskAttrVersion(text: String) extends TaskAttr
-  final case class TaskAttrDetails(details: Map[String, Any]) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, MetaValueElement]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
   final case class TaskAttrTags(tags: Vector[String]) extends TaskAttr
   final case class TaskAttrProperties(properties: Map[String, String]) extends TaskAttr
+
+  sealed abstract class WorkflowAttr
+  final case class WorkflowAttrTitle(text: String) extends WorkflowAttr
+  final case class WorkflowAttrDescription(text: String) extends WorkflowAttr
+  final case class WorkflowAttrSummary(text: String) extends WorkflowAttr
+  final case class WorkflowAttrVersion(text: String) extends WorkflowAttr
+  final case class WorkflowAttrDetails(details: Map[String, MetaValueElement]) extends WorkflowAttr
+  final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
+  final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
+  final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
+  final case class WorkflowAttrCallNames(mapping: Map[String, String]) extends WorkflowAttr
+  final case class WorkflowAttrRunOnSingleNode(value: Boolean) extends WorkflowAttr
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
@@ -362,7 +376,8 @@ object IR {
                       stages: Vector[Stage],
                       womSourceCode: String,
                       locked: Boolean,
-                      level: Level.Value)
+                      level: Level.Value,
+                      meta: Option[Vector[WorkflowAttr]] = None)
       extends Callable {
     def inputVars = inputs.map { case (cVar, _)   => cVar }.toVector
     def outputVars = outputs.map { case (cVar, _) => cVar }.toVector
