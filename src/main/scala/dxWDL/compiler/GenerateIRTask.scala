@@ -383,8 +383,11 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapTaskMeta(meta: Map[String, MetaValueElement]): Vector[IR.TaskAttr] = {
-    meta.flatMap {
+  private def unwrapTaskMeta(
+      meta: Map[String, MetaValueElement],
+      adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
+  ): Vector[IR.TaskAttr] = {
+    val appAttrs = meta.flatMap {
       case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.TaskAttrTitle(text))
       case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.TaskAttrDescription(text))
       case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
@@ -416,13 +419,28 @@ case class GenerateIRTask(verbose: Verbose,
         }))
       case _ => None
     }.toVector
+
+    // Fill in missing attributes from adjunct files
+    appAttrs ++ (adjunctFiles match {
+      case Some(adj) =>
+        adj.flatMap {
+          case Adjuncts.Readme(text) if !meta.contains(IR.META_DESCRIPTION) =>
+            Some(IR.TaskAttrDescription(text))
+          case Adjuncts.DeveloperNotes(text) if !meta.contains(IR.META_DEVELOPER_NOTES) =>
+            Some(IR.TaskAttrDeveloperNotes(text))
+          case _ => None
+        }.toVector
+      case None => Vector.empty
+    })
   }
 
   // Compile a WDL task into an applet.
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
   // native applet.
-  def apply(task: CallableTaskDefinition, taskSourceCode: String): IR.Applet = {
+  def apply(task: CallableTaskDefinition,
+            taskSourceCode: String,
+            adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
@@ -490,7 +508,7 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Parse any task metadata (other than 'type' and 'id', which are handled above)
-    val taskAttr = unwrapTaskMeta(task.meta)
+    val taskAttr = unwrapTaskMeta(task.meta, adjunctFiles)
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))

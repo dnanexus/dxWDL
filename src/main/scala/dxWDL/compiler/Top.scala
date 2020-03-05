@@ -220,7 +220,7 @@ case class Top(cOpt: CompilerOptions) {
   }
 
   private def womToIR(source: Path): IR.Bundle = {
-    val (language, womBundle, allSources, subBundles) =
+    val (language, womBundle, allSources, adjunctFiles, subBundles) =
       ParseWomSourceFile(verbose.on).apply(source, cOpt.importDirs)
 
     // Check that each workflow/task appears just one
@@ -252,7 +252,7 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     new GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
-      .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp)
+      .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 
   // Compile IR only

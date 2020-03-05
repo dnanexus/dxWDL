@@ -26,6 +26,7 @@ object IR {
   // inputSpec/outputSpec attributes, which are defined separately). These attributes can be used
   // in the meta section of task WDL, and will be parsed out and used when generating the native
   // app.
+
   val META_TYPE = "type"
   val META_ID = "id"
   val META_CATEGORIES = "categories"

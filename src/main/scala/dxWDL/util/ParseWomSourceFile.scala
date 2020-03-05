@@ -8,12 +8,11 @@ import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder}
 import cromwell.languages.LanguageFactory
 import cromwell.languages.util.ImportResolver._
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import languages.cwl.CwlV1_0LanguageFactory
 import languages.wdl.draft2.WdlDraft2LanguageFactory
 import languages.wdl.draft3.WdlDraft3LanguageFactory
 import languages.wdl.biscayne.WdlBiscayneLanguageFactory
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
@@ -30,11 +29,13 @@ import dxWDL.base.{Language, Utils}
 case class ParseWomSourceFile(verbose: Boolean) {
 
   // allSources: A mapping from file URL to file source.
+  // adjunctFiles: A mapping from file Path/URL to AdjunctFile
   //
   // Record all files accessed while traversing imports. We wrap
   // the Cromwell importers, and write down every new file.
-  //
   case class FileRecorderResolver(allSources: HashMap[String, WorkflowSource],
+                                  adjunctFiles: HashMap[String, Vector[Adjuncts.AdjunctFile]],
+                                  rootDir: Path,
                                   lower: ImportResolver)
       extends ImportResolver {
 
@@ -63,6 +64,14 @@ case class ParseWomSourceFile(verbose: Boolean) {
                   Invalid(s"${path} has been imported twice, with different content")
                 case _ => ()
               }
+              // TODO: support remote adjuncts
+              if (!path.startsWith("http")) {
+                var localPath = Paths.get(path)
+                if (!localPath.isAbsolute) {
+                  localPath = rootDir.resolve(localPath)
+                }
+                adjunctFiles ++= Adjuncts.findAdjunctFiles(localPath)
+              }
               Valid(bundle)
           }
       }
@@ -74,8 +83,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
   }
 
   private def fileRecorder(allSources: HashMap[String, WorkflowSource],
+                           adjunctFiles: HashMap[String, Vector[Adjuncts.AdjunctFile]],
+                           rootDir: Path,
                            resolver: ImportResolver): ImportResolver =
-    new FileRecorderResolver(allSources, resolver)
+    new FileRecorderResolver(allSources, adjunctFiles, rootDir, resolver)
 
   // Figure out which language variant is used in the source code. WDL/CWL, and
   // which version.
@@ -91,19 +102,44 @@ case class ParseWomSourceFile(verbose: Boolean) {
       .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty()))
   }
 
+  private def languageFactoryToLanguage(languageFactory: LanguageFactory): Language.Value = {
+    (languageFactory.languageName.toLowerCase, languageFactory.languageVersionName) match {
+      case ("wdl", "draft-2")     => Language.WDLvDraft2
+      case ("wdl", "draft-3")     => Language.WDLv1_0
+      case ("wdl", "1.0")         => Language.WDLv1_0
+      case ("wdl", "development") => Language.WDLv2_0
+      case ("wdl", "Biscayne")    => Language.WDLv2_0
+      case ("cwl", "1.0")         => Language.CWLv1_0
+      case (l, v)                 => throw new Exception(s"Unsupported language (${l}) version (${v})")
+    }
+  }
+
+  // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
+  // Also returns 1) a mapping of input files to source code; 2) a mapping of input files to
+  // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
   private def getBundle(
       mainFile: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Map[String, Vector[Adjuncts.AdjunctFile]],
+      Vector[WomBundle]
+  ) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
     val allSources = HashMap.empty[String, WorkflowSource]
+    val adjunctFiles = HashMap.empty[String, Vector[Adjuncts.AdjunctFile]]
 
     val absPath = Paths.get(mainFile.toAbsolutePath.toString)
-    val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
+    val mainFileContents = Utils.readFileContent2(absPath)
 
-    // We need to get all the WDL sources, so we could analyze them
+    // We need to get all the WDL sources, so we can analyze them. First, we create resolvers
+    // for local and remote files.
+
+    // look for sources in the same directory as the main WDL file
     val mainFileResolvers =
       DirectoryResolver.localFilesystemResolvers(Some(DefaultPathBuilder.build(mainFile)))
 
@@ -112,16 +148,20 @@ case class ParseWomSourceFile(verbose: Boolean) {
       val p2: cromwell.core.path.Path = DefaultPathBuilder.build(p.toAbsolutePath)
       DirectoryResolver(p2, customName = None, deleteOnClose = false, directoryHash = None)
     }
+
+    // Allow http addresses when importing
     val importResolvers: List[ImportResolver] =
       mainFileResolvers ++ fileImportResolvers :+ HttpResolver(relativeTo = None)
 
-    // Allow http addresses when importing
+    // Wrap resolvers in a fileRecorder, which keeps track of their paths
     val importResolversRecorded: List[ImportResolver] =
       importResolvers.map { impr =>
-        fileRecorder(allSources, impr)
+        fileRecorder(allSources, adjunctFiles, absPath.getParent, impr)
       }
 
     val languageFactory = getLanguageFactory(mainFileContents)
+    val lang = languageFactoryToLanguage(languageFactory)
+
     val bundleChk: Checked[WomBundle] =
       languageFactory.getWomBundle(mainFileContents,
                                    None,
@@ -139,16 +179,6 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                 |""".stripMargin)
       case Right(bundle) => bundle
     }
-    val lang =
-      (languageFactory.languageName.toLowerCase, languageFactory.languageVersionName) match {
-        case ("wdl", "draft-2")     => Language.WDLvDraft2
-        case ("wdl", "draft-3")     => Language.WDLv1_0
-        case ("wdl", "1.0")         => Language.WDLv1_0
-        case ("wdl", "development") => Language.WDLv2_0
-        case ("wdl", "Biscayne")    => Language.WDLv2_0
-        case ("cwl", "1.0")         => Language.CWLv1_0
-        case (l, v)                 => throw new Exception(s"Unsupported language (${l}) version (${v})")
-      }
 
     // build wom bundles for all the referenced files
     //
@@ -186,21 +216,30 @@ case class ParseWomSourceFile(verbose: Boolean) {
         Utils.trace(verbose, s"found ${delta} new WDL source files")
     }
 
+    // Add source and adjuncts for main file
     allSources(mainFile.toString) = mainFileContents
-    (lang, bundle, allSources.toMap, subBundles.values.toVector)
+    adjunctFiles ++= Adjuncts.findAdjunctFiles(absPath)
+
+    (lang, bundle, allSources.toMap, adjunctFiles.toMap, subBundles.values.toVector)
   }
 
   def apply(
       sourcePath: Path,
       imports: List[Path]
-  ): (Language.Value, WomBundle, Map[String, WorkflowSource], Vector[WomBundle]) = {
-    val (lang, bundle, allSources, subBundles) = getBundle(sourcePath, imports)
+  ): (
+      Language.Value,
+      WomBundle,
+      Map[String, WorkflowSource],
+      Map[String, Vector[Adjuncts.AdjunctFile]],
+      Vector[WomBundle]
+  ) = {
+    val (lang, bundle, allSources, adjunctFiles, subBundles) = getBundle(sourcePath, imports)
     lang match {
       case Language.CWLv1_0 =>
         throw new Exception("CWL is not handled at the moment, only WDL is supported")
       case _ => ()
     }
-    (lang, bundle, allSources, subBundles)
+    (lang, bundle, allSources, adjunctFiles, subBundles)
   }
 
   // Look for the first task in the sequence of lines. If not found, return None.
