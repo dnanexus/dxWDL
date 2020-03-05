@@ -1412,11 +1412,19 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
 
-    // val workflow = bundle.primaryCallable match {
-    //   case Some(wf: IR.Workflow) => wf
-    //   case _ => throw new Exception("primaryCallable is not a workflow")
-    // }
-    // TODO: test workflow readme
+    val workflow = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf
+      case _ => throw new Exception("primaryCallable is not a workflow")
+    }
+    workflow.meta match {
+      case Some(array) => 
+        array.size shouldBe 1
+        array.foreach({
+          case IR.WorkflowAttrDescription(desc) => desc shouldBe "This is the readme for the wf_linear workflow."
+          case other => throw new Exception(s"Unexpected workflow meta ${other}")
+        })
+      case other => throw new Exception("Expected workflow meta")
+    }
 
     val addApp = getAppletByName("add", bundle)
     addApp.meta match {
