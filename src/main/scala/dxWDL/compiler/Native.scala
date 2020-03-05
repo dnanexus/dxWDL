@@ -686,6 +686,38 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
+  // If whatsNew is in array format, convert it to a string
+  private def calcWhatsNew(whatsNew: Option[JsValue]): Map[String, JsValue] = {
+    whatsNew match {
+      case Some(JsArray(array)) =>
+        val changelog = array
+          .map {
+            case JsObject(fields) =>
+              val formattedFields = fields
+                .map {
+                  case ("version", JsString(value)) => Some("version" -> value)
+                  case ("changes", JsArray(array)) =>
+                    Some("changes",
+                         array
+                           .map {
+                             case JsString(item) => s"* ${item}"
+                             case other =>
+                               throw new Exception(s"Invalid change list item: ${other}")
+                           }
+                           .mkString("\n"))
+                  case _ => None
+                }
+                .flatten
+                .toMap
+              s"### Version ${formattedFields("version")}\n${formattedFields("changes")}"
+            case other => throw new Exception(s"Invalid whatsNew ${other}")
+          }
+          .mkString("\n")
+        Map("whatsNew" -> JsString(s"## Changelog\n${changelog}"))
+      case _ => Map.empty
+    }
+  }
+
   private def anyToJs(value: Any): JsValue = {
     value match {
       case s: String    => JsString(s)
@@ -698,7 +730,7 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Convert the applet meta to JS, and overlay details from task-specific extras
-  private def getTaskMetadata(
+  private def buildTaskMetadata(
       applet: IR.Applet,
       defaultTags: Vector[JsString]
   ): (Map[String, JsValue], Map[String, JsValue]) = {
@@ -750,34 +782,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // If whatsNew is in array format, convert it to a string
-    val whatsNew: Map[String, JsValue] = metaDetails.get("whatsNew") match {
-      case Some(JsArray(array)) =>
-        val changelog = array
-          .map {
-            case JsObject(fields) =>
-              val formattedFields = fields
-                .map {
-                  case ("version", JsString(value)) => Some("version" -> value)
-                  case ("changes", JsArray(array)) =>
-                    Some("changes",
-                         array
-                           .map {
-                             case JsString(item) => s"* ${item}"
-                             case other =>
-                               throw new Exception(s"Invalid change list item: ${other}")
-                           }
-                           .mkString("\n"))
-                  case _ => None
-                }
-                .flatten
-                .toMap
-              s"### Version ${formattedFields("version")}\n${formattedFields("changes")}"
-            case other => throw new Exception(s"Invalid whatsNew ${other}")
-          }
-          .mkString("\n")
-        Map("whatsNew" -> JsString(s"## Changelog\n${changelog}"))
-      case _ => Map.empty
-    }
+    val whatsNew: Map[String, JsValue] = calcWhatsNew(metaDetails.get("whatsNew"))
 
     // Default and WDL-specified details can be overridden in task-specific extras
     val taskSpecificDetails: Map[String, JsValue] =
@@ -994,7 +999,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     val defaultTags = Vector(JsString("dxWDL"))
-    val (taskMeta, taskDetails) = getTaskMetadata(applet, defaultTags)
+    val (taskMeta, taskDetails) = buildTaskMetadata(applet, defaultTags)
 
     // Compute all the bits that get merged together into 'details'
 
@@ -1208,6 +1213,54 @@ case class Native(dxWDLrtId: Option[String],
     }.toVector
   }
 
+  private def buildWorkflowMetadata(
+      wf: IR.Workflow,
+      defaultTags: Vector[JsString]): (Map[String, JsValue], Map[String, JsValue]) = {
+    val metaDefaults = Map(
+        "title" -> JsString(wf.name),
+        "tags"  -> JsArray(defaultTags),
+        //"version" -> JsString("0.0.1")
+    )
+
+    var meta: Map[String, JsValue] = wf.meta match {
+      case Some(appAttrs) =>
+        appAttrs
+          .map {
+            case IR.WorkflowAttrTitle(text)       => Some("title" -> JsString(text))
+            case IR.WorkflowAttrDescription(text) => Some("description" -> JsString(text))
+            case IR.WorkflowAttrSummary(text)     => Some("summary" -> JsString(text))
+            case IR.WorkflowAttrTypes(array)      => Some("types" -> JsArray(array.map(anyToJs)))
+            case IR.WorkflowAttrTags(array)       => 
+              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+            case IR.WorkflowAttrProperties(props) =>
+              Some("properties" -> JsObject(props.mapValues(anyToJs)))
+            case IR.WorkflowAttrDetails(details) =>
+              Some("details" -> JsObject(details.mapValues(anyToJs)))
+            // These are currently ignored because they only apply to apps
+            //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
+            case _                            => None
+          }
+          .flatten
+          .toMap
+      case None => Map.empty
+    }
+
+    // Default 'summary' to be the first line of 'description'
+    val summary = calcSummary(meta.get("description"), meta.get("summary"))
+
+    val metaDetails: Map[String, JsValue] = meta.get("details") match {
+      case Some(JsObject(fields)) =>
+        meta -= "details"
+        fields
+      case _ => Map.empty
+    }
+
+    // If whatsNew is in array format, convert it to a string
+    val whatsNew: Map[String, JsValue] = calcWhatsNew(metaDetails.get("whatsNew"))
+
+    (metaDefaults ++ meta ++ summary, metaDetails ++ whatsNew)
+  }
+
   // Create a request for a workflow encapsulated in single API call.
   // Prepare the list of stages, and the checksum in advance.
   private def workflowNewReq(wf: IR.Workflow,
@@ -1244,7 +1297,6 @@ case class Native(dxWDLrtId: Option[String],
     // pack all the arguments into a single API call
     val reqFields = Map("name" -> JsString(wf.name),
                         "stages" -> JsArray(stagesReq),
-                        "tags" -> JsArray(JsString("dxWDL")),
                         "hidden" -> JsBoolean(hidden))
 
     val wfInputOutput: Map[String, JsValue] =
@@ -1287,7 +1339,13 @@ case class Native(dxWDLrtId: Option[String],
           case _          => Map.empty
         }
     }
-    val details = Map("details" -> JsObject(womSourceCodeField ++ dxLinks ++ delayWD))
+
+    val defaultTags = Vector(JsString("dxWDL"))
+    val (wfMeta, wfMetaDetails) = buildWorkflowMetadata(wf, defaultTags)
+
+    val details = Map(
+        "details" -> JsObject(wfMetaDetails ++ womSourceCodeField ++ dxLinks ++ delayWD)
+    )
 
     val ignoreReuse: Map[String, JsValue] = extras match {
       case None => Map.empty
@@ -1302,7 +1360,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // pack all the arguments into a single API call
-    val reqFieldsAll = reqFields ++ wfInputOutput ++ details ++ ignoreReuse
+    val reqFieldsAll = wfMeta ++ reqFields ++ wfInputOutput ++ details ++ ignoreReuse
 
     // Add a checksum
     val (digest, reqWithChecksum) = checksumReq(wf.name, reqFieldsAll)

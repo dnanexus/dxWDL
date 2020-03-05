@@ -115,7 +115,7 @@ case class IOParameter(
 object Field extends Enumeration {
   val Analysis, Applet, ArchivalState, Categories, Created, Description, Details, DeveloperNotes,
       Folder, Id, InputSpec, Modified, Name, OutputSpec, ParentJob, Parts, Project, Properties,
-      Size, Stages, Summary, Tags, Title, Types = Value
+      Size, Stages, Summary, Tags, Title, Types, Version = Value
 }
 
 trait DxObjectDescribe {
@@ -354,6 +354,7 @@ object DxObject {
       case Field.Tags           => "tags"
       case Field.Title          => "title"
       case Field.Types          => "types"
+      case Field.Version        => "version"
     }.toVector
     val m: Map[String, JsValue] = fieldStrings.map { x =>
       x -> JsTrue

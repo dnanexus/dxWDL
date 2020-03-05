@@ -1396,7 +1396,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.WorkflowAttrProperties(Map("foo" -> "bar")),
             IR.WorkflowAttrDetails(Map("whatsNew" -> "v1.0: First release")),
             IR.WorkflowAttrTitle("Workflow with metadata"),
-            IR.WorkflowAttrSummary("A workflow that defines some metadata")
+            IR.WorkflowAttrTypes(Vector("calculator")),
+            IR.WorkflowAttrSummary("A workflow that defines some metadata"),
         )
     )
   }

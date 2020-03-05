@@ -20,6 +20,7 @@ workflow wf_meta {
         properties: {
             foo: "bar"
         }
+        types: ["calculator"]
     }
 
     call add {

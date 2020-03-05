@@ -16,7 +16,12 @@ case class DxWorkflowDescribe(project: String,
                               details: Option[JsValue],
                               inputSpec: Option[Vector[IOParameter]],
                               outputSpec: Option[Vector[IOParameter]],
-                              stages: Option[Vector[DxWorkflowStageDesc]])
+                              stages: Option[Vector[DxWorkflowStageDesc]],
+                              title: Option[String] = None,
+                              summary: Option[String] = None,
+                              description: Option[String] = None,
+                              tags: Option[Vector[String]] = None,
+                              types: Option[Vector[String]] = None)
     extends DxObjectDescribe
 
 case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -39,16 +44,22 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
 
   def describe(fields: Set[Field.Value] = Set.empty): DxWorkflowDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
+    // TODO: working around an API bug where describing a workflow and requesting inputSpec
+    // and outputSpec as part of fields results in a 500 error. Instead, request default fields,
+    // which includes inputSpec and outputSpec.
     val defaultFields = Set(Field.Project,
                             Field.Id,
                             Field.Name,
                             Field.Folder,
                             Field.Created,
                             Field.Modified,
-                            Field.InputSpec,
-                            Field.OutputSpec)
+                            //Field.InputSpec,
+                            //Field.OutputSpec
+                            )
     val allFields = fields ++ defaultFields
-    val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
+    val request = JsObject(projSpec 
+      + ("fields" -> DxObject.requestFields(allFields))
+      + ("defaultFields" -> JsBoolean(true)))
     val response = DXAPI.workflowDescribe(id,
                                           DxUtils.jsonNodeOfJsValue(request),
                                           classOf[JsonNode],
@@ -87,10 +98,38 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
         throw new Exception(s"Malformed JSON ${descJs}")
     }
 
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    val stages = descJs.asJsObject.fields.get("stages").map(parseStages)
-    desc.copy(details = details, properties = props, stages = stages)
+    val descFields: Map[String, JsValue] = descJs.asJsObject.fields
+    val details = descFields.get("details")
+    val props = descFields.get("properties").map(DxObject.parseJsonProperties)
+    val stages = descFields.get("stages").map(parseStages)
+    val description = descFields.get("description").flatMap(unwrapString)
+    val summary = descFields.get("summary").flatMap(unwrapString)
+    val title = descFields.get("title").flatMap(unwrapString)
+    val types = descFields.get("types").flatMap(unwrapStringArray)
+    val tags = descFields.get("tags").flatMap(unwrapStringArray)
+
+    desc.copy(details = details,
+              properties = props,
+              stages = stages,
+              description = description,
+              summary = summary,
+              title = title,
+              types = types,
+              tags = tags)
+  }
+
+  def unwrapString(jsValue: JsValue): Option[String] = {
+    jsValue match {
+      case JsString(value) => Some(value)
+      case _               => None
+    }
+  }
+
+  def unwrapStringArray(jsValue: JsValue): Option[Vector[String]] = {
+    jsValue match {
+      case JsArray(array) => Some(array.flatMap(unwrapString))
+      case _              => None
+    }
   }
 
   def close(): Unit = {
