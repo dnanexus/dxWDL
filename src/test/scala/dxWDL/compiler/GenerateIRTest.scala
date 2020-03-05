@@ -5,6 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
+import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
 import dxWDL.Main
@@ -1080,21 +1081,28 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
-                    "contactEmail" -> "joe@dev.com",
-                    "upstreamVersion" -> "1.0",
-                    "upstreamAuthor" -> "Joe Developer",
-                    "upstreamUrl" -> "https://dev.com/joe",
-                    "upstreamLicenses" -> Vector("MIT"),
-                    "whatsNew" -> Vector(
-                        Map(
-                            "version" -> "1.1",
-                            "changes" -> Vector("Added parameter --foo", "Added cowsay easter-egg")
-                        ),
-                        Map(
-                            "version" -> "1.0",
-                            "changes" -> Vector("Initial version")
-                        )
-                    )
+                    "contactEmail" -> MetaValueElementString("joe@dev.com"),
+                    "upstreamVersion" -> MetaValueElementString("1.0"),
+                    "upstreamAuthor" -> MetaValueElementString("Joe Developer"),
+                    "upstreamUrl" -> MetaValueElementString("https://dev.com/joe"),
+                    "upstreamLicenses" -> MetaValueElementArray(Vector(
+                      MetaValueElementString("MIT")
+                    )),
+                    "whatsNew" -> MetaValueElementArray(Vector(
+                        MetaValueElementObject(Map(
+                            "version" -> MetaValueElementString("1.1"),
+                            "changes" -> MetaValueElementArray(Vector(
+                              MetaValueElementString("Added parameter --foo"), 
+                              MetaValueElementString("Added cowsay easter-egg")
+                            ))
+                        )),
+                        MetaValueElementObject(Map(
+                            "version" -> MetaValueElementString("1.0"),
+                            "changes" -> MetaValueElementArray(Vector(
+                              MetaValueElementString("Initial version")
+                            ))
+                        ))
+                    ))
                 )
             ),
             IR.TaskAttrTitle("Add Ints"),
@@ -1394,7 +1402,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
             IR.WorkflowAttrTags(Vector("foo", "bar")),
             IR.WorkflowAttrVersion("1.0"),
             IR.WorkflowAttrProperties(Map("foo" -> "bar")),
-            IR.WorkflowAttrDetails(Map("whatsNew" -> "v1.0: First release")),
+            IR.WorkflowAttrDetails(Map("whatsNew" -> MetaValueElementString("v1.0: First release"))),
             IR.WorkflowAttrTitle("Workflow with metadata"),
             IR.WorkflowAttrTypes(Vector("calculator")),
             IR.WorkflowAttrSummary("A workflow that defines some metadata")

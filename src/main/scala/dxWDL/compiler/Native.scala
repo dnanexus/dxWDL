@@ -9,6 +9,8 @@ import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
 
+import wom.callable.MetaValueElement
+import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
 
@@ -16,6 +18,7 @@ import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
+import java.io.EOFException
 
 // The end result of the compiler
 object Native {
@@ -718,6 +721,19 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
+  private def metaValueToJs(value: MetaValueElement): JsValue = {
+    value match {
+      case MetaValueElementString(text)   => JsString(text)
+      case MetaValueElementInteger(i)     => JsNumber(i)
+      case MetaValueElementFloat(f)       => JsNumber(f)
+      case MetaValueElementBoolean(b)     => JsBoolean(b)
+      case MetaValueElementArray(array)   => JsArray(array.map(metaValueToJs))
+      case MetaValueElementObject(fields) => JsObject(fields.mapValues(metaValueToJs))
+      case MetaValueElementNull           => JsNull
+      case other                          => throw new Exception(s"Expected MetaValueElement, got ${other}")
+    }
+  }
+
   private def anyToJs(value: Any): JsValue = {
     value match {
       case s: String    => JsString(s)
@@ -726,6 +742,7 @@ case class Native(dxWDLrtId: Option[String],
       case b: Boolean   => JsBoolean(b)
       case a: Vector[_] => JsArray(a.map(anyToJs))
       case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
+      case other        => throw new EOFException(s"Unsupported value ${other}")
     }
   }
 
@@ -757,7 +774,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.TaskAttrProperties(props) =>
               Some("properties" -> JsObject(props.mapValues(anyToJs)))
             case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(anyToJs)))
+              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
             // These are currently ignored because they only apply to apps
             //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
             //case IR.TaskAttrOpenSource(isOpenSource) =>
@@ -1236,7 +1253,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.WorkflowAttrProperties(props) =>
               Some("properties" -> JsObject(props.mapValues(anyToJs)))
             case IR.WorkflowAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(anyToJs)))
+              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
             // These are currently ignored because they only apply to apps
             //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
             // These will be implemented in a future PR

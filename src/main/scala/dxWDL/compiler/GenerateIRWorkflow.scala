@@ -714,8 +714,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         Some(IR.WorkflowAttrDescription(text))
       case (IR.META_SUMMARY, MetaValueElementString(text)) => Some(IR.WorkflowAttrSummary(text))
       case (IR.META_VERSION, MetaValueElementString(text)) => Some(IR.WorkflowAttrVersion(text))
-      case (IR.META_DETAILS, MetaValueElementObject(fields)) =>
-        Some(IR.WorkflowAttrDetails(fields.mapValues(WomMetaSerialization.unwrapAny)))
+      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
       case (IR.META_TYPES, MetaValueElementArray(array)) =>
         Some(IR.WorkflowAttrTypes(array.map {
           case MetaValueElementString(text) => text

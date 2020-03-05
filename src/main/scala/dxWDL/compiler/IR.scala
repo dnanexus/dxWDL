@@ -8,7 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, MetaValueElement}
 import wom.types.WomType
 import wom.values.WomValue
 
@@ -49,7 +49,7 @@ object IR {
   final case class TaskAttrSummary(text: String) extends TaskAttr
   final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
   final case class TaskAttrVersion(text: String) extends TaskAttr
-  final case class TaskAttrDetails(details: Map[String, Any]) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, MetaValueElement]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
@@ -61,7 +61,7 @@ object IR {
   final case class WorkflowAttrDescription(text: String) extends WorkflowAttr
   final case class WorkflowAttrSummary(text: String) extends WorkflowAttr
   final case class WorkflowAttrVersion(text: String) extends WorkflowAttr
-  final case class WorkflowAttrDetails(details: Map[String, Any]) extends WorkflowAttr
+  final case class WorkflowAttrDetails(details: Map[String, MetaValueElement]) extends WorkflowAttr
   final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
