@@ -111,7 +111,7 @@ $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -default
 A task declaration has a runtime section where memory, cpu, and disk
 space can be specified. Based on these attributes, an instance type is chosen by
 the compiler. If you wish to choose an instance type from the
-[native](https://wiki.dnanexus.com/api-specification-v1.0.0/instance-types)
+[native](https://documentation.dnanexus.com/developer/api/running-analyses/instance-types)
 list, this can be done by specifying the `dx_instance_type` key
 instead. For example:
 
@@ -436,7 +436,7 @@ task cgrep {
 
 # Setting DNAnexus-specific attributes in extras.json
 
-When writing a dnanexus applet the user can specify options through the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL equivalent is the *extras* file, specified with the `extras` command line option. The extras file has a `default_task_dx_attributes` section where runtime specification, timeout policies, and access control can be set.
+When writing a dnanexus applet the user can specify options through the [dxapp.json](https://documentation.dnanexus.com/developer/apps/app-metadata#annotated-example) file. The dxWDL equivalent is the *extras* file, specified with the `extras` command line option. The extras file has a `default_task_dx_attributes` section where runtime specification, timeout policies, and access control can be set.
 
 ```
 {
@@ -716,7 +716,7 @@ For an in depth discussion, please see [Missing Call Arguments](MissingCallArgum
 # Docker
 
 As of release 0.80, we moved to using docker, instead of
-[dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images). `dx-docker`
+[dx-docker](https://documentation.dnanexus.com/developer/apps/dependency-management/using-docker-images). `dx-docker`
 is deprecated, although you can still use it with the `--useDxDocker` command line flag.
 
 ## Setting a default docker image for all tasks
