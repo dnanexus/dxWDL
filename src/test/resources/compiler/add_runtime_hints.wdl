@@ -1,6 +1,6 @@
 version 1.0
 
-task per_task_dx_attributes {
+task add_runtime_hints {
     input {
         Int a
         Int b
