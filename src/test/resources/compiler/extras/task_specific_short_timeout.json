@@ -1,0 +1,14 @@
+{
+    "per_task_dx_attributes" : {
+      "per_task_dx_attributes": {
+        "runSpec": {
+          "timeoutPolicy": {
+            "*": {
+              "hours": 3
+            }
+          }
+        }
+      }
+    }
+}
+  

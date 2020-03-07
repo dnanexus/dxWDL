@@ -296,14 +296,14 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                 //   stream : true
                 // }
                 // We also support two aliases, dx_stream and localizationOptional
-                val streamAttr = value
+                value
                   .filterKeys(
                       Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
                   )
-                  .headOption
-                streamAttr match {
-                  case Some(MetaValueElement.MetaValueElementBoolean(b)) if b => findFiles(womValue)
-                  case _                                                      => Vector.empty
+                  .headOption match {
+                  case Some((_, MetaValueElement.MetaValueElementBoolean(b))) if b =>
+                    findFiles(womValue)
+                  case _ => Vector.empty
                 }
               case _ =>
                 Vector.empty

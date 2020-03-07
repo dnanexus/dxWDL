@@ -377,7 +377,31 @@ The [WDL Spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#p
 
 Although the WDL spec indicates that the `parameter_meta` section should apply to both input and output variables, WOM currently only maps the parameter_meta section to the input parameters.
 
-## Example task with DNAnexus-specific metadata
+## Runtime hints
+
+There are several parameters affecting the runtime environment that can be specified in the dxapp.json file:
+
+* `executionPolicy`: Specifies when to try to automatically restart failed jobs, and how many times
+* `timeoutPolicy`: Specifies the maximum amount of time the job can run
+* `access`: Specifies which resources the applet can access
+* `ignoreReuse`: Specifies whether to allow the outputs of the applet to be reused
+
+These attributes can be specified in the `runtime` section of the WDL task, but their representation there is slightly different than in dxapp.json. Also note that the runtime section is different than the metadata section when it comes to attribute values - specifically, object values must be prefixed by the `object` keyword, and map values must have their keys in quotes.
+
+* `restart`: Either an integer value indiCating the number of times to automatically restart regardless of the failure reason, or an object value with the following keys:
+  * `max`: Maximum number of restarts
+  * `default`: Default number of restarts for any error type
+  * `errors`: Mapping of [error types](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications#run-specification) to number of restarts
+* `timeout`: Either a string value that specifies days, hours, and/or minutes in the format "1D6H30M" or an object with at least one of the keys `days`, `hours`, `minutes`.
+* `access`: An object with any of the keys:
+  * `network`: An array of domains to which the app has access, or "*" for all domains
+  * `project`: The maximum level of access the applet has to the host project - a string with any DNAnexus access level
+  * `allProjects`: The maximum level of access the applet has to all projects
+  * `developer`: Boolean - whether the applet is a developer, i.e. can create new applets
+  * `projectCreation`: Boolean - whether the applet can create new projects
+* `ignore_reuse`: Boolean - whether to allow the outputs of the applet to be reused
+
+## Example task with DNAnexus-specific metadata and runtime
 
 ```wdl
 version 1.0
@@ -428,6 +452,25 @@ task cgrep {
     output {
         Int count = read_int(stdout())
         File out_file = "out_file"
+    }
+
+    runtime {
+      docker: "ubuntu:latest"
+      dx_instance_type: "mem1_ssd1_v2_x8"
+      dx_ignore_reuse: true
+      dx_restart: object {
+          default: 1,
+          max: 5,
+          errors: {
+              "UnresponsiveWorker": 2,
+              "ExecutionError": 2,
+          }
+      }
+      dx_timeout: "12H30M"
+      dx_access: object {
+          network: ["*"],
+          developer: true
+      }
     }
 }
 ```
@@ -530,13 +573,6 @@ You are also able add citations or licenses information using for each task at t
 ```
 
 Note that `details` specified in `per_task_dx_attributes` override those that are set in the task's `meta` section.
-
-# Debugging an applet
-
-If you build an applet on the platform with dxWDL, and want to inspect
-it, use: ```dx get --omit-resources <applet path>```. This will
-refrain from downloading the large resource files that go into the
-applet.
 
 ## Job reuse
 
@@ -664,6 +700,7 @@ a string variable `reorg_status___` with the value of `completed` will be includ
 The `reorg_status___` is used to act as a dependency to signal that the workflow has completed.
 
 For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md)
+
 # Toplevel calls compiled as stages
 
 If a workflow is compiled in unlocked mode, top level calls with no
@@ -711,7 +748,6 @@ into stage inputs. The `add` stage will have compulsory integer inputs
 `a` and `b`.
 
 For an in depth discussion, please see [Missing Call Arguments](MissingCallArguments.md).
-
 
 # Docker
 
@@ -809,7 +845,14 @@ $ export HTTP_PROXY = https://john_smith:welcome1@proxy.acme.com:8080
 $ java -jar dxWDL.jar compile ...
 ```
 
-# Getting WDL sources
+# Debugging an applet
+
+If you build an applet on the platform with dxWDL, and want to inspect
+it, use: ```dx get --omit-resources <applet path>```. This will
+refrain from downloading the large resource files that go into the
+applet.
+
+## Getting WDL sources
 
 Compiled workflows and tasks include the original WDL source code in
 the details field. For example, examine workflow `foo` that was

@@ -20,7 +20,10 @@ case class DxAppletDescribe(project: String,
                             summary: Option[String] = None,
                             title: Option[String] = None,
                             types: Option[Vector[String]] = None,
-                            tags: Option[Vector[String]] = None)
+                            tags: Option[Vector[String]] = None,
+                            runSpec: Option[JsValue] = None,
+                            access: Option[JsValue] = None,
+                            ignoreReuse: Option[Boolean] = None)
     extends DxObjectDescribe
 
 case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -80,14 +83,22 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
     val title = descFields.get("title").flatMap(unwrapString)
     val types = descFields.get("types").flatMap(unwrapStringArray)
     val tags = descFields.get("tags").flatMap(unwrapStringArray)
-    desc.copy(details = details,
-              properties = props,
-              description = description,
-              developerNotes = developerNotes,
-              summary = summary,
-              title = title,
-              types = types,
-              tags = tags)
+    val runSpec = descFields.get("runSpec")
+    val access = descFields.get("access")
+    val ignoreReuse = descFields.get("ignoreReuse").flatMap(unwrapBoolean)
+    desc.copy(
+        details = details,
+        properties = props,
+        description = description,
+        developerNotes = developerNotes,
+        summary = summary,
+        title = title,
+        types = types,
+        tags = tags,
+        runSpec = runSpec,
+        access = access,
+        ignoreReuse = ignoreReuse
+    )
   }
 
   def unwrapString(jsValue: JsValue): Option[String] = {
@@ -101,6 +112,13 @@ case class DxApplet(id: String, project: Option[DxProject]) extends DxExecutable
     jsValue match {
       case JsArray(array) => Some(array.flatMap(unwrapString))
       case _              => None
+    }
+  }
+
+  def unwrapBoolean(jsValue: JsValue): Option[Boolean] = {
+    jsValue match {
+      case JsBoolean(value) => Some(value)
+      case _                => None
     }
   }
 

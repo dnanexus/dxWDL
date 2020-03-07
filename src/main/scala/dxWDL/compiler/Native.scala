@@ -850,7 +850,7 @@ case class Native(dxWDLrtId: Option[String],
       ).toRunSpecJson
 
     // Start with the default dx-attribute section, and override
-    // any field that is specified in the individual task section.
+    // any field that is specified in the runtime hints or the individual task section.
     val extraRunSpec: Map[String, JsValue] = extras match {
       case None => Map.empty
       case Some(ext) =>
@@ -858,6 +858,38 @@ case class Native(dxWDLrtId: Option[String],
           case None      => Map.empty
           case Some(dta) => dta.getRunSpecJson
         }
+    }
+
+    val hintRunspec: Map[String, JsValue] = applet.runtimeHints match {
+      case Some(hints) =>
+        hints
+          .map {
+            case IR.RuntimeHintRestart(max, default, errors) =>
+              val defaultMap: Option[Map[String, Int]] = default match {
+                case Some(i) => Some(Map("*" -> i))
+                case _       => None
+              }
+              Some(
+                  DxExecPolicy(
+                      (errors, defaultMap) match {
+                        case (Some(e), Some(d)) => Some(e ++ d)
+                        case (Some(e), None)    => Some(e)
+                        case (None, Some(d))    => Some(d)
+                        case _                  => None
+                      },
+                      max
+                  ).toJson
+              )
+            case IR.RuntimeHintTimeout(days, hours, minutes) =>
+              Some(
+                  DxTimeout(days.orElse(Some(0)), hours.orElse(Some(0)), minutes.orElse(Some(0))).toJson
+              )
+            case _ => None
+          }
+          .flatten
+          .reduceOption(_ ++ _)
+          .getOrElse(Map.empty)
+      case _ => Map.empty
     }
 
     val taskSpecificRunSpec: Map[String, JsValue] =
@@ -875,7 +907,7 @@ case class Native(dxWDLrtId: Option[String],
         Map.empty
       }
 
-    val runSpecWithExtras = runSpec ++ defaultTimeout ++ extraRunSpec ++ taskSpecificRunSpec
+    val runSpecWithExtras = runSpec ++ defaultTimeout ++ extraRunSpec ++ hintRunspec ++ taskSpecificRunSpec
 
     // - If the docker image is a tarball, add a link in the details field.
     val dockerFile: Option[DxFile] = applet.docker match {
@@ -904,6 +936,27 @@ case class Native(dxWDLrtId: Option[String],
       case None      => DxAccess.empty
       case Some(ext) => ext.getDefaultAccess
     }
+
+    val hintAccess: DxAccess = applet.runtimeHints match {
+      case Some(hints) =>
+        hints
+          .map {
+            case IR.RuntimeHintAccess(network, project, allProjects, developer, projectCreation) =>
+              Some(
+                  DxAccess(network,
+                           project.map(Extras.stringToAccessLevel),
+                           allProjects.map(Extras.stringToAccessLevel),
+                           developer,
+                           projectCreation)
+              )
+            case _ => None
+          }
+          .flatten
+          .headOption
+          .getOrElse(DxAccess.empty)
+      case _ => DxAccess.empty
+    }
+
     val taskSpecificAccess: DxAccess =
       if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
         // A task can override the default dx attributes
@@ -921,7 +974,11 @@ case class Native(dxWDLrtId: Option[String],
       case None    => DxAccess.empty
       case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
     }
-    val taskAccess = extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
+
+    val taskAccess = extraAccess
+      .merge(hintAccess)
+      .merge(taskSpecificAccess)
+      .merge(allProjectsAccess)
 
     val access: DxAccess = applet.kind match {
       case IR.AppletKindTask(_) =>
@@ -1068,7 +1125,20 @@ case class Native(dxWDLrtId: Option[String],
         "details" -> JsObject(details),
         "hidden" -> JsBoolean(hidden)
     )
-    val ignoreReuse: Map[String, JsValue] = extras match {
+    // look for ignoreReuse in runtime hints and in extras - the later overrides the former
+    val ignoreReuseHint: Map[String, JsValue] = applet.runtimeHints match {
+      case Some(hints) =>
+        hints
+          .map {
+            case IR.RuntimeHintIgnoreReuse(flag) => Some(Map("ignoreReuse" -> JsBoolean(flag)))
+            case _                               => None
+          }
+          .flatten
+          .headOption
+          .getOrElse(Map.empty)
+      case _ => Map.empty
+    }
+    val ignoreReuseExtras: Map[String, JsValue] = extras match {
       case None => Map.empty
       case Some(ext) =>
         ext.ignoreReuse match {
@@ -1081,7 +1151,7 @@ case class Native(dxWDLrtId: Option[String],
       else Map("access" -> access)
 
     // Add a checksum
-    val reqCoreAll = taskMeta ++ reqCore ++ accessField ++ ignoreReuse
+    val reqCoreAll = taskMeta ++ reqCore ++ accessField ++ ignoreReuseHint ++ ignoreReuseExtras
     checksumReq(applet.name, reqCoreAll)
   }
 

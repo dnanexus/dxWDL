@@ -113,9 +113,10 @@ case class IOParameter(
 
 // Extra fields for describe
 object Field extends Enumeration {
-  val Analysis, Applet, ArchivalState, Categories, Created, Description, Details, DeveloperNotes,
-      Folder, Id, InputSpec, Modified, Name, OutputSpec, ParentJob, Parts, Project, Properties,
-      Size, Stages, Summary, Tags, Title, Types, Version = Value
+  val Access, Analysis, Applet, ArchivalState, Categories, Created, Description, Details,
+      DeveloperNotes, Folder, Id, IgnoreReuse, InputSpec, Modified, Name, OutputSpec, ParentJob,
+      Parts, Project, Properties, RunSpec, Size, Stages, Summary, Tags, Title, Types, Version =
+    Value
 }
 
 trait DxObjectDescribe {
@@ -330,6 +331,7 @@ object DxObject {
 
   def requestFields(fields: Set[Field.Value]): JsValue = {
     val fieldStrings = fields.map {
+      case Field.Access         => "access"
       case Field.Analysis       => "analysis"
       case Field.Applet         => "applet"
       case Field.ArchivalState  => "archivalState"
@@ -340,6 +342,7 @@ object DxObject {
       case Field.Details        => "details"
       case Field.Folder         => "folder"
       case Field.Id             => "id"
+      case Field.IgnoreReuse    => "ignoreReuse"
       case Field.InputSpec      => "inputSpec"
       case Field.Modified       => "modified"
       case Field.Name           => "name"
@@ -348,6 +351,7 @@ object DxObject {
       case Field.Parts          => "parts"
       case Field.Project        => "project"
       case Field.Properties     => "properties"
+      case Field.RunSpec        => "runSpec"
       case Field.Size           => "size"
       case Field.Stages         => "stages"
       case Field.Summary        => "summary"

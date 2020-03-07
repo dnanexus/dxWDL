@@ -15,6 +15,8 @@ import dxWDL.dx._
 import dxWDL.util._
 import IR.CVar
 
+import scala.util.matching.Regex
+
 case class GenerateIRTask(verbose: Verbose,
                           typeAliases: Map[String, WomType],
                           language: Language.Value,
@@ -23,6 +25,15 @@ case class GenerateIRTask(verbose: Verbose,
 
   private class DynamicInstanceTypesException private (ex: Exception) extends RuntimeException(ex) {
     def this() = this(new RuntimeException("Runtime instance type calculation required"))
+  }
+
+  def evalWomExpression(expr: WomExpression): WomValue = {
+    val result: ErrorOr[WomValue] =
+      expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
+    result match {
+      case Invalid(_)         => throw new DynamicInstanceTypesException()
+      case Valid(x: WomValue) => x
+    }
   }
 
   // Figure out which instance to use.
@@ -38,18 +49,12 @@ case class GenerateIRTask(verbose: Verbose,
         case None =>
           // Check the overall defaults, there might be a setting over there
           defaultRuntimeAttrs.m.get(attrName)
-        case Some(expr) =>
-          val result: ErrorOr[WomValue] =
-            expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
-          result match {
-            case Invalid(_)         => throw new DynamicInstanceTypesException()
-            case Valid(x: WomValue) => Some(x)
-          }
+        case Some(expr) => Some(evalWomExpression(expr))
       }
     }
 
     try {
-      val dxInstanceType = evalAttr("dx_instance_type")
+      val dxInstanceType = evalAttr(IR.HINT_INSTANCE_TYPE)
       val memory = evalAttr("memory")
       val diskSpace = evalAttr("disks")
       val cores = evalAttr("cpu")
@@ -421,6 +426,96 @@ case class GenerateIRTask(verbose: Verbose,
     })
   }
 
+  private def unwrapWomString(value: WomValue): String = {
+    value match {
+      case WomString(s) => s
+      case _            => throw new Exception("Expected WomString")
+    }
+  }
+
+  private def unwrapWomStringArray(array: WomValue): Vector[String] = {
+    array match {
+      case WomArray(WomMaybeEmptyArrayType(WomStringType), strings) =>
+        strings.map(unwrapWomString).toVector
+      case _ => throw new Exception("Expected WomArray")
+    }
+  }
+
+  private def unwrapWomBoolean(value: WomValue): Boolean = {
+    value match {
+      case WomBoolean(b) => b
+      case _             => throw new Exception("Expected WomBoolean")
+    }
+  }
+
+  private def unwrapWomInteger(value: WomValue): Int = {
+    value match {
+      case WomInteger(i) => i
+      case _             => throw new Exception("Expected WomInteger")
+    }
+  }
+
+  lazy val durationRegexp =
+    s"^(?:(\\d+)D)?(?:(\\d+)H)?(?:(\\d+)M)?".r
+  lazy val durationFields = Vector("days", "hours", "minutes")
+
+  private def parseDuration(duration: String): IR.RuntimeHintTimeout = {
+    durationRegexp.findFirstMatchIn(duration) match {
+      case Some(result: Regex.Match) =>
+        def group(i: Int): Option[Int] = {
+          result.group(i) match {
+            case null      => None
+            case s: String => Some(s.toInt)
+          }
+        }
+        IR.RuntimeHintTimeout(group(1), group(2), group(3))
+      case _ => throw new Exception(s"Invalid ISO Duration ${duration}")
+    }
+  }
+
+  private def unwrapRuntimeHints(hints: Map[String, WomExpression]): Vector[IR.RuntimeHint] = {
+    hints
+      .mapValues(evalWomExpression)
+      .flatMap {
+        case (IR.HINT_ACCESS, WomObject(values, _)) =>
+          Some(
+              IR.RuntimeHintAccess(
+                  network = values.get("network").map(unwrapWomStringArray),
+                  project = values.get("project").map(unwrapWomString),
+                  allProjects = values.get("allProjects").map(unwrapWomString),
+                  developer = values.get("developer").map(unwrapWomBoolean),
+                  projectCreation = values.get("projectCreation").map(unwrapWomBoolean)
+              )
+          )
+        case (IR.HINT_IGNORE_REUSE, WomBoolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
+        case (IR.HINT_RESTART, WomInteger(i))      => Some(IR.RuntimeHintRestart(default = Some(i)))
+        case (IR.HINT_RESTART, WomObject(values, _)) =>
+          Some(
+              IR.RuntimeHintRestart(
+                  values.get("max").map(unwrapWomInteger),
+                  values.get("default").map(unwrapWomInteger),
+                  values.get("errors").map {
+                    case WomMap(WomMapType(WomStringType, WomIntegerType), fields) =>
+                      fields.map {
+                        case (WomString(s), WomInteger(i)) => (s -> i)
+                        case other                         => throw new Exception(s"Invalid restart map entry ${other}")
+                      }
+                    case _ => throw new Exception("Invalid restart map")
+                  }
+              )
+          )
+        case (IR.HINT_TIMEOUT, WomString(s)) => Some(parseDuration(s))
+        case (IR.HINT_TIMEOUT, WomObject(values, _)) =>
+          Some(
+              IR.RuntimeHintTimeout(values.get("days").map(unwrapWomInteger),
+                                    values.get("hours").map(unwrapWomInteger),
+                                    values.get("minutes").map(unwrapWomInteger))
+          )
+        case _ => None
+      }
+      .toVector
+  }
+
   // Compile a WDL task into an applet.
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
@@ -482,7 +577,7 @@ case class GenerateIRTask(verbose: Verbose,
     val instanceType = calcInstanceType(task)
 
     val kind =
-      (task.meta.get("type"), task.meta.get("id")) match {
+      (task.meta.get(IR.HINT_APP_TYPE), task.meta.get(IR.HINT_APP_ID)) match {
         case (Some(MetaValueElementString("native")), Some(MetaValueElementString(id))) =>
           // wrapper for a native applet.
           // make sure the runtime block is empty
@@ -494,7 +589,10 @@ case class GenerateIRTask(verbose: Verbose,
           IR.AppletKindTask(task)
       }
 
-    // Parse any task metadata (other than 'type' and 'id', which are handled above)
+    // Handle any dx-specific runtime hints, other than "type" and "id" which are handled above
+    val runtimeHints = unwrapRuntimeHints(task.runtimeAttributes.attributes)
+
+    // Handle any task metadata
     val taskAttr = unwrapTaskMeta(task.meta, adjunctFiles)
 
     // Figure out if we need to use docker
@@ -531,6 +629,7 @@ case class GenerateIRTask(verbose: Verbose,
               dockerFinal,
               kind,
               selfContainedSourceCode,
-              Some(taskAttr))
+              Some(taskAttr),
+              Some(runtimeHints))
   }
 }

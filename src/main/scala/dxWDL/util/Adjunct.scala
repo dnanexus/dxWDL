@@ -32,8 +32,8 @@ object Adjuncts {
       wdlName = wdlName.dropRight(4)
     }
 
-    val readmeRegexp = s"(?i)readme\\.${wdlName}\\.(.+)\\.md".r
-    val developerNotesRegexp = s"(?i)readme\\.developer\\.${wdlName}\\.(.+)\\.md".r
+    lazy val readmeRegexp = s"(?i)readme\\.${wdlName}\\.(.+)\\.md".r
+    lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.${wdlName}\\.(.+)\\.md".r
 
     parentDir.listFiles
       .flatMap { file =>
