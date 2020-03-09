@@ -846,7 +846,10 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
               "hours" -> JsNumber(0),
               "minutes" -> JsNumber(0)
           )
-          JsObject(defaults ++ fields)
+          JsObject(fields.mapValues {
+            case JsObject(inner) => JsObject(defaults ++ fields)
+            case _               => throw new Exception("Expected JsObject")
+          })
         case _ => throw new Exception("Expected JsObject")
       }
     }
