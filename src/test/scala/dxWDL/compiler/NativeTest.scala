@@ -841,13 +841,13 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     def fillOut(obj: JsValue): JsObject = {
       obj match {
         case JsObject(fields) =>
-          defaults = Map(
+          val defaults = Map(
               "days" -> JsNumber(0),
               "hours" -> JsNumber(0),
               "minutes" -> JsNumber(0)
           )
           JsObject(fields.mapValues {
-            case JsObject(inner) => JsObject(defaults ++ fields)
+            case JsObject(inner) => JsObject(defaults ++ inner)
             case _               => throw new Exception("Expected JsObject")
           })
         case _ => throw new Exception("Expected JsObject")
