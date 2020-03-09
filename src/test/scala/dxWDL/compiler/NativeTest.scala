@@ -843,7 +843,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             Map(
                 "*" -> JsObject(
                     Map(
-                        "hours" -> JsNumber(3)
+                        "days" -> JsNumber(0),
+                        "hours" -> JsNumber(3),
+                        "minutes" -> JsNumber(0)
                     )
                 )
             )
