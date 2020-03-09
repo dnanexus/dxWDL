@@ -378,17 +378,19 @@ object Extras {
     }
   }
 
+  def stringToAccessLevel(name: String): AccessLevel = {
+    for (x <- AccessLevel.values()) {
+      if (x.toString.toLowerCase == name.toLowerCase)
+        return x
+    }
+    throw new Exception(s"Invalid access level ${name}")
+  }
+
   private def checkedParseAccessLevelField(fields: Map[String, JsValue],
                                            fieldName: String): Option[AccessLevel] = {
     checkedParseStringField(fields, fieldName) match {
-      case None =>
-        return None
-      case Some(s) =>
-        for (x <- AccessLevel.values()) {
-          if (x.toString.toLowerCase == s.toLowerCase)
-            return Some(x)
-        }
-        throw new Exception(s"Invalid access level ${s}")
+      case None    => return None
+      case Some(s) => Some(stringToAccessLevel(s))
     }
   }
 

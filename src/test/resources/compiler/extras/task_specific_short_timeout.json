@@ -1,0 +1,14 @@
+{
+    "per_task_dx_attributes" : {
+      "add_runtime_hints": {
+        "runSpec": {
+          "timeoutPolicy": {
+            "*": {
+              "hours": 3
+            }
+          }
+        }
+      }
+    }
+}
+  

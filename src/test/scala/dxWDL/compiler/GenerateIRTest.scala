@@ -1123,6 +1123,32 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
+  it should "recognize runtime hints" in {
+    val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+
+    val cgrepApplet = getAppletByName("add_runtime_hints", bundle)
+    cgrepApplet.runtimeHints shouldBe Some(
+        Vector(
+            IR.RuntimeHintIgnoreReuse(true),
+            IR.RuntimeHintRestart(
+                max = Some(5),
+                default = Some(1),
+                errors = Some(Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2))
+            ),
+            IR.RuntimeHintTimeout(hours = Some(12), minutes = Some(30)),
+            IR.RuntimeHintAccess(network = Some(Vector("*")), developer = Some(true))
+        )
+    )
+  }
+
   it should "handle streaming files" in {
     val path = pathFromBasename("compiler", "streaming_files.wdl")
     val retval = Main.compile(

@@ -751,6 +751,154 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     desc.types shouldBe Some(Vector("Adder"))
   }
 
+  it should "be able to include runtime hints" in {
+    val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
+
+    val appId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val desc = dxApplet.describe(
+        Set(
+            Field.Access,
+            Field.IgnoreReuse,
+            Field.RunSpec
+        )
+    )
+
+    desc.runSpec match {
+      case Some(JsObject(fields)) =>
+        fields("executionPolicy") shouldBe JsObject(
+            Map(
+                "restartOn" -> JsObject(
+                    Map(
+                        "*" -> JsNumber(1),
+                        "UnresponsiveWorker" -> JsNumber(2),
+                        "ExecutionError" -> JsNumber(2)
+                    )
+                ),
+                "maxRestarts" -> JsNumber(5)
+            )
+        )
+        fields("timeoutPolicy") shouldBe JsObject(
+            Map(
+                "*" -> JsObject(
+                    Map(
+                        "days" -> JsNumber(0),
+                        "hours" -> JsNumber(12),
+                        "minutes" -> JsNumber(30)
+                    )
+                )
+            )
+        )
+      case _ => throw new Exception("Missing runSpec")
+    }
+    desc.access shouldBe Some(
+        JsObject(
+            Map(
+                "network" -> JsArray(Vector(JsString("*"))),
+                "developer" -> JsBoolean(true)
+            )
+        )
+    )
+    desc.ignoreReuse shouldBe Some(true)
+  }
+
+  it should "be able to include runtime hints and override extras global" in {
+    val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
+    val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
+
+    val appId = Main.compile(
+        path.toString
+        //:: "--verbose"
+          :: "--extras" :: extraPath.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val desc = dxApplet.describe(
+        Set(
+            Field.RunSpec
+        )
+    )
+
+    desc.runSpec match {
+      case Some(JsObject(fields)) =>
+        fields("timeoutPolicy") shouldBe JsObject(
+            Map(
+                "*" -> JsObject(
+                    Map(
+                        "days" -> JsNumber(0),
+                        "hours" -> JsNumber(12),
+                        "minutes" -> JsNumber(30)
+                    )
+                )
+            )
+        )
+      case _ => throw new Exception("Missing runSpec")
+    }
+  }
+
+  it should "be able to include runtime hints with extras per-task override" in {
+    val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
+    val extraPath = pathFromBasename("compiler/extras", "task_specific_short_timeout.json")
+
+    val appId = Main.compile(
+        path.toString
+        //:: "--verbose"
+          :: "--extras" :: extraPath.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxApplet = DxApplet.getInstance(appId)
+    val desc = dxApplet.describe(
+        Set(
+            Field.RunSpec
+        )
+    )
+
+    // Sometimes the API only returns the fields with non-zero values
+    def fillOut(obj: JsValue): JsObject = {
+      obj match {
+        case JsObject(fields) =>
+          val defaults = Map(
+              "days" -> JsNumber(0),
+              "hours" -> JsNumber(0),
+              "minutes" -> JsNumber(0)
+          )
+          JsObject(fields.mapValues {
+            case JsObject(inner) => JsObject(defaults ++ inner)
+            case _               => throw new Exception("Expected JsObject")
+          })
+        case _ => throw new Exception("Expected JsObject")
+      }
+    }
+
+    desc.runSpec match {
+      case Some(JsObject(fields)) =>
+        fillOut(fields("timeoutPolicy")) shouldBe JsObject(
+            Map(
+                "*" -> JsObject(
+                    Map(
+                        "days" -> JsNumber(0),
+                        "hours" -> JsNumber(3),
+                        "minutes" -> JsNumber(0)
+                    )
+                )
+            )
+        )
+      case _ => throw new Exception("Missing runSpec")
+    }
+  }
+
   it should "be able to include information from workflow meta" in {
     val path = pathFromBasename("compiler", "wf_meta.wdl")
 

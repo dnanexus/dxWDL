@@ -27,8 +27,6 @@ object IR {
   // can be used in the meta section of task WDL, and will be parsed out and used when generating
   // the native app.
 
-  val META_TYPE = "type"
-  val META_ID = "id"
   val META_CATEGORIES = "categories"
   val META_DESCRIPTION = "description"
   val META_DETAILS = "details"
@@ -67,6 +65,39 @@ object IR {
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
   final case class WorkflowAttrCallNames(mapping: Map[String, String]) extends WorkflowAttr
   final case class WorkflowAttrRunOnSingleNode(value: Boolean) extends WorkflowAttr
+
+  // The following keywords/types correspond to runtime-related attributes from dxapp.json.
+  // Currently, these are searched for in the runtime section of WDL, but will move to hints in
+  // WDL 2.0.
+
+  val HINT_ACCESS = "dx_access"
+  val HINT_IGNORE_REUSE = "dx_ignore_reuse"
+  val HINT_INSTANCE_TYPE = "dx_instance_type"
+  //val HINT_REGIONS = "dx_regions"
+  val HINT_RESTART = "dx_restart"
+  val HINT_TIMEOUT = "dx_timeout"
+  val HINT_APP_TYPE = "type"
+  val HINT_APP_ID = "id"
+
+  // This key is used in the restart object value to represent "*"
+  val ALL_KEY = "All"
+
+  sealed abstract class RuntimeHint
+  final case class RuntimeHintRestart(max: Option[Int] = None,
+                                      default: Option[Int] = None,
+                                      errors: Option[Map[String, Int]] = None)
+      extends RuntimeHint
+  final case class RuntimeHintTimeout(days: Option[Int] = None,
+                                      hours: Option[Int] = None,
+                                      minutes: Option[Int] = None)
+      extends RuntimeHint
+  final case class RuntimeHintIgnoreReuse(value: Boolean) extends RuntimeHint
+  final case class RuntimeHintAccess(network: Option[Vector[String]] = None,
+                                     project: Option[String] = None,
+                                     allProjects: Option[String] = None,
+                                     developer: Option[Boolean] = None,
+                                     projectCreation: Option[Boolean] = None)
+      extends RuntimeHint
 
   // The following keywords/types correspond to attributes of inputSpec/outputSpec from
   // dxapp.json. These attributes can be used in the parameter_meta section of task WDL, and
@@ -324,6 +355,7 @@ object IR {
     * @param task          Task definition
     * @param womSourceCode WDL/CWL source code for task.
     * @param meta          Additional applet metadata
+    * @param runtimeHints  Runtime hints
     */
   case class Applet(name: String,
                     inputs: Vector[CVar],
@@ -332,7 +364,8 @@ object IR {
                     docker: DockerImage,
                     kind: AppletKind,
                     womSourceCode: String,
-                    meta: Option[Vector[TaskAttr]] = None)
+                    meta: Option[Vector[TaskAttr]] = None,
+                    runtimeHints: Option[Vector[RuntimeHint]] = None)
       extends Callable {
     def inputVars = inputs
     def outputVars = outputs
