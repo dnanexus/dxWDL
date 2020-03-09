@@ -837,9 +837,23 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         )
     )
 
+    // Sometimes the API only returns the fields with non-zero values
+    def fillOut(obj: JsValue): JsObject = {
+      obj match {
+        case JsObject(fields) =>
+          defaults = Map(
+              "days" -> JsNumber(0),
+              "hours" -> JsNumber(0),
+              "minutes" -> JsNumber(0)
+          )
+          JsObject(defaults ++ fields)
+        case _ => throw new Exception("Expected JsObject")
+      }
+    }
+
     desc.runSpec match {
       case Some(JsObject(fields)) =>
-        fields("timeoutPolicy") shouldBe JsObject(
+        fillOut(fields("timeoutPolicy")) shouldBe JsObject(
             Map(
                 "*" -> JsObject(
                     Map(
