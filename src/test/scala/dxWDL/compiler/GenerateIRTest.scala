@@ -1450,6 +1450,50 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
+  it should "recognize workflow parameter metadata" in {
+    val path = pathFromBasename("compiler", "wf_param_meta.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+    val workflow = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf
+      case _                     => throw new Exception("primaryCallable is not a workflow")
+    }
+    val input_cvars: Vector[IR.CVar] = workflow.inputs.map {
+      case (c: IR.CVar, _) => c
+      case other           => throw new Exception("Invalid workflow input ${other}")
+    }
+    input_cvars shouldBe Vector(
+        IR.CVar(
+            "y",
+            WomIntegerType,
+            Some(WomInteger(5)),
+            Some(
+                Vector(
+                    IR.IOAttrLabel("Right-hand side"),
+                    IR.IOAttrDefault(IR.DefaultReprInteger(5))
+                )
+            )
+        ),
+        IR.CVar(
+            "x",
+            WomIntegerType,
+            Some(WomInteger(3)),
+            Some(
+                Vector(
+                    IR.IOAttrLabel("Left-hand side"),
+                    IR.IOAttrDefault(IR.DefaultReprInteger(3))
+                )
+            )
+        )
+    )
+  }
+
   it should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
     val retval = Main.compile(path.toString :: cFlags)

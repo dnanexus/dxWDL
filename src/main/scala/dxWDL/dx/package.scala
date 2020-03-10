@@ -114,9 +114,9 @@ case class IOParameter(
 // Extra fields for describe
 object Field extends Enumeration {
   val Access, Analysis, Applet, ArchivalState, Categories, Created, Description, Details,
-      DeveloperNotes, Folder, Id, IgnoreReuse, InputSpec, Modified, Name, OutputSpec, ParentJob,
-      Parts, Project, Properties, RunSpec, Size, Stages, Summary, Tags, Title, Types, Version =
-    Value
+      DeveloperNotes, Folder, Id, IgnoreReuse, Inputs, InputSpec, Modified, Name, Outputs,
+      OutputSpec, ParentJob, Parts, Project, Properties, RunSpec, Size, Stages, Summary, Tags,
+      Title, Types, Version = Value
 }
 
 trait DxObjectDescribe {
@@ -343,9 +343,11 @@ object DxObject {
       case Field.Folder         => "folder"
       case Field.Id             => "id"
       case Field.IgnoreReuse    => "ignoreReuse"
+      case Field.Inputs         => "inputs"
       case Field.InputSpec      => "inputSpec"
       case Field.Modified       => "modified"
       case Field.Name           => "name"
+      case Field.Outputs        => "outputs"
       case Field.OutputSpec     => "outputSpec"
       case Field.ParentJob      => "parentJob"
       case Field.Parts          => "parts"

@@ -64,11 +64,13 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   def buildWorkflowInput(input: GraphInputNode): CVar = {
     input match {
       case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
-        CVar(id.workflowLocalName, womType, None)
+        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
+        CVar(id.workflowLocalName, womType, None, attr)
 
       case OptionalGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
         assert(womType.isInstanceOf[WomOptionalType])
-        CVar(id.workflowLocalName, womType, None)
+        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
+        CVar(id.workflowLocalName, womType, None, attr)
 
       case OptionalGraphInputNodeWithDefault(id,
                                              womType,
@@ -81,7 +83,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                                                |""".stripMargin)
           case Some(value) => value
         }
-        CVar(id.workflowLocalName, womType, Some(defaultValue))
+        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
+        CVar(id.workflowLocalName, womType, Some(defaultValue), attr)
 
       case ScatterVariableNode(id, expression: ExpressionNode, womType) =>
         CVar(id.workflowLocalName, womType, None)

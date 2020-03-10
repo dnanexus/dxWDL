@@ -21,7 +21,9 @@ case class DxWorkflowDescribe(project: String,
                               summary: Option[String] = None,
                               description: Option[String] = None,
                               tags: Option[Vector[String]] = None,
-                              types: Option[Vector[String]] = None)
+                              types: Option[Vector[String]] = None,
+                              inputs: Option[Vector[IOParameter]] = None,
+                              outputs: Option[Vector[IOParameter]] = None)
     extends DxObjectDescribe
 
 case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutable {
@@ -109,15 +111,26 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     val title = descFields.get("title").flatMap(unwrapString)
     val types = descFields.get("types").flatMap(unwrapStringArray)
     val tags = descFields.get("tags").flatMap(unwrapStringArray)
-
-    desc.copy(details = details,
-              properties = props,
-              stages = stages,
-              description = description,
-              summary = summary,
-              title = title,
-              types = types,
-              tags = tags)
+    val inputs = descFields.get("inputs") match {
+      case Some(JsArray(inps)) => Some(DxObject.parseIOSpec(inps.toVector))
+      case _                   => None
+    }
+    val outputs = descFields.get("outputs") match {
+      case Some(JsArray(outs)) => Some(DxObject.parseIOSpec(outs.toVector))
+      case _                   => None
+    }
+    desc.copy(
+        details = details,
+        properties = props,
+        stages = stages,
+        description = description,
+        summary = summary,
+        title = title,
+        types = types,
+        tags = tags,
+        inputs = inputs,
+        outputs = outputs
+    )
   }
 
   def unwrapString(jsValue: JsValue): Option[String] = {
