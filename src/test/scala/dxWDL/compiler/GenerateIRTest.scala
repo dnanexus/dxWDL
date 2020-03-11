@@ -1468,18 +1468,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case (c: IR.CVar, _) => c
       case other           => throw new Exception("Invalid workflow input ${other}")
     }
-    input_cvars shouldBe Vector(
-        IR.CVar(
-            "y",
-            WomIntegerType,
-            Some(WomInteger(5)),
-            Some(
-                Vector(
-                    IR.IOAttrLabel("Right-hand side"),
-                    IR.IOAttrDefault(IR.DefaultReprInteger(5))
-                )
-            )
-        ),
+    input_cvars.sortWith(_.name < _.name) shouldBe Vector(
         IR.CVar(
             "x",
             WomIntegerType,
@@ -1488,6 +1477,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 Vector(
                     IR.IOAttrLabel("Left-hand side"),
                     IR.IOAttrDefault(IR.DefaultReprInteger(3))
+                )
+            )
+        ),
+        IR.CVar(
+            "y",
+            WomIntegerType,
+            Some(WomInteger(5)),
+            Some(
+                Vector(
+                    IR.IOAttrLabel("Right-hand side"),
+                    IR.IOAttrDefault(IR.DefaultReprInteger(5))
                 )
             )
         )
