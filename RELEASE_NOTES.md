@@ -1,5 +1,7 @@
 # Release Notes
 
+## 1.46 12-Mar-2020
+
 ## 1.45 3-Mar-2020
 - Upgrade packages to:
   - dxfuse v20
