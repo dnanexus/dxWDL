@@ -32,9 +32,7 @@ object DxdaManifest {
     val destinationFile: java.io.File = destination.toFile()
     val name = destinationFile.getName()
     val folder = destinationFile.getParent().toString
-    JsObject("id" -> JsString(desc.id),
-             "name" -> JsString(name),
-             "folder" -> JsString(folder))
+    JsObject("id" -> JsString(desc.id), "name" -> JsString(name), "folder" -> JsString(folder))
   }
 
   // The project is just a hint. The files don't have to actually reside in it.

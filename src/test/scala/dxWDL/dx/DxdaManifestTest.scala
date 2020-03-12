@@ -50,9 +50,9 @@ class DxdaManifestTest extends FlatSpec with Matchers {
 
         // add the target folder and name
         val fields = Map(
-          "id" -> JsString(dxFile.getId),
-          "name" -> JsString(local.toFile().getName()),
-          "folder" -> JsString(local.toFile().getParent())
+            "id" -> JsString(dxFile.getId),
+            "name" -> JsString(local.toFile().getName()),
+            "folder" -> JsString(local.toFile().getParent())
         )
         JsObject(fields)
     }.toVector

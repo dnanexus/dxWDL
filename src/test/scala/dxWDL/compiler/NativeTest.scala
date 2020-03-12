@@ -305,7 +305,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
     val dxObj = DxPath.resolveDxPath(
-      s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum")
+        s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
+    )
     dxObj shouldBe a[DxApplet]
     val applet = dxObj.asInstanceOf[DxApplet]
 
@@ -331,7 +332,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     tasks.keys shouldBe (Set("native_sum"))
   }
-
 
   it should "be able to include pattern information in inputSpec" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
@@ -944,6 +944,28 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     desc.tags shouldBe Some(Vector("foo", "bar", "dxWDL"))
     desc.title shouldBe Some("Workflow with metadata")
     desc.types shouldBe Some(Vector("calculator"))
+  }
+
+  it should "be able to include information from workflow parameter meta" in {
+    val path = pathFromBasename("compiler", "wf_param_meta.wdl")
+
+    val wfId = Main.compile(
+        path.toString :: cFlags
+    ) match {
+      case SuccessfulTermination(x) => x
+      case other                    => throw new Exception(s"Unexpected result ${other}")
+    }
+
+    val dxWorkflow = DxWorkflow.getInstance(wfId)
+    val desc = dxWorkflow.describe(Set(Field.Inputs))
+    val (x, y) = desc.inputs match {
+      case Some(s) => (s(0), s(1))
+      case other   => throw new Exception(s"Unexpected result ${other}")
+    }
+    x.label shouldBe Some("Left-hand side")
+    x.default shouldBe Some(IOParameterDefaultNumber(3))
+    y.label shouldBe Some("Right-hand side")
+    y.default shouldBe Some(IOParameterDefaultNumber(5))
   }
 
   it should "deep nesting" taggedAs (NativeTestXX) in {

@@ -161,6 +161,9 @@ object IR {
                                    tag: Option[Vector[String]])
       extends PatternsRepr
 
+  // TODO: we can probably get rid of some of the repr types and just leave them as
+  // MetaValueElements
+
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
     * or, for file parameters, an annotated value (a hash with optional 'name' key and required
