@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.46 12-Mar-2020
+- Recognize DNAnexus-specific keys in task and workflow metadata
+- Recognize workflow parameter metadata
+- Optionally load task and workflow descriptions from README files
+
 ## 1.45 3-Mar-2020
 - Upgrade packages to:
   - dxfuse v20
