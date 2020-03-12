@@ -4,6 +4,7 @@
 - Recognize DNAnexus-specific keys in task and workflow metadata
 - Recognize workflow parameter metadata
 - Optionally load task and workflow descriptions from README files
+- Updated dx-download-agent that reduces memory consumption. This is noticible on small instances with a limited amount of memory.
 
 ## 1.45 3-Mar-2020
 - Upgrade packages to:
