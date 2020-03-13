@@ -1149,6 +1149,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
     )
   }
 
+  it should "ignore dx_instance_type when evaluating runtime hints" in {
+    val path = pathFromBasename("compiler", "instance_type_test.wdl")
+    val retval = Main.compile(
+        path.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("sanity")
+    }
+  }
+
   it should "handle streaming files" in {
     val path = pathFromBasename("compiler", "streaming_files.wdl")
     val retval = Main.compile(

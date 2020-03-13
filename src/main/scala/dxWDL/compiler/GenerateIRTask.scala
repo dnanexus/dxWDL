@@ -191,7 +191,10 @@ case class GenerateIRTask(verbose: Verbose,
   }
 
   private def unwrapRuntimeHints(hints: Map[String, WomExpression]): Vector[IR.RuntimeHint] = {
+    val hintKeys = Set(IR.HINT_ACCESS, IR.HINT_IGNORE_REUSE, IR.HINT_RESTART, IR.HINT_TIMEOUT)
+
     hints
+      .filterKeys(hintKeys)
       .mapValues(evalWomExpression)
       .flatMap {
         case (IR.HINT_ACCESS, WomObject(values, _)) =>
