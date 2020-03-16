@@ -357,7 +357,7 @@ case class Native(dxWDLrtId: Option[String],
             |set -e
             |i=0
             |while [[ $$i -le 5 ]]; do
-            |   docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} -p $${creds}
+            |   echo $${creds}} | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
             |   rc=$$?
             |   if [[ $$rc == 0 ]]; then
             |      break
