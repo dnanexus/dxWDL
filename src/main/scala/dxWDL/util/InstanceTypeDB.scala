@@ -212,10 +212,15 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     }
   }
 
-  // A fast but cheap instance type.
+  // A fast but cheap instance type. Used to run WDL expression
+  // processing, launch jobs, etc.
   //
   def defaultInstanceType: String = {
-    val iType = calcMinimalInstanceType(instances.toSet)
+    // exclude nano instances, they aren't strong enough.
+    val goodEnough = instances.filter { iType =>
+      !iType.name.contains("nano")
+    }
+    val iType = calcMinimalInstanceType(goodEnough.toSet)
     iType.name
   }
 

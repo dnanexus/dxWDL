@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.46.1
+- Do not use AWS nano instances for auxiliarly WDL jobs. They are not strong enough for the task.
+
 ## 1.46 12-Mar-2020
 - Recognize DNAnexus-specific keys in task and workflow metadata
 - Recognize workflow parameter metadata
