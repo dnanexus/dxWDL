@@ -218,7 +218,9 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
   def defaultInstanceType: String = {
     // exclude nano instances, they aren't strong enough.
     val goodEnough = instances.filter { iType =>
-      !iType.name.contains("nano")
+      !iType.name.contains("test") &&
+      iType.memoryMB >= 3 * 1024 &&
+      iType.cpu >= 2
     }
     val iType = calcMinimalInstanceType(goodEnough.toSet)
     iType.name

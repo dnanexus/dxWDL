@@ -1,6 +1,9 @@
 # Release Notes
 
-## 1.46.1
+## 1.46.2 18-Mar-2020
+- Do not use any of the test instances, or any instance with less than 2 CPUs and 3GiB or RAM for auxiliarly WDL jobs.
+
+## 1.46.1 17-Mar-2020
 - Do not use AWS nano instances for auxiliarly WDL jobs. They are not strong enough for the task.
 
 ## 1.46 12-Mar-2020
