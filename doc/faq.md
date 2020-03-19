@@ -1,6 +1,6 @@
 > Q: Do you know if it is possible to use AWS ECR directly in conjunction with DNAnexus as a way to host docker images? It would be good to skip the step of saving the images and uploading them.
 
-A: We currently only support DockerHub and dx:// URLs for docker images. I have notified our developers about this feature suggestion. The more users requesting a feature, it will get higher priority on our development roadmap so we thank you for your feedback.
+A: For private registry that needs credentials, you may find the [extras option](https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#private-registries) helpful.
 
 > Q: How does dxWDL work when trying to rerun jobs with exactly the same input parameters? Does it rerun everything, or just pieces that are different?
 
@@ -28,4 +28,4 @@ A: The intermediate output files can be moved to a specified folder by using the
 
 > Q: What does dxFUSE do if you try to randomly access parts of files that are streamed? As far as I know, you can do this with the regular FUSE package.
 
-A: dxFUSE random access performance is good enough if you are accessing a small part of a file. Otherwise you are better of downloading the file to the local storage insstead of streaming. dxFUSE support mounting Dx containers to access its contents.
+A: dxFUSE random access performance is good enough if you are accessing a small part of a file. Otherwise you are better off downloading the file to the local storage instead of streaming. dxFUSE supports mounting Dx containers to access its contents.
