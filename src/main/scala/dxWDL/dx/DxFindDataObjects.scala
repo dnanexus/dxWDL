@@ -91,6 +91,11 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
                          inputSpec,
                          outputSpec)
       case _: DxFile =>
+        val archivalState = jsv.asJsObject.fields.get("archivalState") match {
+          case None => throw new Exception("'archivalState' field is missing")
+          case Some(JsString(x)) => DxArchivalState.fromString(x)
+          case Some(other) => throw new Exception(s"malformed archivalState field ${other}")
+        }
         DxFileDescribe(
             dxProject.id,
             dxobj.id,
@@ -99,7 +104,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
             created,
             modified,
             size.get,
-            DxArchivalState.fromString(jsv.asJsObject.fields("archivedState")),
+            archivalState,
             Some(properties),
             details,
             None

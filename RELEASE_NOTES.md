@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.46.3 27-Mar-2020
+- fixed bug when describing a live (non-archived) hidden file.
+- Uprade dxfuse to v0.21
+
 ## 1.46.2 18-Mar-2020
 - Do not use any of the test instances, or any instance with less than 2 CPUs and 3GiB or RAM for auxiliarly WDL jobs.
 
