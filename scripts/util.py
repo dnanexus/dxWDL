@@ -19,7 +19,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
 dxda_version = "20200312015155_748dd49"
-dxfuse_version = "v0.21"
+dxfuse_version = "v0.22.1"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -101,12 +101,6 @@ def make_asset_file(version_id, top_dir):
 def _sbt_assembly(top_dir, version_id):
     os.chdir(os.path.abspath(top_dir))
 
-    # Make sure the directory path exists
-    if not os.path.exists("applet_resources"):
-        os.mkdir("applet_resources")
-    if not os.path.exists("applet_resources/resources"):
-        os.mkdir("applet_resources/resources")
-
     jar_path = dxWDL_jar_path(top_dir)
     if os.path.exists(jar_path):
         os.remove(jar_path)
@@ -120,10 +114,6 @@ def _sbt_assembly(top_dir, version_id):
 # sub-directory.
 def _download_dxda_into_resources(top_dir):
     os.chdir(os.path.join(top_dir, "applet_resources"))
-
-    # make sure the resources directory exists
-    if not os.path.exists("resources/usr/bin"):
-        os.makedirs("resources/usr/bin")
 
     # download dxda release, and place it in the resources directory
     trg_dxda_tar = "resources/dx-download-agent-linux.tar"
@@ -153,20 +143,14 @@ def _download_dxda_into_resources(top_dir):
 
 
 def _add_dxfuse_to_resources(top_dir):
-    # make sure the resources directory exists
-    os.chdir(os.path.join(top_dir, "applet_resources"))
-    if not os.path.exists("resources/usr/bin"):
-        os.makedirs("resources/usr/bin")
+    p = os.path.join(top_dir, "applet_resources/resources/usr/bin/dxfuse")
+    if not os.path.exists(p):
         subprocess.check_call([
             "wget",
             "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
             "-O",
-            os.path.join("resources/usr/bin/dxfuse") ])
-#    dxfuse_src="/go/bin/dxfuse"
-#    if not os.path.exists(dxfuse_src):
-#        raise Exception("dxfuse executable not found {}".format(dxfuse_src))
-#    shutil.copy(dxfuse_src, "resources/usr/bin/dxfuse")
-    os.chmod("resources/usr/bin/dxfuse", 0o775)
+            p])
+    os.chmod(p, 0o775)
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -240,6 +224,10 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
+    # make sure the resources directory exists
+    if not os.path.exists(os.path.join(top_dir, "applet_resources/resources/usr/bin")):
+        os.makedirs(os.path.join(top_dir, "applet_resources/resources/usr/bin"))
+
     asset = find_asset(project, folder)
     if asset is None:
         # get a copy of the dxfuse executable

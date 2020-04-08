@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.46.4 8-Apr-2020
+- Limit scatters to 500 elements. Running more than that risks causing platform problems.
+- Uprade dxfuse to v0.22.1
+
 ## 1.46.3 27-Mar-2020
 - fixed bug when describing a live (non-archived) hidden file.
 - Uprade dxfuse to v0.21

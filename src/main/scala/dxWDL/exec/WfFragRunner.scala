@@ -632,6 +632,16 @@ case class WfFragRunner(wf: WorkflowDefinition,
       case x: WomArray => x.value
       case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
+
+    // Limit the number of elements in the collection. Each one spawns a job; this strains the platform
+    // at large numbers.
+    if (collection.size > Utils.SCATTER_LIMIT) {
+      throw new AppInternalException(
+          s"""|The scatter iterates over ${collection.size} elements which
+              |exeedes the maximum (${Utils.SCATTER_LIMIT})""".stripMargin
+            .replaceAll("\n", " ")
+      )
+    }
     (svNode, collection)
   }
 
