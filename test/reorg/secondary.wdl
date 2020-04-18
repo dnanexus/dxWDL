@@ -15,6 +15,21 @@ task secondary {
   }
 }
 
+task secondary_two {
+    input {
+        File input_file
+    }
+
+    command <<<
+      echo "hi" >> ~{input_file}
+      mv ~{input_file} out_2.txt
+    >>>
+
+    output {
+        File output_file = "out_2.txt"
+    }
+}
+
 
 workflow secondary_wf  {
   input {
@@ -25,7 +40,13 @@ workflow secondary_wf  {
     input: output_file_name = output_file_name
   }
 
+  call secondary_two {
+    input: input_file = secondary.output_file
+
+  }
+
   output {
     File output_file = secondary.output_file
+    File output_file_secondary = secondary_two.output_file
   }
 }
