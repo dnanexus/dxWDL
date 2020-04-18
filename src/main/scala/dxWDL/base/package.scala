@@ -36,7 +36,9 @@ case class Verbose(on: Boolean, quiet: Boolean, keywords: Set[String]) {
 // Tree printer types for the execTree option
 sealed trait TreePrinter
 case object JsonTreePrinter extends TreePrinter
+case class JsonTreeWriter(jsonOutFile: String) extends TreePrinter
 case object PrettyTreePrinter extends TreePrinter
+
 
 // Packing of all compiler flags in an easy to digest
 // format
