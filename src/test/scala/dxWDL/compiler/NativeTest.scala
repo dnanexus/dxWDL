@@ -58,7 +58,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
-
   override def beforeAll(): Unit = {
     // build the directory with the native applets
     Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/${unitTestsPath}/applets/", quiet = true)
@@ -81,12 +80,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         case _: Throwable =>
       }
     }
-  }
-
-  private def generateTempFilePath(): String = {
-    val json_output = File.createTempFile("execTree-", ".json")
-    json_output.deleteOnExit()
-    json_output.toString
   }
 
   private def getAppletId(path: String): String = {
@@ -140,39 +133,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  // single task to json file
-  it should "Native compile a single WDL task to JSON file" taggedAs (NativeTestXX) in {
-
-    val tmpFilePath = generateTempFilePath()
-    val path = pathFromBasename("compiler", "add.wdl")
-
-    val expectMsg = TREE_JSON_OUTPUT_MSG.format(tmpFilePath)
-    val retval = Main.compile(
-        path.toString :: "--execTree" :: tmpFilePath :: cFlags
-    )
-    retval shouldBe a[Main.SuccessfulTerminationTree]
-
-    inside(retval) {
-      case Main.SuccessfulTerminationTree(pretty) =>
-        pretty match {
-          case Left(msg) => {
-            msg shouldBe (expectMsg)
-          }
-          case Right(treeJs) => false // should not be the pretty string version
-        }
-    }
-
-    val treeJs: JsValue = Utils.readFileContent(Paths.get(tmpFilePath)).parseJson
-
-    treeJs.asJsObject.getFields("name", "kind") match {
-      case Seq(JsString(name), JsString(kind)) =>
-        name shouldBe ("add")
-        kind shouldBe ("Task")
-      case other =>
-        throw new Exception(s"tree representation is wrong ${treeJs}")
-    }
-  }
-
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
@@ -194,38 +154,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             }
           }
         }
-    }
-  }
-
-  // linear workflow to json
-  it should "Native compile a linear WDL workflow without expressions to JSON file" taggedAs (NativeTestXX) in {
-
-    val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val tmpFilePath = generateTempFilePath()
-    val expectMsg = TREE_JSON_OUTPUT_MSG.format(tmpFilePath)
-
-    val retval = Main.compile(path.toString :: "--execTree" :: tmpFilePath :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationTree]
-
-    inside(retval) {
-      case Main.SuccessfulTerminationTree(pretty) =>
-        pretty match {
-          case Left(msg) => {
-            msg shouldBe (expectMsg)
-          }
-          case Right(treeJs) => false // should not be the pretty string version
-        }
-    }
-
-    val treeJs: JsValue = Utils.readFileContent(Paths.get(tmpFilePath)).parseJson
-
-    treeJs.asJsObject.getFields("name", "kind", "stages") match {
-      case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-        name shouldBe ("wf_linear_no_expr")
-        kind shouldBe ("workflow")
-        stages.size shouldBe (3)
-      case other =>
-        throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
 

@@ -321,12 +321,11 @@ object Main extends App {
 
   private def parseExecTree(execTreeTypeAsString: String): TreePrinter =
     execTreeTypeAsString.toLowerCase match {
-      case jsonFile if jsonFile.endsWith(".json") => JsonTreeWriter(execTreeTypeAsString)
-      case "json"                                 => JsonTreePrinter
-      case "pretty"                               => PrettyTreePrinter
+      case "json"   => JsonTreePrinter
+      case "pretty" => PrettyTreePrinter
       case _ =>
         throw new Exception(
-            s"--execTree must be json, pretty or a path ending with *.json found $execTreeTypeAsString"
+            s"--execTree must be either json or pretty, found $execTreeTypeAsString"
         )
     }
 

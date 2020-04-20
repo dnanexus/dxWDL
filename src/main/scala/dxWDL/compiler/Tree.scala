@@ -3,15 +3,8 @@
 package dxWDL.compiler
 
 import spray.json._
-import DefaultJsonProtocol._
 import Native.ExecRecord
 import IR._
-import java.io.{BufferedWriter, FileWriter}
-
-// make it consistent in tests.
-object TREE_JSON_OUTPUT_MSG {
-  def format(jsonFile: String): String = { "Execution tree written to: %s".format(jsonFile) }
-}
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -26,17 +19,6 @@ case class Tree(execDict: Map[String, ExecRecord]) {
       case AppletKindWorkflowOutputReorg     => "Output Reorg"
       case AppletKindWorkflowCustomReorg(id) => s"Custom reorg ${id}"
     }
-  }
-
-  def toJsonFile(primary: Native.ExecRecord, jsonFile: String): String = {
-
-    val treeJson = apply(primary)
-    val writer = new BufferedWriter(new FileWriter(jsonFile))
-    writer.write(treeJson.toJson.prettyPrint)
-    writer.close()
-    // was considering making this a constant
-    TREE_JSON_OUTPUT_MSG.format(jsonFile)
-
   }
 
   def apply(primary: Native.ExecRecord): JsValue = {
