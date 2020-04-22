@@ -971,6 +971,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           case ("delayWorkspaceDestruction", JsBoolean(value)) => Unit // ignore
           case ("link_inc", JsObject(fields))                  => Unit // ignore
           case ("link_mul", JsObject(fields))                  => Unit // ignore
+          case ("execTree", JsString(value))                   => Unit // ignore
           case other                                           => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")
