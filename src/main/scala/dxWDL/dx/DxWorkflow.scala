@@ -172,6 +172,47 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
         throw new Exception(s"malformed json response ${other}")
     }
   }
+
+  def setDetails(jsValue: JsValue): Unit = {
+    DXAPI.workflowSetDetails(
+      id,
+      DxUtils.jsonNodeOfJsValue(jsValue),
+      classOf[JsonNode],
+      DxUtils.dxEnv
+    )
+  }
+
+  def updateDetails(jsObject: JsObject): Unit = {
+    val projSpec = DxObject.maybeSpecifyProject(project)
+
+    val field = Set(Field.Details)
+
+    val request = JsObject(
+      projSpec
+        + ("fields" -> DxObject.requestFields(field))
+        + ("defaultFields" -> JsBoolean(false))
+    )
+
+    val response = DXAPI.workflowDescribe(id,
+      DxUtils.jsonNodeOfJsValue(request),
+      classOf[JsonNode],
+      DxUtils.dxEnv)
+
+    val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
+    val descFields: Map[String, JsValue] = descJs.asJsObject.fields
+    val details: JsValue = descFields.get("details") match {
+      case None => jsObject
+
+      case Some(JsObject(x)) => {
+        JsObject(
+          JsObject(x).fields ++ jsObject.fields
+        )
+      }
+      case _ => throw new Exception(
+        "Unable to update Details of an workflow. Expects JSON Object or None")
+    }
+    setDetails(details)
+  }
 }
 
 object DxWorkflow {
