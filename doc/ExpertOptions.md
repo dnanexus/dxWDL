@@ -35,6 +35,7 @@ Compilation can be controled with several parameters.
 | locked   | Create a locked-down workflow |
 | reorg    | Move workflow intermediate results into a separate subdirectory |
 | verbose  | Print detailed progress information |
+| leaveWorkflowsOpen | Keep compiled workflow in `open` state |
 
 The `-inputs` option allows specifying a Cromwell JSON
 [format](https://software.broadinstitute.org/wdl/documentation/inputs.php)
