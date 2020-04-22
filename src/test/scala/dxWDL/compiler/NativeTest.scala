@@ -60,8 +60,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "/reorg_tests")
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-    Utils.execCommand(s"dx mkdir -p ${TEST_PROJECT}:/${unitTestsPath}/applets/", quiet = true)
 
+    dxTestProject.newFolder(s"/${unitTestsPath}/applets/", parents = true)
     // building necessary applets before starting the tests
     val native_applets = Vector("native_concat",
                                 "native_diff",
@@ -154,6 +154,46 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             }
           }
         }
+    }
+  }
+
+  // linear workflow
+  it should "Native compile a linear WDL workflow wtih execTree in details" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
+    val retval = Main.compile(path.toString :: cFlags)
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wf: DxWorkflow = retval match {
+      case Main.SuccessfulTermination(id) => DxWorkflow(id, Some(dxTestProject))
+      case _                              => throw new Exception("sanity")
+    }
+
+    val description = wf.describe(Set(Field.Details))
+    val details: Map[String, JsValue] = description.details match {
+      case Some(x: JsValue) => x.asJsObject.fields
+      case _                => throw new Exception("Expect details to be set for workflow")
+    }
+    // the compiled wf should at least have womSourceCode and execTree
+    details.contains("womSourceCode") shouldBe true
+    details.contains("execTree") shouldBe true
+
+    val execString = details("execTree") match {
+      case JsString(x) => x
+      case other =>
+        throw new Exception(
+            s"Expected execTree to be JsString got ${other} instead."
+        )
+    }
+
+    val treeJs = Utils.base64DecodeAndGunzip(execString).parseJson
+
+    treeJs.asJsObject.getFields("name", "kind", "stages") match {
+      case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+        name shouldBe ("wf_linear_no_expr")
+        kind shouldBe ("workflow")
+        stages.size shouldBe (3)
+      case other =>
+        throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
 

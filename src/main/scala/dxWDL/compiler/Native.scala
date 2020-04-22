@@ -8,16 +8,14 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
-
 import wom.callable.MetaValueElement
 import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
-
 import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
-import IR.{CVar, SArg}
+import IR.{CVar, Callable, SArg}
 import java.io.EOFException
 
 // The end result of the compiler
@@ -1374,7 +1372,8 @@ case class Native(dxWDLrtId: Option[String],
   // Create a request for a workflow encapsulated in single API call.
   // Prepare the list of stages, and the checksum in advance.
   private def workflowNewReq(wf: IR.Workflow,
-                             execDict: Map[String, Native.ExecRecord]): (String, JsValue) = {
+                             execDict: Map[String, Native.ExecRecord]
+  ): (String, JsValue) = {
     Utils.trace(verbose2, s"build workflow ${wf.name}")
 
     val stagesReq =
@@ -1489,14 +1488,13 @@ case class Native(dxWDLrtId: Option[String],
     (digest, reqWithEverything)
   }
 
-  private def buildWorkflow(req: JsValue): DxWorkflow = {
+  // keep primary callable workflow open
+  private def buildWorkflow(
+      req: JsValue
+  ): DxWorkflow = {
     val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val id = apiParseReplyID(rep)
     val dxwf = DxWorkflow.getInstance(id)
-
-    // Close the workflow
-    if (!leaveWorkflowsOpen)
-      dxwf.close()
     dxwf
   }
 
@@ -1505,12 +1503,23 @@ case class Native(dxWDLrtId: Option[String],
   // - Calculate the workflow checksum from the intermediate representation
   // - Do not rebuild the workflow if it has a correct checksum
   private def buildWorkflowIfNeeded(wf: IR.Workflow,
-                                    execDict: Map[String, Native.ExecRecord]): DxWorkflow = {
+                                    execDict: Map[String, Native.ExecRecord],
+                                    isPrimaryCallable: Boolean = false): DxWorkflow = {
     val (digest, wfNewReq) = workflowNewReq(wf, execDict)
+
     val buildRequired = isBuildRequired(wf.name, digest)
     buildRequired match {
       case None =>
         val dxWorkflow = buildWorkflow(wfNewReq)
+
+        if (isPrimaryCallable) {
+          val primaryRecord = Native.ExecRecord(wf, dxWorkflow, Vector.empty)
+          addExecTreeToDetails(primaryRecord, execDict + (wf.name -> primaryRecord))
+        }
+
+        if (!leaveWorkflowsOpen)
+          dxWorkflow.close()
+
         dxObjDir.insert(wf.name, dxWorkflow, digest)
         dxWorkflow
       case Some(dxObj) =>
@@ -1518,6 +1527,19 @@ case class Native(dxWDLrtId: Option[String],
         // we need to find a way to get the dependencies.
         dxObj.asInstanceOf[DxWorkflow]
     }
+  }
+
+  private def addExecTreeToDetails(
+      primary: Native.ExecRecord,
+      execDict: Map[String, Native.ExecRecord]
+  ): Unit = {
+
+    val jsonTreeString = Tree(execDict).apply(primary).toString
+    val wfId = primary.dxExec.getId
+    val compressedTree = Utils.gzipAndBase64Encode(jsonTreeString)
+    val dxWf = DxWorkflow(wfId, Some(dxProject))
+    val details = Map("execTree" -> JsString(compressedTree))
+    dxWf.updateDetails(JsObject(details))
   }
 
   def apply(bundle: IR.Bundle): Native.Results = {
@@ -1545,17 +1567,32 @@ case class Native(dxWDLrtId: Option[String],
             }
             accu + (apl.name -> execRecord)
           case wf: IR.Workflow =>
-            val dxwfl = buildWorkflowIfNeeded(wf, accu)
-            accu + (wf.name -> Native.ExecRecord(wf, dxwfl, Vector.empty))
+            if (wf == bundle.primaryCallable.get) {
+              accu
+            } else {
+              val dxwfl = buildWorkflowIfNeeded(wf, accu)
+              accu + (wf.name -> Native.ExecRecord(wf, dxwfl, Vector.empty))
+            }
         }
     }
 
-    // build the toplevel workflow, if it is defined
-    val primary: Option[Native.ExecRecord] = bundle.primaryCallable.flatMap { callable =>
-      execDict.get(callable.name)
-    }
-
+    val (execDictWithPrimary: Map[String, Native.ExecRecord], primary: Option[Native.ExecRecord]) =
+      bundle.primaryCallable match {
+        case Some(x) =>
+          x match {
+            case wf: IR.Workflow => {
+              val dxwfl = buildWorkflowIfNeeded(wf, execDict, true)
+              val primaryRecord = Native.ExecRecord(wf, dxwfl, Vector.empty)
+              // Add exec tree to details of workflow.
+              val updatedDict = execDict + (wf.name -> primaryRecord)
+              (updatedDict, Some(primaryRecord))
+            }
+            case callable: Callable => (execDict, execDict.get(callable.name))
+            case _                  => (execDict, None)
+          }
+        case None => (execDict, None)
+      }
     Utils.traceLevelDec()
-    Native.Results(primary, execDict)
+    Native.Results(primary, execDictWithPrimary)
   }
 }
