@@ -8,10 +8,12 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
+
 import wom.callable.MetaValueElement
 import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
+
 import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
@@ -1490,13 +1492,14 @@ case class Native(dxWDLrtId: Option[String],
     (digest, reqWithEverything)
   }
 
-  // keep primary callable workflow open
-  private def buildWorkflow(
-      req: JsValue
-  ): DxWorkflow = {
+  private def buildWorkflow(req: JsValue): DxWorkflow = {
     val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val id = apiParseReplyID(rep)
     val dxwf = DxWorkflow.getInstance(id)
+
+    // Close the workflow
+    if (!leaveWorkflowsOpen)
+      dxwf.close()
     dxwf
   }
 
@@ -1507,15 +1510,10 @@ case class Native(dxWDLrtId: Option[String],
   private def buildWorkflowIfNeeded(wf: IR.Workflow,
                                     execDict: Map[String, Native.ExecRecord]): DxWorkflow = {
     val (digest, wfNewReq) = workflowNewReq(wf, execDict)
-
     val buildRequired = isBuildRequired(wf.name, digest)
     buildRequired match {
       case None =>
         val dxWorkflow = buildWorkflow(wfNewReq)
-
-        if (!leaveWorkflowsOpen)
-          dxWorkflow.close()
-
         dxObjDir.insert(wf.name, dxWorkflow, digest)
         dxWorkflow
       case Some(dxObj) =>
@@ -1564,6 +1562,7 @@ case class Native(dxWDLrtId: Option[String],
         }
     }
 
+    // build the toplevel workflow, if it is defined
     val primary: Option[Native.ExecRecord] = bundle.primaryCallable.flatMap { callable =>
       execDict.get(callable.name)
     }
