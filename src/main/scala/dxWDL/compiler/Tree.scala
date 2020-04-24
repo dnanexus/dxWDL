@@ -21,6 +21,17 @@ case class Tree(execDict: Map[String, ExecRecord]) {
     }
   }
 
+  def fromWorkflowIR(wf: IR.Workflow): JsValue = {
+    val vec = wf.stages.map {
+      case stage =>
+        val calleeRecord = execDict(stage.calleeName)
+        val jsv: JsValue = apply(calleeRecord)
+        JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
+    }.toVector
+    val stages = JsArray(vec)
+    JsObject("name" -> JsString(wf.name), "kind" -> JsString("workflow"), "stages" -> stages)
+  }
+
   def apply(primary: Native.ExecRecord): JsValue = {
     primary.callable match {
       case apl: IR.Applet if primary.links.size == 0 =>
