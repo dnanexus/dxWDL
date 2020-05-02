@@ -58,6 +58,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "-quiet",
                                       "--folder",
                                       "/reorg_tests")
+
   override def beforeAll(): Unit = {
     // build the directory with the native applets
 
@@ -195,6 +196,32 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
+  }
+
+  //able to describe linear workflow
+  it should "Get execTree from a compiled workflow" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
+    val retval = Main.compile(path.toString :: cFlags)
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wf: DxWorkflow = retval match {
+      case Main.SuccessfulTermination(id) => DxWorkflow(id, Some(dxTestProject))
+      case _                              => throw new Exception("sanity")
+    }
+
+    val execTreeString = Tree.formDXworkflow(wf)
+
+    val treeJs = execTreeString.parseJson
+    treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
+      case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
+        id shouldBe (wf.id)
+        name shouldBe ("wf_linear_no_expr")
+        kind shouldBe ("workflow")
+        stages.size shouldBe (3)
+      case other =>
+        throw new Exception(s"tree representation is wrong ${treeJs}")
+    }
+
   }
 
   it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {

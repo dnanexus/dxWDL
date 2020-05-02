@@ -3,8 +3,11 @@
 package dxWDL.compiler
 
 import spray.json._
+
 import Native.ExecRecord
 import IR._
+import dxWDL.base.Utils
+import dxWDL.dx.{DxWorkflow, Field}
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -174,4 +177,28 @@ case class Tree(execDict: Map[String, ExecRecord]) {
       }
     }
   }
+}
+
+object Tree {
+
+  val CANNOT_FIND_EXEC_TREE = "Unable to find exec tree from"
+
+  def formDXworkflow(workflow: DxWorkflow): String = {
+    val execTree = workflow.describe(Set(Field.Details)).details match {
+      case Some(x: JsValue) =>
+        x.asJsObject.fields.get("execTree") match {
+          case Some(JsString(execString)) => execString
+          case _                          => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
+        }
+      case None => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
+    }
+
+    val TreeJS = Utils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
+
+    JsObject(
+        TreeJS.fields + ("id" -> JsString(workflow.id))
+    ).toString
+
+  }
+
 }
