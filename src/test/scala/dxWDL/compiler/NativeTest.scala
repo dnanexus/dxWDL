@@ -299,12 +299,12 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  // Can't strip out the escape characters that make the strings colored
-  // TODO: add a pretty print nocolor option?
   it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
+    // remove -locked flag to create common stage
+    val nonLocked = cFlags.filterNot(x =>  x == "-locked")
     val retval = Main.compile(
-        path.toString :: "--force" :: "--execTree" :: "pretty" :: cFlags
+        path.toString :: "--force" :: "--execTree" :: "pretty" :: nonLocked
     )
     retval shouldBe a[Main.SuccessfulTerminationTree]
 
@@ -312,6 +312,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
           case Left(str) =>
+            // remove colours
             str.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
                                                   |├───App Inputs: common
                                                   |├───App Fragment: if ((username == "a"))
