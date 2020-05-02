@@ -198,7 +198,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  //able to describe linear workflow
+  //able to describe linear workflow using Tree
   it should "Get execTree from a compiled workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
@@ -221,8 +221,43 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
+  }
+  // able to describe Tree from CLI
+  it should "Get execTree from CLI" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
+    val retval = Main.compile(path.toString :: cFlags)
+    retval shouldBe a[Main.SuccessfulTermination]
+
+    val wf: DxWorkflow = retval match {
+      case Main.SuccessfulTermination(id) => DxWorkflow(id, Some(dxTestProject))
+      case _                              => throw new Exception("sanity")
+    }
+
+    val desRetval = Main.describe(Seq(wf.id))
+
+    val treeJs: JsObject = desRetval match {
+      case Main.SuccessfulTerminationTree(Left(execTreeString)) => execTreeString.parseJson.asJsObject
+      case _                              => throw new Exception("sanity")
+    }
+
+    treeJs.getFields("id", "name", "kind", "stages") match {
+      case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
+        id shouldBe (wf.id)
+        name shouldBe ("wf_linear_no_expr")
+        kind shouldBe ("workflow")
+        stages.size shouldBe (3)
+      case other =>
+        throw new Exception(s"tree representation is wrong ${treeJs}")
+    }
+
+
+
+
+
 
   }
+
+
 
   it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
