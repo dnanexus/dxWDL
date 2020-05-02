@@ -222,100 +222,84 @@ object Tree {
   val OUTPUT_REORG = "Output Reorg"
   val CUSTOM_REORG = "Custom reorg"
 
-  def tranverseTree(TreeJS: JsObject, stageDesc: Option[String] = None, indent: Int = 3, prefix: String = ""): String = {
+  val INDENT = 3
+  val LAST_ELEM = s"└${"─" * INDENT}"
+  val MID_ELEM = s"├${"─" * INDENT}"
 
-    val lastElem = s"└${"─" * indent}"
-    val midElem = s"├${"─" * indent}"
+  private def determineDisplayName(stageDesc:Option[String], name: String): String = {
+    stageDesc match {
+      case Some(name) => name
+      case None       => s"${name}"
+    }
+  }
+
+  private def generateWholePrefix(prefix: String, isLast: Boolean): String = {
+    val commonPrefix = prefix.replace("└", " ").replace("─", " ")
+    if (isLast) {
+      commonPrefix.replace("├", "│") + LAST_ELEM
+    } else {
+      commonPrefix.replace("├", " ") + MID_ELEM
+    }
+  }
+
+  private def generateTreeBlock(prefix: String, links: Vector[String], title: String, name: String): String = {
+    if (links.nonEmpty) {
+      prefix + Console.CYAN + title + name + Console.RESET + "\n" + links
+        .mkString("\n")
+    } else {
+      prefix + Console.CYAN + title + name + Console.RESET
+    }
+  }
+
+  private def processWorkflow(prefix: String, TreeJS: JsObject): String = {
+    TreeJS.getFields("name", "stages") match {
+      case Seq(JsString(wfName), JsArray(stages)) => {
+        val stageLines = stages.zipWithIndex.map {
+          case (stage, index) => {
+            val isLast = index == stages.length - 1
+            val wholePrefix = generateWholePrefix(prefix, isLast)
+            val (stageName, callee) = stage.asJsObject.getFields("stage_name", "callee") match {
+              case Seq(JsString(stageName), callee: JsObject) => (stageName, callee)
+              case x                                          => throw new Exception(s"something is wrong ${x}")
+            }
+            generateTreeFromJson(callee, Some(stageName), wholePrefix)
+          }
+        }.toVector
+        generateTreeBlock(prefix, stageLines, "Workflow: ", Console.YELLOW + wfName)
+      }
+    }
+  }
+
+  private def processApplets(prefix: String, stageDesc: Option[String], TreeJS: JsObject): String = {
+    TreeJS.getFields("name", "id", "kind", "executables") match {
+      case Seq(JsString(stageName), JsString(id), JsString(kind)) => {
+        val name = determineDisplayName(stageDesc, stageName)
+        generateTreeBlock(prefix, Vector.empty ,s"App ${kind}: ", Console.WHITE + name)
+
+      }
+      case Seq(JsString(stageName), JsString(id), JsString(kind), JsArray(executables)) => {
+        val links = executables.zipWithIndex.map {
+          case (link, index) => {
+            val isLast = index == (executables.size - 1)
+            val wholePrefix = generateWholePrefix(prefix, isLast)
+            generateTreeFromJson(link.asJsObject, None, wholePrefix)
+          }
+        }.toVector
+        val name = determineDisplayName(stageDesc, stageName)
+        generateTreeBlock(prefix, links,s"App ${kind}: ", Console.WHITE + name)
+      }
+      case _ => throw new Exception(s"Missing id, name or kind in ${TreeJS}.")
+    }
+  }
+
+  def generateTreeFromJson(TreeJS: JsObject,
+                           stageDesc: Option[String] = None,
+                           prefix: String = ""): String = {
 
     TreeJS.fields.get("kind") match {
-      case Some(JsString(KindString.NATIVE))
-        | Some(JsString(KindString.TASK))
-        | Some(JsString(KindString.FRAGMENT))
-        | Some(JsString(KindString.INPUTS))
-        | Some(JsString(KindString.REORG_OUTPUT))
-        | Some(JsString(KindString.CUSTOM_REORG))
-      => {
-        TreeJS.getFields("name", "id", "kind", "executables") match {
-
-          case Seq(JsString(aplName), JsString(id), JsString(kind)) =>  {
-            val name = stageDesc match {
-              case Some(name) => name
-              case None       => s"${aplName}"
-            }
-            prefix + Console.CYAN + s"App ${kind}: " + Console.WHITE + name + Console.RESET
-          }
-
-          case Seq(JsString(aplName), JsString(id), JsString(aplKind), JsArray(executables)) => {
-
-            val links = executables.zipWithIndex.map {
-              case (link, index) => {
-                val isLast = index == (executables.size - 1)
-                val postPrefix = if (isLast) lastElem else midElem
-                val wholePrefix = if (isLast) {
-                  prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
-                } else {
-                  prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
-                }
-                tranverseTree(link.asJsObject, None, indent, wholePrefix)
-              }
-
-            }.toVector
-
-            val name = stageDesc match {
-              case Some(name) => name
-              case None       => s"${aplName}"
-            }
-
-            if (links.nonEmpty) {
-              prefix + Console.CYAN + s"App ${aplKind}: " + Console.WHITE + name + Console.RESET + "\n" + links
-                .mkString("\n")
-            } else {
-              prefix + Console.CYAN + s"App ${aplKind}: " + Console.WHITE + name + Console.RESET
-            }
-          }
-          case _ => throw new Exception("Tree is fucked")
-        }
-      }
-
-      case Some(JsString(KindString.WORKFLOW)) => {
-        TreeJS.getFields("name", "stages") match {
-          case Seq(JsString(wfName), JsArray(stages)) => {
-            val stageLines = stages.zipWithIndex.map {
-              case (stage, index) => {
-                val isLast = index == stages.length - 1
-                val postPrefix = if (isLast) lastElem else midElem
-                val wholePrefix = if (isLast) {
-                  // This is the last node at this level, remove any ─ or └ characters fromt he
-                  // prefix thus far, then append a prefix with a └.
-                  prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
-                } else {
-                  // Not last, strop out previous characters from the prefix and add a ├.
-                  prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
-                }
-                // For Stages, the stage description field is more useful than the stage name, but it is only
-                // available on the workflow node, so pass it to the prettyPrint call that will generate the
-                // name for the stage
-
-                val (stageName, callele) = stage.asJsObject.getFields("stage_name", "callele") match {
-                  case Seq(JsString(stageName), callele: JsObject) =>
-                    (stageName, callele)
-                }
-                tranverseTree(callele, Some(stageName), indent, wholePrefix)
-              }
-            }.toVector
-
-            if (stageLines.nonEmpty) {
-              prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wfName + Console.RESET + "\n" + stageLines
-                .mkString("\n")
-            } else {
-              prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wfName + Console.RESET
-            }
-          }
-
-        }
-      }
-
-      case _    => throw new Exception("Tree is fucked.")
+      case Some(JsString(KindString.WORKFLOW)) => processWorkflow(prefix, TreeJS)
+      case Some(JsString(x)) => processApplets(prefix, stageDesc, TreeJS)
+      case _ => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
     }
   }
 }
