@@ -9,6 +9,18 @@ import IR._
 import dxWDL.base.Utils
 import dxWDL.dx.{DxWorkflow, Field}
 
+object KindString {
+  val NATIVE = "Native"
+  val TASK = "Task"
+  val FRAGMENT = "Fragment"
+  val INPUTS = "Inputs"
+  val OUTPUTS = "Outputs"
+  val REORG_OUTPUT = "Reorg outputs"
+  val OUTPUT_REORG = "Output Reorg"
+  val CUSTOM_REORG = "Custom reorg"
+  val WORKFLOW = "workflow"
+}
+
 case class Tree(execDict: Map[String, ExecRecord]) {
 
   private def kindToString(kind: AppletKind): String = {
@@ -90,7 +102,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
     * │       └───App Task: c2                              3. App              3b. pretyyPrint(IR.App, None, 3, "│       └───")
     * ├───App Fragment: scatter (i in [1, 4, 9])            1. App              1c. prettyPrint(IR.AppFrag, Some("scatter (i in [1, 4, 9])", 3, "├───")
     * │   └───App Fragment: four_levels_frag_4              2. App              2b. prettyPrint(IR.AppFrag, Some("four_levels_frag_4"), 3, "├───├───")
-    * │       └───Workflow: four_levels_block_1_0           3. Worflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
+    * │       └───Workflow: four_levels_block_1_0           3. Workflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
     * │           ├───App Fragment: if ((j == "john"))      4. App              4a. prettyPrint(IR.AppFrag, Some("if ((j == "john"))"), 3, "│           ├───")
     * │           │   └───App Task: concat                  5. App              5a. prettyPrint(IR.App, None, 3, "│           │   └───")                           The prefix that would be 'fixed', into this was "│           ├───└───"
     * │           └───App Fragment: if ((j == "clease"))    4. App              4b. prettyPrint(IR.AppFrag, Some("if ((j == "clease"))"), 3, "│           └───")
@@ -201,4 +213,109 @@ object Tree {
 
   }
 
+  val NATIVE = "Native"
+  val TASK = "Task"
+  val FRAGMENT = "Fragment"
+  val INPUTS = "Inputs"
+  val OUTPUTS = "Outputs"
+  val REORG_OUTPUT = "Reorg outputs"
+  val OUTPUT_REORG = "Output Reorg"
+  val CUSTOM_REORG = "Custom reorg"
+
+  def tranverseTree(TreeJS: JsObject, stageDesc: Option[String] = None, indent: Int = 3, prefix: String = ""): String = {
+
+    val lastElem = s"└${"─" * indent}"
+    val midElem = s"├${"─" * indent}"
+
+    TreeJS.fields.get("kind") match {
+      case Some(JsString(KindString.NATIVE))
+        | Some(JsString(KindString.TASK))
+        | Some(JsString(KindString.FRAGMENT))
+        | Some(JsString(KindString.INPUTS))
+        | Some(JsString(KindString.REORG_OUTPUT))
+        | Some(JsString(KindString.CUSTOM_REORG))
+      => {
+        TreeJS.getFields("name", "id", "kind", "executables") match {
+
+          case Seq(JsString(aplName), JsString(id), JsString(kind)) =>  {
+            val name = stageDesc match {
+              case Some(name) => name
+              case None       => s"${aplName}"
+            }
+            prefix + Console.CYAN + s"App ${kind}: " + Console.WHITE + name + Console.RESET
+          }
+
+          case Seq(JsString(aplName), JsString(id), JsString(aplKind), JsArray(executables)) => {
+
+            val links = executables.zipWithIndex.map {
+              case (link, index) => {
+                val isLast = index == (executables.size - 1)
+                val postPrefix = if (isLast) lastElem else midElem
+                val wholePrefix = if (isLast) {
+                  prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
+                } else {
+                  prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
+                }
+                tranverseTree(link.asJsObject, None, indent, wholePrefix)
+              }
+
+            }.toVector
+
+            val name = stageDesc match {
+              case Some(name) => name
+              case None       => s"${aplName}"
+            }
+
+            if (links.nonEmpty) {
+              prefix + Console.CYAN + s"App ${aplKind}: " + Console.WHITE + name + Console.RESET + "\n" + links
+                .mkString("\n")
+            } else {
+              prefix + Console.CYAN + s"App ${aplKind}: " + Console.WHITE + name + Console.RESET
+            }
+          }
+          case _ => throw new Exception("Tree is fucked")
+        }
+      }
+
+      case Some(JsString(KindString.WORKFLOW)) => {
+        TreeJS.getFields("name", "stages") match {
+          case Seq(JsString(wfName), JsArray(stages)) => {
+            val stageLines = stages.zipWithIndex.map {
+              case (stage, index) => {
+                val isLast = index == stages.length - 1
+                val postPrefix = if (isLast) lastElem else midElem
+                val wholePrefix = if (isLast) {
+                  // This is the last node at this level, remove any ─ or └ characters fromt he
+                  // prefix thus far, then append a prefix with a └.
+                  prefix.replace("├", "│").replace("└", " ").replace("─", " ") + postPrefix
+                } else {
+                  // Not last, strop out previous characters from the prefix and add a ├.
+                  prefix.replace("├", " ").replace("└", " ").replace("─", " ") + postPrefix
+                }
+                // For Stages, the stage description field is more useful than the stage name, but it is only
+                // available on the workflow node, so pass it to the prettyPrint call that will generate the
+                // name for the stage
+
+                val (stageName, callele) = stage.asJsObject.getFields("stage_name", "callele") match {
+                  case Seq(JsString(stageName), callele: JsObject) =>
+                    (stageName, callele)
+                }
+                tranverseTree(callele, Some(stageName), indent, wholePrefix)
+              }
+            }.toVector
+
+            if (stageLines.nonEmpty) {
+              prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wfName + Console.RESET + "\n" + stageLines
+                .mkString("\n")
+            } else {
+              prefix + Console.CYAN + "Workflow: " + Console.YELLOW + wfName + Console.RESET
+            }
+          }
+
+        }
+      }
+
+      case _    => throw new Exception("Tree is fucked.")
+    }
+  }
 }

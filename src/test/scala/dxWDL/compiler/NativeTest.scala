@@ -249,15 +249,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case other =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
-
-
-
-
-
-
   }
-
-
 
   it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
@@ -309,9 +301,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   // Can't strip out the escape characters that make the strings colored
   // TODO: add a pretty print nocolor option?
-  ignore should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
+  it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
-    val controlCode: (Char) => Boolean = (c: Char) => (c <= 32 || c == 127)
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "pretty" :: cFlags
     )
@@ -321,7 +312,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
           case Left(str) =>
-            str.filterNot(controlCode) shouldBe """Workflow: four_levels
+            str.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
                                                   |├───App Inputs: common
                                                   |├───App Fragment: if ((username == "a"))
                                                   |│   └───Workflow: four_levels_block_0

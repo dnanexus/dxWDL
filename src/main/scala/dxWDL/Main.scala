@@ -621,6 +621,8 @@ object Main extends App {
 
 
     val execTreeString = Tree.formDXworkflow(wf)
+
+
     SuccessfulTerminationTree(Left(execTreeString))
 
   }
