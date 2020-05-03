@@ -3,8 +3,23 @@
 package dxWDL.compiler
 
 import spray.json._
+
 import Native.ExecRecord
 import IR._
+import dxWDL.base.Utils
+import dxWDL.dx.{DxWorkflow, Field}
+
+object KindString {
+  val NATIVE = "Native"
+  val TASK = "Task"
+  val FRAGMENT = "Fragment"
+  val INPUTS = "Inputs"
+  val OUTPUTS = "Outputs"
+  val REORG_OUTPUT = "Reorg outputs"
+  val OUTPUT_REORG = "Output Reorg"
+  val CUSTOM_REORG = "Custom reorg"
+  val WORKFLOW = "workflow"
+}
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 
@@ -87,7 +102,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
     * │       └───App Task: c2                              3. App              3b. pretyyPrint(IR.App, None, 3, "│       └───")
     * ├───App Fragment: scatter (i in [1, 4, 9])            1. App              1c. prettyPrint(IR.AppFrag, Some("scatter (i in [1, 4, 9])", 3, "├───")
     * │   └───App Fragment: four_levels_frag_4              2. App              2b. prettyPrint(IR.AppFrag, Some("four_levels_frag_4"), 3, "├───├───")
-    * │       └───Workflow: four_levels_block_1_0           3. Worflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
+    * │       └───Workflow: four_levels_block_1_0           3. Workflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
     * │           ├───App Fragment: if ((j == "john"))      4. App              4a. prettyPrint(IR.AppFrag, Some("if ((j == "john"))"), 3, "│           ├───")
     * │           │   └───App Task: concat                  5. App              5a. prettyPrint(IR.App, None, 3, "│           │   └───")                           The prefix that would be 'fixed', into this was "│           ├───└───"
     * │           └───App Fragment: if ((j == "clease"))    4. App              4b. prettyPrint(IR.AppFrag, Some("if ((j == "clease"))"), 3, "│           └───")
@@ -172,6 +187,123 @@ case class Tree(execDict: Map[String, ExecRecord]) {
             prefix + Console.CYAN + s"App ${kindToString(apl.kind)}: " + Console.WHITE + name + Console.RESET
         }
       }
+    }
+  }
+}
+
+object Tree {
+
+  val CANNOT_FIND_EXEC_TREE = "Unable to find exec tree from"
+
+  def formDXworkflow(workflow: DxWorkflow): JsValue = {
+    val execTree = workflow.describe(Set(Field.Details)).details match {
+      case Some(x: JsValue) =>
+        x.asJsObject.fields.get("execTree") match {
+          case Some(JsString(execString)) => execString
+          case _                          => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
+        }
+      case None => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
+    }
+
+    val TreeJS = Utils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
+
+    JsObject(
+        TreeJS.fields + ("id" -> JsString(workflow.id))
+    )
+  }
+
+  val NATIVE = "Native"
+  val TASK = "Task"
+  val FRAGMENT = "Fragment"
+  val INPUTS = "Inputs"
+  val OUTPUTS = "Outputs"
+  val REORG_OUTPUT = "Reorg outputs"
+  val OUTPUT_REORG = "Output Reorg"
+  val CUSTOM_REORG = "Custom reorg"
+
+  val INDENT = 3
+  val LAST_ELEM = s"└${"─" * INDENT}"
+  val MID_ELEM = s"├${"─" * INDENT}"
+
+  private def determineDisplayName(stageDesc: Option[String], name: String): String = {
+    stageDesc match {
+      case Some(name) => name
+      case None       => s"${name}"
+    }
+  }
+
+  private def generateWholePrefix(prefix: String, isLast: Boolean): String = {
+    val commonPrefix = prefix.replace("└", " ").replace("─", " ")
+    if (isLast) {
+      commonPrefix.replace("├", "│") + LAST_ELEM
+    } else {
+      commonPrefix.replace("├", " ") + MID_ELEM
+    }
+  }
+
+  private def generateTreeBlock(prefix: String,
+                                links: Vector[String],
+                                title: String,
+                                name: String): String = {
+    if (links.nonEmpty) {
+      prefix + Console.CYAN + title + name + Console.RESET + "\n" + links
+        .mkString("\n")
+    } else {
+      prefix + Console.CYAN + title + name + Console.RESET
+    }
+  }
+
+  private def processWorkflow(prefix: String, TreeJS: JsObject): String = {
+    TreeJS.getFields("name", "stages") match {
+      case Seq(JsString(wfName), JsArray(stages)) => {
+        val stageLines = stages.zipWithIndex.map {
+          case (stage, index) => {
+            val isLast = index == stages.length - 1
+            val wholePrefix = generateWholePrefix(prefix, isLast)
+            val (stageName, callee) = stage.asJsObject.getFields("stage_name", "callee") match {
+              case Seq(JsString(stageName), callee: JsObject) => (stageName, callee)
+              case x                                          => throw new Exception(s"something is wrong ${x}")
+            }
+            generateTreeFromJson(callee, Some(stageName), wholePrefix)
+          }
+        }.toVector
+        generateTreeBlock(prefix, stageLines, "Workflow: ", Console.YELLOW + wfName)
+      }
+    }
+  }
+
+  private def processApplets(prefix: String,
+                             stageDesc: Option[String],
+                             TreeJS: JsObject): String = {
+    TreeJS.getFields("name", "id", "kind", "executables") match {
+      case Seq(JsString(stageName), JsString(id), JsString(kind)) => {
+        val name = determineDisplayName(stageDesc, stageName)
+        generateTreeBlock(prefix, Vector.empty, s"App ${kind}: ", Console.WHITE + name)
+
+      }
+      case Seq(JsString(stageName), JsString(id), JsString(kind), JsArray(executables)) => {
+        val links = executables.zipWithIndex.map {
+          case (link, index) => {
+            val isLast = index == (executables.size - 1)
+            val wholePrefix = generateWholePrefix(prefix, isLast)
+            generateTreeFromJson(link.asJsObject, None, wholePrefix)
+          }
+        }.toVector
+        val name = determineDisplayName(stageDesc, stageName)
+        generateTreeBlock(prefix, links, s"App ${kind}: ", Console.WHITE + name)
+      }
+      case _ => throw new Exception(s"Missing id, name or kind in ${TreeJS}.")
+    }
+  }
+
+  def generateTreeFromJson(TreeJS: JsObject,
+                           stageDesc: Option[String] = None,
+                           prefix: String = ""): String = {
+
+    TreeJS.fields.get("kind") match {
+      case Some(JsString(KindString.WORKFLOW)) => processWorkflow(prefix, TreeJS)
+      case Some(JsString(x))                   => processApplets(prefix, stageDesc, TreeJS)
+      case _                                   => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
     }
   }
 }

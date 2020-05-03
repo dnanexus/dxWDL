@@ -2,10 +2,11 @@ package dxWDL
 
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
+
 import scala.collection.mutable.HashMap
 import spray.json._
-
 import dxWDL.base._
+import dxWDL.compiler.Tree
 import dxWDL.dx._
 import dxWDL.util._
 
@@ -20,7 +21,7 @@ object Main extends App {
   type OptionsMap = Map[String, List[String]]
 
   object Actions extends Enumeration {
-    val Compile, Config, DXNI, Internal, Version = Value
+    val Compile, Config, DXNI, Internal, Version, Describe = Value
   }
   object InternalOp extends Enumeration {
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
@@ -80,25 +81,25 @@ object Main extends App {
     keywordAndOptions.map(_.reverse).reverse
   }
 
+  def normKeyword(word: String): String = {
+    // normalize a keyword, remove leading dashes
+    // letters to lowercase.
+    //
+    // "--Archive" -> "archive"
+    // "--archive-only -> "archiveonly"
+    word.replaceAll("-", "")
+  }
+
+  def checkNumberOfArguments(keyword: String, expectedNumArgs: Int, subargs: List[String]): Unit = {
+    if (expectedNumArgs != subargs.length)
+      throw new Exception(s"""|Wrong number of arguments for ${keyword}.
+                              |Expected ${expectedNumArgs}, input is
+                              |${subargs}""".stripMargin.replaceAll("\n", " "))
+  }
   // parse extra command line arguments
   def parseCmdlineOptions(arglist: List[String]): OptionsMap = {
     def keywordValueIsList = Set("inputs", "imports", "verboseKey")
-    def normKeyword(word: String): String = {
-      // normalize a keyword, remove leading dashes
-      // letters to lowercase.
-      //
-      // "--Archive" -> "archive"
-      // "--archive-only -> "archiveonly"
-      word.replaceAll("-", "")
-    }
-    def checkNumberOfArguments(keyword: String,
-                               expectedNumArgs: Int,
-                               subargs: List[String]): Unit = {
-      if (expectedNumArgs != subargs.length)
-        throw new Exception(s"""|Wrong number of arguments for ${keyword}.
-                                |Expected ${expectedNumArgs}, input is
-                                |${subargs}""".stripMargin.replaceAll("\n", " "))
-    }
+
     val cmdLineOpts = splitCmdLine(arglist)
     val options = HashMap.empty[String, List[String]]
     cmdLineOpts.foreach {
@@ -553,6 +554,74 @@ object Main extends App {
     }
   }
 
+  def parseDescribeOptions(argList: List[String]): OptionsMap = {
+
+    val describeOpts = splitCmdLine(argList)
+    val options = HashMap.empty[String, List[String]]
+
+    describeOpts.foreach {
+      case Nil => Nil
+      case keyOrg :: subargs =>
+        val keyword = normKeyword(keyOrg)
+        val (nKeyword, value) = keyword match {
+          case "pretty" =>
+            checkNumberOfArguments(keyword, 0, subargs)
+            (keyword, "")
+          case "help" =>
+            checkNumberOfArguments(keyword, 0, subargs)
+            (keyword, "")
+          case _ =>
+            throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
+
+        }
+        options.get(nKeyword) match {
+          case None =>
+            // first time
+            options(nKeyword) = List(value)
+          case Some(x) =>
+            // overwrite the previous flag value
+            options(nKeyword) = List(value)
+        }
+    }
+    options.toMap
+  }
+
+  def describe(args: Seq[String]): Termination = {
+
+    if (args.isEmpty)
+      return BadUsageTermination("Workflow ID is not provided")
+
+    // validate workflow
+    val workflowId = args.head
+    val wf =
+      try {
+        DxWorkflow.getInstance(workflowId)
+      } catch {
+        case e: Throwable =>
+          return BadUsageTermination(Utils.exceptionToString(e))
+      }
+
+    val options =
+      try {
+        parseDescribeOptions(args.tail.toList)
+      } catch {
+        case e: Throwable =>
+          return BadUsageTermination(Utils.exceptionToString((e)))
+      }
+
+    if (options contains "help")
+      return BadUsageTermination("")
+
+    val execTreeJS = Tree.formDXworkflow(wf)
+
+    if (options contains "pretty") {
+      val prettyTree = Tree.generateTreeFromJson(execTreeJS.asJsObject)
+      SuccessfulTerminationTree(Left(prettyTree))
+    } else {
+      SuccessfulTerminationTree(Right(execTreeJS))
+    }
+  }
+
   private def dxniApplets(dOpt: DxniAppletOptions): Termination = {
     try {
       compiler.DxNI.apply(dOpt.dxProject,
@@ -928,6 +997,7 @@ object Main extends App {
       case Some(x) =>
         x match {
           case Actions.Compile  => compile(args.tail)
+          case Actions.Describe => describe(args.tail)
           case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
@@ -940,6 +1010,12 @@ object Main extends App {
     s"""|java -jar dxWDL.jar <action> <parameters> [options]
         |
         |Actions:
+        |  describe <DxWorkflow ID>
+        |    Generate the execution tree as JSON for a given dnanexus workflow ID.
+        |    Workflow needs to be have been previoulsy compiled by dxWDL.
+        |    options
+        |      -pretty                Print exec tree in pretty format
+        |
         |  compile <WDL file>
         |    Compile a wdl file into a dnanexus workflow.
         |    Optionally, specify a destination path on the
