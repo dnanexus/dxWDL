@@ -195,7 +195,7 @@ object Tree {
 
   val CANNOT_FIND_EXEC_TREE = "Unable to find exec tree from"
 
-  def formDXworkflow(workflow: DxWorkflow): String = {
+  def formDXworkflow(workflow: DxWorkflow): JsValue = {
     val execTree = workflow.describe(Set(Field.Details)).details match {
       case Some(x: JsValue) =>
         x.asJsObject.fields.get("execTree") match {
@@ -209,8 +209,7 @@ object Tree {
 
     JsObject(
         TreeJS.fields + ("id" -> JsString(workflow.id))
-    ).toString
-
+    )
   }
 
   val NATIVE = "Native"
@@ -226,7 +225,7 @@ object Tree {
   val LAST_ELEM = s"└${"─" * INDENT}"
   val MID_ELEM = s"├${"─" * INDENT}"
 
-  private def determineDisplayName(stageDesc:Option[String], name: String): String = {
+  private def determineDisplayName(stageDesc: Option[String], name: String): String = {
     stageDesc match {
       case Some(name) => name
       case None       => s"${name}"
@@ -242,7 +241,10 @@ object Tree {
     }
   }
 
-  private def generateTreeBlock(prefix: String, links: Vector[String], title: String, name: String): String = {
+  private def generateTreeBlock(prefix: String,
+                                links: Vector[String],
+                                title: String,
+                                name: String): String = {
     if (links.nonEmpty) {
       prefix + Console.CYAN + title + name + Console.RESET + "\n" + links
         .mkString("\n")
@@ -270,11 +272,13 @@ object Tree {
     }
   }
 
-  private def processApplets(prefix: String, stageDesc: Option[String], TreeJS: JsObject): String = {
+  private def processApplets(prefix: String,
+                             stageDesc: Option[String],
+                             TreeJS: JsObject): String = {
     TreeJS.getFields("name", "id", "kind", "executables") match {
       case Seq(JsString(stageName), JsString(id), JsString(kind)) => {
         val name = determineDisplayName(stageDesc, stageName)
-        generateTreeBlock(prefix, Vector.empty ,s"App ${kind}: ", Console.WHITE + name)
+        generateTreeBlock(prefix, Vector.empty, s"App ${kind}: ", Console.WHITE + name)
 
       }
       case Seq(JsString(stageName), JsString(id), JsString(kind), JsArray(executables)) => {
@@ -286,7 +290,7 @@ object Tree {
           }
         }.toVector
         val name = determineDisplayName(stageDesc, stageName)
-        generateTreeBlock(prefix, links,s"App ${kind}: ", Console.WHITE + name)
+        generateTreeBlock(prefix, links, s"App ${kind}: ", Console.WHITE + name)
       }
       case _ => throw new Exception(s"Missing id, name or kind in ${TreeJS}.")
     }
@@ -298,8 +302,8 @@ object Tree {
 
     TreeJS.fields.get("kind") match {
       case Some(JsString(KindString.WORKFLOW)) => processWorkflow(prefix, TreeJS)
-      case Some(JsString(x)) => processApplets(prefix, stageDesc, TreeJS)
-      case _ => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
+      case Some(JsString(x))                   => processApplets(prefix, stageDesc, TreeJS)
+      case _                                   => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
     }
   }
 }

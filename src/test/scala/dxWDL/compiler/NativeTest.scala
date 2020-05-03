@@ -209,9 +209,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case _                              => throw new Exception("sanity")
     }
 
-    val execTreeString = Tree.formDXworkflow(wf)
-
-    val treeJs = execTreeString.parseJson
+    val treeJs = Tree.formDXworkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
         id shouldBe (wf.id)
@@ -336,6 +334,79 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                        |│           └───App Fragment: if ((j == "clease"))
                        |└───App Outputs: outputs""".stripMargin
 
+  }
+
+  it should "return a execTree in json when using describe with CLI" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    // remove -locked flag to create common stage
+    val nonLocked = cFlags.filterNot(x => x == "-locked")
+    val retval = Main.compile(
+        path.toString :: "--force" :: nonLocked
+    )
+    val wfID = retval match {
+      case Main.SuccessfulTermination(wfID) => wfID
+      case _                                => throw new Exception("Unable to compile workflow.")
+    }
+
+    val describeRet = Main.describe(Seq(wfID))
+    describeRet shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(describeRet) {
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Left(str) => false // should not produce a pretty string
+          case Right(treeJs) => {
+            treeJs.asJsObject.getFields("name", "kind", "stages", "id") match {
+              case Seq(JsString(name), JsString(kind), JsArray(stages), JsString(id)) =>
+                name shouldBe ("four_levels")
+                kind shouldBe ("workflow")
+                stages.size shouldBe (4)
+                id shouldBe wfID
+              case other =>
+                throw new Exception(s"tree representation is wrong ${treeJs}")
+            }
+          }
+        }
+    }
+  }
+
+  it should "return a execTree in PrettyTree when using describe with CLI" taggedAs (NativeTestXX) in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    // remove -locked flag to create common stage
+    val nonLocked = cFlags.filterNot(x => x == "-locked")
+    val retval = Main.compile(
+        path.toString :: "--force" :: nonLocked
+    )
+    val wfID = retval match {
+      case Main.SuccessfulTermination(wfID) => wfID
+      case _                                => throw new Exception("Unable to compile workflow.")
+    }
+
+    val describeRet = Main.describe(Seq(wfID, "-pretty"))
+    describeRet shouldBe a[Main.SuccessfulTerminationTree]
+
+    inside(describeRet) {
+      case Main.SuccessfulTerminationTree(pretty) =>
+        pretty match {
+          case Right(_)  => false
+          case Left(str) =>
+            // remove colours
+            str.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
+                                                               |├───App Inputs: common
+                                                               |├───App Fragment: if ((username == "a"))
+                                                               |│   └───Workflow: four_levels_block_0
+                                                               |│       ├───App Task: c1
+                                                               |│       └───App Task: c2
+                                                               |├───App Fragment: scatter (i in [1, 4, 9])
+                                                               |│   └───App Fragment: four_levels_frag_4
+                                                               |│       └───Workflow: four_levels_block_1_0
+                                                               |│           ├───App Fragment: if ((j == "john"))
+                                                               |│           │   └───App Task: concat
+                                                               |│           └───App Fragment: if ((j == "clease"))
+                                                               |└───App Outputs: outputs""".stripMargin
+
+        }
+    }
   }
 
   it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
