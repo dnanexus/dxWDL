@@ -1451,10 +1451,13 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     val defaultTags = Vector(JsString("dxWDL"))
+    val execTreeMap = buildWorkflowExecTree(wf, execDict)
     val (wfMeta, wfMetaDetails) = buildWorkflowMetadata(wf, defaultTags)
 
     val details = Map(
-        "details" -> JsObject(wfMetaDetails ++ womSourceCodeField ++ dxLinks ++ delayWD)
+        "details" -> JsObject(
+            wfMetaDetails ++ womSourceCodeField ++ dxLinks ++ delayWD ++ execTreeMap
+        )
     )
 
     val ignoreReuse: Map[String, JsValue] = extras match {
@@ -1518,6 +1521,15 @@ case class Native(dxWDLrtId: Option[String],
         // we need to find a way to get the dependencies.
         dxObj.asInstanceOf[DxWorkflow]
     }
+  }
+
+  private def buildWorkflowExecTree(
+      wf: IR.Workflow,
+      execDict: Map[String, Native.ExecRecord]
+  ): Map[String, JsString] = {
+    val jsonTreeString = Tree(execDict).fromWorkflowIR(wf).toString
+    val compressedTree = Utils.gzipAndBase64Encode(jsonTreeString)
+    Map("execTree" -> JsString(compressedTree))
   }
 
   def apply(bundle: IR.Bundle): Native.Results = {
