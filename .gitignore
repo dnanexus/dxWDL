@@ -20,6 +20,7 @@ dx_app_extern.wdl
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
+lib/
 
 # Draft WDL files
 test/scratch

@@ -5,15 +5,11 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 import spray.json._
-
-import wom.callable._
-import wom.executable.WomBundle
-import wom.graph.expression._
-
 import dxWDL.base._
 import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
 import dxWDL.dx._
 import dxWDL.util._
+import wdlTools.syntax.{AbstractSyntax => AST, AstTools}
 
 case class Top(cOpt: CompilerOptions) {
   val verbose = cOpt.verbose
@@ -121,23 +117,23 @@ case class Top(cOpt: CompilerOptions) {
   }
 
   // check that streaming annotations are only done for files.
-  private def validate(callable: Callable): Unit = {
+  private def validate(callable: AST.Callable): Unit = {
     callable match {
-      case wf: WorkflowDefinition =>
+      case wf: AST.Workflow =>
         if (wf.parameterMeta.size > 0)
           Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
-        val g = wf.innerGraph
-        checkDeclarations(g.inputNodes.map(_.localName).toSeq)
-        checkDeclarations(g.outputNodes.map(_.localName).toSeq)
-        val allDeclarations = g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
-        checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
+        val callInfo = AstTools.callableInfo(wf)
+        checkDeclarations(callInfo.input)
+        checkDeclarations(callInfo.output)
+        val allDeclarations : Vector[Declaration] = wf.body.collect{
+          case d : Declaration => d
+        }
+        checkDeclarations(allDeclarations.map(_.name).toSeq)
 
-      case task: CallableTaskDefinition =>
-        checkDeclarations(task.inputs.map(_.name).toSeq)
-        checkDeclarations(task.outputs.map(_.name).toSeq)
-
-      case other =>
-        throw new Exception(s"Unexpected object ${other}")
+      case task: AST.Task =>
+        val callInfo = AstTools.callableInfo(task)
+        checkDeclarations(callInfo.input.map(_.name).toSeq)
+        checkDeclarations(callInfo.output.map(_.name).toSeq)
     }
   }
 

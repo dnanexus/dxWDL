@@ -6,7 +6,7 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
-import wom.values._
+import wdlTools.eval.WdlValues._
 
 import dxWDL.dx._
 
@@ -226,21 +226,21 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
 //    cpu
 //    docker
 //
-case class WdlRuntimeAttrs(m: Map[String, WomValue])
+case class WdlRuntimeAttrs(m: Map[String, WdlValues.WV])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
     private def readWomValue(value: JsValue): WomValue = value match {
-      case JsBoolean(b)  => WomBoolean(b.booleanValue)
-      case JsNumber(nmb) => WomInteger(nmb.intValue)
-      case JsString(s)   => WomString(s)
+      case JsBoolean(b)  => WV_Boolean(b.booleanValue)
+      case JsNumber(nmb) => WV_Integer(nmb.intValue)
+      case JsString(s)   => WV_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
     private def writeWomValue(wValue: WomValue): JsValue = wValue match {
-      case WomBoolean(b) => JsBoolean(b)
-      case WomInteger(i) => JsNumber(i)
-      case WomString(s)  => JsString(s)
+      case WV_Boolean(b) => JsBoolean(b)
+      case WV_Integer(i) => JsNumber(i)
+      case WV_String(s)  => JsString(s)
       case other         => throw new Exception(s"Unsupported wom value value ${other}")
     }
 
@@ -428,11 +428,11 @@ object Extras {
         )
     }
 
-    def wdlValueFromJsValue(jsv: JsValue): WomValue = {
+    def wdlValueFromJsValue(jsv: JsValue): WdlValues.WV = {
       jsv match {
-        case JsBoolean(b)  => WomBoolean(b.booleanValue)
-        case JsNumber(nmb) => WomInteger(nmb.intValue)
-        case JsString(s)   => WomString(s)
+        case JsBoolean(b)  => WV_Boolean(b.booleanValue)
+        case JsNumber(nmb) => WV_Integer(nmb.intValue)
+        case JsString(s)   => WV_String(s)
         case other         => throw new Exception(s"Unsupported json value ${other}")
       }
     }

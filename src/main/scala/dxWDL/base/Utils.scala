@@ -12,7 +12,9 @@ import scala.concurrent._
 import spray.json._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
-import wom.types._
+
+//import wom.types._
+import wdlTools.types.WdlTypes._
 
 class PermissionDeniedException(s: String) extends Exception(s) {}
 
@@ -241,18 +243,18 @@ object Utils {
   }
 
   // types
-  def isOptional(t: WomType): Boolean = {
+  def isOptional(t: WdlTypes.WT): Boolean = {
     t match {
-      case WomOptionalType(_) => true
+      case WdlTypes.WT_Optional(_) => true
       case t                  => false
     }
   }
 
   // We need to deal with types like:
   //     Int??, Array[File]??
-  def stripOptional(t: WomType): WomType = {
+  def stripOptional(t: WdlTypes.WT): WomType = {
     t match {
-      case WomOptionalType(x) => stripOptional(x)
+      case WdlTypes.WT_Optional(x) => stripOptional(x)
       case x                  => x
     }
   }
@@ -367,4 +369,6 @@ object Utils {
     }
     "[" + concat + "]"
   }
+
+
 }
