@@ -12,6 +12,8 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 `dx login`. Download the latest compiler jar file from the
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
+## Compiling Workflow
+
 To compile a workflow:
 ```console
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
@@ -106,6 +108,26 @@ tasks by default.
 $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
 
+## Describe WDL workflow to obtain execution tree
+
+You can also describe a dnanexus workflow that was compiled by dxWDL to get a execution tree presentating the workfow.
+The execution tree will information of the executables in the workflow (applets and subworkflows). 
+By default, the execution tree is return as JSON. You can supply a `--pretty` flag to return a pretty print. 
+
+To obtain execution tree from a dxWDL compiled workflow:
+
+1. JSON - [example](./examples/four_levels.exectree.json)
+
+```bash
+java -jar dxWDL-v1.46.5.jar describe <workflow_id> 
+```
+
+2. prettyPrint - [example](./examples/four_levels.exectree.pretty.txt)
+
+```bash
+java -jar dxWDL-v1.46.5.jar describe <workflow_id> -pretty 
+```
+   
 # Extensions
 
 ## Runtime

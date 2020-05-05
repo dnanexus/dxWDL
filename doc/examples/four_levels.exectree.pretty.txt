@@ -1,0 +1,13 @@
+Workflow: four_levels
+├───App Inputs: common
+├───App Fragment: if ((username == "a"))
+│   └───Workflow: four_levels_block_0
+│       ├───App Task: c1
+│       └───App Task: c2
+├───App Fragment: scatter (i in [1, 4, 9])
+│   └───App Fragment: four_levels_frag_4
+│       └───Workflow: four_levels_block_1_0
+│           ├───App Fragment: if ((j == "john"))
+│           │   └───App Task: concat
+│           └───App Fragment: if ((j == "clease"))
+└───App Outputs: outputs
