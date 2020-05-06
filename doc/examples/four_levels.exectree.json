@@ -1,0 +1,84 @@
+{
+  "id": "workflow-FpjvY500ffP5744V1BB79XkK",
+  "kind": "workflow",
+  "name": "four_levels",
+  "stages": [{
+    "callee": {
+      "id": "applet-FpjvY100ffPG353PPj0P5g4G",
+      "kind": "Inputs",
+      "name": "four_levels_common"
+    },
+    "stage_name": "common"
+  }, {
+    "callee": {
+      "executables": [{
+        "id": "workflow-FpjvY1j0ffPJGXf96Y02v82G",
+        "kind": "workflow",
+        "name": "four_levels_block_0",
+        "stages": [{
+          "callee": {
+            "id": "applet-FpjvY0Q0ffPGzKQQPgZyV68z",
+            "kind": "Task",
+            "name": "concat"
+          },
+          "stage_name": "c1"
+        }, {
+          "callee": {
+            "id": "applet-FpjvY0Q0ffPGzKQQPgZyV68z",
+            "kind": "Task",
+            "name": "concat"
+          },
+          "stage_name": "c2"
+        }]
+      }],
+      "id": "applet-FpjvY280ffPJGXf96Y02v82K",
+      "kind": "Fragment",
+      "name": "four_levels_frag_1"
+    },
+    "stage_name": "if ((username == \"a\"))"
+  }, {
+    "callee": {
+      "executables": [{
+        "executables": [{
+          "id": "workflow-FpjvY380ffP5744V1BB79XkG",
+          "kind": "workflow",
+          "name": "four_levels_block_1_0",
+          "stages": [{
+            "callee": {
+              "executables": [{
+                "id": "applet-FpjvY0Q0ffPGzKQQPgZyV68z",
+                "kind": "Task",
+                "name": "concat"
+              }],
+              "id": "applet-FpjvY2j0ffP6kpFK8p7k8x73",
+              "kind": "Fragment",
+              "name": "four_levels_block_1_0_frag_2"
+            },
+            "stage_name": "if ((j == \"john\"))"
+          }, {
+            "callee": {
+              "id": "applet-FpjvY2j0ffP2G355JKpgZ942",
+              "kind": "Fragment",
+              "name": "four_levels_block_1_0_frag_3"
+            },
+            "stage_name": "if ((j == \"clease\"))"
+          }]
+        }],
+        "id": "applet-FpjvY3j0ffP0q0P38p97kqjV",
+        "kind": "Fragment",
+        "name": "four_levels_frag_4"
+      }],
+      "id": "applet-FpjvY400ffP69zQ3PjXFJ5p2",
+      "kind": "Fragment",
+      "name": "four_levels_frag_5"
+    },
+    "stage_name": "scatter (i in [1, 4, 9])"
+  }, {
+    "callee": {
+      "id": "applet-FpjvY400ffP2zZzQ6XgpJ1Fk",
+      "kind": "Outputs",
+      "name": "four_levels_outputs"
+    },
+    "stage_name": "outputs"
+  }]
+}
