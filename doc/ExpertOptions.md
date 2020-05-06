@@ -1,6 +1,6 @@
 The reader is assumed to understand the [Workflow Description Language (WDL)](http://www.openwdl.org/), and have some experience using the [DNAnexus](http://www.dnanexus.com) platform.
 
-*dxWDL* takes a pipeline written in WDL, and statically compiles it to an equivalent workflow on the DNAnexus platform.
+dxWDL takes a pipeline written in WDL, and statically compiles it to an equivalent workflow on the DNAnexus platform.
 
 - [Getting started](#getting-started)
 - [Extensions](#extensions)
