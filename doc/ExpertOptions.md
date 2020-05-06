@@ -110,8 +110,8 @@ $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -default
 
 ## Describe WDL workflow to obtain execution tree
 
-You can also describe a dnanexus workflow that was compiled by dxWDL to get a execution tree presentating the workfow.
-The execution tree will information of the executables in the workflow (applets and subworkflows). 
+You can describe a dnanexus workflow that was compiled by dxWDL to get an execution tree presentating the workfow.w.
+The execution tree will include information on the executables in the workflow (applets and subworkflows). 
 By default, the execution tree is return as JSON. You can supply a `--pretty` flag to return a pretty print. 
 
 To obtain execution tree from a dxWDL compiled workflow:
