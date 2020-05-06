@@ -20,6 +20,7 @@ dx_app_extern.wdl
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
+antlr*.jar
 lib/
 
 # Draft WDL files
@@ -42,3 +43,7 @@ metals.sbt
 
 # editor files
 .vscode/
+
+# antlr generated code
+src/main/java/Wdl*Lexer*
+src/main/java/Wdl*Parser*
