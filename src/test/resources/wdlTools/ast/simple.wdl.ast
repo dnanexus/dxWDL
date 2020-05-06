@@ -1,0 +1,52 @@
+Document(
+  version = "1.0",
+  elements = Vector(
+    Task(
+      name = "foo",
+      input = Some(InputSection(Vector(Declaration(s,TypeString,None), Declaration(i,TypeInt,None)))),
+      output = Some(OutputSection(Vector(Declaration(sout,TypeString,Some(ExprIdentifier(x)))))),
+      command = CommandSection(Vector(
+        ValueString("\n    echo "),
+        ExprIdentifier("x"),
+        ValueString("\n    echo "),
+        ExprMul(
+          a = ExprIdentifier("i"),
+          b = ExprIdentifier("i")
+        ),
+        ValueString("\n    echo "),
+        ExprIfThenElse(
+          cond = ValueBoolean(true),
+          tBranch = ValueString("a"),
+          fBranch = ValueString("b")
+        ),
+        ValueString("\n    ")
+      )),
+      declarations = Vector(
+        Declaration(
+          name = "x",
+          wdlType = TypeString,
+          expr = Some(ExprCompoundString(Vector(ValueString(), ExprIdentifier(s), ExprCompoundString(Vector(ValueString(.txt))))))
+        ),
+        Declaration(
+          name = "y",
+          wdlType = TypeString,
+          expr = Some(ValueString(foo))
+        ),
+        Declaration(
+          name = "z",
+          wdlType = TypeInt,
+          expr = Some(ExprAdd(ExprIdentifier(i),ExprIdentifier(i)))
+        ),
+        Declaration(
+          name = "a",
+          wdlType = TypeInt,
+          expr = Some(ExprIfThenElse(ExprGt(ExprIdentifier(i),ValueInt(1)),ValueInt(2),ValueInt(3)))
+        )
+      ),
+      meta = None,
+      parameterMeta = None,
+      runtime = Some(RuntimeSection(Vector(RuntimeKV(docker,ValueString(debian:stretch-slim)))))
+    )
+  ),
+  workflow = None
+)

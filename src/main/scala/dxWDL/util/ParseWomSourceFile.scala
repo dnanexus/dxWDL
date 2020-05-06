@@ -1,27 +1,13 @@
 package dxWDL.util
 
-import cats.data.Validated.{Invalid, Valid}
-import common.Checked
-import common.transforms.CheckedAtoB
-import common.validation.ErrorOr._
 import com.typesafe.config.ConfigFactory
-import cromwell.core.path.{DefaultPathBuilder}
-import cromwell.languages.LanguageFactory
-import cromwell.languages.util.ImportResolver._
 import java.nio.file.{Path, Paths}
-import languages.cwl.CwlV1_0LanguageFactory
-import languages.wdl.draft2.WdlDraft2LanguageFactory
-import languages.wdl.draft3.WdlDraft3LanguageFactory
-import languages.wdl.biscayne.WdlBiscayneLanguageFactory
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
-import wom.SourceFileLocation
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
-import wom.core.WorkflowSource
-import wom.executable.WomBundle
-import wom.graph.{CallNode, Graph, GraphNode}
-import wom.types._
+import wdlTools.syntax.{AbstractSyntax => AST}
+import wdlTools.util.{Util => WdlUtil}
+import wdlTools.types.{Stdlib => WdlTypeStdlib, TypeChecker => WdlTypeChecker}
 
 import dxWDL.base.{Language, Utils}
 
@@ -135,6 +121,22 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     val absPath = Paths.get(mainFile.toAbsolutePath.toString)
     val mainFileContents = Utils.readFileContent2(absPath)
+
+    // parse and type check
+    val srcDir = Paths.get(getClass.getResource("/eval/v1").getPath)
+    val opts =
+      Options(typeChecking = TypeCheckingRegime.Strict,
+              antlr4Trace = false,
+              localDirectories = imports.toVector,
+              verbosity = Verbosity.Normal)
+    val parser = ParseAll(opts)
+    val stdlib = WdlTypeStdlib(opts)
+    val checker =WdlTypeChecker(stdlib)
+    val doc : AST.Document = parser.parseDocument(WdlUtil.pathToUrl(absPath))
+    val typeCtx = checker.apply(doc)
+    Utils.ignore(typeCtx)
+
+
 
     // We need to get all the WDL sources, so we can analyze them. First, we create resolvers
     // for local and remote files.

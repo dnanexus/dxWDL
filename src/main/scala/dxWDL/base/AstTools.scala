@@ -26,7 +26,7 @@ object AstTools {
     }
   }
 
-  final case class WomBundle(primaryCallable: Option[Callable],
+  final case class WdlBundle(primaryCallable: Option[Callable],
                              allCallables: Map[String, Callable],
-                             typeAliases: Map[String, WomType])
+                             typeAliases: Map[String, WdlTypes.WT])
 }
