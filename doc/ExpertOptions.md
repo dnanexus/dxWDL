@@ -569,7 +569,8 @@ task bwa_mem {
     -R "~{actual_read_group}" \
     -k ~{min_seed_length} \
     ~{genome_index_basename}.fa \
-    ~{fastq1_gz} ~{fastq2_gz} > ~{sample_name}.bam
+    ~{fastq1_gz} ~{fastq2_gz} | \
+    samtools view -Sb > ~{sample_name}.bam
   >>>
 
   output {
