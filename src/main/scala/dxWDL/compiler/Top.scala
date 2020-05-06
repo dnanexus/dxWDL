@@ -327,10 +327,11 @@ case class Top(cOpt: CompilerOptions) {
           case Some(primary) =>
             val tree = new Tree(cResults.execDict)
             val treeRepr = execTree.get match { // Safe get because we check isDefined above
-              case PrettyTreePrinter => Left(
-                Tree.generateTreeFromJson(tree.apply(primary).asJsObject)
-              )
-              case JsonTreePrinter   => Right(tree.apply(primary)) // Convert to string
+              case PrettyTreePrinter =>
+                Left(
+                    Tree.generateTreeFromJson(tree.apply(primary).asJsObject)
+                )
+              case JsonTreePrinter => Right(tree.apply(primary)) // Convert to string
             }
             (wf.dxExec.getId, Some(treeRepr))
         }

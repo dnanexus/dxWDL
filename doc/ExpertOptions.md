@@ -1,25 +1,47 @@
-The reader is assumed to understand the
-[Workflow Description Language (WDL)](http://www.openwdl.org/), and have
-some experience using the [DNAnexus](http://www.dnanexus.com) platform.
+The reader is assumed to understand the [Workflow Description Language (WDL)](http://www.openwdl.org/), and have some experience using the [DNAnexus](http://www.dnanexus.com) platform.
 
-*dxWDL* takes a bioinformatics pipeline written in WDL, and statically
-compiles it to an equivalent workflow on the DNAnexus platform.
+*dxWDL* takes a pipeline written in WDL, and statically compiles it to an equivalent workflow on the DNAnexus platform.
+
+- [Getting started](#getting-started)
+- [Extensions](#extensions)
+  * [Runtime](#runtime)
+  * [Streaming](#streaming)
+- [Task and workflow inputs](#task-and-workflow-inputs)
+- [Task metadata](#task-metadata)
+  * [meta section](#meta-section)
+    + [Calling existing applets](#calling-existing-applets)
+    + [Calling apps](#calling-apps)
+  * [parameter_meta section](#parameter_meta-section)
+  * [Runtime hints](#runtime-hints)
+  * [Example task with DNAnexus-specific metadata and runtime](#example-task-with-dnanexus-specific-metadata-and-runtime)
+- [Setting DNAnexus-specific attributes in extras.json](#setting-dnanexus-specific-attributes-in-extrasjson)
+  * [Job reuse](#job-reuse)
+  * [Delay workspace destruction](#delay-workspace-destruction)
+- [Workflow metadata](#workflow-metadata)
+- [Handling intermediate workflow outputs](#handling-intermediate-workflow-outputs)
+  * [Use your own applet](#use-your-own-applet)
+  * [Adding config-file based reorg applet at compilation time](#adding-config-file-based-reorg-applet-at-compilation-time)
+- [Toplevel calls compiled as stages](#toplevel-calls-compiled-as-stages)
+- [Docker](#docker)
+  * [Setting a default docker image for all tasks](#setting-a-default-docker-image-for-all-tasks)
+  * [Private registries](#private-registries)
+  * [Storing a docker image as a file](#storing-a-docker-image-as-a-file)
+- [Proxy configurations](#proxy-configurations)
+- [Debugging an applet](#debugging-an-applet)
+  * [Getting WDL sources](#getting-wdl-sources)
+- [Recompilation](#recompilation)
 
 # Getting started
-Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
-Make sure you've installed the dx-toolkit CLI, and initialized it with
-`dx login`. Download the latest compiler jar file from the
-[releases](https://github.com/dnanexus/dxWDL/releases) page.
+Prerequisites: [DNAnexus platform](https://platform.dnanexus.com) account, [dx-toolkit](https://github.com/dnanexus/dx-toolkit), java 8+, python 2.7 or 3.5+.
+
+Make sure you've installed the dx-toolkit CLI, and initialized it with `dx login`. Download the latest dxWDL compiler jar file from the [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 To compile a workflow:
 ```console
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
-This compiles `foo.wdl` to platform workflow `foo` in dx's
-current project and folder. The generated workflow can then be run as
-usual using `dx run`. For example, if the workflow takes string
-argument `X`, then: ``` dx run foo -i0.X="hello world" ```
+This compiles `foo.wdl` to platform workflow `foo` in dx's current project and folder. The generated workflow can then be run as usual using `dx run`. For example, if the workflow takes string argument `X`, then: ``` dx run foo -i0.X="hello world" ```
 
 Compilation can be controled with several parameters.
 
@@ -43,6 +65,7 @@ inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
 [files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
 has input file
+
 ```
 {
   "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
@@ -52,6 +75,7 @@ has input file
 ```
 
 The command
+
 ```console
 java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs test/files_input.json
 ```
@@ -72,6 +96,7 @@ generates a `test/files_input.dx.json` file that looks like this:
 ```
 
 The workflow can then be run with the command:
+
 ```console
 $ dx run files -f test/files_input.dx.json
 ```
@@ -79,11 +104,13 @@ $ dx run files -f test/files_input.dx.json
 The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-value pairs,
 and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
 `-defaults` instead of `-inputs`
+
 ```console
 $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
 ```
 
 It can be run without parameters, for an equivalent execution.
+
 ```console
 $ dx run files
 ```
@@ -92,6 +119,7 @@ The `extras` command line option allows, for example, the Cromwell feature of se
 default runtime attributes of a task.
 
 If this is file `extraOptions.json`:
+
 ```
 {
     "default_runtime_attributes" : {
@@ -102,6 +130,7 @@ If this is file `extraOptions.json`:
 
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
+
 ```console
 $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
@@ -109,6 +138,7 @@ $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -default
 # Extensions
 
 ## Runtime
+
 A task declaration has a runtime section where memory, cpu, and disk
 space can be specified. Based on these attributes, an instance type is chosen by
 the compiler. If you wish to choose an instance type from the
@@ -132,6 +162,7 @@ runtime {
 ```
 
 ## Streaming
+
 Normally, a file used in a task is downloaded to the instance, and
 then used locally (*locallized*). If the file only needs to be
 examined once in sequential order, then this can be optimized by
@@ -389,20 +420,22 @@ There are several parameters affecting the runtime environment that can be speci
 
 These attributes can be specified in the `runtime` section of the WDL task, but their representation there is slightly different than in dxapp.json. Also note that the runtime section is different than the metadata section when it comes to attribute values - specifically, object values must be prefixed by the `object` keyword, and map values must have their keys in quotes.
 
-* `restart`: Either an integer value indiCating the number of times to automatically restart regardless of the failure reason, or an object value with the following keys:
+* `dx_restart`: Either an integer value indicating the number of times to automatically restart regardless of the failure reason, or an object value with the following keys:
   * `max`: Maximum number of restarts
   * `default`: Default number of restarts for any error type
   * `errors`: Mapping of [error types](https://documentation.dnanexus.com/developer/api/running-analyses/io-and-run-specifications#run-specification) to number of restarts
-* `timeout`: Either a string value that specifies days, hours, and/or minutes in the format "1D6H30M" or an object with at least one of the keys `days`, `hours`, `minutes`.
-* `access`: An object with any of the keys:
+* `dx_timeout`: Either a string value that specifies days, hours, and/or minutes in the format "1D6H30M" or an object with at least one of the keys `days`, `hours`, `minutes`.
+* `dx_access`: An object with any of the keys:
   * `network`: An array of domains to which the app has access, or "*" for all domains
   * `project`: The maximum level of access the applet has to the host project - a string with any DNAnexus access level
   * `allProjects`: The maximum level of access the applet has to all projects
   * `developer`: Boolean - whether the applet is a developer, i.e. can create new applets
   * `projectCreation`: Boolean - whether the applet can create new projects
-* `ignore_reuse`: Boolean - whether to allow the outputs of the applet to be reused
+* `dx_ignore_reuse`: Boolean - whether to allow the outputs of the applet to be reused
 
-## Example task with DNAnexus-specific metadata and runtime
+## Example tasks with DNAnexus-specific metadata and runtime
+
+### Example 1: grep for pattern in file
 
 ```wdl
 version 1.0
@@ -476,6 +509,128 @@ task cgrep {
 }
 ```
 
+### Example 2: alignment with BWA-MEM
+
+```wdl
+version 1.0
+
+task bwa_mem {
+  input {
+    String sample_name
+    File fastq1_gz
+    File fastq2_gz
+    File genome_index_tgz
+    Int min_seed_length = 19
+    String? read_group
+    String docker_image = "broadinstitute/baseimg"
+    Int cpu = 4
+    Int memory_gb = 8
+    Int? disk_gb
+  }
+
+  String genome_index_basename = basename(genome_index_tgz, ".tar.gz")
+  String actual_read_group = select_first([
+    read_group,
+    "@RG\\tID:${sample_name}\\tSM:${sample_name}\\tLB:${sample_name}\\tPL:ILLUMINA"
+  ])
+  Int actual_disk_gb = select_first([
+    disk_gb,
+    ceil(2 * (size(genome_index_tgz, "G") + size(fastq1_gz, "G") + size(fastq2_gz, "G")))
+  ])
+
+  command <<<
+  set -eux
+  tar xzvf ~{genome_index_tgz}
+  bwa mem \
+    -M \
+    -t ~{cpu} \
+    -R "~{actual_read_group}" \
+    -k ~{min_seed_length} \
+    ~{genome_index_basename}.fa \
+    ~{fastq1_gz} ~{fastq2_gz} > ~{sample_name}.bam
+  >>>
+
+  output {
+    File bam = "${sample_name}.bam"
+  }
+
+  runtime {
+    docker: docker_image
+    cpu: "${cpu}"
+    memory: "${memory_gb} GB"
+    disks: "local-disk ${actual_disk_gb} SSD"
+    dx_timeout: "1D"
+    dx_restart: {
+      "max": 3
+    }
+  }
+
+  meta {
+    title: "BWA-MEM"
+    description: "Align paired-end reads using BWA MEM"
+    details: {
+      upstreamLicenses: "GPLv3"
+    } 
+  }
+
+  parameter_meta {
+    sample_name: {
+      label: "Sample Name",
+      help: "Name of the sample; used to prefix output files"
+    }
+    fastq1_gz: {
+      label: "FASTQ 1 (gzipped)",
+      description: "Gzipped fastq file of first paired-end reads",
+      stream: true
+    }
+    fastq2_gz: {
+      label: "FASTQ 2 (gzipped)",
+      description: "Gzipped fastq file of second paired-end reads",
+      stream: true
+    }
+    genome_index_tgz: {
+      label: "Genome Index (.tgz)",
+      description: "Tarball of the reference genome and BWA index",
+      stream: true
+    }
+    min_seed_length: {
+      label: "Minimum Seed Length",
+      help: "Matches shorter than INT will be missed.",
+      group: "Advanced",
+      default: 19
+    }
+    read_group: {
+      label: "Read Group",
+      help: "(Optional) the read group to add to aligned reads",
+      group: "Advanced" 
+    }
+    docker_image: {
+      label: "Docker Image",
+      help: "Name of the docker image to use",
+      group: "Resources",
+      default: "broadinstitute/baseimg"
+    }
+    cpu: {
+      label: "CPUs",
+      help: "Minimum number of CPUs to use",
+      group: "Resources",
+      default: 4
+    }
+    memory_gb: {
+      label: "Memory (GB)",
+      help: "Minimum amount of memory required",
+      group: "Resources",
+      default: 8
+    }
+    disk_gb: {
+      label: "Disk Space (GB)",
+      help: "Minimum amount of disk space required (in GB); by default this is calculated from the inputs",
+      group: "Resources"
+    }
+  }
+}
+```
+
 \* Note the comma seperating the members of the objects within meta and paramter_meta
 
 # Setting DNAnexus-specific attributes in extras.json
@@ -509,8 +664,7 @@ When writing a dnanexus applet the user can specify options through the [dxapp.j
 }
 ```
 
-In order to override the defaults for specific tasks, you can add the `per_task_dx_attributes`
-section. For example
+In order to override the defaults for specific tasks, you can add the `per_task_dx_attributes` section. For example
 
 ```
 {
@@ -540,8 +694,7 @@ section. For example
 }
 ```
 
-will override the default timeout for tasks `Add` and `Inc`. It will also provide
-`UPLOAD` instead of `VIEW` project access to `Inc`.
+will override the default timeout for tasks `Add` and `Inc`. It will also provide `UPLOAD` instead of `VIEW` project access to `Inc`.
 
 You are also able add citations or licenses information using for each task at the `per_task_dx_attributes` section. For example
 
@@ -578,6 +731,7 @@ Note that `details` specified in `per_task_dx_attributes` override those that ar
 ## Job reuse
 
 By default, job results are [reused](https://documentation.dnanexus.com/user/running-apps-and-workflows/job-reuse). This is an optimization whereby when a job is run a second time, the results from the previous execution are returned, skipping job execution entirely. Sometimes, it is desirable to disable this behavior. To do so use:
+
 ```
 {
   "ignoreReuse" : true
@@ -587,13 +741,14 @@ By default, job results are [reused](https://documentation.dnanexus.com/user/run
 ## Delay workspace destruction
 
 By default, temporary workspaces hold the results of executed workflows and applets. Normally, these are garbage collected by the system. If you wish to leave them around longer for debugging purposes, please use:
+
 ```
 {
   "delayWorkspaceDestruction" : true
 }
 ```
-This will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours.
-This is a runtime flag, so you will need to run the toplevel workflow with that flag:
+
+This will be passed down through the entire workflow, sub-workflows, and tasks. Workspaces will remain intact for 72 hours. This is a runtime flag, so you will need to run the toplevel workflow with that flag:
 
 ```
 dx run YOUR_WORKFLOW --delay-workspace-destruction
@@ -639,13 +794,12 @@ it may misplace or outright delete files. The applet:
 4. should use bulk object operations, so as not to overload the API server.
 
 ## Adding config-file based reorg applet at compilation time
-In addition to using `--reorg` flag to add the reorg stage, you may also add a custom reorganization applet that takes an optional input
-by declaring a "custom-reorg" object in the JSON file used as parameter with `-extras`
+
+In addition to using `--reorg` flag to add the reorg stage, you may also add a custom reorganization applet that takes an optional input by declaring a "custom-reorg" object in the JSON file used as parameter with `-extras`
 
 The  "custom-reorg" object has two properties in extra.json:
     # app_id: reorg applet id
     # conf: auxiliary configuration
-
 
 The optional input file can be used as a configuration file for the reorganization process.
 
@@ -667,7 +821,6 @@ For example:
     "conf" : null
   }
 }
-
 
 ```
 
@@ -697,14 +850,13 @@ The config-file based reorg applet needs to have the following specs as inputs.
 }
 ```
 
-When compiling a workflow with a custom-reorg applet declared with `-extras` JSON,
-a string variable `reorg_status___` with the value of `completed` will be included in the output stage.
+When compiling a workflow with a custom-reorg applet declared with `-extras` JSON, a string variable `reorg_status___` with the value of `completed` will be included in the output stage.
 
 The `reorg_status___` is used to act as a dependency to signal that the workflow has completed.
 
-For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md)
+For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md).
 
-# Toplevel calls compiled as stages
+# Top-level calls compiled as stages
 
 If a workflow is compiled in unlocked mode, top level calls with no
 subexpressions are compiled directly to dx:workflow stages. For
@@ -713,7 +865,6 @@ example, in workflow `foo` call `add` is compiled to a dx:stage.
 will be compiled to dx:applets.
 
 ```wdl
-
 workflow foo {
     String username
     Boolean flag
@@ -771,8 +922,8 @@ as an argument. For example, if `taskAttrs.json` is this file:
 }
 ```
 
-Then adding it to the compilation command line will add the `atac-seq` docker image to all
-tasks by default.
+Then adding it to the compilation command line will add the `atac-seq` docker image to all tasks by default.
+
 ```console
 $ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
 ```
@@ -782,6 +933,7 @@ $ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults fil
 If your images are stored in a private registry, add its information
 to the extras file, so that tasks will be able to pull images from it.
 For example:
+
 ```
 {
   "docker_registry" : {
@@ -806,8 +958,7 @@ Normally, [docker](https://www.docker.com/) images are public, and
 stored in publicly available web sites. This enables reproducibility
 across different tools and environments. However, if you have a
 docker image that you wish to store on the platform,
-you can do `docker save`, followed by uploading the tar ball to platform file `file-xxxx`.
-Then, specify the docker attribute in the runtime section as
+you can do `docker save`, followed by uploading the tar ball to platform file `file-xxxx`. Then, specify the docker attribute in the runtime section as
 `dx://file-xxxx`. Paths or file ids can be used, for example:
 ```
 runtime {
@@ -841,6 +992,7 @@ $ java -jar dxWDL.jar compile ...
 the compiler will send all requests through the machine `proxy.acme.com` on port `8080`.
 
 If an a proxy with NTLM authentication is used, the following configuration is required:
+
 ```
 $ export HTTP_PROXY_METHOD=ntlm
 $ export HTTP_PROXY_DOMAIN = acme.com
