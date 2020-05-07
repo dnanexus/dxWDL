@@ -141,31 +141,6 @@ case class TypeChecker(stdlib: Stdlib) {
     }
   }
 
-  private def typeTranslate(t: Type, text: TextSource, ctx: Context): WT = {
-    t match {
-      case TypeOptional(t, _) => WT_Optional(typeTranslate(t, text, ctx))
-      case TypeArray(t, _, _) => WT_Array(typeTranslate(t, text, ctx))
-      case TypeMap(k, v, _)   => WT_Map(typeTranslate(k, text, ctx), typeTranslate(v, text, ctx))
-      case TypePair(l, r, _)  => WT_Pair(typeTranslate(l, text, ctx), typeTranslate(r, text, ctx))
-      case _: TypeString      => WT_String
-      case _: TypeFile        => WT_File
-      case _: TypeBoolean     => WT_Boolean
-      case _: TypeInt         => WT_Int
-      case _: TypeFloat       => WT_Float
-      case TypeIdentifier(id, _) =>
-        ctx.structs.get(id) match {
-          case None =>
-            throw new TypeException(s"struct ${id} has not been defined", text, ctx.docSourceUrl)
-          case Some(struct) => struct
-        }
-      case _: TypeObject => WT_Object
-      case TypeStruct(name, members, _) =>
-        WT_Struct(name, members.map {
-          case StructMember(name, t2, _) => name -> typeTranslate(t2, text, ctx)
-        }.toMap)
-    }
-  }
-
   // Figure out what the type of an expression is.
   //
   private def typeEval(expr: Expr, ctx: Context): WT = {
@@ -462,7 +437,7 @@ case class TypeChecker(stdlib: Stdlib) {
   //   Int x = 5
   //   Int x = 7 + y
   private def applyDecl(decl: Declaration, ctx: Context): (String, WT) = {
-    val lhsType: WT = typeTranslate(decl.wdlType, decl.text, ctx)
+    val lhsType: WT = typeFromAst(decl.wdlType, decl.text, ctx)
     (lhsType, decl.expr) match {
       // Int x
       case (_, None) =>
@@ -512,24 +487,24 @@ case class TypeChecker(stdlib: Stdlib) {
         decls.map {
           case Declaration(name, wdlType, Some(_), text) =>
             // input has a default value, caller may omit it.
-            val t = typeTranslate(wdlType, text, ctx)
+            val t = typeFromAst(wdlType, text, ctx)
             name -> (t, true)
 
           case Declaration(name, TypeOptional(wdlType, _), _, text) =>
             // input is optional, caller can omit it.
-            val t = typeTranslate(wdlType, text, ctx)
+            val t = typeFromAst(wdlType, text, ctx)
             name -> (WT_Optional(t), true)
 
           case Declaration(name, wdlType, _, text) =>
             // input is compulsory
-            val t = typeTranslate(wdlType, text, ctx)
+            val t = typeFromAst(wdlType, text, ctx)
             name -> (t, false)
         }.toMap
     }
     val outputType: Map[String, WT] = outputSection match {
       case None => Map.empty
       case Some(OutputSection(decls, _)) =>
-        decls.map(decl => decl.name -> typeTranslate(decl.wdlType, decl.text, ctx)).toMap
+        decls.map(decl => decl.name -> typeFromAst(decl.wdlType, decl.text, ctx)).toMap
     }
     (inputType, outputType)
   }
@@ -880,7 +855,7 @@ case class TypeChecker(stdlib: Stdlib) {
 
         case (accu: Context, struct: TypeStruct) =>
           // Add the struct to the context
-          val t = typeTranslate(struct, struct.text, accu)
+          val t = typeFromAst(struct, struct.text, accu)
           val t2 = t.asInstanceOf[WT_Struct]
           accu.bind(t2, struct.text)
 

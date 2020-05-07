@@ -51,7 +51,7 @@ assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 libraryDependencies ++= Seq(
     // antlr4 lexer + parser
-    "org.antlr" % "antlr4" % antlr4Version,
+    "org.antlr" % "antlr4" % "4.8",
 
     "io.spray" %% "spray-json" % "1.3.5",
     "com.typesafe" % "config" % "1.3.3",

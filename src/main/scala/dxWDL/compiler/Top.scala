@@ -137,58 +137,6 @@ case class Top(cOpt: CompilerOptions) {
     }
   }
 
-  // Check the uniqueness of tasks, Workflows, and Types
-  // merge everything into one bundle.
-  private def mergeIntoOneBundle(mainBundle: WomBundle,
-                                 subBundles: Vector[WomBundle]): WomBundle = {
-    var allCallables = mainBundle.allCallables
-    var allTypeAliases = mainBundle.typeAliases
-
-    subBundles.foreach { subBund =>
-      subBund.allCallables.foreach {
-        case (key, callable) =>
-          allCallables.get(key) match {
-            case None =>
-              allCallables = allCallables + (key -> callable)
-
-            // The comparision is done with "toString", because otherwise two
-            // identical definitions are somehow, through the magic of Scala,
-            // unequal.
-            case Some(existing) if (existing.toString != callable.toString) =>
-              Utils.error(s"""|${key} appears with two different callable definitions
-                              |1)
-                              |${callable}
-                              |
-                              |2)
-                              |${existing}
-                              |""".stripMargin)
-              throw new Exception(s"${key} appears twice, with two different definitions")
-            case _ => ()
-          }
-      }
-      subBund.typeAliases.foreach {
-        case (key, definition) =>
-          allTypeAliases.get(key) match {
-            case None =>
-              allTypeAliases = allTypeAliases + (key -> definition)
-            case Some(existing) if (existing != definition) =>
-              Utils.error(s"""|${key} appears twice, with two different definitions
-                              |1)
-                              |${definition}
-                              |
-                              |2)
-                              |${existing}
-                              |""".stripMargin)
-              throw new Exception(s"${key} type alias appears twice")
-            case _ => ()
-          }
-      }
-    }
-
-    // Merge all the bundles together
-    WomBundle(mainBundle.primaryCallable, allCallables, allTypeAliases, Set.empty)
-  }
-
   // Scan the JSON inputs files for dx:files, and batch describe them. This
   // reduces the number of API calls.
   private def bulkFileDescribe(
@@ -216,11 +164,8 @@ case class Top(cOpt: CompilerOptions) {
   }
 
   private def womToIR(source: Path): IR.Bundle = {
-    val (language, womBundle, allSources, adjunctFiles, subBundles) =
+    val (language, everythingBundle, allSources, adjunctFiles) =
       ParseWomSourceFile(verbose.on).apply(source, cOpt.importDirs)
-
-    // Check that each workflow/task appears just one
-    val everythingBundle: WomBundle = mergeIntoOneBundle(womBundle, subBundles)
 
     // validate
     everythingBundle.allCallables.foreach { case (_, c) => validate(c) }

@@ -48,7 +48,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
 import scala.util.matching.Regex
 import spray.json._
-import wom.types._
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
 import dxWDL.dx._
