@@ -4,14 +4,17 @@ import java.net.URL
 import java.nio.file.Path
 
 import wdlTools.syntax.AbstractSyntax.Document
+import wdlTools.syntax.Antlr4Util.ParseTreeListenerFactory
 import wdlTools.util.{Options, SourceCode, Util}
 
 import scala.collection.mutable
 
-case class Parsers(opts: Options = Options()) {
+case class Parsers(opts: Options = Options(),
+                   listenerFactories: Vector[ParseTreeListenerFactory] = Vector.empty) {
   private lazy val parsers: Map[WdlVersion, WdlParser] = Map(
-      WdlVersion.Draft_2 -> draft_2.ParseAll(opts),
-      WdlVersion.V1 -> v1.ParseAll(opts)
+      WdlVersion.Draft_2 -> draft_2.ParseAll(opts, listenerFactories),
+      WdlVersion.V1 -> v1.ParseAll(opts, listenerFactories),
+      WdlVersion.V2 -> v2.ParseAll(opts, listenerFactories)
   )
 
   def getParser(url: URL): WdlParser = {
@@ -19,17 +22,19 @@ case class Parsers(opts: Options = Options()) {
   }
 
   def getParser(sourceCode: SourceCode): WdlParser = {
-    WdlVersion.All.foreach { ver =>
-      val parser = parsers(ver)
-      if (parser.canParse(sourceCode)) {
-        return parser
-      }
+    parsers.values.collectFirst {
+      case parser if parser.canParse(sourceCode) => parser
+    } match {
+      case Some(parser) => parser
+      case _            => throw new Exception(s"No parser is able to parse document ${sourceCode.url}")
     }
-    throw new Exception(s"No parser is able to parse document ${sourceCode.url}")
   }
 
   def getParser(wdlVersion: WdlVersion): WdlParser = {
-    parsers(wdlVersion)
+    parsers.get(wdlVersion) match {
+      case Some(parser) => parser
+      case _            => throw new Exception(s"No parser defined for WdlVersion ${wdlVersion}")
+    }
   }
 
   def parseDocument(path: Path): Document = {

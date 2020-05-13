@@ -5,83 +5,79 @@ import java.net.URL
 import WdlTypes._
 import wdlTools.util.Options
 //import wdlTools.util.Verbosity._
-import wdlTools.syntax.{AbstractSyntax, TextSource}
-import wdlTools.types.{Util => TUtil}
+import wdlTools.syntax.TextSource
 
 case class Stdlib(conf: Options) {
-  private val tUtil = TUtil(conf)
+  private val unify = Unification(conf)
 
-  private val stdlibV1_0: Vector[WT_StdlibFunc] = Vector(
-      WT_Function0("stdout", WT_File),
-      WT_Function0("stderr", WT_File),
-      WT_Function1("read_lines", WT_File, WT_Array(WT_String)),
-      WT_Function1("read_tsv", WT_File, WT_Array(WT_Array(WT_String))),
-      WT_Function1("read_map", WT_File, WT_Map(WT_String, WT_String)),
-      WT_Function1("read_object", WT_File, WT_Object),
-      WT_Function1("read_objects", WT_File, WT_Array(WT_Object)),
-      WT_Function1("read_json", WT_File, WT_Any),
-      WT_Function1("read_int", WT_File, WT_Int),
-      WT_Function1("read_string", WT_File, WT_String),
-      WT_Function1("read_float", WT_File, WT_Float),
-      WT_Function1("read_boolean", WT_File, WT_Boolean),
-      WT_Function1("write_lines", WT_Array(WT_String), WT_File),
-      WT_Function1("write_tsv", WT_Array(WT_Array(WT_String)), WT_File),
-      WT_Function1("write_map", WT_Map(WT_String, WT_String), WT_File),
-      WT_Function1("write_object", WT_Object, WT_File),
-      WT_Function1("write_objects", WT_Array(WT_Object), WT_File),
-      WT_Function1("write_json", WT_Any, WT_File),
+  private val stdlibV1_0: Vector[T_StdlibFunc] = Vector(
+      T_Function0("stdout", T_File),
+      T_Function0("stderr", T_File),
+      T_Function1("read_lines", T_File, T_Array(T_String)),
+      T_Function1("read_tsv", T_File, T_Array(T_Array(T_String))),
+      T_Function1("read_map", T_File, T_Map(T_String, T_String)),
+      T_Function1("read_object", T_File, T_Object),
+      T_Function1("read_objects", T_File, T_Array(T_Object)),
+      T_Function1("read_json", T_File, T_Any),
+      T_Function1("read_int", T_File, T_Int),
+      T_Function1("read_string", T_File, T_String),
+      T_Function1("read_float", T_File, T_Float),
+      T_Function1("read_boolean", T_File, T_Boolean),
+      T_Function1("write_lines", T_Array(T_String), T_File),
+      T_Function1("write_tsv", T_Array(T_Array(T_String)), T_File),
+      T_Function1("write_map", T_Map(T_String, T_String), T_File),
+      T_Function1("write_object", T_Object, T_File),
+      T_Function1("write_objects", T_Array(T_Object), T_File),
+      T_Function1("write_json", T_Any, T_File),
       // Size can take several kinds of arguments.
-      WT_Function1("size", WT_File, WT_Float),
-      WT_Function1("size", WT_Optional(WT_File), WT_Float),
-      WT_Function1("size", WT_Array(WT_File), WT_Float),
-      WT_Function1("size", WT_Array(WT_Optional(WT_File)), WT_Float),
+      T_Function1("size", T_File, T_Float),
+      T_Function1("size", T_Optional(T_File), T_Float),
+      T_Function1("size", T_Array(T_File), T_Float),
+      T_Function1("size", T_Array(T_Optional(T_File)), T_Float),
       // Size takes an optional units parameter (KB, KiB, MB, GiB, ...)
-      WT_Function2("size", WT_File, WT_String, WT_Float),
-      WT_Function2("size", WT_Optional(WT_File), WT_String, WT_Float),
-      WT_Function2("size", WT_Array(WT_File), WT_String, WT_Float),
-      WT_Function2("size", WT_Array(WT_Optional(WT_File)), WT_String, WT_Float),
-      WT_Function3("sub", WT_String, WT_String, WT_String, WT_String),
-      WT_Function1("range", WT_Int, WT_Array(WT_Int)),
+      T_Function2("size", T_File, T_String, T_Float),
+      T_Function2("size", T_Optional(T_File), T_String, T_Float),
+      T_Function2("size", T_Array(T_File), T_String, T_Float),
+      T_Function2("size", T_Array(T_Optional(T_File)), T_String, T_Float),
+      T_Function3("sub", T_String, T_String, T_String, T_String),
+      T_Function1("range", T_Int, T_Array(T_Int)),
       // Array[Array[X]] transpose(Array[Array[X]])
-      WT_Function1("transpose", WT_Array(WT_Array(WT_Var(0))), WT_Array(WT_Array(WT_Var(0)))),
+      T_Function1("transpose", T_Array(T_Array(T_Var(0))), T_Array(T_Array(T_Var(0)))),
       // Array[Pair(X,Y)] zip(Array[X], Array[Y])
-      WT_Function2("zip",
-                   WT_Array(WT_Var(0)),
-                   WT_Array(WT_Var(1)),
-                   WT_Array(WT_Pair(WT_Var(0), WT_Var(1)))),
+      T_Function2("zip", T_Array(T_Var(0)), T_Array(T_Var(1)), T_Array(T_Pair(T_Var(0), T_Var(1)))),
       // Array[Pair(X,Y)] cross(Array[X], Array[Y])
-      WT_Function2("cross",
-                   WT_Array(WT_Var(0)),
-                   WT_Array(WT_Var(1)),
-                   WT_Array(WT_Pair(WT_Var(0), WT_Var(1)))),
+      T_Function2("cross",
+                  T_Array(T_Var(0)),
+                  T_Array(T_Var(1)),
+                  T_Array(T_Pair(T_Var(0), T_Var(1)))),
       // Integer length(Array[X])
-      WT_Function1("length", WT_Array(WT_Var(0)), WT_Int),
+      T_Function1("length", T_Array(T_Var(0)), T_Int),
       // Array[X] flatten(Array[Array[X]])
-      WT_Function1("flatten", WT_Array(WT_Array(WT_Var(0))), WT_Array(WT_Var(0))),
-      WT_Function2("prefix", WT_String, WT_Array(WT_Var(0)), WT_Array(WT_String)),
-      WT_Function1("select_first", WT_Array(WT_Optional(WT_Var(0))), WT_Var(0)),
-      WT_Function1("select_all", WT_Array(WT_Optional(WT_Var(0))), WT_Array(WT_Var(0))),
-      WT_Function1("defined", WT_Optional(WT_Var(0)), WT_Boolean),
+      T_Function1("flatten", T_Array(T_Array(T_Var(0))), T_Array(T_Var(0))),
+      T_Function2("prefix", T_String, T_Array(T_Var(0)), T_Array(T_String)),
+      T_Function1("select_first", T_Array(T_Optional(T_Var(0))), T_Var(0)),
+      T_Function1("select_all", T_Array(T_Optional(T_Var(0))), T_Array(T_Var(0))),
+      T_Function1("defined", T_Optional(T_Var(0)), T_Boolean),
       // simple functions again
       // basename has two variants
-      WT_Function1("basename", WT_String, WT_String),
-      WT_Function2("basename", WT_String, WT_String, WT_String),
-      WT_Function1("floor", WT_Float, WT_Int),
-      WT_Function1("ceil", WT_Float, WT_Int),
-      WT_Function1("round", WT_Float, WT_Int),
+      T_Function1("basename", T_String, T_String),
+      T_Function2("basename", T_String, T_String, T_String),
+      T_Function1("floor", T_Float, T_Int),
+      T_Function1("ceil", T_Float, T_Int),
+      T_Function1("round", T_Float, T_Int),
       // not mentioned in the specification
-      WT_Function1("glob", WT_String, WT_Array(WT_File))
+      T_Function1("glob", T_String, T_Array(T_File))
   )
 
   // build a mapping from a function name to all of its prototypes.
   // Some functions are overloaded, so they may have several.
-  private val funcProtoMap: Map[String, Vector[WT_StdlibFunc]] = {
-    stdlibV1_0.foldLeft(Map.empty[String, Vector[WT_StdlibFunc]]) {
-      case (accu, funcDesc: WT_StdlibFunc) =>
+  private val funcProtoMap: Map[String, Vector[T_StdlibFunc]] = {
+    stdlibV1_0.foldLeft(Map.empty[String, Vector[T_StdlibFunc]]) {
+      case (accu, funcDesc: T_StdlibFunc) =>
         accu.get(funcDesc.name) match {
           case None =>
             accu + (funcDesc.name -> Vector(funcDesc))
-          case Some(protoVec: Vector[WT_StdlibFunc]) =>
+          case Some(protoVec: Vector[T_StdlibFunc]) =>
             accu + (funcDesc.name -> (protoVec :+ funcDesc))
         }
     }
@@ -89,20 +85,20 @@ case class Stdlib(conf: Options) {
 
   // evaluate the output type of a function. This may require calculation because
   // some functions are polymorphic in their inputs.
-  private def evalOnePrototype(funcDesc: WT_StdlibFunc,
-                               inputTypes: Vector[WT],
+  private def evalOnePrototype(funcDesc: T_StdlibFunc,
+                               inputTypes: Vector[T],
                                text: TextSource,
-                               docSourceUrl: Option[URL]): Option[WT] = {
+                               docSourceUrl: Option[URL]): Option[T] = {
     val args = funcDesc match {
-      case WT_Function0(_, _) if inputTypes.isEmpty => Vector.empty
-      case WT_Function1(_, arg1, _)                 => Vector(arg1)
-      case WT_Function2(_, arg1, arg2, _)           => Vector(arg1, arg2)
-      case WT_Function3(_, arg1, arg2, arg3, _)     => Vector(arg1, arg2, arg3)
-      case _                                        => throw new TypeException(s"${funcDesc.name} is not a function", text, docSourceUrl)
+      case T_Function0(_, _) if inputTypes.isEmpty => Vector.empty
+      case T_Function1(_, arg1, _)                 => Vector(arg1)
+      case T_Function2(_, arg1, arg2, _)           => Vector(arg1, arg2)
+      case T_Function3(_, arg1, arg2, arg3, _)     => Vector(arg1, arg2, arg3)
+      case _                                       => throw new TypeException(s"${funcDesc.name} is not a function", text, docSourceUrl)
     }
     try {
-      val (_, ctx) = tUtil.unifyFunctionArguments(args, inputTypes, Map.empty)
-      val t = tUtil.substitute(funcDesc.output, ctx, text)
+      val (_, ctx) = unify.unifyFunctionArguments(args, inputTypes, Map.empty)
+      val t = unify.substitute(funcDesc.output, ctx, text)
       Some(t)
     } catch {
       case _: TypeUnificationException =>
@@ -111,13 +107,13 @@ case class Stdlib(conf: Options) {
   }
 
   def apply(funcName: String,
-            inputTypes: Vector[WT],
-            expr: AbstractSyntax.Expr,
-            docSourceUrl: Option[URL] = None): WT = {
+            inputTypes: Vector[T],
+            text: TextSource,
+            docSourceUrl: Option[URL] = None): T = {
     val candidates = funcProtoMap.get(funcName) match {
       case None =>
         throw new TypeException(s"No function named ${funcName} in the standard library",
-                                expr.text,
+                                text,
                                 docSourceUrl)
       case Some(protoVec) =>
         protoVec
@@ -125,30 +121,30 @@ case class Stdlib(conf: Options) {
 
     // The function may be overloaded, taking several types of inputs. Try to
     // match all of them against the input.
-    val allCandidatePrototypes: Vector[Option[WT]] = candidates.map {
-      evalOnePrototype(_, inputTypes, expr.text, docSourceUrl)
+    val allCandidatePrototypes: Vector[Option[T]] = candidates.map {
+      evalOnePrototype(_, inputTypes, text, docSourceUrl)
     }
-    val result: Vector[WT] = allCandidatePrototypes.flatten
+    val result: Vector[T] = allCandidatePrototypes.flatten
     result.size match {
       case 0 =>
-        val inputsStr = inputTypes.map(tUtil.toString).mkString("\n")
-        val candidatesStr = candidates.map(tUtil.toString(_)).mkString("\n")
+        val inputsStr = inputTypes.map(Util.typeToString).mkString("\n")
+        val candidatesStr = candidates.map(Util.typeToString(_)).mkString("\n")
         throw new TypeException(s"""|Invoking stdlib function ${funcName} with badly typed arguments
                                     |${candidatesStr}
                                     |inputs: ${inputsStr}
-                                    |""".stripMargin, expr.text, docSourceUrl)
+                                    |""".stripMargin, text, docSourceUrl)
       //Util.warning(e.getMessage, conf.verbosity)
       case 1 =>
         result.head
       case n =>
         // Match more than one prototype. If they all have the same output type, then it doesn't matter
         // though.
-        val possibleOutputTypes: Set[WT] = result.toSet
+        val possibleOutputTypes: Set[T] = result.toSet
         if (possibleOutputTypes.size > 1)
           throw new TypeException(s"""|Call to ${funcName} matches ${n} prototypes with different
                                       |output types (${possibleOutputTypes})""".stripMargin
                                     .replaceAll("\n", " "),
-                                  expr.text,
+                                  text,
                                   docSourceUrl)
         possibleOutputTypes.toVector.head
     }

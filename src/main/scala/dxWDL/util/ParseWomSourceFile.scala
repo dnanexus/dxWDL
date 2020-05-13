@@ -13,7 +13,8 @@ import wdlTools.util.{
 import wdlTools.types.{
   Context => WdlTypeContext,
   Stdlib => WdlTypeStdlib,
-  TypeChecker => WdlTypeChecker,
+  TypeInfer,
+  TypedAbstractSyntax => TAT,
   WdlTypes}
 import dxWDL.base.{Language, Utils}
 
@@ -136,7 +137,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
               verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
     val parsers = Parsers(opts)
     val stdlib = WdlTypeStdlib(opts)
-    val checker = WdlTypeChecker(stdlib)
+    val typeInfer = TypeInfer(stdlib)
     val mainDoc : AST.Document = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
     val ctxTypes = checker.apply(mainDoc)
 

@@ -35,7 +35,6 @@ object ConcreteSyntax {
   // expressions
   sealed trait Expr extends Element
   case class ExprString(value: String, text: TextSource) extends Expr
-  case class ExprFile(value: String, text: TextSource) extends Expr
   case class ExprBoolean(value: Boolean, text: TextSource) extends Expr
   case class ExprInt(value: Int, text: TextSource) extends Expr
   case class ExprFloat(value: Double, text: TextSource) extends Expr

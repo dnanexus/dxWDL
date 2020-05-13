@@ -166,7 +166,8 @@ object Util {
     * @param indentSize Number of spaces for each indent.
     * @param maxElementWidth Largest element size before wrapping.
     * @param depth Initial depth to pretty print indents.
-    * @return
+    * @return the formatted object as a String
+    * TODO: add color
     */
   def prettyFormat(a: Any,
                    indentSize: Int = 2,

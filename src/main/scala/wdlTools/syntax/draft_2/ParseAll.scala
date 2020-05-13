@@ -2,13 +2,15 @@ package wdlTools.syntax.draft_2
 
 import java.net.URL
 
+import wdlTools.syntax.Antlr4Util.ParseTreeListenerFactory
 import wdlTools.syntax.{SyntaxException, TextSource, WdlParser, WdlVersion, AbstractSyntax => AST}
 import wdlTools.syntax.draft_2.{ConcreteSyntax => CST}
 import wdlTools.util.{Options, SourceCode}
 
 // parse and follow imports
-case class ParseAll(opts: Options) extends WdlParser(opts) {
-  private val grammarFactory = WdlDraft2GrammarFactory(opts)
+case class ParseAll(opts: Options,
+                    listenerFactories: Vector[ParseTreeListenerFactory] = Vector.empty)
+    extends WdlParser(opts) {
 
   private case class Translator(docSourceUrl: Option[URL] = None) {
     def translateType(t: CST.Type): AST.Type = {
@@ -35,7 +37,6 @@ case class ParseAll(opts: Options) extends WdlParser(opts) {
       e match {
         // values
         case CST.ExprString(value, srcText)  => AST.ValueString(value, srcText)
-        case CST.ExprFile(value, srcText)    => AST.ValueFile(value, srcText)
         case CST.ExprBoolean(value, srcText) => AST.ValueBoolean(value, srcText)
         case CST.ExprInt(value, srcText)     => AST.ValueInt(value, srcText)
         case CST.ExprFloat(value, srcText)   => AST.ValueFloat(value, srcText)
@@ -198,6 +199,7 @@ case class ParseAll(opts: Options) extends WdlParser(opts) {
                 case CST.CallAlias(callName, callText) =>
                   AST.CallAlias(callName, callText)
               },
+              Vector.empty,
               inputs.map {
                 case CST.CallInputs(inputsVec, inputsText) =>
                   AST.CallInputs(inputsVec.map { inp =>
@@ -248,6 +250,7 @@ case class ParseAll(opts: Options) extends WdlParser(opts) {
           task.meta.map(translateMetaSection),
           task.parameterMeta.map(translateParameterMetaSection),
           task.runtime.map(translateRuntimeSection),
+          None,
           task.text
       )
     }
@@ -286,8 +289,8 @@ case class ParseAll(opts: Options) extends WdlParser(opts) {
   }
 
   override def parseDocument(sourceCode: SourceCode): AST.Document = {
-    val grammar = grammarFactory.createGrammar(sourceCode.toString)
-    val visitor = ParseTop(opts, grammar, sourceCode.toString, Some(sourceCode.url))
+    val grammar = WdlDraft2Grammar.newInstance(sourceCode, listenerFactories, opts)
+    val visitor = ParseTop(opts, grammar)
     val top: ConcreteSyntax.Document = visitor.parseDocument
     val errorListener = grammar.errListener
     if (errorListener.hasErrors) {
@@ -298,13 +301,13 @@ case class ParseAll(opts: Options) extends WdlParser(opts) {
   }
 
   override def parseExpr(text: String): AST.Expr = {
-    val parser = ParseTop(opts, grammarFactory.createGrammar(text), text)
+    val parser = ParseTop(opts, WdlDraft2Grammar.newInstance(text, listenerFactories, opts = opts))
     val translator = Translator()
     translator.translateExpr(parser.parseExpr)
   }
 
   override def parseType(text: String): AST.Type = {
-    val parser = ParseTop(opts, grammarFactory.createGrammar(text), text)
+    val parser = ParseTop(opts, WdlDraft2Grammar.newInstance(text, listenerFactories, opts = opts))
     val translator = Translator()
     translator.translateType(parser.parseWdlType)
   }

@@ -2,8 +2,6 @@ package wdlTools.syntax.draft_2
 
 // Parse one document. Do not follow imports.
 
-import java.net.URL
-
 import scala.jdk.CollectionConverters._
 import org.antlr.v4.runtime._
 import org.antlr.v4.runtime.tree.TerminalNode
@@ -15,21 +13,18 @@ import org.openwdl.wdl.parser.draft_2.WdlDraft2Parser.{
   Task_runtime_elementContext
 }
 import org.openwdl.wdl.parser.draft_2._
-import wdlTools.syntax.Antlr4Util.{Grammar, getTextSource}
+import wdlTools.syntax.Antlr4Util.getTextSource
 import wdlTools.syntax.draft_2.ConcreteSyntax._
 import wdlTools.syntax.{Comment, CommentMap, SyntaxException, TextSource}
 import wdlTools.util.Options
 
 import scala.collection.mutable
 
-case class ParseTop(opts: Options,
-                    grammar: Grammar[WdlDraft2Lexer, WdlDraft2Parser],
-                    docSource: String,
-                    docSourceURL: Option[URL] = None)
+case class ParseTop(opts: Options, grammar: WdlDraft2Grammar)
     extends WdlDraft2ParserBaseVisitor[Element] {
   private def getIdentifierText(identifier: TerminalNode, ctx: ParserRuleContext): String = {
     if (identifier == null) {
-      throw new SyntaxException("missing identifier", getTextSource(ctx), docSourceURL)
+      throw new SyntaxException("missing identifier", getTextSource(ctx), grammar.docSourceUrl)
     }
     identifier.getText
   }
@@ -94,7 +89,9 @@ type_base
       return TypeInt(getTextSource(ctx))
     if (ctx.FLOAT() != null)
       return TypeFloat(getTextSource(ctx))
-    throw new SyntaxException("sanity: unrecgonized type case", getTextSource(ctx), docSourceURL)
+    throw new SyntaxException("sanity: unrecgonized type case",
+                              getTextSource(ctx),
+                              grammar.docSourceUrl)
   }
 
   /*
@@ -120,7 +117,9 @@ wdl_type
     if (ctx.FloatLiteral() != null) {
       return ExprFloat(ctx.getText.toDouble, getTextSource(ctx))
     }
-    throw new SyntaxException("Not an integer nor a float", getTextSource(ctx), docSourceURL)
+    throw new SyntaxException("Not an integer nor a float",
+                              getTextSource(ctx),
+                              grammar.docSourceUrl)
   }
 
   /* expression_placeholder_option
@@ -139,7 +138,7 @@ wdl_type
       else
         throw new SyntaxException("sanity: not a string or a number",
                                   getTextSource(ctx),
-                                  docSourceURL)
+                                  grammar.docSourceUrl)
 
     if (ctx.BoolLiteral() != null) {
       val b = ctx.BoolLiteral().getText.toLowerCase() == "true"
@@ -153,7 +152,7 @@ wdl_type
     }
     throw new SyntaxException(s"Not one of three known variants of a placeholder",
                               getTextSource(ctx),
-                              docSourceURL)
+                              grammar.docSourceUrl)
   }
 
   // These are full expressions of the same kind
@@ -182,7 +181,9 @@ wdl_type
         case ExprPlaceholderPartSep(sep, _) =>
           return ExprPlaceholderSep(sep, expr, source)
         case _ =>
-          throw new SyntaxException("invalid place holder", getTextSource(ctx), docSourceURL)
+          throw new SyntaxException("invalid place holder",
+                                    getTextSource(ctx),
+                                    grammar.docSourceUrl)
       }
     }
 
@@ -196,13 +197,15 @@ wdl_type
         case (_: ExprPlaceholderPartEqual, _: ExprPlaceholderPartEqual) =>
           throw new SyntaxException("invalid boolean place holder",
                                     getTextSource(ctx),
-                                    docSourceURL)
+                                    grammar.docSourceUrl)
         case (_, _) =>
-          throw new SyntaxException("invalid place holder", getTextSource(ctx), docSourceURL)
+          throw new SyntaxException("invalid place holder",
+                                    getTextSource(ctx),
+                                    grammar.docSourceUrl)
       }
     }
 
-    throw new SyntaxException("invalid place holder", getTextSource(ctx), docSourceURL)
+    throw new SyntaxException("invalid place holder", getTextSource(ctx), grammar.docSourceUrl)
   }
 
   /* string_part
@@ -286,7 +289,7 @@ string
     }
     throw new SyntaxException("Not one of four supported variants of primitive_literal",
                               getTextSource(ctx),
-                              docSourceURL)
+                              grammar.docSourceUrl)
   }
 
   override def visitLor(ctx: WdlDraft2Parser.LorContext): Expr = {
@@ -400,7 +403,7 @@ string
     if (n % 2 != 0)
       throw new SyntaxException("the expressions in a map must come in pairs",
                                 getTextSource(ctx),
-                                docSourceURL)
+                                grammar.docSourceUrl)
 
     val m: Vector[ExprMapItem] = Vector.tabulate(n / 2) { i =>
       val key = elements(2 * i)
@@ -450,7 +453,7 @@ string
     else if (ctx.MINUS() != null)
       ExprUniraryMinus(expr, getTextSource(ctx))
     else
-      throw new SyntaxException("sanity", getTextSource(ctx), docSourceURL)
+      throw new SyntaxException("sanity", getTextSource(ctx), grammar.docSourceUrl)
   }
 
   // | expr_core LBRACK expr RBRACK #at
@@ -582,7 +585,7 @@ string
       visitChildren(ctx).asInstanceOf[Expr]
     } catch {
       case _: NullPointerException =>
-        throw new SyntaxException("bad expression", getTextSource(ctx), docSourceURL)
+        throw new SyntaxException("bad expression", getTextSource(ctx), grammar.docSourceUrl)
     }
   }
 
@@ -627,7 +630,9 @@ unbound_decls
    */
   override def visitUnbound_decls(ctx: WdlDraft2Parser.Unbound_declsContext): Declaration = {
     if (ctx.wdl_type() == null)
-      throw new SyntaxException("type missing in declaration", getTextSource(ctx), docSourceURL)
+      throw new SyntaxException("type missing in declaration",
+                                getTextSource(ctx),
+                                grammar.docSourceUrl)
     val wdlType: Type = visitWdl_type(ctx.wdl_type())
     val name: String = getIdentifierText(ctx.Identifier(), ctx)
     Declaration(name, wdlType, None, getTextSource(ctx))
@@ -640,7 +645,9 @@ bound_decls
    */
   override def visitBound_decls(ctx: WdlDraft2Parser.Bound_declsContext): Declaration = {
     if (ctx.wdl_type() == null)
-      throw new SyntaxException("type missing in declaration", getTextSource(ctx), docSourceURL)
+      throw new SyntaxException("type missing in declaration",
+                                getTextSource(ctx),
+                                grammar.docSourceUrl)
     val wdlType: Type = visitWdl_type(ctx.wdl_type())
     val name: String = getIdentifierText(ctx.Identifier(), ctx)
     if (ctx.expr() == null)
@@ -660,7 +667,7 @@ any_decls
       return visitUnbound_decls(ctx.unbound_decls())
     if (ctx.bound_decls() != null)
       return visitBound_decls(ctx.bound_decls())
-    throw new SyntaxException("bad declaration format", getTextSource(ctx), docSourceURL)
+    throw new SyntaxException("bad declaration format", getTextSource(ctx), grammar.docSourceUrl)
   }
 
   /* meta_kv
@@ -806,7 +813,7 @@ any_decls
         throw new SyntaxException(
             s"section ${sectionName} appears ${n} times, it cannot appear more than once",
             getTextSource(ctx),
-            docSourceURL
+            grammar.docSourceUrl
         )
     }
   }
@@ -821,7 +828,7 @@ any_decls
         throw new SyntaxException(
             s"section ${sectionName} appears ${n} times, it must appear exactly once",
             getTextSource(ctx),
-            docSourceURL
+            grammar.docSourceUrl
         )
     }
   }
@@ -846,7 +853,7 @@ any_decls
     if (both.nonEmpty)
       throw new SyntaxException(s"${both} appears in both input and output sections",
                                 getTextSource(ctx),
-                                docSourceURL)
+                                grammar.docSourceUrl)
 
     val ioVarNames = inputVarNames ++ outputVarNames
 
@@ -856,16 +863,16 @@ any_decls
           throw new SyntaxException(
               s"parameter ${k} does not appear in the input or output sections",
               getTextSource(ctx),
-              docSourceURL
+              grammar.docSourceUrl
           )
     }
   }
 
   def requiresEvaluation(expr: Expr): Boolean = {
     expr match {
-      case _: ExprString | _: ExprFile | _: ExprBoolean | _: ExprInt | _: ExprFloat => false
-      case ExprPair(l, r, _)                                                        => requiresEvaluation(l) || requiresEvaluation(r)
-      case ExprArrayLiteral(value, _)                                               => value.exists(requiresEvaluation)
+      case _: ExprString | _: ExprBoolean | _: ExprInt | _: ExprFloat => false
+      case ExprPair(l, r, _)                                          => requiresEvaluation(l) || requiresEvaluation(r)
+      case ExprArrayLiteral(value, _)                                 => value.exists(requiresEvaluation)
       case ExprMapLiteral(value, _) =>
         value.exists(elt => requiresEvaluation(elt.key) || requiresEvaluation(elt.value))
       case ExprObjectLiteral(value, _) => value.exists(member => requiresEvaluation(member.value))
@@ -1177,11 +1184,10 @@ document_element
   ): DocumentElement = {
     visitChildren(ctx).asInstanceOf[DocumentElement]
   }
-
   /*
-document
-	: version document_element* (workflow document_element*)?
-	;
+  document
+    : version document_element* (workflow document_element*)?
+    ;
    */
   def visitDocument(ctx: WdlDraft2Parser.DocumentContext,
                     comments: mutable.Map[Int, Comment]): Document = {
@@ -1198,41 +1204,35 @@ document
       else
         Some(visitWorkflow(ctx.workflow()))
 
-    Document(docSourceURL.get,
-             docSource,
+    Document(grammar.docSourceUrl.get,
+             grammar.docSource,
              elems,
              workflow,
              getTextSource(ctx),
              CommentMap(comments.toMap))
   }
 
+  def visitExprDocument(ctx: WdlDraft2Parser.Expr_documentContext): Expr = {
+    visitExpr(ctx.expr())
+  }
+
+  def visitTypeDocument(ctx: WdlDraft2Parser.Type_documentContext): Type = {
+    visitWdl_type(ctx.wdl_type())
+  }
+
   def parseDocument: Document = {
-    val ctx = grammar.parser.document
-    if (ctx == null) {
-      throw new Exception("WDL file does not contain a valid document")
-    }
-    val result = visitDocument(ctx, grammar.comments)
-    grammar.verify()
-    result
+    grammar
+      .visitDocument[WdlDraft2Parser.DocumentContext, Document](grammar.parser.document,
+                                                                visitDocument)
   }
 
   def parseExpr: Expr = {
-    val ctx = grammar.parser.expr_document
-    if (ctx == null) {
-      throw new Exception("Not a Valid expression")
-    }
-    val result = visitExpr(ctx.expr())
-    grammar.verify()
-    result
+    grammar.visitFragment[WdlDraft2Parser.Expr_documentContext, Expr](grammar.parser.expr_document,
+                                                                      visitExprDocument)
   }
 
   def parseWdlType: Type = {
-    val ctx = grammar.parser.type_document
-    if (ctx == null) {
-      throw new Exception("Not a valid WDL type")
-    }
-    val result = visitWdl_type(ctx.wdl_type())
-    grammar.verify()
-    result
+    grammar.visitFragment[WdlDraft2Parser.Type_documentContext, Type](grammar.parser.type_document,
+                                                                      visitTypeDocument)
   }
 }

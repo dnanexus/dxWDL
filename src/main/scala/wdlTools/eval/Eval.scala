@@ -3,20 +3,19 @@ package wdlTools.eval
 import java.net.URL
 
 import wdlTools.eval.WdlValues._
-import wdlTools.syntax.{AbstractSyntax => AST}
-import wdlTools.syntax.{Util, TextSource, WdlVersion}
-import wdlTools.types.WdlTypes
+import wdlTools.syntax.{TextSource, WdlVersion}
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{EvalConfig, Options}
 
 case class Eval(opts: Options,
                 evalCfg: EvalConfig,
-                structDefs: Map[String, WdlTypes.WT_Struct],
                 wdlVersion: WdlVersion,
                 docSourceUrl: Option[URL]) {
   // choose the standard library implementation based on version
   private val stdlib = wdlVersion match {
     case WdlVersion.Draft_2 => StdlibDraft2(opts, evalCfg, docSourceUrl)
     case WdlVersion.V1      => StdlibV1(opts, evalCfg, docSourceUrl)
+    case WdlVersion.V2      => throw new Exception("WDL V2 is not yet supported")
   }
   private val coercion = Coercion(docSourceUrl)
 
@@ -262,46 +261,46 @@ case class Eval(opts: Options,
     }
   }
 
-  def apply(expr: AST.Expr, ctx: Context): WdlValues.WV = {
+  private def apply(expr: TAT.Expr, ctx: Context): WdlValues.WV = {
     expr match {
-      case AST.ValueNull(_)           => WV_Null
-      case AST.ValueBoolean(value, _) => WV_Boolean(value)
-      case AST.ValueInt(value, _)     => WV_Int(value)
-      case AST.ValueFloat(value, _)   => WV_Float(value)
-      case AST.ValueString(value, _)  => WV_String(value)
-      case AST.ValueFile(value, _)    => WV_File(value)
+      case _: TAT.ValueNull    => WV_Null
+      case x: TAT.ValueBoolean => WV_Boolean(x.value)
+      case x: TAT.ValueInt     => WV_Int(x.value)
+      case x: TAT.ValueFloat   => WV_Float(x.value)
+      case x: TAT.ValueString  => WV_String(x.value)
+      case x: TAT.ValueFile    => WV_File(x.value)
 
       // accessing a variable
-      case AST.ExprIdentifier(id: String, _) if !(ctx.bindings contains id) =>
-        throw new EvalException(s"accessing undefined variable ${id}")
-      case AST.ExprIdentifier(id: String, _) =>
-        ctx.bindings(id)
+      case eid: TAT.ExprIdentifier if !(ctx.bindings contains eid.id) =>
+        throw new EvalException(s"accessing undefined variable ${eid.id}")
+      case eid: TAT.ExprIdentifier =>
+        ctx.bindings(eid.id)
 
       // concatenate an array of strings inside a command block
-      case AST.ExprCompoundString(vec: Vector[AST.Expr], _) =>
-        val strArray: Vector[String] = vec.map { x =>
+      case ecs: TAT.ExprCompoundString =>
+        val strArray: Vector[String] = ecs.value.map { x =>
           val xv = apply(x, ctx)
           getStringVal(xv, x.text)
         }
         WV_String(strArray.mkString(""))
 
-      case AST.ExprPair(l, r, _) => WV_Pair(apply(l, ctx), apply(r, ctx))
-      case AST.ExprArray(array, _) =>
-        WV_Array(array.map { x =>
+      case ep: TAT.ExprPair => WV_Pair(apply(ep.l, ctx), apply(ep.r, ctx))
+      case ea: TAT.ExprArray =>
+        WV_Array(ea.value.map { x =>
           apply(x, ctx)
         })
-      case AST.ExprMap(elements, _) =>
-        WV_Map(elements.map {
-          case AST.ExprMapItem(k, v, _) => apply(k, ctx) -> apply(v, ctx)
-        }.toMap)
+      case em: TAT.ExprMap =>
+        WV_Map(em.value.map {
+          case (k, v) => apply(k, ctx) -> apply(v, ctx)
+        })
 
-      case AST.ExprObject(elements, _) =>
-        WV_Object(elements.map {
-          case AST.ExprObjectMember(k, v, _) => k -> apply(v, ctx)
+      case eObj: TAT.ExprObject =>
+        WV_Object(eObj.value.map {
+          case (k, v) => k -> apply(v, ctx)
         }.toMap)
 
       // ~{true="--yes" false="--no" boolean_value}
-      case AST.ExprPlaceholderEqual(t, f, boolExpr, _) =>
+      case TAT.ExprPlaceholderEqual(t, f, boolExpr, _, _) =>
         apply(boolExpr, ctx) match {
           case WV_Boolean(true)  => apply(t, ctx)
           case WV_Boolean(false) => apply(f, ctx)
@@ -312,14 +311,14 @@ case class Eval(opts: Options,
         }
 
       // ~{default="foo" optional_value}
-      case AST.ExprPlaceholderDefault(defaultVal, optVal, _) =>
+      case TAT.ExprPlaceholderDefault(defaultVal, optVal, _, _) =>
         apply(optVal, ctx) match {
           case WV_Null => apply(defaultVal, ctx)
           case other   => other
         }
 
       // ~{sep=", " array_value}
-      case AST.ExprPlaceholderSep(sep: AST.Expr, arrayVal: AST.Expr, _) =>
+      case TAT.ExprPlaceholderSep(sep: TAT.Expr, arrayVal: TAT.Expr, _, _) =>
         val sep2 = getStringVal(apply(sep, ctx), sep.text)
         apply(arrayVal, ctx) match {
           case WV_Array(ar) =>
@@ -334,8 +333,8 @@ case class Eval(opts: Options,
         }
 
       // operators on one argument
-      case AST.ExprUniraryPlus(e, _) =>
-        apply(e, ctx) match {
+      case e: TAT.ExprUniraryPlus =>
+        apply(e.value, ctx) match {
           case WV_Float(f) => WV_Float(f)
           case WV_Int(k)   => WV_Int(k)
           case other =>
@@ -344,8 +343,8 @@ case class Eval(opts: Options,
                                     docSourceUrl)
         }
 
-      case AST.ExprUniraryMinus(e, _) =>
-        apply(e, ctx) match {
+      case e: TAT.ExprUniraryMinus =>
+        apply(e.value, ctx) match {
           case WV_Float(f) => WV_Float(-1 * f)
           case WV_Int(k)   => WV_Int(-1 * k)
           case other =>
@@ -354,8 +353,8 @@ case class Eval(opts: Options,
                                     docSourceUrl)
         }
 
-      case AST.ExprNegate(e, _) =>
-        apply(e, ctx) match {
+      case e: TAT.ExprNegate =>
+        apply(e.value, ctx) match {
           case WV_Boolean(b) => WV_Boolean(!b)
           case other =>
             throw new EvalException(s"bad value ${other}, should be a boolean",
@@ -364,7 +363,7 @@ case class Eval(opts: Options,
         }
 
       // operators on two arguments
-      case AST.ExprLor(a, b, _) =>
+      case TAT.ExprLor(a, b, _, _) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         (av, bv) match {
@@ -380,7 +379,7 @@ case class Eval(opts: Options,
                                     docSourceUrl)
         }
 
-      case AST.ExprLand(a, b, _) =>
+      case TAT.ExprLand(a, b, _, _) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         (av, bv) match {
@@ -397,58 +396,58 @@ case class Eval(opts: Options,
         }
 
       // recursive comparison
-      case AST.ExprEqeq(a, b, text) =>
+      case TAT.ExprEqeq(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(compareEqeq(av, bv, text))
-      case AST.ExprNeq(a, b, text) =>
+      case TAT.ExprNeq(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(!compareEqeq(av, bv, text))
 
-      case AST.ExprLt(a, b, text) =>
+      case TAT.ExprLt(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(compareLt(av, bv, text))
-      case AST.ExprLte(a, b, text) =>
+      case TAT.ExprLte(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(compareLte(av, bv, text))
-      case AST.ExprGt(a, b, text) =>
+      case TAT.ExprGt(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(compareGt(av, bv, text))
-      case AST.ExprGte(a, b, text) =>
+      case TAT.ExprGte(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         WV_Boolean(compareGte(av, bv, text))
 
       // Add is overloaded, can be used to add numbers or concatenate strings
-      case AST.ExprAdd(a, b, text) =>
+      case TAT.ExprAdd(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         add(av, bv, text)
 
       // Math operations
-      case AST.ExprSub(a, b, text) =>
+      case TAT.ExprSub(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         sub(av, bv, text)
-      case AST.ExprMod(a, b, text) =>
+      case TAT.ExprMod(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         mod(av, bv, text)
-      case AST.ExprMul(a, b, text) =>
+      case TAT.ExprMul(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         multiply(av, bv, text)
-      case AST.ExprDivide(a, b, text) =>
+      case TAT.ExprDivide(a, b, _, text) =>
         val av = apply(a, ctx)
         val bv = apply(b, ctx)
         divide(av, bv, text)
 
       // Access an array element at [index]
-      case AST.ExprAt(array, index, text) =>
+      case TAT.ExprAt(array, index, _, text) =>
         val array_v = apply(array, ctx)
         val index_v = apply(index, ctx)
         (array_v, index_v) match {
@@ -469,7 +468,7 @@ case class Eval(opts: Options,
 
       // conditional:
       // if (x == 1) then "Sunday" else "Weekday"
-      case AST.ExprIfThenElse(cond, tBranch, fBranch, text) =>
+      case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, text) =>
         val cond_v = apply(cond, ctx)
         cond_v match {
           case WV_Boolean(true)  => apply(tBranch, ctx)
@@ -480,60 +479,26 @@ case class Eval(opts: Options,
 
       // Apply a standard library function to arguments. For example:
       //   read_int("4")
-      case AST.ExprApply(funcName, elements, text) =>
+      case TAT.ExprApply(funcName, elements, _, text) =>
         val funcArgs = elements.map(e => apply(e, ctx))
         stdlib.call(funcName, funcArgs, text)
 
       // Access a field in a struct or an object. For example:
       //   Int z = x.a
-      case AST.ExprGetName(e: AST.Expr, fieldName, text) =>
+      case TAT.ExprGetName(e: TAT.Expr, fieldName, _, text) =>
         val ev = apply(e, ctx)
         exprGetName(ev, fieldName, ctx, text)
 
       case other =>
-        throw new Exception(s"expression ${Util.exprToString(other)} not implemented yet")
+        throw new Exception(s"sanity: expression ${other} not implemented")
     }
-  }
-
-  private def typeFromAst(t: AST.Type, text: TextSource): WdlTypes.WT = {
-    def inner(t: AST.Type): WdlTypes.WT = {
-      t match {
-        case AST.TypeBoolean(_) => WdlTypes.WT_Boolean
-        case AST.TypeInt(_)     => WdlTypes.WT_Int
-        case AST.TypeFloat(_)   => WdlTypes.WT_Float
-        case AST.TypeString(_)  => WdlTypes.WT_String
-        case AST.TypeFile(_)    => WdlTypes.WT_File
-
-        case AST.TypeOptional(t, _) => WdlTypes.WT_Optional(inner(t))
-        case AST.TypeArray(t, _, _) => WdlTypes.WT_Array(inner(t))
-        case AST.TypeMap(k, v, _)   => WdlTypes.WT_Map(inner(k), inner(v))
-        case AST.TypePair(l, r, _)  => WdlTypes.WT_Pair(inner(l), inner(r))
-
-        // a variable whose type is a user defined struct
-        case AST.TypeIdentifier(id, _) if structDefs contains id =>
-          structDefs(id)
-        case AST.TypeIdentifier(id, _) =>
-          throw new EvalException(s"struct ${id} is undefined", text, docSourceUrl)
-
-        case AST.TypeObject(_) => WdlTypes.WT_Object
-
-        case AST.TypeStruct(name, members, _) =>
-          val members2 = members.map {
-            case AST.StructMember(name, dataType, _) =>
-              name -> inner(dataType)
-          }.toMap
-          WdlTypes.WT_Struct(name, members2)
-      }
-    }
-    inner(t)
   }
 
   // Evaluate all the declarations and return a context
-  def applyDeclarations(decls: Vector[AST.Declaration], ctx: Context): Context = {
+  def applyDeclarations(decls: Vector[TAT.Declaration], ctx: Context): Context = {
     decls.foldLeft(ctx) {
-      case (accu, AST.Declaration(name, astWdlType, Some(expr), text)) =>
+      case (accu, TAT.Declaration(name, wdlType, Some(expr), text)) =>
         val value = apply(expr, accu)
-        val wdlType: WdlTypes.WT = typeFromAst(astWdlType, text)
         val value2 = coercion.coerceTo(wdlType, value, text)
         accu.addBinding(name, value2)
       case (_, ast) =>
@@ -543,7 +508,7 @@ case class Eval(opts: Options,
 
   // evaluate all the parts of a command section.
   //
-  def applyCommand(command: AST.CommandSection, ctx: Context): String = {
+  def applyCommand(command: TAT.CommandSection, ctx: Context): String = {
     command.parts
       .map { expr =>
         val value = apply(expr, ctx)

@@ -84,23 +84,27 @@ case class InteractiveConsole(promptColor: String = "",
                     default: Option[T] = None): Option[T] = {
     def promptOnce: Option[T] = {
       Console.print(prompt)
-      try {
-        reader.read match {
-          case v: Some[T]               => v
-          case None if default.nonEmpty => default
-          case _                        => None
-        }
-      } catch {
-        case e: InputException =>
-          error(s"You entered an invalid value: ${e.getMessage}; please try again")
-          None
+      reader.read match {
+        case v: Some[T]               => v
+        case None if default.nonEmpty => default
+        case _                        => None
       }
     }
-
-    var result = promptOnce
+    def promptWhileError: Option[T] = {
+      while (true) {
+        try {
+          return promptOnce
+        } catch {
+          case e: InputException =>
+            error(s"You entered an invalid value: ${e.getMessage}; please try again")
+        }
+      }
+      throw new Exception()
+    }
+    var result = promptWhileError
     while (result.isEmpty && !optional) {
       error("A non-empty value is required; please try again")
-      result = promptOnce
+      result = promptWhileError
     }
     if (afterEntry.isDefined) {
       Console.print(afterEntry.get)

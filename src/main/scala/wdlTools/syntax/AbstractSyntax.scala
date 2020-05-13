@@ -9,9 +9,6 @@ object AbstractSyntax {
   }
   sealed trait WorkflowElement extends Element
   sealed trait DocumentElement extends Element
-  sealed trait Callable {
-    val name: String
-  }
 
   // type system
   sealed trait Type extends Element
@@ -21,6 +18,7 @@ object AbstractSyntax {
   case class TypePair(l: Type, r: Type, text: TextSource) extends Type
   case class TypeString(text: TextSource) extends Type
   case class TypeFile(text: TextSource) extends Type
+  case class TypeDirectory(text: TextSource) extends Type
   case class TypeBoolean(text: TextSource) extends Type
   case class TypeInt(text: TextSource) extends Type
   case class TypeFloat(text: TextSource) extends Type
@@ -37,8 +35,8 @@ object AbstractSyntax {
   // values
   sealed trait Value extends Expr
   case class ValueNull(text: TextSource) extends Value
+  case class ValueNone(text: TextSource) extends Value
   case class ValueString(value: String, text: TextSource) extends Value
-  case class ValueFile(value: String, text: TextSource) extends Value
   case class ValueBoolean(value: Boolean, text: TextSource) extends Value
   case class ValueInt(value: Int, text: TextSource) extends Value
   case class ValueFloat(value: Double, text: TextSource) extends Value
@@ -129,19 +127,18 @@ object AbstractSyntax {
   case class RuntimeKV(id: String, expr: Expr, text: TextSource) extends Element
   case class RuntimeSection(kvs: Vector[RuntimeKV], text: TextSource) extends Element
 
+  case class HintsKV(id: String, expr: Expr, text: TextSource) extends Element
+  case class HintsSection(kvs: Vector[HintsKV], text: TextSource) extends Element
+
   // meta section
   case class MetaKV(id: String, expr: Expr, text: TextSource) extends Element
   case class ParameterMetaSection(kvs: Vector[MetaKV], text: TextSource) extends Element
   case class MetaSection(kvs: Vector[MetaKV], text: TextSource) extends Element
 
-  case class Version(value: WdlVersion, text: TextSource) extends DocumentElement
+  case class Version(value: WdlVersion, text: TextSource) extends Element
 
   // import statement with the AST for the referenced document
-  case class ImportAddr(value: String, text: TextSource) extends Element {
-    def isLocal: Boolean = {
-      !(value.contains("://") && value.startsWith("file"))
-    }
-  }
+  case class ImportAddr(value: String, text: TextSource) extends Element
   case class ImportName(value: String, text: TextSource) extends Element
   case class ImportAlias(id1: String, id2: String, text: TextSource) extends Element
   case class ImportDoc(name: Option[ImportName],
@@ -160,16 +157,17 @@ object AbstractSyntax {
                   meta: Option[MetaSection],
                   parameterMeta: Option[ParameterMetaSection],
                   runtime: Option[RuntimeSection],
+                  hints: Option[HintsSection],
                   text: TextSource)
       extends DocumentElement
-      with Callable
 
-  // TODO: support comments - only one comment before inputs
   case class CallAlias(name: String, text: TextSource) extends Element
+  case class CallAfter(name: String, text: TextSource) extends Element
   case class CallInput(name: String, expr: Expr, text: TextSource) extends Element
   case class CallInputs(value: Vector[CallInput], text: TextSource) extends Element
   case class Call(name: String,
                   alias: Option[CallAlias],
+                  afters: Vector[CallAfter],
                   inputs: Option[CallInputs],
                   text: TextSource)
       extends WorkflowElement
@@ -192,9 +190,8 @@ object AbstractSyntax {
                       body: Vector[WorkflowElement],
                       text: TextSource)
       extends Element
-      with Callable
 
-  case class Document(docSourceUrl: URL,
+  case class Document(sourceUrl: URL,
                       sourceCode: String,
                       version: Version,
                       elements: Vector[DocumentElement],

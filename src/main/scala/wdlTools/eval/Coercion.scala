@@ -8,7 +8,7 @@ import wdlTools.types.WdlTypes
 case class Coercion(docSourceUrl: Option[URL]) {
 
   private def coerceToStruct(structName: String,
-                             memberDefs: Map[String, WdlTypes.WT],
+                             memberDefs: Map[String, WdlTypes.T],
                              members: Map[String, WV],
                              text: TextSource): WV_Struct = {
     if (memberDefs.keys.toSet != members.keys.toSet)
@@ -24,13 +24,13 @@ case class Coercion(docSourceUrl: Option[URL]) {
     WV_Struct(structName, memValues)
   }
 
-  def coerceTo(wdlType: WdlTypes.WT, value: WV, text: TextSource): WV = {
+  def coerceTo(wdlType: WdlTypes.T, value: WV, text: TextSource): WV = {
     (wdlType, value) match {
       // primitive types
-      case (WdlTypes.WT_Boolean, WV_Boolean(_)) => value
-      case (WdlTypes.WT_Int, WV_Int(_))         => value
-      case (WdlTypes.WT_Int, WV_Float(x))       => WV_Int(x.toInt)
-      case (WdlTypes.WT_Int, WV_String(s)) =>
+      case (WdlTypes.T_Boolean, WV_Boolean(_)) => value
+      case (WdlTypes.T_Int, WV_Int(_))         => value
+      case (WdlTypes.T_Int, WV_Float(x))       => WV_Int(x.toInt)
+      case (WdlTypes.T_Int, WV_String(s)) =>
         val n =
           try {
             s.toInt
@@ -41,9 +41,9 @@ case class Coercion(docSourceUrl: Option[URL]) {
                                       docSourceUrl)
           }
         WV_Int(n)
-      case (WdlTypes.WT_Float, WV_Int(n))   => WV_Float(n.toFloat)
-      case (WdlTypes.WT_Float, WV_Float(_)) => value
-      case (WdlTypes.WT_Float, WV_String(s)) =>
+      case (WdlTypes.T_Float, WV_Int(n))   => WV_Float(n.toFloat)
+      case (WdlTypes.T_Float, WV_Float(_)) => value
+      case (WdlTypes.T_Float, WV_String(s)) =>
         val x =
           try {
             s.toDouble
@@ -54,39 +54,39 @@ case class Coercion(docSourceUrl: Option[URL]) {
                                       docSourceUrl)
           }
         WV_Float(x)
-      case (WdlTypes.WT_String, WV_Boolean(b)) => WV_String(b.toString)
-      case (WdlTypes.WT_String, WV_Int(n))     => WV_String(n.toString)
-      case (WdlTypes.WT_String, WV_Float(x))   => WV_String(x.toString)
-      case (WdlTypes.WT_String, WV_String(_))  => value
-      case (WdlTypes.WT_String, WV_File(s))    => WV_String(s)
-      case (WdlTypes.WT_File, WV_String(s))    => WV_File(s)
-      case (WdlTypes.WT_File, WV_File(_))      => value
+      case (WdlTypes.T_String, WV_Boolean(b)) => WV_String(b.toString)
+      case (WdlTypes.T_String, WV_Int(n))     => WV_String(n.toString)
+      case (WdlTypes.T_String, WV_Float(x))   => WV_String(x.toString)
+      case (WdlTypes.T_String, WV_String(_))  => value
+      case (WdlTypes.T_String, WV_File(s))    => WV_String(s)
+      case (WdlTypes.T_File, WV_String(s))    => WV_File(s)
+      case (WdlTypes.T_File, WV_File(_))      => value
 
       // compound types
       // recursively descend into the sub structures and coerce them.
-      case (WdlTypes.WT_Optional(t), WV_Optional(v)) =>
+      case (WdlTypes.T_Optional(t), WV_Optional(v)) =>
         WV_Optional(coerceTo(t, v, text))
-      case (WdlTypes.WT_Optional(t), v) =>
+      case (WdlTypes.T_Optional(t), v) =>
         WV_Optional(coerceTo(t, v, text))
       case (t, WV_Optional(v)) =>
         coerceTo(t, v, text)
 
-      case (WdlTypes.WT_Array(t), WV_Array(vec)) =>
-//        if (nonEmpty && vec.isEmpty)
-//          throw new EvalException("array is empty", text, docSourceURL)
+      case (WdlTypes.T_Array(t, nonEmpty), WV_Array(vec)) =>
+        if (nonEmpty && vec.isEmpty)
+          throw new EvalException("array is empty", text, docSourceUrl)
         WV_Array(vec.map { x =>
           coerceTo(t, x, text)
         })
 
-      case (WdlTypes.WT_Map(kt, vt), WV_Map(m)) =>
+      case (WdlTypes.T_Map(kt, vt), WV_Map(m)) =>
         WV_Map(m.map {
           case (k, v) =>
             coerceTo(kt, k, text) -> coerceTo(vt, v, text)
         })
-      case (WdlTypes.WT_Pair(lt, rt), WV_Pair(l, r)) =>
+      case (WdlTypes.T_Pair(lt, rt), WV_Pair(l, r)) =>
         WV_Pair(coerceTo(lt, l, text), coerceTo(rt, r, text))
 
-      case (WdlTypes.WT_Struct(name1, _), WV_Struct(name2, _)) =>
+      case (WdlTypes.T_Struct(name1, _), WV_Struct(name2, _)) =>
         if (name1 != name2)
           throw new EvalException(s"cannot coerce struct ${name2} to struct ${name1}",
                                   text,
@@ -94,10 +94,10 @@ case class Coercion(docSourceUrl: Option[URL]) {
         value
 
       // cast of an object to a struct. I think this is legal.
-      case (WdlTypes.WT_Struct(name, memberDefs), WV_Object(members)) =>
+      case (WdlTypes.T_Struct(name, memberDefs), WV_Object(members)) =>
         coerceToStruct(name, memberDefs, members, text)
 
-      case (WdlTypes.WT_Struct(name, memberDefs), WV_Map(members)) =>
+      case (WdlTypes.T_Struct(name, memberDefs), WV_Map(members)) =>
         // convert into a mapping from string to WdlValue
         val members2: Map[String, WV] = members.map {
           case (WV_String(k), v) => k -> v
@@ -108,7 +108,7 @@ case class Coercion(docSourceUrl: Option[URL]) {
         }
         coerceToStruct(name, memberDefs, members2, text)
 
-      case (WdlTypes.WT_Object, WV_Object(_)) => value
+      case (WdlTypes.T_Object, WV_Object(_)) => value
 
       case (t, other) =>
         throw new EvalException(s"value ${other} cannot be coerced to type ${t}",

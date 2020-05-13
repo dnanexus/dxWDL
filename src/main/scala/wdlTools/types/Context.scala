@@ -1,21 +1,50 @@
 package wdlTools.types
 
 import java.net.URL
-import wdlTools.syntax.AbstractSyntax._
+import wdlTools.syntax.{AbstractSyntax => AST}
 import wdlTools.syntax.TextSource
 import wdlTools.types.WdlTypes._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // An entire context
 //
 // There are separate namespaces for variables, struct definitions, and callables (tasks/workflows).
 // An additional variable holds a list of all imported namespaces.
 case class Context(docSourceUrl: Option[URL] = None,
-                   declarations: Map[String, WT] = Map.empty,
-                   structs: Map[String, WT_Struct] = Map.empty,
-                   callables: Map[String, WT_Callable] = Map.empty,
+                   inputs: Map[String, WdlTypes.T] = Map.empty,
+                   declarations: Map[String, WdlTypes.T] = Map.empty,
+                   structs: Map[String, T_Struct] = Map.empty,
+                   callables: Map[String, T_Callable] = Map.empty,
                    namespaces: Set[String] = Set.empty) {
+  type WdlType = WdlTypes.T
 
-  def bindVar(varName: String, wdlType: WT, srcText: TextSource): Context = {
+  def lookup(varName: String,
+             bindings: Map[String, WdlType],
+             srcText: TextSource): Option[WdlType] = {
+    inputs.get(varName) match {
+      case None    => ()
+      case Some(t) => return Some(t)
+    }
+    declarations.get(varName) match {
+      case None    => ()
+      case Some(t) => return Some(t)
+    }
+    bindings.get(varName) match {
+      case None    => ()
+      case Some(t) => return Some(t)
+    }
+    None
+  }
+
+  def bindInputSection(inputSection: TAT.InputSection): Context = {
+    // building bindings
+    val bindings = inputSection.declarations.map { tDecl =>
+      tDecl.name -> tDecl.wdlType
+    }.toMap
+    this.copy(inputs = bindings)
+  }
+
+  def bindVar(varName: String, wdlType: WdlType, srcText: TextSource): Context = {
     declarations.get(varName) match {
       case None =>
         this.copy(declarations = declarations + (varName -> wdlType))
@@ -26,17 +55,20 @@ case class Context(docSourceUrl: Option[URL] = None,
     }
   }
 
-  def bind(s: WT_Struct, srcText: TextSource): Context = {
+  def bindStruct(s: T_Struct, srcText: TextSource): Context = {
     structs.get(s.name) match {
       case None =>
         this.copy(structs = structs + (s.name -> s))
-      case Some(_) =>
-        throw new TypeException(s"struct ${s.name} is already declared", srcText, docSourceUrl)
+      case Some(existingStruct: T_Struct) =>
+        if (s != existingStruct)
+          throw new TypeException(s"struct ${s.name} is already declared", srcText, docSourceUrl)
+        // The struct is defined a second time, with the exact same definition. Ignore.
+        this
     }
   }
 
   // add a callable (task/workflow)
-  def bindCallable(callable: WT_Callable, srcText: TextSource): Context = {
+  def bindCallable(callable: T_Callable, srcText: TextSource): Context = {
     callables.get(callable.name) match {
       case None =>
         this.copy(callables = callables + (callable.name -> callable))
@@ -48,7 +80,7 @@ case class Context(docSourceUrl: Option[URL] = None,
   }
 
   // add a bunch of bindings
-  def bindVarList(bindings: Map[String, WT], srcText: TextSource): Context = {
+  def bindVarList(bindings: Map[String, WdlType], srcText: TextSource): Context = {
     val existingVarNames = declarations.keys.toSet
     val newVarNames = bindings.keys.toSet
     val both = existingVarNames intersect newVarNames
@@ -71,17 +103,17 @@ case class Context(docSourceUrl: Option[URL] = None,
   // }
   def bindImportedDoc(namespace: String,
                       iCtx: Context,
-                      aliases: Vector[ImportAlias],
+                      aliases: Vector[AST.ImportAlias],
                       srcText: TextSource): Context = {
     if (this.namespaces contains namespace)
       throw new TypeException(s"namespace ${namespace} already exists", srcText, iCtx.docSourceUrl)
 
     // There cannot be any collisions because this is a new namespace
     val iCallables = iCtx.callables.map {
-      case (name, taskSig: WT_Task) =>
+      case (name, taskSig: T_Task) =>
         val fqn = namespace + "." + name
         fqn -> taskSig.copy(name = fqn)
-      case (name, wfSig: WT_Workflow) =>
+      case (name, wfSig: T_Workflow) =>
         val fqn = namespace + "." + name
         fqn -> wfSig.copy(name = fqn)
       case other =>
@@ -96,13 +128,13 @@ case class Context(docSourceUrl: Option[URL] = None,
     //     alias GrandChild as GrandChild2
     //
     val aliasesMap: Map[String, String] = aliases.map {
-      case ImportAlias(src, dest, _) => src -> dest
+      case AST.ImportAlias(src, dest, _) => src -> dest
     }.toMap
     val iStructs = iCtx.structs.map {
       case (name, iStruct) =>
         aliasesMap.get(name) match {
           case None          => name -> iStruct
-          case Some(altName) => altName -> WT_Struct(altName, iStruct.members)
+          case Some(altName) => altName -> T_Struct(altName, iStruct.members)
         }
     }
 

@@ -9,6 +9,7 @@ sealed abstract class WdlVersion(val name: String, val order: Int) extends Order
 object WdlVersion {
   case object Draft_2 extends WdlVersion("draft-2", 0)
   case object V1 extends WdlVersion("1.0", 1)
+  case object V2 extends WdlVersion("2.0", 2)
 
   val All: Vector[WdlVersion] = Vector(V1, Draft_2).sortWith(_ < _)
 
@@ -30,10 +31,10 @@ object WdlVersion {
   * an implicit value of WdlVersion.Draft_2, but there is no actual version
   * statement.
   *
-  * @param line: line number starting line
+  * @param line: starting line number
   * @param col: starting column
-  * @param endLine: ending line, end-inclusive
-  * @param endCol: ending column, end-exclusive
+  * @param endLine: line (end-inclusive) on which the last token ends
+  * @param endCol: column (end-exclusive) at which the last token ends
   */
 case class TextSource(line: Int, col: Int, endLine: Int, endCol: Int) extends Ordered[TextSource] {
   lazy val lineRange: Range = line to endLine

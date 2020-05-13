@@ -135,7 +135,7 @@ expr_core
         ;
 
 version
-	: VERSION RELEASE_VERSION
+	: VERSION ReleaseVersion
 	;
 
 import_alias
@@ -186,7 +186,7 @@ task_command_string_part
 	;
 
 task_command_expr_part
-	: StringCommandStart	(expression_placeholder_option)* expr RBRACE
+	: StringCommandStart (expression_placeholder_option)* expr RBRACE
 	;
 
 task_command_expr_with_string
@@ -194,8 +194,8 @@ task_command_expr_with_string
 	;
 
 task_command
-	: COMMAND task_command_string_part task_command_expr_with_string* EndCommand
-	| HEREDOC_COMMAND task_command_string_part task_command_expr_with_string* EndCommand
+	: COMMAND BeginLBrace task_command_string_part task_command_expr_with_string* EndCommand
+	| COMMAND BeginHereDoc task_command_string_part task_command_expr_with_string* EndCommand
 	;
 
 task_element

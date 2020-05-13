@@ -58,21 +58,21 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   private def getWdlFile(args: Vector[WV], text: TextSource): WV_File = {
     // process arguments
     assert(args.size == 1)
-    coercion.coerceTo(WT_File, args.head, text).asInstanceOf[WV_File]
+    coercion.coerceTo(T_File, args.head, text).asInstanceOf[WV_File]
   }
 
   private def getWdlInt(arg: WV, text: TextSource): Int = {
-    val n = coercion.coerceTo(WT_Int, arg, text).asInstanceOf[WV_Int]
+    val n = coercion.coerceTo(T_Int, arg, text).asInstanceOf[WV_Int]
     n.value
   }
 
   private def getWdlFloat(arg: WV, text: TextSource): Double = {
-    val x = coercion.coerceTo(WT_Float, arg, text).asInstanceOf[WV_Float]
+    val x = coercion.coerceTo(T_Float, arg, text).asInstanceOf[WV_Float]
     x.value
   }
 
   private def getWdlString(arg: WV, text: TextSource): String = {
-    val s = coercion.coerceTo(WT_String, arg, text).asInstanceOf[WV_String]
+    val s = coercion.coerceTo(T_String, arg, text).asInstanceOf[WV_String]
     s.value
   }
 
@@ -250,7 +250,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   private def write_lines(args: Vector[WV], text: TextSource): WV_File = {
     assert(args.size == 1)
     val array: WV_Array =
-      coercion.coerceTo(WT_Array(WT_String), args.head, text).asInstanceOf[WV_Array]
+      coercion.coerceTo(T_Array(T_String), args.head, text).asInstanceOf[WV_Array]
     val strRepr: String = array.value
       .map {
         case WV_String(x) => x
@@ -270,7 +270,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   private def write_tsv(args: Vector[WV], text: TextSource): WV_File = {
     assert(args.size == 1)
     val arAr: WV_Array =
-      coercion.coerceTo(WT_Array(WT_Array(WT_String)), args.head, text).asInstanceOf[WV_Array]
+      coercion.coerceTo(T_Array(T_Array(T_String)), args.head, text).asInstanceOf[WV_Array]
     val tblRepr: String = arAr.value
       .map {
         case WV_Array(a) =>
@@ -294,7 +294,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   private def write_map(args: Vector[WV], text: TextSource): WV_File = {
     assert(args.size == 1)
     val m: WV_Map =
-      coercion.coerceTo(WT_Map(WT_String, WT_String), args.head, text).asInstanceOf[WV_Map]
+      coercion.coerceTo(T_Map(T_String, T_String), args.head, text).asInstanceOf[WV_Map]
     val mapStrRepr = m.value
       .map {
         case (WV_String(key), WV_String(value)) => key + "\t" + value
@@ -310,7 +310,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   private def lineFromObject(obj: WV_Object, text: TextSource): String = {
     obj.members.values
       .map { vw =>
-        coercion.coerceTo(WT_String, vw, text).asInstanceOf[WV_String].value
+        coercion.coerceTo(T_String, vw, text).asInstanceOf[WV_String].value
       }
       .mkString("\t")
   }
@@ -319,7 +319,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   //
   private def write_object(args: Vector[WV], text: TextSource): WV_File = {
     assert(args.size == 1)
-    val obj = coercion.coerceTo(WT_Object, args.head, text).asInstanceOf[WV_Object]
+    val obj = coercion.coerceTo(T_Object, args.head, text).asInstanceOf[WV_Object]
     val keyLine = obj.members.keys.mkString("\t")
     val valueLine = lineFromObject(obj, text)
     val content = keyLine + "\n" + valueLine
@@ -332,7 +332,7 @@ case class StdlibV1(opts: Options, evalCfg: EvalConfig, docSourceUrl: Option[URL
   //
   private def write_objects(args: Vector[WV], text: TextSource): WV_File = {
     assert(args.size == 1)
-    val objs = coercion.coerceTo(WT_Array(WT_Object), args.head, text).asInstanceOf[WV_Array]
+    val objs = coercion.coerceTo(T_Array(T_Object), args.head, text).asInstanceOf[WV_Array]
     val objArray = objs.value.asInstanceOf[Vector[WV_Object]]
     if (objArray.isEmpty)
       throw new EvalException("write_objects: empty input array", text, docSourceUrl)
