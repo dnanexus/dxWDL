@@ -29,6 +29,8 @@ test/scratch
 # misc
 applet_resources/
 src/main/resources/dxWDL_runtime.conf
+src/main/antlr4
+src/main/scala/wdlTools
 *.tmp
 
 # IntelliJ

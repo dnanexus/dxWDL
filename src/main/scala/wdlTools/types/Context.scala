@@ -1,7 +1,7 @@
 package wdlTools.types
 
 import java.net.URL
-import wdlTools.syntax.{AbstractSyntax => AST}
+import wdlTools.syntax.{AbstractSyntax => AST, WdlVersion}
 import wdlTools.syntax.TextSource
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -10,7 +10,9 @@ import wdlTools.types.{TypedAbstractSyntax => TAT}
 //
 // There are separate namespaces for variables, struct definitions, and callables (tasks/workflows).
 // An additional variable holds a list of all imported namespaces.
-case class Context(docSourceUrl: Option[URL] = None,
+case class Context(version: WdlVersion,
+                   stdlib: Stdlib,
+                   docSourceUrl: Option[URL] = None,
                    inputs: Map[String, WdlTypes.T] = Map.empty,
                    declarations: Map[String, WdlTypes.T] = Map.empty,
                    structs: Map[String, T_Struct] = Map.empty,

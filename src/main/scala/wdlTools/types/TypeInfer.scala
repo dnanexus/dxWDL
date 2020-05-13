@@ -4,16 +4,16 @@ import java.nio.file.Paths
 
 import wdlTools.syntax.{AbstractSyntax => AST}
 import wdlTools.syntax.TextSource
-import wdlTools.util.TypeCheckingRegime._
-import wdlTools.util.{Util => UUtil}
 import wdlTools.syntax.{Util => SUtil}
 import wdlTools.types.WdlTypes._
 import wdlTools.types.Util.{isPrimitive, typeToString, exprToString}
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.TypeCheckingRegime._
+import wdlTools.util.{Options, Util => UUtil}
 
-case class TypeInfer(stdlib: Stdlib) {
-  private val unify = Unification(stdlib.conf)
-  private val regime = stdlib.conf.typeChecking
+case class TypeInfer(conf: Options) {
+  private val unify = Unification(conf)
+  private val regime = conf.typeChecking
 
   // A group of bindings. This is typically a part of the context. For example,
   // the body of a scatter.
@@ -480,7 +480,7 @@ case class TypeInfer(stdlib: Stdlib) {
       //   read_int("4")
       case AST.ExprApply(funcName: String, elements: Vector[AST.Expr], text) =>
         val eElements = elements.map(applyExpr(_, bindings, ctx))
-        val t = stdlib.apply(funcName, eElements.map(_.wdlType), expr.text)
+        val t = ctx.stdlib.apply(funcName, eElements.map(_.wdlType), expr.text)
         TAT.ExprApply(funcName, eElements, t, text)
 
       // Access a field in a struct or an object. For example "x.a" in:
@@ -1030,7 +1030,9 @@ case class TypeInfer(stdlib: Stdlib) {
 
   // Convert from AST to TAT and maintain context
   private def applyDoc(doc: AST.Document): (TAT.Document, Context) = {
-    val initCtx = Context(docSourceUrl = Some(doc.sourceUrl))
+    val initCtx = Context(version = doc.version.value,
+                          stdlib = Stdlib(conf, doc.version.value),
+                          docSourceUrl = Some(doc.sourceUrl))
 
     // translate each of the elements in the document
     val (context, elements) =
@@ -1053,7 +1055,7 @@ case class TypeInfer(stdlib: Stdlib) {
               // will be named:
               //    stdlib
               //    C
-              val url = UUtil.getUrl(iStat.addr.value, stdlib.conf.localDirectories)
+              val url = UUtil.getUrl(iStat.addr.value, conf.localDirectories)
               val nsName = Paths.get(url.getFile).getFileName.toString
               if (nsName.endsWith(".wdl"))
                 nsName.dropRight(".wdl".length)
