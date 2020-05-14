@@ -5,29 +5,28 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
-import wdlTools.syntax.{AbstractSyntax => AST, Parsers, WdlVersion}
+import wdlTools.syntax.{Parsers, WdlVersion}
 import wdlTools.util.{
   Util => WdlUtil,
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
-import wdlTools.types.{
-  Context => WdlTypeContext,
-  Stdlib => WdlTypeStdlib,
-  TypeInfer,
-  TypedAbstractSyntax => TAT,
-  WdlTypes}
+import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT, WdlTypes}
 import dxWDL.base.{Language, Utils}
+
+case class WdlBundle(primaryCallable : Option[TAT.Callable],
+                     allCallables : Map[String, TAT.Callable],
+                     structDefs : Map[String, WdlTypes.T_Struct])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
 
-  private case class BInfo(callables : Map[String, AST.Callable],
+  private case class BInfo(callables : Map[String, TAT.Callable],
                            sources : Map[String, WorkflowSource],
                            adjunctFiles : Map[String, Vector[Adjuncts.AdjunctFile]])
 
-  private def mergeCallables(aCallables : Map[String, AST.Callable],
-                             bCallables : Map[String, AST.Callable]) : Map[String, AST.Callable] = {
-    var allCallables = Map.empty[String, AST.Callable]
+  private def mergeCallables(aCallables : Map[String, TAT.Callable],
+                             bCallables : Map[String, TAT.Callable]) : Map[String, TAT.Callable] = {
+    var allCallables = Map.empty[String, TAT.Callable]
     aCallables.foreach {
       case (key, callable) =>
         bCallables.get(key) match {
@@ -52,7 +51,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     allCallables
   }
 
-  private def bInfoFromDoc(doc : AST.Document) : BInfo = {
+  private def bInfoFromDoc(doc : TAT.Document) : BInfo = {
     // Add source and adjuncts for main file
     val pathOrUrl = doc.codeSourceUrl.toString
     val (source, adjunctFiles) =
@@ -66,8 +65,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
         (sources, adjunctFiles)
       }
 
-    val tasks : Vector[AST.Task] = doc.elements.collect {
-      case x : AST.Task => x
+    val tasks : Vector[TAT.Task] = doc.elements.collect {
+      case x : TAT.Task => x
     }
     val primaryCallable =
       doc.workflow match {
@@ -79,7 +78,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
       callable => callable.name -> callable
     }.toMap
 
-    val bundle = Bundle(primaryCallable, allCallables, Map.empty)
+    val bundle = WdlBundle(primaryCallable, allCallables, Map.empty)
     BInfo(bundle, sources, adjunctsFiles)
   }
 
@@ -135,11 +134,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
               antlr4Trace = false,
               localDirectories = imports.toVector :+ srcDir,
               verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
-    val parsers = Parsers(opts)
-    val stdlib = WdlTypeStdlib(opts)
-    val typeInfer = TypeInfer(stdlib)
-    val mainDoc : AST.Document = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
-    val ctxTypes = checker.apply(mainDoc)
+    val parsers = new Parsers(opts)
+    val typeInfer = new TypeInfer(opts)
+    val doc = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
+    val (tDoc, ctxTypes) = typeInfer.apply(doc)
 
     // recurse into the imported packages
     //
@@ -148,9 +146,82 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val flatInfo : BInfo = dfsFlatten(bInfo)
 
     (languageFromVersion(mainDoc.version),
-     Bundle(primaryCallable, flatInfo.callables, ctxTypes.structs),
+     WdlBundle(primaryCallable, flatInfo.callables, ctxTypes.structs),
      allInfo2.sources,
      allInfo2.ajunctsFiles)
   }
 
+  // throw an exception if this WDL program is invalid
+  def validateWdlCode(wdlWfSource: String): Unit = {
+    // write the code to a local file
+    val tmpPath = Files.createTempFile("wdlCode",".txt");
+    Utils.writeFileContent(tmpPath, wdlWfSource)
+
+    val opts =
+      Options(typeChecking = WdlTypeCheckingRegime.Strict,
+              antlr4Trace = false,
+              localDirectories = Vector.empty,
+              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val parsers = new Parsers(opts)
+    val typeInfer = new TypeInfer(opts)
+    val doc = parsers.parseDocument(WdlUtil.pathToUrl(tmpPath))
+    val (_, _) = typeInfer.apply(doc)
+
+    // cleanup: remove temporary file
+    Files.deleteIfExists(tmpPath)
+  }
+
+
+  // Parse a Workflow source file. Return the:
+  //  * workflow definition
+  //  * directory of tasks
+  //  * directory of type aliases
+  def parseWdlWorkflow(
+      wfSource: String
+  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlType]) = {
+    // write the code to a local file
+    val tmpPath = Files.createTempFile("wdlCode",".txt");
+    Utils.writeFileContent(tmpPath, wdlWfSource)
+
+    val _, bundle, _, _ = apply(tmpPath, List.empty)
+
+    // cleanup: remove temporary file
+    Files.deleteIfExists(tmpPath)
+
+    val wf = bundle.primaryCallable match {
+      case Some(wf : TAT.Workflow) =>  wf
+      case _ => throw new Exception("no workflow in this file")
+    }
+    val tasks = bundle.callables.map{
+      case (name, task : TAT.Task) => name -> task
+      case _ => throw new Exception("not a task")
+    }.toMap
+    (wf, tasks, bundle.structDefs)
+  }
+
+  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlType]) = {
+    // write the code to a local file
+    val tmpPath = Files.createTempFile("wdlCode",".txt");
+    Utils.writeFileContent(tmpPath, wdlWfSource)
+
+    val _, bundle, _, _ = apply(tmpPath, List.empty)
+
+    // cleanup: remove temporary file
+    Files.deleteIfExists(tmpPath)
+
+    val wf = bundle.primaryCallable match {
+      case Some(wf : TAT.Workflow) =>  wf
+      case _ => throw new Exception("no workflow in this file")
+    }
+    val tasks = bundle.callables.map{
+      case (name, task : TAT.Task) => name -> task
+      case _ => throw new Exception("not a task")
+    }.toMap
+    (wf, tasks, bundle.structDefs)
+  }
+
+  // Extract the only task from a namespace
+  def getMainTask(bundle: WdlBundle): TAT.Task = {
+
+  }
 }
