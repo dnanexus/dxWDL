@@ -17,9 +17,12 @@ import time
 
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
+# If there is a published dxda version, use it this way:
 #dxda_version = "v0.2.2"
-dxda_version = "20200312015155_748dd49"
-dxfuse_version = "v0.22.1"
+# If there isn't, lookup the latest version at docker hub
+#    https://hub.docker.com/r/dnanexus/dxda/tags?page=1&ordering=last_updated
+dxda_version = "20200514165628_1611332"
+dxfuse_version = "v0.22.2"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
