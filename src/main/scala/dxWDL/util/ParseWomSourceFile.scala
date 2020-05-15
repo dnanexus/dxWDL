@@ -153,22 +153,17 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   // throw an exception if this WDL program is invalid
   def validateWdlCode(wdlWfSource: String): Unit = {
-    // write the code to a local file
-    val tmpPath = Files.createTempFile("wdlCode",".txt");
-    Utils.writeFileContent(tmpPath, wdlWfSource)
-
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,
               localDirectories = Vector.empty,
               verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
-    val parsers = new Parsers(opts)
+    val lines = sourceCode.split("\n").toVector
+    val sourceCode = SourceCode(None, lines)
+    val parser = new Parsers(opts).getParser(sourceCode)
+    val doc = parser.parseDocument(sourceCode)
     val typeInfer = new TypeInfer(opts)
-    val doc = parsers.parseDocument(WdlUtil.pathToUrl(tmpPath))
     val (_, _) = typeInfer.apply(doc)
-
-    // cleanup: remove temporary file
-    Files.deleteIfExists(tmpPath)
   }
 
 
@@ -178,50 +173,49 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //  * directory of type aliases
   def parseWdlWorkflow(
       wfSource: String
-  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlType]) = {
-    // write the code to a local file
-    val tmpPath = Files.createTempFile("wdlCode",".txt");
-    Utils.writeFileContent(tmpPath, wdlWfSource)
+  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T]) = {
+    val opts =
+      Options(typeChecking = WdlTypeCheckingRegime.Strict,
+              antlr4Trace = false,
+              localDirectories = Vector.empty,
+              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val lines = sourceCode.split("\n").toVector
+    val sourceCode = SourceCode(None, lines)
+    val parser = new Parsers(opts).getParser(sourceCode)
+    val doc = parser.parseDocument(sourceCode)
+    val (tDoc, _) = new TypeInfer(opts).apply(doc)
 
-    val _, bundle, _, _ = apply(tmpPath, List.empty)
-
-    // cleanup: remove temporary file
-    Files.deleteIfExists(tmpPath)
-
-    val wf = bundle.primaryCallable match {
-      case Some(wf : TAT.Workflow) =>  wf
-      case _ => throw new Exception("no workflow in this file")
-    }
-    val tasks = bundle.callables.map{
+    val tasks = tDoc.map{
       case (name, task : TAT.Task) => name -> task
       case _ => throw new Exception("not a task")
     }.toMap
-    (wf, tasks, bundle.structDefs)
+    (tDoc.wf, tasks, bundle.structDefs)
   }
 
-  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlType]) = {
-    // write the code to a local file
-    val tmpPath = Files.createTempFile("wdlCode",".txt");
-    Utils.writeFileContent(tmpPath, wdlWfSource)
+  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T]) = {
+    val opts =
+      Options(typeChecking = WdlTypeCheckingRegime.Strict,
+              antlr4Trace = false,
+              localDirectories = Vector.empty,
+              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val lines = sourceCode.split("\n").toVector
+    val sourceCode = SourceCode(None, lines)
+    val parser = new Parsers(opts).getParser(sourceCode)
+    val doc = parser.parseDocument(sourceCode)
+    val (tDoc, typeCtx) = new TypeInfer(opts).apply(doc)
 
-    val _, bundle, _, _ = apply(tmpPath, List.empty)
-
-    // cleanup: remove temporary file
-    Files.deleteIfExists(tmpPath)
-
-    val wf = bundle.primaryCallable match {
-      case Some(wf : TAT.Workflow) =>  wf
-      case _ => throw new Exception("no workflow in this file")
+    if (tDoc.wf != None)
+      throw new Exception("a workflow that shouldn't be a member of this document")
+    val tasks = tDoc.elements.collect{
+      case task : Task => task
     }
-    val tasks = bundle.callables.map{
-      case (name, task : TAT.Task) => name -> task
-      case _ => throw new Exception("not a task")
-    }.toMap
-    (wf, tasks, bundle.structDefs)
+    if (tasks.isEmpty)
+      throw new Exception("no tasks in this WDL program")
+    if (tasks.size > 1)
+      throw new Exception("More than one task in this WDL program")
+    (tasks.head, typeCtx.structDefs)
   }
 
   // Extract the only task from a namespace
-  def getMainTask(bundle: WdlBundle): TAT.Task = {
-
-  }
+  def getMainTask(bundle: WdlBundle): TAT.Task = ???
 }

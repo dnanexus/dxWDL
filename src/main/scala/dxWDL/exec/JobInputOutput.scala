@@ -4,11 +4,6 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
-import wom.callable.Callable._
-import wom.callable.MetaValueElement
-import wom.expression.WomExpression
-import wom.types._
-import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
@@ -17,7 +12,7 @@ import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           runtimeDebugLevel: Int,
-                          typeAliases: Map[String, WomType]) {
+                          structDefs: Map[String, WomType]) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
