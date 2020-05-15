@@ -1,9 +1,8 @@
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
@@ -12,26 +11,26 @@ import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           runtimeDebugLevel: Int,
-                          structDefs: Map[String, WomType]) {
+                          structDefs: Map[String, WdlTypes.T]) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
+    WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, structDefs)
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
-  def unpackJobInput(name: String, womType: WomType, jsv: JsValue): WomValue = {
-    val (womValue, _) = wdlVarLinksConverter.unpackJobInput(name, womType, jsv)
+  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WomValue = {
+    val (womValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
     womValue
   }
 
-  def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue): Vector[DxFile] = {
-    val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", womType, jsv)
+  def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
+    val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", wdlType, jsv)
     dxFiles
   }
 
-  private def evaluateWomExpression(expr: WomExpression,
-                                    womType: WomType,
+  private def evaluateWomExpression(expr: TAT.Expr,
+                                    wdlType: WdlTypes.T,
                                     env: Map[String, WomValue]): WomValue = {
     val result: ErrorOr[WomValue] =
       expr.evaluateValue(env, dxIoFunctions)
@@ -45,13 +44,13 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     // For example, an expression like:
     //   Float x = "3.2"
     // requires casting from string to float
-    womType.coerceRawValue(value).get
+    wdlType.coerceRawValue(value).get
   }
 
   // Read the job-inputs JSON file, and convert the variables
   // from JSON to WOM values. Delay downloading the files.
   def loadInputs(inputs: JsValue,
-                 callable: wom.callable.Callable): Map[InputDefinition, WomValue] = {
+                 callable: TAT.Callable): Map[InputDefinition, WomValue] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
@@ -66,35 +65,35 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
         }.toMap
         val value: WomValue = inpDfn match {
           // A required input, no default.
-          case RequiredInputDefinition(iName, womType, _, _) =>
+          case RequiredInputDefinition(iName, wdlType, _, _) =>
             fields.get(iName.value) match {
               case None =>
                 throw new Exception(s"Input ${iName} is required but not provided")
               case Some(x: JsValue) =>
                 // Conversion from JSON to WomValue
-                unpackJobInput(iName.value, womType, x)
+                unpackJobInput(iName.value, wdlType, x)
             }
 
           // An input definition that has a default value supplied.
           // Typical WDL example would be a declaration like: "Int x = 5"
-          case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+          case OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _, _) =>
             fields.get(iName.value) match {
               case None =>
                 // use the default expression
-                evaluateWomExpression(defaultExpr, womType, accuValues)
+                evaluateWomExpression(defaultExpr, wdlType, accuValues)
               case Some(x: JsValue) =>
-                unpackJobInput(iName.value, womType, x)
+                unpackJobInput(iName.value, wdlType, x)
             }
 
           // An input whose value should always be calculated from the default, and is
           // not allowed to be overridden.
-          case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+          case FixedInputDefinitionWithDefault(iName, wdlType, defaultExpr, _, _) =>
             fields.get(iName.value) match {
               case None => ()
               case Some(_) =>
                 throw new Exception(s"Input ${iName} should not be provided")
             }
-            evaluateWomExpression(defaultExpr, womType, accuValues)
+            evaluateWomExpression(defaultExpr, wdlType, accuValues)
 
           // There are several distinct cases
           //
@@ -104,17 +103,17 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
           //   _         null            None     override
           //   _         Some(v)         Some(v)
           //
-          case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
+          case OptionalInputDefinition(iName, WomOptionalType(wdlType), _, _) =>
             fields.get(iName.value) match {
               case None =>
                 // this key is not specified in the input
-                WomOptionalValue(womType, None)
+                WomOptionalValue(wdlType, None)
               case Some(JsNull) =>
                 // the input is null
-                WomOptionalValue(womType, None)
+                WomOptionalValue(wdlType, None)
               case Some(x) =>
-                val value: WomValue = unpackJobInput(iName.value, womType, x)
-                WomOptionalValue(womType, Some(value))
+                val value: WomValue = unpackJobInput(iName.value, wdlType, x)
+                WomOptionalValue(wdlType, Some(value))
             }
         }
         accu + (inpDfn -> value)
