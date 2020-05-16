@@ -15,7 +15,7 @@ import dxWDL.base.{Language, Utils}
 
 case class WdlBundle(primaryCallable : Option[TAT.Callable],
                      allCallables : Map[String, TAT.Callable],
-                     structDefs : Map[String, WdlTypes.T_Struct])
+                     aliases : Map[String, WdlTypes.T])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
@@ -146,7 +146,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val flatInfo : BInfo = dfsFlatten(bInfo)
 
     (languageFromVersion(mainDoc.version),
-     WdlBundle(primaryCallable, flatInfo.callables, ctxTypes.structs),
+     WdlBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      allInfo2.sources,
      allInfo2.ajunctsFiles)
   }
@@ -189,7 +189,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
       case (name, task : TAT.Task) => name -> task
       case _ => throw new Exception("not a task")
     }.toMap
-    (tDoc.wf, tasks, bundle.structDefs)
+    (tDoc.wf, tasks, bundle.aliases)
   }
 
   def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T]) = {
@@ -213,9 +213,15 @@ case class ParseWomSourceFile(verbose: Boolean) {
       throw new Exception("no tasks in this WDL program")
     if (tasks.size > 1)
       throw new Exception("More than one task in this WDL program")
-    (tasks.head, typeCtx.structDefs)
+    (tasks.head, typeCtx.aliases)
   }
 
   // Extract the only task from a namespace
-  def getMainTask(bundle: WdlBundle): TAT.Task = ???
+  def getMainTask(bundle: WdlBundle): TAT.Task = {
+    bundle.primaryCallable match {
+      case None => throw new Exception("found no callable")
+      case Some(task : TAT.Task) => task
+      case Some(wf) => throw new Exception("found a workflow ${wf.name} and not a task")
+    }
+  }
 }

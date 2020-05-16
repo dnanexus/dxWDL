@@ -13,7 +13,6 @@ import spray.json._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 
-//import wom.types._
 import wdlTools.types.WdlTypes._
 
 class PermissionDeniedException(s: String) extends Exception(s) {}
@@ -243,18 +242,18 @@ object Utils {
   }
 
   // types
-  def isOptional(t: WdlTypes.WT): Boolean = {
+  def isOptional(t: WdlTypes.T): Boolean = {
     t match {
-      case WdlTypes.WT_Optional(_) => true
+      case WdlTypes.T_Optional(_) => true
       case t                  => false
     }
   }
 
   // We need to deal with types like:
   //     Int??, Array[File]??
-  def stripOptional(t: WdlTypes.WT): WomType = {
+  def stripOptional(t: WdlType.T): WdlTypes.T = {
     t match {
-      case WdlTypes.WT_Optional(x) => stripOptional(x)
+      case WdlTypes.T_Optional(x) => stripOptional(x)
       case x                  => x
     }
   }

@@ -19,9 +19,9 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
-  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WomValue = {
-    val (womValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
-    womValue
+  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlTypes.T = {
+    val (wdlValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
+    wdlValue
   }
 
   def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
@@ -48,7 +48,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   }
 
   // Read the job-inputs JSON file, and convert the variables
-  // from JSON to WOM values. Delay downloading the files.
+  // from JSON to WOM values. No files are downloaded here.
   def loadInputs(inputs: JsValue,
                  callable: TAT.Callable): Map[InputDefinition, WomValue] = {
     // Discard auxiliary fields

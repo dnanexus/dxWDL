@@ -231,13 +231,13 @@ case class WdlRuntimeAttrs(m: Map[String, WdlValues.WV])
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
-    private def readWomValue(value: JsValue): WomValue = value match {
+    private def readWomValue(value: JsValue): WdlValues.WV = value match {
       case JsBoolean(b)  => WV_Boolean(b.booleanValue)
       case JsNumber(nmb) => WV_Integer(nmb.intValue)
       case JsString(s)   => WV_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
-    private def writeWomValue(wValue: WomValue): JsValue = wValue match {
+    private def writeWomValue(wValue: WdlValues.WV): JsValue = wValue match {
       case WV_Boolean(b) => JsBoolean(b)
       case WV_Integer(i) => JsNumber(i)
       case WV_String(s)  => JsString(s)

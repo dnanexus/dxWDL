@@ -9,8 +9,7 @@ file type is very different between WDL and DNAx.
 package dxWDL.util
 
 import spray.json._
-import wom.types._
-import wom.values._
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -31,11 +30,11 @@ case class DxlStage(dxStage: DxWorkflowStage, ioRef: IORef.Value, varName: Strin
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 
-case class WdlVarLinks(womType: WomType, dxlink: DxLink)
+case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 
 case class WdlVarLinksConverter(verbose: Verbose,
                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                                typeAliases: Map[String, WomType]) {
+                                typeAliases: Map[String, WdlTypes.T]) {
   val womTypeSerializer = WomTypeSerialization(typeAliases)
 
   private def isDoubleOptional(t: WomType): Boolean = {
