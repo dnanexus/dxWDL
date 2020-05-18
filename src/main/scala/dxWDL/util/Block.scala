@@ -75,20 +75,18 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
-import wom.callable.Callable
-import wom.callable.Callable._
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
-import wom.types._
+import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.util.Util.prettyFormat
+
+import dxWDL.base.WomCompat._
 
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
-case class Block(nodes: Vector[GraphNode]) {
+case class Block(nodes: Vector[TAT.WorkflowElement]) {
   def prettyPrint: String = {
     val desc = nodes
       .map { node =>
-        "    " + WomPrettyPrint.apply(node) + "\n"
+      "    " + prettyFormat.apply(node) + "\n"
       }
       .mkString("")
     s"""|Block [
@@ -112,44 +110,40 @@ case class Block(nodes: Vector[GraphNode]) {
   //
   // If the entire block is made up of expressions, return None
   def makeName: Option[String] = {
-    val coreStmts = nodes.filter {
-      case _: ScatterNode     => true
-      case _: ConditionalNode => true
-      case _: CallNode        => true
-      case _                  => false
+    nodes.collectFirst {
+      case TAT.Scatter(id, expr, body, _) =>
+        val collection = TUtil.exprToString(expr)
+        s"scatter (${id} in ${collection})"
+      case TAT.Conditional(expr, body, _) =>
+        val cond = TUtil.exprToString(expr)
+        s"if (${cond})"
+      case call : TAT.Call =>
+        s"frag ${call.actualName}"
     }
-
-    if (coreStmts.isEmpty)
-      return None
-    val name = coreStmts.head match {
-      case ssc: ScatterNode =>
-        // WDL allows scatter on one element only
-        assert(ssc.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = ssc.scatterVariableNodes.head
-        val collection = svNode.scatterExpressionNode.womExpression.sourceString
-        val name = svNode.identifier.localName.value
-        s"scatter (${name} in ${collection})"
-      case cond: ConditionalNode =>
-        s"if (${cond.conditionExpression.womExpression.sourceString})"
-      case call: CallNode =>
-        s"frag ${call.identifier.localName.value}"
-      case _ =>
-        throw new Exception("sanity")
-    }
-    return Some(name)
   }
-
 }
 
 object Block {
+  // figure out the inputs from an expression
+  //
+  // For example:
+  //   expression   inputs
+  //   x + y        Vector(x, y)
+  //   x + y + z    Vector(x, y, z)
+  //   foo.y + 3    Vector(foo.y)
+  //   1 + 9        Vector.empty
+  //   "a" + "b"    Vector.empty
+  //
+  def exprInputs(expr : WdlExpression) : Vector[String] = ???
+
   // A trivial expression has no operators, it is either a constant WomValue
   // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
   // is not.
-  def isTrivialExpression(womType: WomType, expr: WomExpression): Boolean = {
-    val inputs = expr.inputs
+  def isTrivialExpression(womType: WdlType, expr: WdlExpression): Boolean = {
+    val inputs = exprInputs(expr)
     if (inputs.size > 1)
       return false
-    if (WomValueAnalysis.isExpressionConst(womType, expr))
+    if (WdlValueAnalysis.isExpressionConst(womType, expr))
       return true
     // The expression may have one input, but could still have an operator.
     // For example: x+1, x + x.
@@ -159,12 +153,16 @@ object Block {
   // The block is a singleton with one statement which is a call. The call
   // has no subexpressions. Note that the call may not provide
   // all the callee's arguments.
-  def isCallWithNoSubexpressions(node: GraphNode): Boolean = {
+  def isCallWithNoSubexpressions(node: WorkflowElement): Boolean = {
     node match {
       case call: CallNode =>
-        call.inputDefinitionMappings.forall {
-          case (inputDef, expr: WomExpression) =>
-            isTrivialExpression(inputDef.womType, expr)
+        call.inputs.forall {
+          case (name, expr: WomExpression) =>
+            val (t, _) = call.callee.input.get(name) match {
+              case None => throw ...
+              case Some(t) => t
+            }
+            isTrivialExpression(t, expr)
           case (_, _) => true
         }
       case _ => false

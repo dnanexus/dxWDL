@@ -10,15 +10,15 @@ import wdlTools.util.{
   Util => WdlUtil,
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
-import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT, WdlTypes}
-import dxWDL.base.{Language, Utils}
+import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT}
+import dxWDL.base.{Language, Utils, WdlCompat}
 
 case class WdlBundle(primaryCallable : Option[TAT.Callable],
                      allCallables : Map[String, TAT.Callable],
-                     aliases : Map[String, WdlTypes.T])
+                     aliases : Map[String, WdlType])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
-case class ParseWomSourceFile(verbose: Boolean) {
+case class ParseWdlSourceFile(verbose: Boolean) {
 
   private case class BInfo(callables : Map[String, TAT.Callable],
                            sources : Map[String, WorkflowSource],
@@ -173,7 +173,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //  * directory of type aliases
   def parseWdlWorkflow(
       wfSource: String
-  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T]) = {
+  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlType]) = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,
@@ -192,7 +192,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     (tDoc.wf, tasks, bundle.aliases)
   }
 
-  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T]) = {
+  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlType]) = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,

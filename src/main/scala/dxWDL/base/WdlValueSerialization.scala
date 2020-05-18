@@ -1,13 +1,14 @@
 package dxWDL.base
 
 import spray.json._
-import wdlTools.eval.WdlValues._
-import wdlTools.types.WdlTypes._
+//import wdlTools.eval.WdlValues._
+//import wdlTools.types.WdlTypes._
+import womCompat._
 
 case class WdlValueSerialization(typeAliases: Map[String, WdlType]) {
 
   // Serialization of a WOM value to JSON
-  private def womToJSON(t: WdlType, w: WdlValue): JsValue = {
+  private def womToJSON(t: WdlTypes.T, w: WdlValue.V): JsValue = {
     (t, w) match {
       // Base case: primitive types.
       // Files are encoded as their full path.
