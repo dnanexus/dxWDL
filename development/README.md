@@ -4,10 +4,10 @@
 
 ### Developing in a Docker container
 
-A Dockerfile with all the dependencies to build and test dxWDL is at [/development/docker/Dockerfile](docker/Dockerfile). To build an image from it and run a Docker container, run from the dxWDL repo root folder:
+A Dockerfile with all the dependencies to build and test dxWDL is available [here](docker/Dockerfile). To build an image from it and run a Docker container, run:
 
 ```
-make -f development/Makefile
+make
 ```
 
 To recompile dxWDL with your updates, run a test, as described [here](#Running-tests).
@@ -22,18 +22,17 @@ First login into DNAnexus staging environment
 dx login --staging
 ```
 
-Then run a test from the repo root folder. To run a subset of tests, run:
+Then run a test from the dxWDL repository root folder. To run a medium-sized subset of tests, run:
 
 ```
 ./scripts/run_tests.py --test M
 ```
 
-You can also select a test to run from [/test](/test) and invoke it by name, for example:
+You can also select a test to run from the [/test](/test) directory and invoke it by name, for example:
 
 ```
 ./scripts/run_tests.py --test add3
 ```
 
-Check test runner script help for more options.
-
+Check the test runner script `--help` for more options.
 
