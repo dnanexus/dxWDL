@@ -34,10 +34,10 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 
 case class WdlVarLinksConverter(verbose: Verbose,
                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                                typeAliases: Map[String, WdlType]) {
-  val wdlTypeSerializer = WdlTypeSerialization(typeAliases)
+                                typeAliases: Map[String, WomType]) {
+  val wdlTypeSerializer = WomTypeSerialization(typeAliases)
 
-  private def isDoubleOptional(t: WdlType): Boolean = {
+  private def isDoubleOptional(t: WomType): Boolean = {
     t match {
       case WdlOptionalType(WdlOptionalType(_)) => true
       case _                                   => false
@@ -47,7 +47,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
   // Serialize a complex WDL value into a JSON value. The value could potentially point
   // to many files. The assumption is that files are already in the format of dxWDLs,
   // requiring not upload/download or any special conversion.
-  private def jsFromWdlValue(wdlType: WdlType, wdlValue: WdlValue): JsValue = {
+  private def jsFromWdlValue(wdlType: WomType, wdlValue: WdlValue): JsValue = {
     if (isDoubleOptional(wdlType) ||
         isDoubleOptional(wdlValue.wdlType)) {
       System.err.println(s"""|jsFromWdlValue
@@ -68,79 +68,79 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
     (wdlType, wdlValue) match {
       // Base case: primitive types
-      case (WdlFileType, WdlString(path))     => handleFile(path)
-      case (WdlFileType, WdlSingleFile(path)) => handleFile(path)
-      case (WdlStringType, WdlSingleFile(path))     => JsString(path)
-      case (WdlStringType, WdlString(buf)) =>
+      case (WomFileType, WomString(path))     => handleFile(path)
+      case (WomFileType, WomSingleFile(path)) => handleFile(path)
+      case (WomStringType, WomSingleFile(path))     => JsString(path)
+      case (WomStringType, WomString(buf)) =>
         if (buf.length > Utils.MAX_STRING_LEN)
           throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
         JsString(buf)
-      case (WdlBooleanType, WdlBoolean(b))      => JsBoolean(b)
-      case (WdlBooleanType, WdlString("true"))  => JsBoolean(true)
-      case (WdlBooleanType, WdlString("false")) => JsBoolean(false)
+      case (WomBooleanType, WomBoolean(b))      => JsBoolean(b)
+      case (WomBooleanType, WomString("true"))  => JsBoolean(true)
+      case (WomBooleanType, WomString("false")) => JsBoolean(false)
 
       // Integer conversions
-      case (WdlIntegerType, WdlInteger(n)) => JsNumber(n)
-      case (WdlIntegerType, WdlString(s))  => JsNumber(s.toInt)
-      case (WdlIntegerType, WdlFloat(x))   => JsNumber(x.toInt)
+      case (WomIntegerType, WomInteger(n)) => JsNumber(n)
+      case (WomIntegerType, WomString(s))  => JsNumber(s.toInt)
+      case (WomIntegerType, WomFloat(x))   => JsNumber(x.toInt)
 
       // Float conversions
-      case (WdlFloatType, WdlFloat(x))   => JsNumber(x)
-      case (WdlFloatType, WdlInteger(n)) => JsNumber(n.toFloat)
-      case (WdlFloatType, WdlString(s))  => JsNumber(s.toFloat)
+      case (WomFloatType, WomFloat(x))   => JsNumber(x)
+      case (WomFloatType, WomInteger(n)) => JsNumber(n.toFloat)
+      case (WomFloatType, WomString(s))  => JsNumber(s.toFloat)
 
-      case (WdlPairType(lType, rType), WdlPair(l, r)) =>
-        val lJs = jsFromWdlValue(lType, l)
-        val rJs = jsFromWdlValue(rType, r)
+      case (WomPairType(lType, rType), WomPair(l, r)) =>
+        val lJs = jsFromWomValue(lType, l)
+        val rJs = jsFromWomValue(rType, r)
         JsObject("left" -> lJs, "right" -> rJs)
 
       // Maps. These are projections from a key to value, where
       // the key and value types are statically known. We
       // represent them in JSON as an array of keys, followed by
       // an array of values.
-      case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
+      case (WomMapType(keyType, valueType), WomMap(_, m)) =>
         // general case
-        val keys: WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-        val kJs = jsFromWdlValue(keys.wdlType, keys)
-        val values: WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-        val vJs = jsFromWdlValue(values.wdlType, values)
+        val keys: WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
+        val kJs = jsFromWomValue(keys.wdlType, keys)
+        val values: WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
+        val vJs = jsFromWomValue(values.wdlType, values)
         JsObject("keys" -> kJs, "values" -> vJs)
 
       // Arrays: these come after maps, because there is an automatic coercion from
       // a map to an array.
       //
       // Base case: empty array
-      case (_, WdlArray(_, ar)) if ar.length == 0 =>
+      case (_, WomArray(_, ar)) if ar.length == 0 =>
         JsArray(Vector.empty)
-      case (WdlArrayType(t), null) =>
+      case (WomArrayType(t), null) =>
         JsArray(Vector.empty)
 
       // Non empty array
-      case (WdlArrayType(t), WdlArray(_, elems)) =>
+      case (WomArrayType(t), WomArray(_, elems)) =>
         val jsVals = elems.map { x =>
-          jsFromWdlValue(t, x)
+          jsFromWomValue(t, x)
         }
         JsArray(jsVals.toVector)
 
       // Strip optional type
-      case (WdlOptionalType(t), WdlOptionalValue(_, Some(w))) =>
-        jsFromWdlValue(t, w)
-      case (WdlOptionalType(t), WdlOptionalValue(_, None)) =>
+      case (WomOptionalType(t), WomOptionalValue(_, Some(w))) =>
+        jsFromWomValue(t, w)
+      case (WomOptionalType(t), WomOptionalValue(_, None)) =>
         JsNull
-      case (WdlOptionalType(t), w) =>
-        jsFromWdlValue(t, w)
-      case (t, WdlOptionalValue(_, Some(w))) =>
-        jsFromWdlValue(t, w)
+      case (WomOptionalType(t), w) =>
+        jsFromWomValue(t, w)
+      case (t, WomOptionalValue(_, Some(w))) =>
+        jsFromWomValue(t, w)
 
       // structs
-      case (WdlStructType(structName, typeMap), WdlStruct(_, m: Map[String, WdlValue], _)) =>
+      case (WomStructType(structName, typeMap), WomStruct(_, m: Map[String, WomValue], _)) =>
         // Convert each of the elements
         val mJs = m.map {
           case (key, wdlValue) =>
             val elemType = typeMap.get(key) match {
               case None =>
                 throw new Exception(s"""|ERROR
-                                        |WdlStructType
+                                        |WomStructType
                                         |  structName=${structName}
                                         |  typeMap=${typeMap}
                                         |  wdl-object=${m}
@@ -148,7 +148,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
                                         |""".stripMargin)
               case Some(t) => t
             }
-            key -> jsFromWdlValue(elemType, wdlValue)
+            key -> jsFromWomValue(elemType, wdlValue)
         }.toMap
         JsObject(mJs)
 
@@ -157,12 +157,12 @@ case class WdlVarLinksConverter(verbose: Verbose,
           if (wdlType == null)
             "null"
           else
-            WdlTypeSerialization.typeName(wdlType)
+            WomTypeSerialization.typeName(wdlType)
         val wdlValueStr =
           if (wdlValue == null)
             "null"
           else
-            s"(${wdlValue.toWdlString}, ${wdlValue.wdlType})"
+            s"(${wdlValue.toWomString}, ${wdlValue.wdlType})"
         throw new Exception(s"""|Unsupported combination:
                                 |    wdlType:  ${wdlTypeStr}
                                 |    wdlValue: ${wdlValueStr}""".stripMargin)
@@ -170,32 +170,32 @@ case class WdlVarLinksConverter(verbose: Verbose,
   }
 
   // import a WDL value
-  def importFromWDL(wdlType: WdlType, wdlValue: WdlValue): WdlVarLinks = {
-    val jsValue = jsFromWdlValue(wdlType, wdlValue)
+  def importFromWDL(wdlType: WomType, wdlValue: WomValue): WdlVarLinks = {
+    val jsValue = jsFromWomValue(wdlType, wdlValue)
     WdlVarLinks(wdlType, DxlValue(jsValue))
   }
 
-  // Convert a job input to a WdlValue. Do not download any files, convert them
+  // Convert a job input to a WomValue. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def jobInputToWdlValue(name: String, wdlType: WdlType, jsValue: JsValue): WdlValue = {
+  private def jobInputToWomValue(name: String, wdlType: WomType, jsValue: JsValue): WomValue = {
     (wdlType, jsValue) match {
       // base case: primitive types
-      case (WdlBooleanType, JsBoolean(b))   => WdlBoolean(b.booleanValue)
-      case (WdlIntegerType, JsNumber(bnm))  => WdlInteger(bnm.intValue)
-      case (WdlFloatType, JsNumber(bnm))    => WdlFloat(bnm.doubleValue)
-      case (WdlStringType, JsString(s))     => WdlString(s)
-      case (WdlFileType, JsString(s)) => WdlFile(s)
-      case (WdlFileType, JsObject(_)) =>
+      case (WomBooleanType, JsBoolean(b))   => WomBoolean(b.booleanValue)
+      case (WomIntegerType, JsNumber(bnm))  => WomInteger(bnm.intValue)
+      case (WomFloatType, JsNumber(bnm))    => WomFloat(bnm.doubleValue)
+      case (WomStringType, JsString(s))     => WomString(s)
+      case (WomFileType, JsString(s)) => WomFile(s)
+      case (WomFileType, JsObject(_)) =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxUtils.dxFileFromJsValue(jsValue)
         val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
-        WdlSingleFile(s)
+        WomSingleFile(s)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
-      case (WdlMapType(keyType, valueType), _) =>
+      case (WomMapType(keyType, valueType), _) =>
         val fields = jsValue.asJsObject.fields
         // [mJs] is a map from json key to json value
         val mJs: Map[JsValue, JsValue] =
@@ -209,45 +209,45 @@ case class WdlVarLinksConverter(verbose: Verbose,
             case _ =>
               throw new Exception(s"Malformed JSON ${fields}")
           }
-        val m: Map[WdlValue, WdlValue] = mJs.map {
+        val m: Map[WomValue, WomValue] = mJs.map {
           case (k: JsValue, v: JsValue) =>
-            val kWdl = jobInputToWdlValue(name, keyType, k)
-            val vWdl = jobInputToWdlValue(name, valueType, v)
-            kWdl -> vWdl
+            val kWom = jobInputToWomValue(name, keyType, k)
+            val vWom = jobInputToWomValue(name, valueType, v)
+            kWom -> vWom
         }.toMap
-        WdlMap(WdlMapType(keyType, valueType), m)
+        WomMap(WomMapType(keyType, valueType), m)
 
-      case (WdlPairType(lType, rType), JsObject(fields))
+      case (WomPairType(lType, rType), JsObject(fields))
           if (List("left", "right").forall(fields contains _)) =>
-        val left = jobInputToWdlValue(name, lType, fields("left"))
-        val right = jobInputToWdlValue(name, rType, fields("right"))
-        WdlPair(left, right)
+        val left = jobInputToWomValue(name, lType, fields("left"))
+        val right = jobInputToWomValue(name, rType, fields("right"))
+        WomPair(left, right)
 
       // empty array
-      case (WdlArrayType(t), JsNull) =>
-        WdlArray(List.empty[WdlValue])
+      case (WomArrayType(t), JsNull) =>
+        WomArray(List.empty[WomValue])
 
       // array
-      case (WdlArrayType(t), JsArray(vec)) =>
-        val wVec: Seq[WdlValue] = vec.map { elem: JsValue =>
-          jobInputToWdlValue(name, t, elem)
+      case (WomArrayType(t), JsArray(vec)) =>
+        val wVec: Seq[WomValue] = vec.map { elem: JsValue =>
+          jobInputToWomValue(name, t, elem)
         }
-        WdlArray(wVec)
+        WomArray(wVec)
 
-      case (WdlOptionalType(t), JsNull) =>
-        WdlOptionalValue(t, None)
-      case (WdlOptionalType(t), jsv) =>
-        val value = jobInputToWdlValue(name, t, jsv)
-        WdlOptionalValue(t, Some(value))
+      case (WomOptionalType(t), JsNull) =>
+        WomOptionalValue(t, None)
+      case (WomOptionalType(t), jsv) =>
+        val value = jobInputToWomValue(name, t, jsv)
+        WomOptionalValue(t, Some(value))
 
       // structs
-      case (WdlStructType(typeMap, Some(structName)), JsObject(fields)) =>
-        val m: Map[String, WdlValue] = fields.map {
+      case (WomStructType(typeMap, Some(structName)), JsObject(fields)) =>
+        val m: Map[String, WomValue] = fields.map {
           case (key, jsValue) =>
             val t = typeMap.get(key) match {
               case None =>
                 throw new Exception(s"""|ERROR
-                                        |WdlStructType
+                                        |WomStructType
                                         |  structName=${structName}
                                         |  typeMap=${typeMap}
                                         |  fields=${fields}
@@ -255,9 +255,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
                                         |""".stripMargin)
               case Some(t) => t
             }
-            key -> jobInputToWdlValue(key, t, jsValue)
+            key -> jobInputToWomValue(key, t, jsValue)
         }.toMap
-        WdlStruct(structName, m)
+        WomStruct(structName, m)
 
       case _ =>
         throw new AppInternalException(s"""|Unsupported combination
@@ -268,7 +268,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
   }
 
-  def unpackJobInput(name: String, wdlType: WdlType, jsv: JsValue): (WdlValue, Vector[DxFile]) = {
+  def unpackJobInput(name: String, wdlType: WomType, jsv: JsValue): (WomValue, Vector[DxFile]) = {
     val jsv1 =
       jsv match {
         case JsObject(fields) if fields contains "___" =>
@@ -277,13 +277,13 @@ case class WdlVarLinksConverter(verbose: Verbose,
           fields("___")
         case _ => jsv
       }
-    val wdlValue = jobInputToWdlValue(name, wdlType, jsv1)
+    val wdlValue = jobInputToWomValue(name, wdlType, jsv1)
     val dxFiles = DxUtils.findDxFiles(jsv)
     (wdlValue, dxFiles)
   }
 
   // create input/output fields that bind the variable name [bindName] to
-  // this WdlVar
+  // this WomVar
   def genFields(wvl: WdlVarLinks,
                 bindName: String,
                 encodeDots: Boolean = true): List[(String, JsValue)] = {
@@ -309,7 +309,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
       }
       (bindEncName, jsv)
     }
-    def mkComplex(wdlType: WdlType): Map[String, JsValue] = {
+    def mkComplex(wdlType: WomType): Map[String, JsValue] = {
       val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
       wvl.dxlink match {
         case DxlValue(jsn) =>

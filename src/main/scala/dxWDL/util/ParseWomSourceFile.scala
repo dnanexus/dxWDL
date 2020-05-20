@@ -11,14 +11,15 @@ import wdlTools.util.{
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
 import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT}
-import dxWDL.base.{Language, Utils, WdlCompat}
+import dxWDL.base.{Language, Utils}
+import dxWDL.base.WomCompat._
 
-case class WdlBundle(primaryCallable : Option[TAT.Callable],
+case class WomBundle(primaryCallable : Option[TAT.Callable],
                      allCallables : Map[String, TAT.Callable],
                      aliases : Map[String, WdlType])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
-case class ParseWdlSourceFile(verbose: Boolean) {
+case class ParseWomSourceFile(verbose: Boolean) {
 
   private case class BInfo(callables : Map[String, TAT.Callable],
                            sources : Map[String, WorkflowSource],
@@ -78,7 +79,7 @@ case class ParseWdlSourceFile(verbose: Boolean) {
       callable => callable.name -> callable
     }.toMap
 
-    val bundle = WdlBundle(primaryCallable, allCallables, Map.empty)
+    val bundle = WomBundle(primaryCallable, allCallables, Map.empty)
     BInfo(bundle, sources, adjunctsFiles)
   }
 
@@ -117,7 +118,7 @@ case class ParseWdlSourceFile(verbose: Boolean) {
   // Also returns 1) a mapping of input files to source code; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
   def apply(mainFile: Path, imports: List[Path]): (Language.Value,
-                                                   WdlBundle,
+                                                   WomBundle,
                                                    Map[String, WorkflowSource],
                                                    Map[String, Vector[Adjuncts.AdjunctFile]]) = {
     // Resolves for:
@@ -146,7 +147,7 @@ case class ParseWdlSourceFile(verbose: Boolean) {
     val flatInfo : BInfo = dfsFlatten(bInfo)
 
     (languageFromVersion(mainDoc.version),
-     WdlBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
+     WomBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      allInfo2.sources,
      allInfo2.ajunctsFiles)
   }
@@ -192,7 +193,7 @@ case class ParseWdlSourceFile(verbose: Boolean) {
     (tDoc.wf, tasks, bundle.aliases)
   }
 
-  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlType]) = {
+  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WomType]) = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,
@@ -217,7 +218,7 @@ case class ParseWdlSourceFile(verbose: Boolean) {
   }
 
   // Extract the only task from a namespace
-  def getMainTask(bundle: WdlBundle): TAT.Task = {
+  def getMainTask(bundle: WomBundle): TAT.Task = {
     bundle.primaryCallable match {
       case None => throw new Exception("found no callable")
       case Some(task : TAT.Task) => task

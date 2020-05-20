@@ -17,20 +17,15 @@ task Add {
   */
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
-import common.validation.ErrorOr.ErrorOr
 import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
-import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
-import wom.callable.Callable.{InputDefinition, OutputDefinition}
-import wom.core.WorkflowSource
-import wom.types.WomType
-import wom.values._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base._
+import dxWDL.base.WomCompat._
 import dxWDL.dx._
 import dxWDL.util._
 

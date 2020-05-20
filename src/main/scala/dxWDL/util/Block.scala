@@ -139,11 +139,11 @@ object Block {
   // A trivial expression has no operators, it is either a constant WomValue
   // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
   // is not.
-  def isTrivialExpression(womType: WdlType, expr: WdlExpression): Boolean = {
+  def isTrivialExpression(expr: WdlExpression): Boolean = {
     val inputs = exprInputs(expr)
     if (inputs.size > 1)
       return false
-    if (WdlValueAnalysis.isExpressionConst(womType, expr))
+    if (WdlValueAnalysis.isExpressionConst(expr.wdlType, expr))
       return true
     // The expression may have one input, but could still have an operator.
     // For example: x+1, x + x.
@@ -155,124 +155,12 @@ object Block {
   // all the callee's arguments.
   def isCallWithNoSubexpressions(node: WorkflowElement): Boolean = {
     node match {
-      case call: CallNode =>
+      case call: TAT.Call =>
         call.inputs.forall {
-          case (name, expr: WomExpression) =>
-            val (t, _) = call.callee.input.get(name) match {
-              case None => throw ...
-              case Some(t) => t
-            }
-            isTrivialExpression(t, expr)
-          case (_, _) => true
+          case (name, expr: WomExpression) => isTrivialExpression(expr)
         }
       case _ => false
     }
-  }
-
-  // Is the call [callName] invoked in one of the nodes, or their
-  // inner graphs?
-  private def graphContainsCall(callName: String, nodes: Set[GraphNode]): Boolean = {
-    nodes.exists {
-      case callNode: CallNode =>
-        callNode.identifier.localName.value == callName
-      case cNode: ConditionalNode =>
-        graphContainsCall(callName, cNode.innerGraph.nodes)
-      case scNode: ScatterNode =>
-        graphContainsCall(callName, scNode.innerGraph.nodes)
-      case _ => false
-    }
-  }
-
-  // Find the toplevel graph node that contains this call
-  def findCallByName(callName: String, nodes: Set[GraphNode]): Option[GraphNode] = {
-    val gnode: Option[GraphNode] = nodes.find {
-      case callNode: CallNode =>
-        callNode.identifier.localName.value == callName
-      case cNode: ConditionalNode =>
-        graphContainsCall(callName, cNode.innerGraph.nodes)
-      case scNode: ScatterNode =>
-        graphContainsCall(callName, scNode.innerGraph.nodes)
-      case _ => false
-    }
-    gnode
-  }
-
-  private def pickTopNodes(nodes: Set[GraphNode]) = {
-    assert(nodes.size > 0)
-    nodes.flatMap { node =>
-      val ancestors = node.upstreamAncestry
-      val others = nodes - node
-      if ((ancestors.intersect(others)).isEmpty) {
-        Some(node)
-      } else {
-        None
-      }
-    }
-  }
-
-  // Sort a group of nodes according to dependencies. Note that this is a partial
-  // ordering only.
-  def partialSortByDep(nodes: Set[GraphNode]): Vector[GraphNode] = {
-    var ordered = Vector.empty[GraphNode]
-    var rest: Set[GraphNode] = nodes
-
-    while (!rest.isEmpty) {
-      val tops = pickTopNodes(rest)
-      assert(!tops.isEmpty)
-      ordered = ordered ++ tops
-      rest = rest -- tops
-    }
-
-    assert(ordered.size == nodes.size)
-    ordered
-  }
-
-  private def deepAncestors(node: GraphNode): Set[GraphNode] = {
-    node match {
-      case cndNode: ConditionalNode =>
-        cndNode.upstreamAncestry ++
-          cndNode.innerGraph.nodes.flatMap(deepAncestors(_))
-      case sctNode: ScatterNode =>
-        sctNode.upstreamAncestry ++
-          sctNode.innerGraph.nodes.flatMap(deepAncestors(_))
-      case ogin: OuterGraphInputNode =>
-        // follow the indirection, this is not by default
-        val sourceNode = ogin.linkToOuterGraphNode
-        sourceNode.upstreamAncestry + sourceNode
-      case _ =>
-        node.upstreamAncestry
-    }
-  }
-
-  // remove non local inputs, propagated from inner calls.
-  // In this workflow:
-  //
-  // workflow inner_wf {
-  //     input {}
-  //     call foo
-  //     output {}
-  // }
-  //
-  // task foo {
-  //     input {
-  //         Boolean unpassed_arg_default = true
-  //     }
-  //     command {}
-  //     output {}
-  // }
-  // unpassed_arg_default becomes a inner_wf argument, called
-  // 'inner_wf.foo.unpassed_arg_default'.
-  //
-  // As a result, we filter out any argument that has a dot it in.
-  private def distinguishTopLevelInputs(
-      inputs: Seq[GraphInputNode]
-  ): (Vector[GraphInputNode], Vector[GraphInputNode]) = {
-    val (inner, topLevelInputs) = inputs.partition { inNode =>
-      val name = inNode.identifier.localName.value
-      name contains '.'
-    }
-
-    (topLevelInputs.toVector, inner.toVector)
   }
 
   // Split an entire workflow.
@@ -298,13 +186,11 @@ object Block {
   //  [ call B ]  [ call C ]
   //
   // We choose option #2 because it resembles the original.
-  def splitGraph(
-      graph: Graph,
-      callsLoToHi: Vector[String]
-  ): (Vector[GraphInputNode], // inputs
-      Vector[GraphInputNode], // missing inner inputs that propagate
-      Vector[Block], // blocks
-      Vector[GraphOutputNode]) // outputs
+  def splitGraph(stmts : Vector[WorkflowElement]) :
+      (Vector[GraphInputNode], // inputs
+       Vector[GraphInputNode], // missing inner inputs that propagate
+       Vector[Block], // blocks
+       Vector[GraphOutputNode]) // outputs
   = {
     var rest: Set[GraphNode] = graph.nodes
     var blocks = Vector.empty[Block]

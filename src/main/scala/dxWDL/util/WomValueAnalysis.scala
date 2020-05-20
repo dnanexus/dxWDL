@@ -4,9 +4,9 @@ import java.nio.file.{Paths}
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.Utils
-import dxWDL.base.WdlCompat._
+import dxWDL.base.WomCompat._
 
-object WdlValueAnalysis {
+object WomValueAnalysis {
   // Examine task foo:
   //
   // task foo {
@@ -22,7 +22,7 @@ object WdlValueAnalysis {
   // read from disk, and uploaded to the platform.  A file can't
   // have a constant string as an input, this has to be a dnanexus
   // link.
-  private def requiresEvaluation(wdlType: WdlType, value: WdlValue): Boolean = {
+  private def requiresEvaluation(wdlType: WomType, value: WomValue): Boolean = {
     def isMutableFile(constantFileStr: String): Boolean = {
       constantFileStr match {
         case path if path.startsWith(Utils.DX_URL_PREFIX) =>
@@ -39,40 +39,40 @@ object WdlValueAnalysis {
 
     (wdlType, value) match {
       // Base case: primitive types.
-      case (WdlBooleanType, _)                   => false
-      case (WdlIntegerType, _)                   => false
-      case (WdlFloatType, _)                     => false
-      case (WdlStringType, _)                    => false
-      case (WdlFileType, WdlString(s))     => isMutableFile(s)
-      case (WdlFileType, WdlSingleFile(s)) => isMutableFile(s)
+      case (WomBooleanType, _)                   => false
+      case (WomIntegerType, _)                   => false
+      case (WomFloatType, _)                     => false
+      case (WomStringType, _)                    => false
+      case (WomFileType, WomString(s))     => isMutableFile(s)
+      case (WomFileType, WomSingleFile(s)) => isMutableFile(s)
 
       // arrays
-      case (WdlArrayType(t), WdlArray(_, elems)) =>
+      case (WomArrayType(t), WomArray(_, elems)) =>
         elems.exists(e => requiresEvaluation(t, e))
 
       // maps
-      case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
+      case (WomMapType(keyType, valueType), WomMap(_, m)) =>
         m.keys.exists(k => requiresEvaluation(keyType, k)) ||
           m.values.exists(v => requiresEvaluation(valueType, v))
 
-      case (WdlPairType(lType, rType), WdlPair(l, r)) =>
+      case (WomPairType(lType, rType), WomPair(l, r)) =>
         requiresEvaluation(lType, l) ||
           requiresEvaluation(rType, r)
 
       // Strip optional type
-      case (WdlOptionalType(t), WdlOptionalValue(_, Some(w))) =>
+      case (WomOptionalType(t), WomOptionalValue(_, Some(w))) =>
         requiresEvaluation(t, w)
-      case (WdlOptionalType(t), w) =>
+      case (WomOptionalType(t), w) =>
         requiresEvaluation(t, w)
 
       // missing value
-      case (_, WdlOptionalValue(_, None)) => false
+      case (_, WomOptionalValue(_, None)) => false
 
       // struct -- make sure all of its fields do not require evaluation
-      case (WdlStructType(typeMap: Map[String, WdlType], _), WdlStruct(valueMap, _)) =>
+      case (WomStructType(typeMap: Map[String, WomType], _), WomStruct(valueMap, _)) =>
         typeMap.exists {
           case (name, t) =>
-            val value: WdlValue = valueMap(name)
+            val value: WomValue = valueMap(name)
             requiresEvaluation(t, value)
         }
 
@@ -88,7 +88,7 @@ object WdlValueAnalysis {
   // Check if the WDL expression is a constant. If so, calculate and return it.
   // Otherwise, return None.
   //
-  def ifConstEval(wdlType: WdlType, expr: TAT.Expr): Option[WdlValue] = {
+  def ifConstEval(wdlType: WomType, expr: TAT.Expr): Option[WomValue] = {
     if (requiresEvaluation(wdlType, value)) {
         // There are WDL constants that require evaluation.
         None
@@ -97,14 +97,14 @@ object WdlValueAnalysis {
     }
   }
 
-  def isExpressionConst(wdlType: WdlType, expr: TAT.Expr): Boolean = {
+  def isExpressionConst(wdlType: WomType, expr: TAT.Expr): Boolean = {
     ifConstEval(wdlType, expr) match {
       case None    => false
       case Some(_) => true
     }
   }
 
-  def evalConst(wdlType: WdlType, expr: TAT.Expr): WdlValue = {
+  def evalConst(wdlType: WomType, expr: TAT.Expr): WomValue = {
     ifConstEval(wdlType, expr) match {
       case None           => throw new Exception(s"Expression ${expr} is not a WDL constant")
       case Some(wdlValue) => wdlValue

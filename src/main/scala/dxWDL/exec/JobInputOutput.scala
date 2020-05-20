@@ -2,16 +2,17 @@ package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
+import dxWDL.base.WomCompat._
 import dxWDL.dx.{DxFile, DxUtils, DxdaManifest, DxfuseManifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           runtimeDebugLevel: Int,
-                          structDefs: Map[String, WdlTypes.T]) {
+                          structDefs: Map[String, WomType]) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
@@ -19,18 +20,18 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
-  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlTypes.T = {
+  def unpackJobInput(name: String, wdlType: WomType, jsv: JsValue): WomType = {
     val (wdlValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
     wdlValue
   }
 
-  def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
+  def unpackJobInputFindRefFiles(wdlType: WomType, jsv: JsValue): Vector[DxFile] = {
     val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", wdlType, jsv)
     dxFiles
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,
-                                    wdlType: WdlTypes.T,
+                                    wdlType: WomType,
                                     env: Map[String, WomValue]): WomValue = {
     val result: ErrorOr[WomValue] =
       expr.evaluateValue(env, dxIoFunctions)
@@ -50,14 +51,14 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // Read the job-inputs JSON file, and convert the variables
   // from JSON to WOM values. No files are downloaded here.
   def loadInputs(inputs: JsValue,
-                 callable: TAT.Callable): Map[InputDefinition, WomValue] = {
+                 callable: TAT.Callable): Map[TAT.InputDefinition, WomValue] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
 
     // Get the declarations matching the input fields.
     // Create a mapping from each key to its WDL value
-    callable.inputs.foldLeft(Map.empty[InputDefinition, WomValue]) {
+    callable.inputs.foldLeft(Map.empty[TAT.InputDefinition, WomValue]) {
       case (accu, inpDfn) =>
         val accuValues = accu.map {
           case (inpDfn, value) =>
