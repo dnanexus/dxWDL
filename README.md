@@ -143,8 +143,6 @@ See [development](development/) for more information on how to set up your devel
 
 This software is a community effort! You can browse any of the contributions, that are not a part of dxWDL main source codebase, below in our [contrib](contrib) folder, and add your own (see [Contributing to dxWDL](#Contributing-to-dxWDL)).
 
- - [docker](contrib/docker): A Dockerfile to deploy the software ([@vsoch](https://www.github.com/vsoch))
-
 ## Issues and feature requests
 
 [Let us know](https://github.com/dnanexus/dxWDL/issues) if you would like to contribute, request a feature, or report a bug.
