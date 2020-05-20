@@ -11,7 +11,7 @@ import wdlTools.util.{
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
 import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT}
-import dxWDL.base.{Language, Utils}
+import dxWDL.base.{Language, BaseUtils}
 import dxWDL.base.WomCompat._
 
 case class WomBundle(primaryCallable : Option[TAT.Callable],
@@ -38,13 +38,13 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // identical definitions are somehow, through the magic of Scala,
           // unequal.
           case Some(existing) if (existing != callable) =>
-            Utils.error(s"""|${key} appears with two different callable definitions
-                            |1)
-                            |${callable}
-                            |
-                            |2)
-                            |${existing}
-                            |""".stripMargin)
+            BaseUtils.error(s"""|${key} appears with two different callable definitions
+                                |1)
+                                |${callable}
+                                |
+                                |2)
+                                |${existing}
+                                |""".stripMargin)
             throw new Exception(s"${key} appears twice, with two different definitions")
           case _ => ()
         }

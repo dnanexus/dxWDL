@@ -26,13 +26,12 @@ price       comparative price
   */
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXJSON}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
-import wom.values._
 
-import dxWDL.base.{Utils, Verbose}
+import dxWDL.base.{BaseUtils, Verbose}
+import dxWDL.base.WomCompat._
 import dxWDL.dx._
 
 // Request for an instance type
@@ -429,15 +428,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       }.toVector
     }
 
-    val availableField = "availableInstanceTypes"
-    val req: ObjectNode = DXJSON
-      .getObjectBuilder()
-      .put("fields",
-           DXJSON
-             .getObjectBuilder()
-             .put(availableField, true)
-             .build())
-      .build()
+    val req = JsObject("fields" ->
+                         JsObject("availableInstanceTypes" -> JsTrue))
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
@@ -464,15 +456,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   // view the user account. The compiler may not have these
   // permissions, causing this method to throw an exception.
   private def getPricingModel(billTo: String, region: String): Map[String, Float] = {
-    val req: ObjectNode = DXJSON
-      .getObjectBuilder()
-      .put("fields",
-           DXJSON
-             .getObjectBuilder()
-             .put("pricingModelsByRegion", true)
-             .build())
-      .build()
-
+    val req = JsObject("fields" ->
+                         JsObject("pricingModelsByRegion" -> JsTrue))
     val rep =
       try {
         DXAPI.userDescribe(billTo, req, classOf[JsonNode])
@@ -578,7 +563,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     } catch {
       // Insufficient permissions to describe the user, we cannot get the price list.
       case e: Throwable =>
-        Utils.warning(
+        BaseUtils.warning(
             verbose,
             """|Warning: insufficient permissions to retrieve the
                |instance price list. This will result in suboptimal machine choices,

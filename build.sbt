@@ -49,9 +49,14 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
+//resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+
 libraryDependencies ++= Seq(
     // antlr4 lexer + parser
     "org.antlr" % "antlr4" % "4.8",
+
+  // JSON jackson parser
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.11.0",
 
     "io.spray" %% "spray-json" % "1.3.5",
     "com.typesafe" % "config" % "1.3.3",

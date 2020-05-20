@@ -6,8 +6,9 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
-import wdlTools.eval.WdlValues._
 
+import wdlTools.eval.WdlValues
+import dxWDL.base.WomCompat._
 import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
@@ -26,7 +27,7 @@ case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option
     if (m.isEmpty)
       Map.empty
     else
-      Map("executionPolicy" -> JsObject(m))
+      Map("executionPolicy" -> JsObject(m.toMap))
   }
 }
 
@@ -163,7 +164,7 @@ case class DxRunSpec(access: Option[DxAccess],
       case None             => Map.empty
       case Some(execPolicy) => execPolicy.toJson
     }
-    execPolicyFields ++ restartableEntryPointsFields ++ timeoutFields
+    (execPolicyFields ++ restartableEntryPointsFields).toMap ++ timeoutFields
   }
 }
 
@@ -226,21 +227,21 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
 //    cpu
 //    docker
 //
-case class WdlRuntimeAttrs(m: Map[String, WdlValues.WV])
+case class WdlRuntimeAttrs(m: Map[String, WomValue])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
-    private def readWomValue(value: JsValue): WdlValues.WV = value match {
-      case JsBoolean(b)  => WV_Boolean(b.booleanValue)
-      case JsNumber(nmb) => WV_Integer(nmb.intValue)
-      case JsString(s)   => WV_String(s)
+    private def readWomValue(value: JsValue): WomValue = value match {
+      case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
+      case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
+      case JsString(s)   => WdlValues.V_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
-    private def writeWomValue(wValue: WdlValues.WV): JsValue = wValue match {
-      case WV_Boolean(b) => JsBoolean(b)
-      case WV_Integer(i) => JsNumber(i)
-      case WV_String(s)  => JsString(s)
+    private def writeWomValue(wValue: WomValue): JsValue = wValue match {
+      case WdlValues.V_Boolean(b) => JsBoolean(b)
+      case WdlValues.V_Int(i) => JsNumber(i)
+      case WdlValues.V_String(s)  => JsString(s)
       case other         => throw new Exception(s"Unsupported wom value value ${other}")
     }
 
@@ -420,7 +421,7 @@ object Extras {
     val fields = jsv.asJsObject.fields
     for (k <- fields.keys) {
       if (!(RUNTIME_ATTRS contains k))
-        Utils.warning(
+        BaseUtils.warning(
             verbose,
             s"""|Unsupported runtime attribute ${k},
                 |we currently support ${RUNTIME_ATTRS}
@@ -428,11 +429,11 @@ object Extras {
         )
     }
 
-    def wdlValueFromJsValue(jsv: JsValue): WdlValues.WV = {
+    def wdlValueFromJsValue(jsv: JsValue): WdlValues.V = {
       jsv match {
-        case JsBoolean(b)  => WV_Boolean(b.booleanValue)
-        case JsNumber(nmb) => WV_Integer(nmb.intValue)
-        case JsString(s)   => WV_String(s)
+        case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
+        case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
+        case JsString(s)   => WdlValues.V_String(s)
         case other         => throw new Exception(s"Unsupported json value ${other}")
       }
     }
@@ -699,7 +700,7 @@ object Extras {
     veryifyReorgApp(reorgAppId)
     verifyInputs(reorgConf)
 
-    Utils.trace(
+    BaseUtils.trace(
         verbose.on,
         s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
             |it may misplace or outright delete files.

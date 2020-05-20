@@ -4,7 +4,7 @@
 package dxWDL.util
 
 import java.nio.file.Path
-import dxWDL.base.Utils
+import dxWDL.base.BaseUtils
 
 object Adjuncts {
   sealed abstract class AdjunctFile
@@ -40,9 +40,9 @@ object Adjuncts {
         {
           file.getName match {
             case readmeRegexp(target) =>
-              Some(target -> Readme(Utils.readFileContent2(file.toPath)))
+              Some(target -> Readme(BaseUtils.readFileContent2(file.toPath)))
             case developerNotesRegexp(target) =>
-              Some(target -> DeveloperNotes(Utils.readFileContent2(file.toPath)))
+              Some(target -> DeveloperNotes(BaseUtils.readFileContent2(file.toPath)))
             case _ => None
           }
         }

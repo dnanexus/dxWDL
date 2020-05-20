@@ -13,7 +13,7 @@ import spray.json._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 
-import wdlTools.types.WdlTypes._
+import wdlTools.types.WdlTypes
 
 class PermissionDeniedException(s: String) extends Exception(s) {}
 
@@ -21,7 +21,7 @@ class InvalidInputException(s: String) extends Exception(s) {}
 
 class IllegalArgumentException(s: String) extends Exception(s) {}
 
-object Utils {
+object BaseUtils {
   val APPLET_LOG_MSG_LIMIT = 1000
   val CHECKSUM_PROP = "dxWDL_checksum"
   val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
@@ -251,7 +251,7 @@ object Utils {
 
   // We need to deal with types like:
   //     Int??, Array[File]??
-  def stripOptional(t: WdlType.T): WdlTypes.T = {
+  def stripOptional(t: WdlTypes.T): WdlTypes.T = {
     t match {
       case WdlTypes.T_Optional(x) => stripOptional(x)
       case x                  => x

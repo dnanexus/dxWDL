@@ -223,13 +223,13 @@ object Main extends App {
     val errMsg = JsObject(
         "error" -> JsObject(
             "type" -> JsString(errType),
-            "message" -> JsString(Utils.sanitize(e.getMessage))
+            "message" -> JsString(BaseUtils.sanitize(e.getMessage))
         )
     ).prettyPrint
-    Utils.writeFileContent(jobErrorPath, errMsg)
+    BaseUtils.writeFileContent(jobErrorPath, errMsg)
 
     // Write out a full stack trace to standard error.
-    System.err.println(Utils.exceptionToString(e))
+    System.err.println(BaseUtils.exceptionToString(e))
   }
 
   private def pathOptions(options: OptionsMap, verbose: Verbose): (DxProject, String) = {
@@ -288,13 +288,13 @@ object Main extends App {
         DxPath.resolveProject(projectRaw)
       } catch {
         case e: Exception =>
-          Utils.error(e.getMessage)
+          BaseUtils.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${projectRaw}, you probably need to be logged into
                   |the platform""".stripMargin
           )
       }
-    Utils.trace(verbose.on, s"""|project ID: ${dxProject.id}
+    BaseUtils.trace(verbose.on, s"""|project ID: ${dxProject.id}
                                 |folder: ${dxFolder}""".stripMargin)
     (dxProject, dxFolder)
   }
@@ -368,7 +368,7 @@ object Main extends App {
     val extras = options.get("extras") match {
       case None => None
       case Some(List(p)) =>
-        val contents = Utils.readFileContent(Paths.get(p))
+        val contents = BaseUtils.readFileContent(Paths.get(p))
         Some(Extras.parse(contents.parseJson, verbose))
       case _ => throw new Exception("extras specified twice")
     }
@@ -472,7 +472,7 @@ object Main extends App {
         DxPath.resolveProject(project)
       } catch {
         case e: Exception =>
-          Utils.error(e.getMessage)
+          BaseUtils.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${project}, you probably need to be logged into
                   |the platform""".stripMargin
@@ -523,7 +523,7 @@ object Main extends App {
         parseCmdlineOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
+          return BadUsageTermination(BaseUtils.exceptionToString(e))
       }
     if (options contains "help")
       return BadUsageTermination("")
@@ -550,7 +550,7 @@ object Main extends App {
       }
     } catch {
       case e: Throwable =>
-        UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(BaseUtils.exceptionToString(e))
     }
   }
 
@@ -598,7 +598,7 @@ object Main extends App {
         DxWorkflow.getInstance(workflowId)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
+          return BadUsageTermination(BaseUtils.exceptionToString(e))
       }
 
     val options =
@@ -606,7 +606,7 @@ object Main extends App {
         parseDescribeOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString((e)))
+          return BadUsageTermination(BaseUtils.exceptionToString((e)))
       }
 
     if (options contains "help")
@@ -634,7 +634,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        return UnsuccessfulTermination(Utils.exceptionToString(e))
+        return UnsuccessfulTermination(BaseUtils.exceptionToString(e))
     }
   }
 
@@ -644,7 +644,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        return UnsuccessfulTermination(Utils.exceptionToString(e))
+        return UnsuccessfulTermination(BaseUtils.exceptionToString(e))
     }
   }
 
@@ -666,7 +666,7 @@ object Main extends App {
       }
     } catch {
       case e: Throwable =>
-        return BadUsageTermination(Utils.exceptionToString(e))
+        return BadUsageTermination(BaseUtils.exceptionToString(e))
     }
   }
 
@@ -683,7 +683,7 @@ object Main extends App {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
     val verbose = rtDebugLvl > 0
-    val inputLines: String = Utils.readFileContent(jobInputPath)
+    val inputLines: String = BaseUtils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
     val (task, typeAliases, document) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
@@ -728,7 +728,7 @@ object Main extends App {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        BaseUtils.writeFileContent(jobOutputPath, ast_pp)
         SuccessfulTermination(s"success ${op}")
 
       case InternalOp.TaskRelaunch =>
@@ -737,7 +737,7 @@ object Main extends App {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        BaseUtils.writeFileContent(jobOutputPath, ast_pp)
         SuccessfulTermination(s"success ${op}")
 
       case _ =>
@@ -763,7 +763,7 @@ object Main extends App {
 
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = Utils.readFileContent(jobInputPath)
+    val inputLines: String = BaseUtils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
@@ -853,7 +853,7 @@ object Main extends App {
     // values that were not specified.
     val json = JsObject(outputFields)
     val ast_pp = json.prettyPrint
-    Utils.writeFileContent(jobOutputPath, ast_pp)
+    BaseUtils.writeFileContent(jobOutputPath, ast_pp)
 
     SuccessfulTermination(s"success ${op}")
   }
@@ -863,10 +863,10 @@ object Main extends App {
   private def retrieveFromDetails(
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
-    val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
+    val jobInfo = BaseUtils.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
-        Utils.trace(true, s"""|applet field not found locally, performing
+        BaseUtils.trace(true, s"""|applet field not found locally, performing
                               |an API call.
                               |""".stripMargin)
         val dxJob = DxJob(DxUtils.dxEnv.getJob())
@@ -879,10 +879,10 @@ object Main extends App {
 
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
-    val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+    val womSourceCode = BaseUtils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+    val dbRaw = BaseUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
     val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
     val runtimeAttrs: Option[WdlRuntimeAttrs] =
@@ -903,7 +903,7 @@ object Main extends App {
   // Make a list of all the files cloned for access by this applet.
   // Bulk describe all the them.
   private def runtimeBulkFileDescribe(jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
-    val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
+    val inputs: JsValue = BaseUtils.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
       case (_, jsElem) => DxUtils.findDxFiles(jsElem)
@@ -929,7 +929,7 @@ object Main extends App {
         val rtDebugLvl = parseRuntimeDebugLevel(args(2))
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
-          Utils.jobFilesOfHomeDir(homeDir)
+          BaseUtils.jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
@@ -1001,7 +1001,7 @@ object Main extends App {
           case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
-          case Actions.Version  => SuccessfulTermination(Utils.getVersion())
+          case Actions.Version  => SuccessfulTermination(BaseUtils.getVersion())
         }
     }
   }
@@ -1078,10 +1078,10 @@ object Main extends App {
       Console.err.println(usageMessage)
       System.exit(1)
     case BadUsageTermination(s) =>
-      Utils.error(s)
+      BaseUtils.error(s)
       System.exit(1)
     case UnsuccessfulTermination(s) =>
-      Utils.error(s)
+      BaseUtils.error(s)
       System.exit(1)
   }
   System.exit(0)

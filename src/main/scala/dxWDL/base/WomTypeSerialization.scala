@@ -1,10 +1,11 @@
 package dxWDL.base
 
 import wdlTools.types.WdlTypes._
+import wdlTools.types.{Util => TUtil}
 
 // Write a wom type as a string, and be able to convert back.
-case class WomTypeSerialization(typeAliases: Map[String, WdlTypes.T]) {
-  def toString(t: WdlType): String = {
+case class WomTypeSerialization(typeAliases: Map[String, T]) {
+  def toString(t: T): String = {
     t match {
       // Base case: primitive types.
       case T_Any        => "Any"
@@ -35,12 +36,12 @@ case class WomTypeSerialization(typeAliases: Map[String, WdlTypes.T]) {
         s"Pair[$ls, $rs]"
 
       // structs
-      case T_Struct(_, Some(structName)) =>
+      case T_Struct(structName, _) =>
         structName
 
       // catch-all for other types not currently supported
-      case _ =>
-        throw new Exception(s"Unsupported WDL type ${t}, ${t.stableName}")
+      case other =>
+        throw new Exception(s"Unsupported WDL type ${TUtil.typeToString(other)}")
     }
   }
 
@@ -83,7 +84,7 @@ case class WomTypeSerialization(typeAliases: Map[String, WdlTypes.T]) {
     (firstType.trim, secondType.trim)
   }
 
-  def fromString(str: String): WdlType = {
+  def fromString(str: String): T = {
     str match {
       case "Any" => T_Any
       case "Boolean" => T_Boolean
@@ -128,7 +129,7 @@ object WomTypeSerialization {
   // Get a human readable type name
   // Int ->   "Int"
   // Array[Int] -> "Array[Int]"
-  def typeName(t: WdlType): String = {
+  def typeName(t: T): String = {
     t match {
       // Base case: primitive types.
       case T_Any        => "Any"
@@ -156,12 +157,12 @@ object WomTypeSerialization {
         s"Pair[$ls, $rs]"
 
       // structs
-      case T_Struct(_, Some(structName)) =>
+      case T_Struct(structName, _) =>
         structName
 
       // catch-all for other types not currently supported
-      case _ =>
-        throw new Exception(s"Unsupported WDL type ${t}")
+      case other =>
+        throw new Exception(s"Unsupported WDL type ${TUtil.typeToString(other)}")
     }
   }
 }

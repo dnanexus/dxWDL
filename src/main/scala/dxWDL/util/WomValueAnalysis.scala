@@ -3,7 +3,7 @@ package dxWDL.util
 import java.nio.file.{Paths}
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-import dxWDL.base.Utils
+import dxWDL.base.BaseUtils
 import dxWDL.base.WomCompat._
 
 object WomValueAnalysis {
@@ -25,7 +25,7 @@ object WomValueAnalysis {
   private def requiresEvaluation(wdlType: WomType, value: WomValue): Boolean = {
     def isMutableFile(constantFileStr: String): Boolean = {
       constantFileStr match {
-        case path if path.startsWith(Utils.DX_URL_PREFIX) =>
+        case path if path.startsWith(BaseUtils.DX_URL_PREFIX) =>
           // platform files are immutable
           false
         case path if path.startsWith("http://") || path.startsWith("https://") =>

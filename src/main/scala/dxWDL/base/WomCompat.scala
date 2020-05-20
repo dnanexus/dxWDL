@@ -1,6 +1,6 @@
 package dxWDL.base
 
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.types.WdlTypes
 import wdlTools.eval.WdlValues
 
 object WomCompat {
@@ -34,6 +34,4 @@ object WomCompat {
   type WomPair = WdlValues.V_Pair
   type WomStruct = WdlValues.V_Struct
 
-  type WomExpression = TAT.Expr
-  type WorkflowSource = String
 }
