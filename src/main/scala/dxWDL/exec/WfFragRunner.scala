@@ -35,27 +35,19 @@ workflow wf_cond {
 
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
 import java.nio.file.Paths
 import spray.json._
-import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
-import wom.callable.Callable._
-import wom.expression._
-import wom.graph._
-import wom.graph.GraphNodePort._
-import wom.graph.expression._
-import wom.values._
-import wom.types._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base._
+import dxWDL.base.WomCompat._
 import dxWDL.dx._
 import dxWDL.util._
 
-case class WfFragRunner(wf: WorkflowDefinition,
-                        taskDir: Map[String, CallableTaskDefinition],
+case class WfFragRunner(wf: TAT.Workflow,
+                        taskDir: Map[String, TAT.Task],
                         typeAliases: Map[String, WomType],
-                        wfSourceCode: String,
+                        document : TAT.Document,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
@@ -78,9 +70,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                               delayWorkspaceDestruction,
                                               runtimeDebugLevel,
                                               fragInputOutput.typeAliases)
-  // The source code for all the tasks
-  private val taskSourceDir: Map[String, String] =
-    ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {
@@ -345,7 +334,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
   // Figure out what instance type to launch at task in. Return None if the instance
   // type is a constant, and is already set.
   private def preCalcInstanceType(task: CallableTaskDefinition,
-                                  taskSourceCode: String,
                                   taskInputs: Map[InputDefinition, WomValue]): Option[String] = {
     // Note: if none of these attributes are specified, the return value is None.
     val instanceAttrs = Set("memory", "disks", "cpu")
@@ -360,7 +348,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
     // There is runtime evaluation for the instance type
     val taskRunner = new TaskRunner(task,
-                                    taskSourceCode,
+                                    document,
                                     typeAliases,
                                     instanceTypeDB,
                                     dxPathConfig,
@@ -453,11 +441,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
     // If this is a call to a task that computes the required instance type at runtime,
     // do the calculation right now. This saves a job relaunch down the road.
-    val instanceType: Option[String] =
-      (taskDir.get(calleeName), taskSourceDir.get(calleeName)) match {
-        case (Some(task), Some(taskSourceCode)) =>
+    val instanceType: Option[String] = taskDir.get(calleeName) match {
+        case Some(task) =>
           val taskInputs = jobInputOutput.loadInputs(callInputsJSON, task)
-          preCalcInstanceType(task, taskSourceCode, taskInputs)
+          preCalcInstanceType(task, taskInputs)
         case (_, _) => None
       }
     execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)

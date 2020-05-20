@@ -9,15 +9,15 @@ package dxWDL.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.types.WomType
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.Utils
+import dxWDL.base.WomCompat._
 import dxWDL.dx._
 import dxWDL.util._
 
-case class WorkflowOutputReorg(wf: WorkflowDefinition,
-                               wfSourceCode: String,
+case class WorkflowOutputReorg(wf: TAT.Workflow,
+                               document : TAT.Document,
                                typeAliases: Map[String, WomType],
                                dxPathConfig: DxPathConfig,
                                dxIoFunctions: DxIoFunctions,

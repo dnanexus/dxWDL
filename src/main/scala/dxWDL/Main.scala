@@ -686,7 +686,7 @@ object Main extends App {
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
+    val (task, typeAliases, document) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
@@ -694,9 +694,9 @@ object Main extends App {
     val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     val taskRunner = exec.TaskRunner(
-        task,
-        taskSourceCode,
-        typeAliases,
+      task,
+      document,
+      typeAliases,
         instanceTypeDB,
         dxPathConfig,
         dxIoFunctions,
@@ -766,7 +766,7 @@ object Main extends App {
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
-    val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
+    val (wf, taskDir, typeAliases, document) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
@@ -780,7 +780,7 @@ object Main extends App {
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
-                                                 womSourceCode,
+                                                 document,
                                                  instanceTypeDB,
                                                  fragInputs.execLinkInfo,
                                                  dxPathConfig,
@@ -795,7 +795,7 @@ object Main extends App {
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
-                                                 womSourceCode,
+                                                 document,
                                                  instanceTypeDB,
                                                  fragInputs.execLinkInfo,
                                                  dxPathConfig,
@@ -808,7 +808,7 @@ object Main extends App {
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(wf,
-                                           womSourceCode,
+                                           document,
                                            typeAliases,
                                            dxPathConfig,
                                            dxIoFunctions,
@@ -816,7 +816,7 @@ object Main extends App {
           wfInputs.apply(fragInputs.env)
         case InternalOp.WfOutputs =>
           val wfOutputs = new exec.WfOutputs(wf,
-                                             womSourceCode,
+                                             document,
                                              typeAliases,
                                              dxPathConfig,
                                              dxIoFunctions,
@@ -826,7 +826,7 @@ object Main extends App {
         case InternalOp.WfCustomReorgOutputs =>
           val wfCustomReorgOutputs = new exec.WfOutputs(
               wf,
-              womSourceCode,
+              document,
               typeAliases,
               dxPathConfig,
               dxIoFunctions,
@@ -837,7 +837,7 @@ object Main extends App {
 
         case InternalOp.WorkflowOutputReorg =>
           val wfReorg = new exec.WorkflowOutputReorg(wf,
-                                                     womSourceCode,
+                                                     document,
                                                      typeAliases,
                                                      dxPathConfig,
                                                      dxIoFunctions,

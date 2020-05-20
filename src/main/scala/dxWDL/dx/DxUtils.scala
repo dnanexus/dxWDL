@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Path, Files}
 import spray.json._
-import wom.types._
 
+import dxWDL.base.WomCompat._
 import dxWDL.base.{AppInternalException, Utils, Verbose}
 
 object DxUtils {

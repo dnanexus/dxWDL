@@ -70,10 +70,11 @@ object TaskRunnerUtils {
   }
 }
 
+
 // We can't use the name Task, because that would confuse it with the
 // WDL language definition.
-case class TaskRunner(task: CallableTaskDefinition,
-                      taskSourceCode: WorkflowSource, // for debugging/informational purposes only
+case class TaskRunner(task: TAT.Task,
+                      document : TAT.Document,
                       typeAliases: Map[String, WomType],
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
@@ -89,22 +90,16 @@ case class TaskRunner(task: CallableTaskDefinition,
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
-  // check if the command section is empty
-  val commandSectionEmpty: Boolean = {
-    try {
-      val commandTemplate = task.commandTemplateString(Map.empty[InputDefinition, WomValue])
-      commandTemplate.trim.isEmpty
-    } catch {
-      case _: Throwable =>
-        false
-    }
-  }
-
-  def getErrorOr[A](value: ErrorOr[A]): A = {
-    value match {
-      case Valid(x)   => x
-      case Invalid(s) => throw new AppInternalException(s"Invalid ${s}")
-    }
+  val evaluator : wdlTools.eval.Eval = {
+    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+                                         antlr4Trace = false,
+                                         localDirectories = Vector.empty,
+                                         verbosity = wdlTools.util.Verbosity.Quiet)
+    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
+                                           dxIoFunctions.config.tmpDir,
+                                           dxIoFunctions.config.stdout,
+                                           dxIoFunctions.config.stderr)
+    wdlTools.eval.Eval(evalOpts, evalCfg, doc.version.value, None)
   }
 
   // serialize the task inputs to json, and then write to a file.
@@ -164,12 +159,7 @@ case class TaskRunner(task: CallableTaskDefinition,
           case Some(dra) => dra.m.get("docker")
         }
       case Some(expr) =>
-        val result: ErrorOr[WomValue] = expr.evaluateValue(env, dxIoFunctions)
-        result match {
-          case Valid(x) => Some(x)
-          case Invalid(_) =>
-            throw new AppInternalException(s"Invalid wom expression ${expr}")
-        }
+        evaluator.applyExprAndCoerce(expr, WomString, env)
     }
     dImg match {
       case None               => None
@@ -269,25 +259,6 @@ case class TaskRunner(task: CallableTaskDefinition,
       .getOperatingSystemMXBean()
       .asInstanceOf[com.sun.management.OperatingSystemMXBean]
     mbean.getTotalPhysicalMemorySize()
-  }
-
-  private def getRuntimeEnvironment(): RuntimeEnvironment = {
-    val physicalMemorySize = availableMemory()
-    val numCores = Runtime.getRuntime().availableProcessors()
-
-    import eu.timepit.refined._
-    import eu.timepit.refined.numeric._
-    val numCoresPositiveInt = refineV[Positive](numCores).right.get
-
-    RuntimeEnvironment(
-        dxPathConfig.outputFilesDir.toAbsolutePath().toString,
-        dxPathConfig.tmpDir.toAbsolutePath().toString,
-        numCoresPositiveInt,
-        physicalMemorySize,
-        // TODO
-        1000, //outputPathSize: Long,
-        1000
-    ) //tempPathSize: Long)
   }
 
   // Write the core bash script into a file. In some cases, we
@@ -408,29 +379,17 @@ case class TaskRunner(task: CallableTaskDefinition,
 
   // Calculate the input variables for the task, download the input files,
   // and build a shell script to run the command.
-  def prolog(
-      taskInputs: Map[InputDefinition, WomValue]
-  ): (Map[String, WomValue], Map[Furl, Path]) = {
+  def prolog(taskInputs: Map[TAT.InputDefinition, WomValue]) :
+      (Map[String, WomValue], Map[Furl, Path]) =
+  {
     Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     if (maxVerboseLevel)
       printDirStruct()
 
     Utils.appletLog(verbose, s"Task source code:")
-    Utils.appletLog(verbose, taskSourceCode, 10000)
+    Utils.appletLog(verbose, doc.sourceCode, 10000)
     Utils.appletLog(verbose, s"inputs: ${inputsDbg(taskInputs)}")
-
-    if (commandSectionEmpty) {
-      // The command section is empty, there is no need to setup docker,
-      // or download files.
-      val inputs = taskInputs.map {
-        case (inpDfn, value) =>
-          inpDfn.name -> value
-      }.toMap
-      // write an empty bash script
-      writeBashScript("")
-      return (inputs, Map.empty)
-    }
 
     // Download/stream all input files.
     //
@@ -458,11 +417,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     val docker = dockerImage(inputs)
 
     // instantiate the command
-    val runtimeEnvironment = getRuntimeEnvironment()
-    val womInstantiation = getErrorOr(
-        task.instantiateCommand(localizedInputs, dxIoFunctions, identity, runtimeEnvironment)
-    )
-    val command = womInstantiation.commandString
+    val command = evaluator.applyCommand(task.command, inputs)
 
     // Write shell script to a file. It will be executed by the dx-applet shell code.
     writeBashScript(command)
@@ -486,39 +441,15 @@ case class TaskRunner(task: CallableTaskDefinition,
     // Evaluate the output declarations. Add outputs evaluated to
     // the environment, so they can be referenced by expressions in the next
     // lines.
-    var envFull = localizedInputValues
-    val outputsLocal: Map[String, WomValue] = task.outputs.map {
-      case (outDef: OutputDefinition) =>
-        val result: ErrorOr[WomValue] =
-          outDef.expression.evaluateValue(envFull, dxIoFunctions)
-        val valueRaw = result match {
-          case Valid(value) =>
-            value
-          case Invalid(errors) =>
-            Utils.error(errors.toList.mkString)
-            throw new AppInternalException(
-                s"Error evaluating output expression ${outDef.expression}"
-            )
-        }
-
-        // cast the result value to the correct type
-        // For example, an expression like:
-        //   Float x = "3.2"
-        // requires casting from string to float
-        val value = outDef.womType.coerceRawValue(valueRaw).get
-        envFull += (outDef.name -> value)
-        outDef.name -> value
+    val outputsLocal: Map[String, WomValue] = task.outputs.foldLeft(localizedInputs) {
+      case (outDef: TAT.OutputDefinition, envFull) =>
+        val value = evaluator.applyExprAndCoerce(outDef.expr, outDef.wdlType, envFull)
+        envFull + (outDef.name -> value)
     }.toMap
 
     val outputs: Map[String, WomValue] =
-      if (commandSectionEmpty) {
-        // the command section is empty, so there is no manipulation of local files.
-        // we do not upload or download files.
-        outputsLocal
-      } else {
-        // Upload output files to the platform.
-        jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
-      }
+      // Upload output files to the platform.
+      jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
@@ -555,7 +486,7 @@ case class TaskRunner(task: CallableTaskDefinition,
             case Some(dra) => dra.m.get(attrName)
           }
         case Some(expr) =>
-          Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
+          Some(evaluator.applyExprAndCoerce(expr, WomString, inputs))
       }
     }
 
@@ -578,7 +509,7 @@ case class TaskRunner(task: CallableTaskDefinition,
   /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
     * relaunch operations.
     */
-  def checkInstanceType(inputs: Map[InputDefinition, WomValue]): Boolean = {
+  def checkInstanceType(inputs: Map[TAT.InputDefinition, WomValue]): Boolean = {
     // evaluate the runtime attributes
     // determine the instance type
     Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
@@ -608,7 +539,7 @@ case class TaskRunner(task: CallableTaskDefinition,
   /** The runtime attributes need to be calculated at runtime. Evaluate them,
     *  determine the instance type [xxxx], and relaunch the job on [xxxx]
     */
-  def relaunch(inputs: Map[InputDefinition, WomValue],
+  def relaunch(inputs: Map[TAT.InputDefinition, WomValue],
                originalInputs: JsValue): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
 

@@ -3,20 +3,15 @@
 
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.expression.WomExpression
-import wom.graph._
-import wom.values._
-import wom.types._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{Utils, Verbose}
+import dxWDL.base.WomCompat._
 import dxWDL.util._
 
-case class WfOutputs(wf: WorkflowDefinition,
-                     wfSourceCode: String,
+case class WfOutputs(wf: TAT.Workflow,
+                     document : TAT.Document,
                      typeAliases: Map[String, WomType],
                      dxPathConfig: DxPathConfig,
                      dxIoFunctions: DxIoFunctions,
@@ -27,22 +22,22 @@ case class WfOutputs(wf: WorkflowDefinition,
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
+  private val evaluator : wdlTools.eval.Eval = {
+    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+                                         antlr4Trace = false,
+                                         localDirectories = Vector.empty,
+                                         verbosity = wdlTools.util.Verbosity.Quiet)
+    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
+                                           dxIoFunctions.config.tmpDir,
+                                           dxIoFunctions.config.stdout,
+                                           dxIoFunctions.config.stderr)
+    wdlTools.eval.Eval(evalOpts, evalCfg, doc.version.value, None)
+  }
+
   private def evaluateWomExpression(expr: WomExpression,
                                     womType: WomType,
                                     env: Map[String, WomValue]): WomValue = {
-    val result: ErrorOr[WomValue] =
-      expr.evaluateValue(env, dxIoFunctions)
-    val value = result match {
-      case Invalid(errors) =>
-        throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
-      case Valid(x: WomValue) => x
-    }
-
-    // cast the result value to the correct type
-    // For example, an expression like:
-    //   Float x = "3.2"
-    // requires casting from string to float
-    womType.coerceRawValue(value).get
+    evaluator.applyExprAndCoerce(expr, womType, env)
   }
 
   def apply(envInitial: Map[String, WomValue], addStatus: Boolean = false): Map[String, JsValue] = {

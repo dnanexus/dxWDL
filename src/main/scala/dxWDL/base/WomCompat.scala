@@ -35,4 +35,5 @@ object WomCompat {
   type WomStruct = WdlValues.V_Struct
 
   type WomExpression = TAT.Expr
+  type WorkflowSource = String
 }

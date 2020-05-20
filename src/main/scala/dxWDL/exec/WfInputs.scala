@@ -4,15 +4,14 @@
 package dxWDL.exec
 
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.values._
-import wom.types.WomType
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{Utils, Verbose}
+import dxWDL.base.WomCompat._
 import dxWDL.util._
 
-case class WfInputs(wf: WorkflowDefinition,
-                    wfSourceCode: String,
+case class WfInputs(wf: TAT.Workflow,
+                    document : TAT.Document,
                     typeAliases: Map[String, WomType],
                     dxPathConfig: DxPathConfig,
                     dxIoFunctions: DxIoFunctions,
