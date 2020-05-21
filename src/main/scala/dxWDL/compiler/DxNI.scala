@@ -58,35 +58,35 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def wdlTypeOfIOClass(appletName: String,
                                argName: String,
                                ioClass: DxIOClass.Value,
-                               isOptional: Boolean): WomType = {
+                               isOptional: Boolean): WdlTypes.T = {
     if (isOptional) {
       ioClass match {
-        case DxIOClass.BOOLEAN           => WomOptionalType(WomBooleanType)
-        case DxIOClass.INT               => WomOptionalType(WomIntegerType)
-        case DxIOClass.FLOAT             => WomOptionalType(WomFloatType)
-        case DxIOClass.STRING            => WomOptionalType(WomStringType)
-        case DxIOClass.FILE              => WomOptionalType(WomSingleFileType)
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
-        case DxIOClass.ARRAY_OF_INTS     => WomMaybeEmptyArrayType(WomIntegerType)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomMaybeEmptyArrayType(WomFloatType)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomMaybeEmptyArrayType(WomStringType)
-        case DxIOClass.ARRAY_OF_FILES    => WomMaybeEmptyArrayType(WomSingleFileType)
+        case DxIOClass.BOOLEAN           => WdlTypes.T_Optional(WdlTypes.T_Boolean)
+        case DxIOClass.INT               => WdlTypes.T_Optional(WdlTypes.T_Int)
+        case DxIOClass.FLOAT             => WdlTypes.T_Optional(WdlTypes.T_Float)
+        case DxIOClass.STRING            => WdlTypes.T_Optional(WdlTypes.T_String)
+        case DxIOClass.FILE              => WdlTypes.T_Optional(WdlTypes.T_File)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WdlTypes.T_Boolean)
+        case DxIOClass.ARRAY_OF_INTS     => WomMaybeEmptyArrayType(WdlTypes.T_Int)
+        case DxIOClass.ARRAY_OF_FLOATS   => WomMaybeEmptyArrayType(WdlTypes.T_Float)
+        case DxIOClass.ARRAY_OF_STRINGS  => WomMaybeEmptyArrayType(WdlTypes.T_String)
+        case DxIOClass.ARRAY_OF_FILES    => WomMaybeEmptyArrayType(WdlTypes.T_File)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
       }
     } else {
       ioClass match {
-        case DxIOClass.BOOLEAN           => WomBooleanType
-        case DxIOClass.INT               => WomIntegerType
-        case DxIOClass.FLOAT             => WomFloatType
-        case DxIOClass.STRING            => WomStringType
-        case DxIOClass.FILE              => WomSingleFileType
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
-        case DxIOClass.ARRAY_OF_INTS     => WomNonEmptyArrayType(WomIntegerType)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomNonEmptyArrayType(WomFloatType)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomNonEmptyArrayType(WomStringType)
-        case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WomSingleFileType)
+        case DxIOClass.BOOLEAN           => WdlTypes.T_Boolean
+        case DxIOClass.INT               => WdlTypes.T_Int
+        case DxIOClass.FLOAT             => WdlTypes.T_Float
+        case DxIOClass.STRING            => WdlTypes.T_String
+        case DxIOClass.FILE              => WdlTypes.T_File
+        case DxIOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WdlTypes.T_Boolean)
+        case DxIOClass.ARRAY_OF_INTS     => WomNonEmptyArrayType(WdlTypes.T_Int)
+        case DxIOClass.ARRAY_OF_FLOATS   => WomNonEmptyArrayType(WdlTypes.T_Float)
+        case DxIOClass.ARRAY_OF_STRINGS  => WomNonEmptyArrayType(WdlTypes.T_String)
+        case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WdlTypes.T_File)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -101,13 +101,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def wdlTypesOfDxApplet(
       aplName: String,
       desc: DxAppletDescribe
-  ): (Map[String, WomType], Map[String, WomType]) = {
+  ): (Map[String, WdlTypes.T], Map[String, WdlTypes.T]) = {
     Utils.trace(verbose.on, s"analyzing applet ${aplName}")
-    val inputSpec: Map[String, WomType] =
+    val inputSpec: Map[String, WdlTypes.T] =
       desc.inputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
-    val outputSpec: Map[String, WomType] =
+    val outputSpec: Map[String, WdlTypes.T] =
       desc.outputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
@@ -305,11 +305,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   }
 
   private def appToWdlInterface(dxApp: DxAppDescribe): String = {
-    val inputSpec: Map[String, WomType] =
+    val inputSpec: Map[String, WdlTypes.T] =
       dxApp.inputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name, ioSpec.ioClass, ioSpec.optional)
       }.toMap
-    val outputSpec: Map[String, WomType] =
+    val outputSpec: Map[String, WdlTypes.T] =
       dxApp.outputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name, ioSpec.ioClass, ioSpec.optional)
       }.toMap

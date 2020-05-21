@@ -273,20 +273,20 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   implicit val instanceTypeDBFormat = jsonFormat2(InstanceTypeDB.apply)
 
   // Currently, we support only constants.
-  def parse(dxInstanceType: Option[WomValue],
-            wdlMemoryMB: Option[WomValue],
-            wdlDiskGB: Option[WomValue],
-            wdlCpu: Option[WomValue],
-            wdlGpu: Option[WomValue]): InstanceTypeReq = {
+  def parse(dxInstanceType: Option[WdlValues.V],
+            wdlMemoryMB: Option[WdlValues.V],
+            wdlDiskGB: Option[WdlValues.V],
+            wdlCpu: Option[WdlValues.V],
+            wdlGpu: Option[WdlValues.V]): InstanceTypeReq = {
     // Shortcut the entire calculation, and provide the dx instance type directly
     dxInstanceType match {
       case None => None
-      case Some(WomString(iType)) =>
+      case Some(WdlValues.V_String(iType)) =>
         return InstanceTypeReq(Some(iType), None, None, None, None)
       case Some(x) =>
         throw new Exception(
             s"""|dxInstaceType has to evaluate to a
-                |WomString type ${x.toWomString}""".stripMargin
+                |WdlValues.V_String type ${x.toWdlValues.V_String}""".stripMargin
               .replaceAll("\n", " ")
         )
     }
@@ -294,7 +294,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // Examples for memory specification: "4000 MB", "1 GB"
     val memoryMB: Option[Int] = wdlMemoryMB match {
       case None                 => None
-      case Some(WomString(buf)) =>
+      case Some(WdlValues.V_String(buf)) =>
         // extract number
         val numRex = """(\d+\.?\d*)""".r
         val numbers = numRex.findAllIn(buf).toList
@@ -338,13 +338,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val memMib: Double = memBytes / (1024 * 1024).toDouble
         Some(memMib.toInt)
       case Some(x) =>
-        throw new Exception(s"Memory has to evaluate to a WomString type ${x.toWomString}")
+        throw new Exception(s"Memory has to evaluate to a WdlValues.V_String type ${x.toWdlValues.V_String}")
     }
 
     // Examples: "local-disk 1024 HDD"
     val diskGB: Option[Int] = wdlDiskGB match {
       case None => None
-      case Some(WomString(buf)) =>
+      case Some(WdlValues.V_String(buf)) =>
         val components = buf.split("\\s+")
         val ignoreWords = Set("local-disk", "hdd", "sdd", "ssd")
         val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
@@ -359,13 +359,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           }
         Some(i)
       case Some(x) =>
-        throw new Exception(s"Disk space has to evaluate to a WomString type ${x.toWomString}")
+        throw new Exception(s"Disk space has to evaluate to a WdlValues.V_String type ${x.toWdlValues.V_String}")
     }
 
     // Examples: "1", "12"
     val cpu: Option[Int] = wdlCpu match {
       case None => None
-      case Some(WomString(buf)) =>
+      case Some(WdlValues.V_String(buf)) =>
         val i: Int =
           try {
             buf.toInt
@@ -374,14 +374,14 @@ object InstanceTypeDB extends DefaultJsonProtocol {
               throw new Exception(s"Parse error for cpu specification ${buf}")
           }
         Some(i)
-      case Some(WomInteger(i)) => Some(i)
-      case Some(WomFloat(x))   => Some(x.toInt)
+      case Some(WdlValues.V_Int(i)) => Some(i)
+      case Some(WdlValues.V_Float(x))   => Some(x.toInt)
       case Some(x)             => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
     }
 
     val gpu: Option[Boolean] = wdlGpu match {
       case None                   => None
-      case Some(WomBoolean(flag)) => Some(flag)
+      case Some(WdlValues.V_Boolean(flag)) => Some(flag)
       case Some(x)                => throw new Exception(s"Gpu has to be a boolean ${x}")
     }
 

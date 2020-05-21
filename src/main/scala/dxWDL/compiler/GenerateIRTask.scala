@@ -18,7 +18,7 @@ import IR.CVar
 import scala.util.matching.Regex
 
 case class GenerateIRTask(verbose: Verbose,
-                          typeAliases: Map[String, WomType],
+                          typeAliases: Map[String, WdlTypes.T],
                           language: Language.Value,
                           defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
@@ -27,12 +27,12 @@ case class GenerateIRTask(verbose: Verbose,
     def this() = this(new RuntimeException("Runtime instance type calculation required"))
   }
 
-  def evalWomExpression(expr: WomExpression): WomValue = {
-    val result: ErrorOr[WomValue] =
-      expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
+  def evalWomExpression(expr: WomExpression): WdlValues.V = {
+    val result: ErrorOr[WdlValues.V] =
+      expr.evaluateValue(Map.empty[String, WdlValues.V], wom.expression.NoIoFunctionSet)
     result match {
       case Invalid(_)         => throw new DynamicInstanceTypesException()
-      case Valid(x: WomValue) => x
+      case Valid(x: WdlValues.V) => x
     }
   }
 
@@ -44,7 +44,7 @@ case class GenerateIRTask(verbose: Verbose,
   // At compile time, constants expressions are handled. Some can
   // only be evaluated at runtime.
   private def calcInstanceType(task: CallableTaskDefinition): IR.InstanceType = {
-    def evalAttr(attrName: String): Option[WomValue] = {
+    def evalAttr(attrName: String): Option[WdlValues.V] = {
       task.runtimeAttributes.attributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
@@ -77,10 +77,10 @@ case class GenerateIRTask(verbose: Verbose,
     dockerExpr match {
       case None =>
         IR.DockerImageNone
-      case Some(expr) if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
-        val wdlConst = WomValueAnalysis.evalConst(WomStringType, expr)
+      case Some(expr) if WdlValues.VAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
+        val wdlConst = WdlValues.VAnalysis.evalConst(WdlTypes.T_String, expr)
         wdlConst match {
-          case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
+          case WdlValues.V_String(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
             // A constant image specified with a DX URL
             val dxfile = DxPath.resolveDxURLFile(url)
             IR.DockerImageDxFile(url, dxfile)
@@ -144,32 +144,32 @@ case class GenerateIRTask(verbose: Verbose,
     })
   }
 
-  private def unwrapWomString(value: WomValue): String = {
+  private def unwrapWomString(value: WdlValues.V): String = {
     value match {
-      case WomString(s) => s
-      case _            => throw new Exception("Expected WomString")
+      case WdlValues.V_String(s) => s
+      case _            => throw new Exception("Expected WdlValues.V_String")
     }
   }
 
-  private def unwrapWomStringArray(array: WomValue): Vector[String] = {
+  private def unwrapWomStringArray(array: WdlValues.V): Vector[String] = {
     array match {
-      case WomArray(WomMaybeEmptyArrayType(WomStringType), strings) =>
-        strings.map(unwrapWomString).toVector
-      case _ => throw new Exception("Expected WomArray")
+      case WdlValues.V_Array(WomMaybeEmptyArrayType(WdlTypes.T_String), strings) =>
+        strings.map(unwrapWdlValues.V_String).toVector
+      case _ => throw new Exception("Expected WdlValues.V_Array")
     }
   }
 
-  private def unwrapWomBoolean(value: WomValue): Boolean = {
+  private def unwrapWomBoolean(value: WdlValues.V): Boolean = {
     value match {
-      case WomBoolean(b) => b
-      case _             => throw new Exception("Expected WomBoolean")
+      case WdlValues.V_Boolean(b) => b
+      case _             => throw new Exception("Expected WdlValues.V_Boolean")
     }
   }
 
   private def unwrapWomInteger(value: WomValue): Int = {
     value match {
-      case WomInteger(i) => i
-      case _             => throw new Exception("Expected WomInteger")
+      case WdlValues.V_Int(i) => i
+      case _             => throw new Exception("Expected WdlValues.V_Int")
     }
   }
 
@@ -200,36 +200,36 @@ case class GenerateIRTask(verbose: Verbose,
         case (IR.HINT_ACCESS, WomObject(values, _)) =>
           Some(
               IR.RuntimeHintAccess(
-                  network = values.get("network").map(unwrapWomStringArray),
-                  project = values.get("project").map(unwrapWomString),
-                  allProjects = values.get("allProjects").map(unwrapWomString),
-                  developer = values.get("developer").map(unwrapWomBoolean),
-                  projectCreation = values.get("projectCreation").map(unwrapWomBoolean)
+                  network = values.get("network").map(unwrapWdlValues.V_StringArray),
+                  project = values.get("project").map(unwrapWdlValues.V_String),
+                  allProjects = values.get("allProjects").map(unwrapWdlValues.V_String),
+                  developer = values.get("developer").map(unwrapWdlValues.V_Boolean),
+                  projectCreation = values.get("projectCreation").map(unwrapWdlValues.V_Boolean)
               )
           )
-        case (IR.HINT_IGNORE_REUSE, WomBoolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
-        case (IR.HINT_RESTART, WomInteger(i))      => Some(IR.RuntimeHintRestart(default = Some(i)))
+        case (IR.HINT_IGNORE_REUSE, WdlValues.V_Boolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
+        case (IR.HINT_RESTART, WdlValues.V_Int(i))      => Some(IR.RuntimeHintRestart(default = Some(i)))
         case (IR.HINT_RESTART, WomObject(values, _)) =>
           Some(
               IR.RuntimeHintRestart(
-                  values.get("max").map(unwrapWomInteger),
-                  values.get("default").map(unwrapWomInteger),
+                  values.get("max").map(unwrapWdlValues.V_Int),
+                  values.get("default").map(unwrapWdlValues.V_Int),
                   values.get("errors").map {
-                    case WomMap(WomMapType(WomStringType, WomIntegerType), fields) =>
+                    case WdlValues.V_Map(WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Int), fields) =>
                       fields.map {
-                        case (WomString(s), WomInteger(i)) => (s -> i)
+                        case (WdlValues.V_String(s), WdlValues.V_Int(i)) => (s -> i)
                         case other                         => throw new Exception(s"Invalid restart map entry ${other}")
                       }
                     case _ => throw new Exception("Invalid restart map")
                   }
               )
           )
-        case (IR.HINT_TIMEOUT, WomString(s)) => Some(parseDuration(s))
+        case (IR.HINT_TIMEOUT, WdlValues.V_String(s)) => Some(parseDuration(s))
         case (IR.HINT_TIMEOUT, WomObject(values, _)) =>
           Some(
-              IR.RuntimeHintTimeout(values.get("days").map(unwrapWomInteger),
-                                    values.get("hours").map(unwrapWomInteger),
-                                    values.get("minutes").map(unwrapWomInteger))
+              IR.RuntimeHintTimeout(values.get("days").map(unwrapWdlValues.V_Int),
+                                    values.get("hours").map(unwrapWdlValues.V_Int),
+                                    values.get("minutes").map(unwrapWdlValues.V_Int))
           )
         case _ => None
       }
@@ -256,7 +256,7 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
       case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, paramMeta) =>
-        WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+        WdlValues.VAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
             // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
@@ -275,15 +275,15 @@ case class GenerateIRTask(verbose: Verbose,
       case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
         None
 
-      case OptionalInputDefinition(iName, WomOptionalType(womType), _, paramMeta) =>
+      case OptionalInputDefinition(iName, WdlTypes.T_Optional(womType), _, paramMeta) =>
         val attr = ParameterMeta.unwrap(paramMeta, womType)
-        Some(CVar(iName.value, WomOptionalType(womType), None, attr))
+        Some(CVar(iName.value, WdlTypes.T_Optional(womType), None, attr))
     }.toVector
 
     // create dx:applet outputs
     val outputs: Vector[CVar] = task.outputs.map {
       case OutputDefinition(id, womType, expr) =>
-        val defaultValue = WomValueAnalysis.ifConstEval(womType, expr) match {
+        val defaultValue = WdlValues.VAnalysis.ifConstEval(womType, expr) match {
           case None =>
             // This is an expression to be evaluated at runtime
             None

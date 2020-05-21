@@ -8,7 +8,6 @@ import spray.json._
 import DefaultJsonProtocol._
 
 import wdlTools.eval.WdlValues
-import dxWDL.base.WomCompat._
 import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
@@ -227,18 +226,18 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
 //    cpu
 //    docker
 //
-case class WdlRuntimeAttrs(m: Map[String, WomValue])
+case class WdlRuntimeAttrs(m: Map[String, WdlValues.V])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
-    private def readWomValue(value: JsValue): WomValue = value match {
+    private def readWomValue(value: JsValue): WdlValues.V = value match {
       case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
       case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
       case JsString(s)   => WdlValues.V_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
-    private def writeWomValue(wValue: WomValue): JsValue = wValue match {
+    private def writeWomValue(wValue: WdlValues.V): JsValue = wValue match {
       case WdlValues.V_Boolean(b) => JsBoolean(b)
       case WdlValues.V_Int(i) => JsNumber(i)
       case WdlValues.V_String(s)  => JsString(s)

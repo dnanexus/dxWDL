@@ -68,7 +68,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         CVar(id.workflowLocalName, womType, None, attr)
 
       case OptionalGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
-        assert(womType.isInstanceOf[WomOptionalType])
+        assert(womType.isInstanceOf[WdlTypes.T_Optional])
         val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
         CVar(id.workflowLocalName, womType, None, attr)
 
@@ -77,7 +77,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                                              defaultExpr: WomExpression,
                                              nameInInputSet,
                                              valueMapper) =>
-        val defaultValue: WomValue = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+        val defaultValue: WdlValues.V = WdlValues.VAnalysis.ifConstEval(womType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
                                                | ${input}
                                                |""".stripMargin)
@@ -161,8 +161,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
           IR.SArgEmpty
 
         case Some(tcInput)
-            if WomValueAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
-          IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, tcInput.womExpression))
+            if WdlValues.VAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
+          IR.SArgConst(WdlValues.VAnalysis.evalConst(cVar.womType, tcInput.womExpression))
 
         case Some(tcInput) =>
           val exprSourceString = tcInput.womExpression.sourceString
@@ -229,7 +229,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // Lookup in the environment. Provide a human readable error message
   // if the fully-qualified-name is not found.
   private def lookupInEnv(fqn: String,
-                          womType: WomType,
+                          womType: WdlTypes.T,
                           env: CallEnv,
                           optional: Boolean): Option[(String, LinkedVar)] = {
     lookupInEnvInner(fqn, env) match {
@@ -259,8 +259,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // Find the closure of a graph, besides its normal inputs. Create an input
   // node for each of these external references.
   private def graphClosure(inputNodes: Vector[GraphInputNode],
-                           subBlocks: Vector[Block]): Map[String, (WomType, Boolean)] = {
-    val allInputs: Map[String, (WomType, Boolean)] = subBlocks
+                           subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
+    val allInputs: Map[String, (WdlTypes.T, Boolean)] = subBlocks
       .map { block =>
         Block.closure(block)
       }
@@ -381,7 +381,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     }.toMap
 
     // Figure out the block outputs
-    val outputs: Map[String, WomType] = Block.outputs(block)
+    val outputs: Map[String, WdlTypes.T] = Block.outputs(block)
 
     // create a cVar definition from each block output. The dx:stage
     // will output these cVars.
@@ -570,8 +570,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   private def addOutputStatus(outputsVar: Vector[CVar]) = {
     outputsVar :+ CVar(
         Utils.REORG_STATUS,
-        WomStringType,
-        Some(WomString(Utils.REORG_STATUS_COMPLETE))
+        WdlTypes.T_String,
+        Some(WdlValues.V_String(Utils.REORG_STATUS_COMPLETE))
     )
   }
 
@@ -678,14 +678,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       case (x, y) => x.name == Utils.REORG_STATUS
     }.head
 
-    val configFile: Option[WomSingleFile] = reorgAttributes.reorgConf match {
+    val configFile: Option[WdlValues.V_File] = reorgAttributes.reorgConf match {
       case ""        => None
-      case x: String => Some(WomSingleFile(x))
+      case x: String => Some(WdlValues.V_File(x))
     }
 
     val appInputs = Vector(
         reorgStatusCvar,
-        CVar(Utils.REORG_CONFIG, WomSingleFileType, configFile)
+        CVar(Utils.REORG_CONFIG, WdlTypes.T_File, configFile)
     )
 
     val applet = IR.Applet(
@@ -758,7 +758,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   private def compileWorkflowLocked(
       wfName: String,
       inputNodes: Vector[GraphInputNode],
-      closureInputs: Map[String, (WomType, Boolean)],
+      closureInputs: Map[String, (WdlTypes.T, Boolean)],
       outputNodes: Vector[GraphOutputNode],
       blockPath: Vector[Int],
       subBlocks: Vector[Block],
@@ -784,7 +784,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
           if (Utils.isOptional(womType))
             CVar(name, womType, None)
           else
-            CVar(name, WomOptionalType(womType), None)
+            CVar(name, WdlTypes.T_Optional(womType), None)
         (cVar, IR.SArgWorkflowInput(cVar))
     }.toVector
     val allWfInputs = wfInputs ++ clsInputs

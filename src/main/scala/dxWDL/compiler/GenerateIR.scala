@@ -92,7 +92,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
   private def compileWorkflow(
       wf: WorkflowDefinition,
-      typeAliases: Map[String, WomType],
+      typeAliases: Map[String, WdlTypes.T],
       wfSource: String,
       callables: Map[String, IR.Callable],
       language: Language.Value,
@@ -141,7 +141,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
   // Entry point for compiling tasks and workflows into IR
   private def compileCallable(
       callable: Callable,
-      typeAliases: Map[String, WomType],
+      typeAliases: Map[String, WdlTypes.T],
       taskDir: Map[String, String],
       workflowDir: Map[String, String],
       callables: Map[String, IR.Callable],

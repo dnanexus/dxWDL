@@ -36,7 +36,7 @@ case class Native(dxWDLrtId: Option[String],
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
                   fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                  typeAliases: Map[String, WomType],
+                  typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
                   leaveWorkflowsOpen: Boolean,
@@ -279,33 +279,33 @@ case class Native(dxWDLrtId: Option[String],
       )
     }
 
-    def handleType(wdlType: WomType, optional: Boolean): Vector[JsValue] = {
+    def handleType(wdlType: WdlTypes.T, optional: Boolean): Vector[JsValue] = {
       wdlType match {
         // primitive types
-        case WomBooleanType    => mkPrimitive("boolean", optional)
-        case WomIntegerType    => mkPrimitive("int", optional)
-        case WomFloatType      => mkPrimitive("float", optional)
-        case WomStringType     => mkPrimitive("string", optional)
-        case WomSingleFileType => mkPrimitive("file", optional)
+        case WdlTypes.T_Boolean    => mkPrimitive("boolean", optional)
+        case WdlTypes.T_Int    => mkPrimitive("int", optional)
+        case WdlTypes.T_Float      => mkPrimitive("float", optional)
+        case WdlTypes.T_String     => mkPrimitive("string", optional)
+        case WdlTypes.T_File => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
-        case WomNonEmptyArrayType(WomBooleanType)      => mkPrimitiveArray("boolean", optional)
-        case WomNonEmptyArrayType(WomIntegerType)      => mkPrimitiveArray("int", optional)
-        case WomNonEmptyArrayType(WomFloatType)        => mkPrimitiveArray("float", optional)
-        case WomNonEmptyArrayType(WomStringType)       => mkPrimitiveArray("string", optional)
-        case WomNonEmptyArrayType(WomSingleFileType)   => mkPrimitiveArray("file", optional)
-        case WomMaybeEmptyArrayType(WomBooleanType)    => mkPrimitiveArray("boolean", true)
-        case WomMaybeEmptyArrayType(WomIntegerType)    => mkPrimitiveArray("int", true)
-        case WomMaybeEmptyArrayType(WomFloatType)      => mkPrimitiveArray("float", true)
-        case WomMaybeEmptyArrayType(WomStringType)     => mkPrimitiveArray("string", true)
-        case WomMaybeEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", true)
+        case WomNonEmptyArrayType(WdlTypes.T_Boolean)      => mkPrimitiveArray("boolean", optional)
+        case WomNonEmptyArrayType(WdlTypes.T_Int)      => mkPrimitiveArray("int", optional)
+        case WomNonEmptyArrayType(WdlTypes.T_Float)        => mkPrimitiveArray("float", optional)
+        case WomNonEmptyArrayType(WdlTypes.T_String)       => mkPrimitiveArray("string", optional)
+        case WomNonEmptyArrayType(WdlTypes.T_File)   => mkPrimitiveArray("file", optional)
+        case WomMaybeEmptyArrayType(WdlTypes.T_Boolean)    => mkPrimitiveArray("boolean", true)
+        case WomMaybeEmptyArrayType(WdlTypes.T_Int)    => mkPrimitiveArray("int", true)
+        case WomMaybeEmptyArrayType(WdlTypes.T_Float)      => mkPrimitiveArray("float", true)
+        case WomMaybeEmptyArrayType(WdlTypes.T_String)     => mkPrimitiveArray("string", true)
+        case WomMaybeEmptyArrayType(WdlTypes.T_File) => mkPrimitiveArray("file", true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
       }
     }
     cVar.womType match {
-      case WomOptionalType(t) => handleType(t, true)
+      case WdlTypes.T_Optional(t) => handleType(t, true)
       case t                  => handleType(t, false)
     }
   }
@@ -665,10 +665,10 @@ case class Native(dxWDLrtId: Option[String],
 
   // Create linking information for a dx:executable
   private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
-    val callInputDefs: Map[String, WomType] = irCall.inputVars.map {
+    val callInputDefs: Map[String, WdlTypes.T] = irCall.inputVars.map {
       case CVar(name, wdlType, _, _) => (name -> wdlType)
     }.toMap
-    val callOutputDefs: Map[String, WomType] = irCall.outputVars.map {
+    val callOutputDefs: Map[String, WdlTypes.T] = irCall.outputVars.map {
       case CVar(name, wdlType, _, _) => (name -> wdlType)
     }.toMap
     ExecLinkInfo(irCall.name, callInputDefs, callOutputDefs, dxObj)
@@ -1056,7 +1056,7 @@ case class Native(dxWDLrtId: Option[String],
               "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
               "fqnDictTypes" -> JsObject(fqnDictTypes.map {
                 case (k, t) =>
-                  val tStr = WomTypeSerialization(typeAliases).toString(t)
+                  val tStr = WdlTypes.TSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
               }.toMap)
           )
@@ -1066,7 +1066,7 @@ case class Native(dxWDLrtId: Option[String],
           // meta information used for running workflow fragments
           val fqnDictTypes = JsObject(applet.inputVars.map {
             case cVar =>
-              val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
+              val tStr = WdlTypes.TSerialization(typeAliases).toString(cVar.womType)
               cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
@@ -1226,7 +1226,7 @@ case class Native(dxWDLrtId: Option[String],
 
   // Calculate the stage inputs from the call closure
   //
-  // It comprises mappings from variable name to WomType.
+  // It comprises mappings from variable name to WdlTypes.T.
   private def genStageInputs(inputs: Vector[(CVar, SArg)]): JsValue = {
     // sort the inputs, to make the request deterministic
     val jsInputs: TreeMap[String, JsValue] = inputs.foldLeft(TreeMap.empty[String, JsValue]) {
@@ -1261,7 +1261,7 @@ case class Native(dxWDLrtId: Option[String],
   //
   private def buildWorkflowInputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
     // deal with default values
-    val sArgDefault: Option[WomValue] = sArg match {
+    val sArgDefault: Option[WdlValues.V] = sArg match {
       case IR.SArgConst(wdlValue) =>
         Some(wdlValue)
       case _ =>

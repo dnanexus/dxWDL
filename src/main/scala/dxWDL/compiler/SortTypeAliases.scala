@@ -10,23 +10,23 @@ case class SortTypeAliases(verbose: Verbose) {
   // figure out all the types that type [a] depends on. Ignore
   // standard types like Int, String, Array, etc.
   //
-  private def dependencies(a: WomType): Set[String] = {
+  private def dependencies(a: WdlTypes.T): Set[String] = {
     a match {
       // Base case: primitive types.
-      case WomNothingType | WomBooleanType | WomIntegerType | WomLongType | WomFloatType |
-          WomStringType | WomSingleFileType =>
+      case WomNothingType | WdlTypes.T_Boolean | WdlTypes.T_Int | WomLongType | WdlTypes.T_Float |
+          WdlTypes.T_String | WdlTypes.T_File =>
         Set.empty
 
       // compound types
       case WomMaybeEmptyArrayType(memberType) =>
         dependencies(memberType)
-      case WomMapType(keyType, valueType) =>
+      case WdlTypes.T_Map(keyType, valueType) =>
         dependencies(keyType) ++ dependencies(valueType)
       case WomNonEmptyArrayType(memberType) =>
         dependencies(memberType)
-      case WomOptionalType(memberType) =>
+      case WdlTypes.T_Optional(memberType) =>
         dependencies(memberType)
-      case WomPairType(lType, rType) =>
+      case WdlTypes.T_Pair(lType, rType) =>
         dependencies(lType) ++ dependencies(rType)
 
       // structs
@@ -42,7 +42,7 @@ case class SortTypeAliases(verbose: Verbose) {
     }
   }
 
-  private def dependenciesOuter(a: WomType): Set[String] = {
+  private def dependenciesOuter(a: WdlTypes.T): Set[String] = {
     val d = dependencies(a)
     a match {
       case WomCompositeType(_, Some(name)) => d - name
@@ -50,8 +50,8 @@ case class SortTypeAliases(verbose: Verbose) {
     }
   }
 
-  private def next(remaining: Vector[WomType],
-                   alreadySorted: Vector[WomType]): (Vector[WomType], Vector[WomType]) = {
+  private def next(remaining: Vector[WdlTypes.T],
+                   alreadySorted: Vector[WdlTypes.T]): (Vector[WdlTypes.T], Vector[WdlTypes.T]) = {
     val alreadySortedNames: Set[String] = alreadySorted.collect {
       case WomCompositeType(_, Some(name)) => name
     }.toSet
@@ -67,16 +67,16 @@ case class SortTypeAliases(verbose: Verbose) {
     (zeroDeps.toVector, top.toVector)
   }
 
-  private def getNames(ta: Vector[WomType]): Vector[String] = {
+  private def getNames(ta: Vector[WdlTypes.T]): Vector[String] = {
     ta.map {
       case WomCompositeType(_, Some(name)) => name
     }.toVector
   }
 
-  private def apply2(typeAliases: Vector[WomType]): Vector[WomType] = {
+  private def apply2(typeAliases: Vector[WdlTypes.T]): Vector[WdlTypes.T] = {
     val N = typeAliases.size
 
-    var accu = Vector.empty[WomType]
+    var accu = Vector.empty[WdlTypes.T]
     var crnt = typeAliases
 
     while (!crnt.isEmpty) {
@@ -90,7 +90,7 @@ case class SortTypeAliases(verbose: Verbose) {
     accu
   }
 
-  def apply(typeAliases: Vector[(String, WomType)]): Vector[(String, WomType)] = {
+  def apply(typeAliases: Vector[(String, WdlTypes.T)]): Vector[(String, WdlTypes.T)] = {
     val justTypes = typeAliases.map { case (_, x) => x }
     val sortedTypes = apply2(justTypes)
 

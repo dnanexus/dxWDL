@@ -136,7 +136,7 @@ object Block {
   //
   def exprInputs(expr : WdlExpression) : Vector[String] = ???
 
-  // A trivial expression has no operators, it is either a constant WomValue
+  // A trivial expression has no operators, it is either a constant WdlValues.V
   // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
   // is not.
   def isTrivialExpression(expr: WdlExpression): Boolean = {
@@ -267,8 +267,8 @@ object Block {
   //
   // Is represented by the graph:
   // Block [
-  //   TaskCallInputExpressionNode(a, x, WomIntegerType, GraphNodeOutputPort(a))
-  //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
+  //   TaskCallInputExpressionNode(a, x, WdlTypes.T_Int, GraphNodeOutputPort(a))
+  //   TaskCallInputExpressionNode(b, y, WdlTypes.T_Int, GraphNodeOutputPort(b))
   //   CommandCall(add, Set(a, b))
   // ]
   private def isSimpleCall(nodes: Seq[GraphNode], trivialExpressionsOnly: Boolean): Boolean = {
@@ -469,7 +469,7 @@ object Block {
   // For each input also return whether is has a default. This makes it,
   // de facto, optional.
   //
-  def closure(block: Block): Map[String, (WomType, Boolean)] = {
+  def closure(block: Block): Map[String, (WdlTypes.T, Boolean)] = {
     // make a deep list of all the nodes inside the block
     val allBlockNodes: Set[GraphNode] = block.nodes
       .map {
@@ -484,14 +484,14 @@ object Block {
       .toSet
 
     // Examine an input port, and keep it only if it points outside the block.
-    def keepOnlyOutsideRefs(inPort: GraphNodePort.InputPort): Option[(String, WomType)] = {
+    def keepOnlyOutsideRefs(inPort: GraphNodePort.InputPort): Option[(String, WdlTypes.T)] = {
       if (allBlockNodes contains inPort.upstream.graphNode) None
       else Some((inPort.name, inPort.womType))
     }
 
     // Examine only the outer input nodes, check that they
     // originate in a node outside the block.
-    def getInputsToGraph(graph: Graph): Map[String, WomType] = {
+    def getInputsToGraph(graph: Graph): Map[String, WdlTypes.T] = {
       graph.nodes.flatMap {
         case ogin: OuterGraphInputNode =>
           if (allBlockNodes contains ogin.linkToOuterGraphNode)
@@ -502,7 +502,7 @@ object Block {
       }.toMap
     }
 
-    val allInputs: Map[String, WomType] = block.nodes.flatMap {
+    val allInputs: Map[String, WdlTypes.T] = block.nodes.flatMap {
       case scNode: ScatterNode =>
         val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
@@ -557,7 +557,7 @@ object Block {
   // the block.  For example, 'Int x' declared inside a scatter, is
   // 'Array[Int] x' outside the scatter.
   //
-  def outputs(block: Block): Map[String, WomType] = {
+  def outputs(block: Block): Map[String, WdlTypes.T] = {
     val xtrnPorts: Vector[GraphNodePort.OutputPort] =
       block.nodes.map {
         case node: ExposedExpressionNode =>

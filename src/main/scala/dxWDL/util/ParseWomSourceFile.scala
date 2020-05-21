@@ -173,7 +173,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //  * directory of tasks
   //  * directory of type aliases
   def parseWdlWorkflow(wfSource: String):
-      (TAT.Workflow, Map[String, TAT.Task], Map[String, WomType], TAT.Document) = {
+      (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,
@@ -192,7 +192,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     (tDoc.wf, tasks, bundle.aliases, tDoc)
   }
 
-  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WomType], TAT.Document) = {
+  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,

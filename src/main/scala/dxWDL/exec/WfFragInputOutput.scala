@@ -8,19 +8,19 @@ import dxWDL.dx._
 import dxWDL.util._
 
 case class WfFragInput(blockPath: Vector[Int],
-                       env: Map[String, WomValue],
+                       env: Map[String, WdlValues.V],
                        execLinkInfo: Map[String, ExecLinkInfo])
 
 case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
                              dxProject: DxProject,
                              runtimeDebugLevel: Int,
-                             typeAliases: Map[String, WomType]) {
+                             typeAliases: Map[String, WdlTypes.T]) {
   val verbose = runtimeDebugLevel >= 1
   val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel, typeAliases)
 
   private def loadWorkflowMetaInfo(
       metaInfo: Map[String, JsValue]
-  ): (Map[String, ExecLinkInfo], Vector[Int], Map[String, WomType]) = {
+  ): (Map[String, ExecLinkInfo], Vector[Int], Map[String, WdlTypes.T]) = {
     // meta information used for running workflow fragments
     val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
       case None => Map.empty
@@ -40,13 +40,13 @@ case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
         }.toVector
       case other => throw new Exception(s"Bad value ${other}")
     }
-    val fqnDictTypes: Map[String, WomType] = metaInfo.get("fqnDictTypes") match {
+    val fqnDictTypes: Map[String, WdlTypes.T] = metaInfo.get("fqnDictTypes") match {
       case Some(JsObject(fields)) =>
         fields.map {
           case (key, JsString(value)) =>
             // Transform back to a fully qualified name with dots
             val orgKeyName = Utils.revTransformVarName(key)
-            val womType = WomTypeSerialization(typeAliases).fromString(value)
+            val womType = WdlTypes.TSerialization(typeAliases).fromString(value)
             orgKeyName -> womType
           case other => throw new Exception(s"Bad value ${other}")
         }.toMap
@@ -69,7 +69,7 @@ case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
 
     // What remains are inputs from other stages. Convert from JSON
     // to wom values
-    val env: Map[String, WomValue] = regularFields.map {
+    val env: Map[String, WdlValues.V] = regularFields.map {
       case (name, jsValue) =>
         val fqn = Utils.revTransformVarName(name)
         val womType = fqnDictTypes.get(fqn) match {

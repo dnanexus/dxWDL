@@ -80,7 +80,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           runtimeDebugLevel: Int,
-                          typeAliases: Map[String, WomType]) {
+                          typeAliases: Map[String, WdlTypes.T]) {
   //private val verbose = runtimeDebugLevel >= 1
   private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
@@ -88,7 +88,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
 
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
-             exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+             exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {
     assert(!childJobs.isEmpty)
 
     // Run a sub-job with the "collect" entry point.
@@ -190,18 +190,18 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   // collect field [name] from all child jobs, by looking at their
   // outputs. Coerce to the correct [womType].
   private def collectCallField(name: String,
-                               womType: WomType,
-                               childJobsComplete: Vector[ChildExecDesc]): WomValue = {
-    val vec: Vector[WomValue] =
+                               womType: WdlTypes.T,
+                               childJobsComplete: Vector[ChildExecDesc]): WdlValues.V = {
+    val vec: Vector[WdlValues.V] =
       childJobsComplete.flatMap {
         case childExec =>
           val dxName = Utils.transformVarName(name)
           val fieldValue = childExec.outputs.get(dxName)
           (womType, fieldValue) match {
-            case (WomOptionalType(_), None) =>
+            case (WdlTypes.T_Optional(_), None) =>
               // Optional field that has not been returned
               None
-            case (WomOptionalType(_), Some(jsv)) =>
+            case (WdlTypes.T_Optional(_), Some(jsv)) =>
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
             case (_, None) =>
               // Required output that is missing
@@ -210,7 +210,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
               Some(jobInputOutput.unpackJobInput(name, womType, jsv))
           }
       }.toVector
-    WomArray(WomArrayType(womType), vec)
+    WdlValues.V_Array(WdlTypes.T_Array(womType), vec)
   }
 
   // aggregate call results
@@ -219,7 +219,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     call.callable.outputs.map { cot: OutputDefinition =>
       val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
       val womType = cot.womType
-      val value: WomValue = collectCallField(cot.name, womType, childJobsComplete)
+      val value: WdlValues.V = collectCallField(cot.name, womType, childJobsComplete)
       val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
       fullName -> wvl
     }.toMap
@@ -233,7 +233,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   ): Map[String, WdlVarLinks] = {
     execLinkInfo.outputs.map {
       case (name, womType) =>
-        val value: WomValue = collectCallField(name, womType, childJobsComplete)
+        val value: WdlValues.V = collectCallField(name, womType, childJobsComplete)
         val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
         name -> wvl
     }.toMap

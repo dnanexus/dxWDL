@@ -70,7 +70,7 @@ object Language extends Enumeration {
 }
 
 // global definitions
-package object {
+package object base {
   type WomExpression = TAT.Expr
   type WorkflowSource = String
 }

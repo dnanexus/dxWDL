@@ -45,18 +45,18 @@ case class InputFileScanResults(path2file: Map[String, DxFile], dxFiles: Vector[
 
 case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbose) {
 
-  private def findDxFiles(womType: WomType, jsValue: JsValue): Vector[JsValue] = {
+  private def findDxFiles(womType: WdlTypes.T, jsValue: JsValue): Vector[JsValue] = {
     (womType, jsValue) match {
       // base case: primitive types
-      case (WomBooleanType, _)      => Vector.empty
-      case (WomIntegerType, _)      => Vector.empty
-      case (WomFloatType, _)        => Vector.empty
-      case (WomStringType, _)       => Vector.empty
-      case (WomSingleFileType, jsv) => Vector(jsv)
+      case (WdlTypes.T_Boolean, _)      => Vector.empty
+      case (WdlTypes.T_Int, _)      => Vector.empty
+      case (WdlTypes.T_Float, _)        => Vector.empty
+      case (WdlTypes.T_String, _)       => Vector.empty
+      case (WdlTypes.T_File, jsv) => Vector(jsv)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
-      case (WomMapType(keyType, valueType), _) =>
+      case (WdlTypes.T_Map(keyType, valueType), _) =>
         //System.out.println(s"wom map    kv-type=(${keyType}, ${valueType})")
         val keysJs = jsValue.asJsObject.fields.keys.map { k =>
           JsString(k)
@@ -68,31 +68,31 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
 
       // Two ways of writing pairs: an object with left/right fields, or an array
       // with two elements.
-      case (WomPairType(lType, rType), JsObject(fields))
+      case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
           if (List("left", "right").forall(fields contains _)) =>
         val lFiles = findDxFiles(lType, fields("left"))
         val rFiles = findDxFiles(rType, fields("right"))
         lFiles ++ rFiles
 
-      case (WomPairType(lType, rType), JsArray(Vector(l, r))) =>
+      case (WdlTypes.T_Pair(lType, rType), JsArray(Vector(l, r))) =>
         val lFiles = findDxFiles(lType, l)
         val rFiles = findDxFiles(rType, r)
         lFiles ++ rFiles
 
-      case (WomArrayType(t), JsArray(vec)) =>
+      case (WdlTypes.T_Array(t), JsArray(vec)) =>
         vec.flatMap(findDxFiles(t, _))
 
-      case (WomOptionalType(t), JsNull) =>
+      case (WdlTypes.T_Optional(t), JsNull) =>
         Vector.empty
 
-      case (WomOptionalType(t), jsv) =>
+      case (WdlTypes.T_Optional(t), jsv) =>
         findDxFiles(t, jsv)
 
       // structs
       case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
         fields.flatMap {
           case (key, value) =>
-            val t: WomType = typeMap(key)
+            val t: WdlTypes.T = typeMap(key)
             findDxFiles(t, value)
         }.toVector
 
@@ -180,77 +180,77 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
 
 case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                      path2file: Map[String, DxFile],
-                     typeAliases: Map[String, WomType],
+                     typeAliases: Map[String, WdlTypes.T],
                      verbose: Verbose) {
   val verbose2: Boolean = verbose.containsKey("InputFile")
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
-  // Convert a job input to a WomValue. Do not download any files, convert them
+  // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def womValueFromCromwellJSON(womType: WomType, jsValue: JsValue): WomValue = {
+  private def womValueFromCromwellJSON(womType: WdlTypes.T, jsValue: JsValue): WdlValues.V = {
     (womType, jsValue) match {
       // base case: primitive types
-      case (WomBooleanType, JsBoolean(b))   => WomBoolean(b.booleanValue)
-      case (WomIntegerType, JsNumber(bnm))  => WomInteger(bnm.intValue)
-      case (WomFloatType, JsNumber(bnm))    => WomFloat(bnm.doubleValue)
-      case (WomStringType, JsString(s))     => WomString(s)
-      case (WomSingleFileType, JsString(s)) => WomSingleFile(s)
-      case (WomSingleFileType, JsObject(_)) =>
+      case (WdlTypes.T_Boolean, JsBoolean(b))   => WdlValues.V_Boolean(b.booleanValue)
+      case (WdlTypes.T_Int, JsNumber(bnm))  => WdlValues.V_Int(bnm.intValue)
+      case (WdlTypes.T_Float, JsNumber(bnm))    => WdlValues.V_Float(bnm.doubleValue)
+      case (WdlTypes.T_String, JsString(s))     => WdlValues.V_String(s)
+      case (WdlTypes.T_File, JsString(s)) => WdlValues.V_File(s)
+      case (WdlTypes.T_File, JsObject(_)) =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxUtils.dxFileFromJsValue(jsValue)
         val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
-        WomSingleFile(s)
+        WdlValues.V_File(s)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
-      case (WomMapType(keyType, valueType), _) =>
+      case (WdlTypes.T_Map(keyType, valueType), _) =>
         val fields = jsValue.asJsObject.fields
-        val m: Map[WomValue, WomValue] = fields.map {
+        val m: Map[WdlValues.V, WdlValues.V] = fields.map {
           case (k: String, v: JsValue) =>
             val kWom = womValueFromCromwellJSON(keyType, JsString(k))
             val vWom = womValueFromCromwellJSON(valueType, v)
             kWom -> vWom
         }.toMap
-        WomMap(WomMapType(keyType, valueType), m)
+        WdlValues.V_Map(WdlTypes.T_Map(keyType, valueType), m)
 
       // a few ways of writing a pair: an object, or an array
-      case (WomPairType(lType, rType), JsObject(fields))
+      case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
           if (List("left", "right").forall(fields contains _)) =>
         val left = womValueFromCromwellJSON(lType, fields("left"))
         val right = womValueFromCromwellJSON(rType, fields("right"))
-        WomPair(left, right)
+        WdlValues.V_Pair(left, right)
 
-      case (WomPairType(lType, rType), JsArray(Vector(l, r))) =>
+      case (WdlTypes.T_Pair(lType, rType), JsArray(Vector(l, r))) =>
         val left = womValueFromCromwellJSON(lType, l)
         val right = womValueFromCromwellJSON(rType, r)
-        WomPair(left, right)
+        WdlValues.V_Pair(left, right)
 
       // empty array
-      case (WomArrayType(t), JsNull) =>
-        WomArray(WomArrayType(t), List.empty[WomValue])
+      case (WdlTypes.T_Array(t), JsNull) =>
+        WdlValues.V_Array(WdlTypes.T_Array(t), List.empty[WdlValues.V])
 
       // array
-      case (WomArrayType(t), JsArray(vec)) =>
-        val wVec: Seq[WomValue] = vec.map { elem: JsValue =>
+      case (WdlTypes.T_Array(t), JsArray(vec)) =>
+        val wVec: Seq[WdlValues.V] = vec.map { elem: JsValue =>
           womValueFromCromwellJSON(t, elem)
         }
-        WomArray(WomArrayType(t), wVec)
+        WdlValues.V_Array(WdlTypes.T_Array(t), wVec)
 
-      case (WomOptionalType(t), JsNull) =>
-        WomOptionalValue(t, None)
-      case (WomOptionalType(t), jsv) =>
+      case (WdlTypes.T_Optional(t), JsNull) =>
+        WdlValues.V_OptionalValue(t, None)
+      case (WdlTypes.T_Optional(t), jsv) =>
         val value = womValueFromCromwellJSON(t, jsv)
-        WomOptionalValue(t, Some(value))
+        WdlValues.V_OptionalValue(t, Some(value))
 
       // structs
       case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
         // convert each field
         val m = fields.map {
           case (key, value) =>
-            val t: WomType = typeMap(key)
-            val elem: WomValue = womValueFromCromwellJSON(t, value)
+            val t: WdlTypes.T = typeMap(key)
+            val elem: WdlValues.V = womValueFromCromwellJSON(t, value)
             key -> elem
         }.toMap
         WomObject(m, WomCompositeType(typeMap, Some(structName)))
@@ -309,7 +309,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         getExactlyOnce(defaultFields, fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
-            val w: WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+            val w: WdlValues.V = womValueFromCromwellJSON(cVar.womType, dflt)
             IR.SArgConst(w)
         }
     }
@@ -328,7 +328,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         val sArgDflt = getExactlyOnce(defaultFields, fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
-            val w: WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+            val w: WdlValues.V = womValueFromCromwellJSON(cVar.womType, dflt)
             IR.SArgConst(w)
         }
         (cVar, sArgDflt)
@@ -345,7 +345,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
           case None =>
             cVar
           case Some(dflt: JsValue) =>
-            val w: WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+            val w: WdlValues.V = womValueFromCromwellJSON(cVar.womType, dflt)
             cVar.copy(default = Some(w))
         }
     }.toVector

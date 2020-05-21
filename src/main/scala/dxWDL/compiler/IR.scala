@@ -9,8 +9,8 @@
 package dxWDL.compiler
 
 import wom.callable.{CallableTaskDefinition, MetaValueElement}
-import wom.types.WomType
-import wom.values.WomValue
+import wom.types.WdlTypes.T
+import wom.values.WdlValues.V
 
 import dxWDL.base.Utils
 import dxWDL.dx.{ConstraintOper, DxFile, DxWorkflowStage}
@@ -267,8 +267,8 @@ object IR {
   //
   case class CVar(
       name: String,
-      womType: WomType,
-      default: Option[WomValue],
+      womType: WdlTypes.T,
+      default: Option[WdlValues.V],
       attrs: Option[Vector[IOAttr]] = None
   ) {
     // dx does not allow dots in variable names, so we
@@ -337,7 +337,7 @@ object IR {
   case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
   case class AppletKindWfFragment(calls: Vector[String],
                                   blockPath: Vector[Int],
-                                  fqnDictTypes: Map[String, WomType])
+                                  fqnDictTypes: Map[String, WdlTypes.T])
       extends AppletKind
   case object AppletKindWfInputs extends AppletKind
 
@@ -380,7 +380,7 @@ object IR {
     */
   sealed trait SArg
   case object SArgEmpty extends SArg
-  case class SArgConst(wdlValue: WomValue) extends SArg
+  case class SArgConst(wdlValue: WdlValues.V) extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
   case class SArgWorkflowInput(argName: CVar) extends SArg
 
@@ -425,5 +425,5 @@ object IR {
   case class Bundle(primaryCallable: Option[Callable],
                     allCallables: Map[String, Callable],
                     dependencies: Vector[String],
-                    typeAliases: Map[String, WomType])
+                    typeAliases: Map[String, WdlTypes.T])
 }

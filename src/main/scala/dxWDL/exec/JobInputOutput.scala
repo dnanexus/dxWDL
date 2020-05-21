@@ -12,7 +12,7 @@ import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           runtimeDebugLevel: Int,
-                          structDefs: Map[String, WomType]) {
+                          structDefs: Map[String, WdlTypes.T]) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
   private val wdlVarLinksConverter =
@@ -20,25 +20,25 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
-  def unpackJobInput(name: String, wdlType: WomType, jsv: JsValue): WomType = {
+  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlTypes.T = {
     val (wdlValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
     wdlValue
   }
 
-  def unpackJobInputFindRefFiles(wdlType: WomType, jsv: JsValue): Vector[DxFile] = {
+  def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
     val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", wdlType, jsv)
     dxFiles
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,
-                                    wdlType: WomType,
-                                    env: Map[String, WomValue]): WomValue = {
-    val result: ErrorOr[WomValue] =
+                                    wdlType: WdlTypes.T,
+                                    env: Map[String, WdlValues.V]): WdlValues.V = {
+    val result: ErrorOr[WdlValues.V] =
       expr.evaluateValue(env, dxIoFunctions)
     val value = result match {
       case Invalid(errors) =>
         throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
-      case Valid(x: WomValue) => x
+      case Valid(x: WdlValues.V) => x
     }
 
     // cast the result value to the correct type
@@ -51,27 +51,27 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // Read the job-inputs JSON file, and convert the variables
   // from JSON to WOM values. No files are downloaded here.
   def loadInputs(inputs: JsValue,
-                 callable: TAT.Callable): Map[TAT.InputDefinition, WomValue] = {
+                 callable: TAT.Callable): Map[TAT.InputDefinition, WdlValues.V] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
 
     // Get the declarations matching the input fields.
     // Create a mapping from each key to its WDL value
-    callable.inputs.foldLeft(Map.empty[TAT.InputDefinition, WomValue]) {
+    callable.inputs.foldLeft(Map.empty[TAT.InputDefinition, WdlValues.V]) {
       case (accu, inpDfn) =>
         val accuValues = accu.map {
           case (inpDfn, value) =>
             inpDfn.name -> value
         }.toMap
-        val value: WomValue = inpDfn match {
+        val value: WdlValues.V = inpDfn match {
           // A required input, no default.
           case RequiredInputDefinition(iName, wdlType, _, _) =>
             fields.get(iName.value) match {
               case None =>
                 throw new Exception(s"Input ${iName} is required but not provided")
               case Some(x: JsValue) =>
-                // Conversion from JSON to WomValue
+                // Conversion from JSON to WdlValues.V
                 unpackJobInput(iName.value, wdlType, x)
             }
 
@@ -104,17 +104,17 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
           //   _         null            None     override
           //   _         Some(v)         Some(v)
           //
-          case OptionalInputDefinition(iName, WomOptionalType(wdlType), _, _) =>
+          case OptionalInputDefinition(iName, WdlTypes.T_Optional(wdlType), _, _) =>
             fields.get(iName.value) match {
               case None =>
                 // this key is not specified in the input
-                WomOptionalValue(wdlType, None)
+                WdlValues.V_OptionalValue(wdlType, None)
               case Some(JsNull) =>
                 // the input is null
-                WomOptionalValue(wdlType, None)
+                WdlValues.V_OptionalValue(wdlType, None)
               case Some(x) =>
-                val value: WomValue = unpackJobInput(iName.value, wdlType, x)
-                WomOptionalValue(wdlType, Some(value))
+                val value: WdlValues.V = unpackJobInput(iName.value, wdlType, x)
+                WdlValues.V_OptionalValue(wdlType, Some(value))
             }
         }
         accu + (inpDfn -> value)
@@ -122,22 +122,22 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   }
 
   // find all file URLs in a Wom value
-  private def findFiles(v: WomValue): Vector[Furl] = {
+  private def findFiles(v: WdlValues.V): Vector[Furl] = {
     v match {
-      case (WomSingleFile(s)) => Vector(Furl.parse(s))
-      case (WomMap(_, m: Map[WomValue, WomValue])) =>
+      case (WdlValues.V_File(s)) => Vector(Furl.parse(s))
+      case (WdlValues.V_Map(_, m: Map[WdlValues.V, WdlValues.V])) =>
         m.foldLeft(Vector.empty[Furl]) {
           case (accu, (k, v)) =>
             findFiles(k) ++ findFiles(v) ++ accu
         }
-      case WomPair(lf, rt) =>
+      case WdlValues.V_Pair(lf, rt) =>
         findFiles(lf) ++ findFiles(rt)
 
       // empty array
-      case (WomArray(_, value: Seq[WomValue])) =>
+      case (WdlValues.V_Array(_, value: Seq[WdlValues.V])) =>
         value.map(findFiles).flatten.toVector
 
-      case (WomOptionalValue(_, Some(value))) =>
+      case (WdlValues.V_OptionalValue(_, Some(value))) =>
         findFiles(value)
 
       // structs
@@ -182,57 +182,57 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Recursively go into a womValue, and replace file string with
   // an equivalent. Use the [translation] map to translate.
-  private def translateFiles(womValue: WomValue, translation: Map[String, String]): WomValue = {
+  private def translateFiles(womValue: WdlValues.V, translation: Map[String, String]): WdlValues.V = {
     womValue match {
       // primitive types, pass through
-      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
+      case WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) | WdlValues.V_String(_) => womValue
 
       // single file
-      case WomSingleFile(s) =>
+      case WdlValues.V_File(s) =>
         translation.get(s) match {
           case None =>
             throw new Exception(s"Did not localize file ${s}")
           case Some(s2) =>
-            WomSingleFile(s2)
+            WdlValues.V_File(s2)
         }
 
       // Maps
-      case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
+      case (WdlValues.V_Map(t: WdlTypes.T_Map, m: Map[WdlValues.V, WdlValues.V])) =>
         val m1 = m.map {
           case (k, v) =>
             val k1 = translateFiles(k, translation)
             val v1 = translateFiles(v, translation)
             k1 -> v1
         }
-        WomMap(t, m1)
+        WdlValues.V_Map(t, m1)
 
-      case (WomPair(l, r)) =>
+      case (WdlValues.V_Pair(l, r)) =>
         val left = translateFiles(l, translation)
         val right = translateFiles(r, translation)
-        WomPair(left, right)
+        WdlValues.V_Pair(left, right)
 
-      case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
+      case WdlValues.V_Array(t: WdlTypes.T_Array, a: Seq[WdlValues.V]) =>
         val a1 = a.map { v =>
           translateFiles(v, translation)
         }
-        WomArray(t, a1)
+        WdlValues.V_Array(t, a1)
 
-      case WomOptionalValue(t, None) =>
-        WomOptionalValue(t, None)
+      case WdlValues.V_OptionalValue(t, None) =>
+        WdlValues.V_OptionalValue(t, None)
 
       // special case: an optional file. If it doesn't exist,
       // return None
-      case WomOptionalValue(WomSingleFileType, Some(WomSingleFile(localPath))) =>
+      case WdlValues.V_OptionalValue(WdlTypes.T_File, Some(WdlValues.V_File(localPath))) =>
         translation.get(localPath) match {
           case None =>
-            WomOptionalValue(WomSingleFileType, None)
+            WdlValues.V_OptionalValue(WdlTypes.T_File, None)
           case Some(url) =>
-            WomOptionalValue(WomSingleFileType, Some(WomSingleFile(url)))
+            WdlValues.V_OptionalValue(WdlTypes.T_File, Some(WdlValues.V_File(url)))
         }
 
-      case WomOptionalValue(t, Some(v)) =>
+      case WdlValues.V_OptionalValue(t, Some(v)) =>
         val v1 = translateFiles(v, translation)
-        WomOptionalValue(t, Some(v1))
+        WdlValues.V_OptionalValue(t, Some(v1))
 
       case WomObject(m, t) =>
         val m2 = m.map {
@@ -247,8 +247,8 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Recursively go into a womValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceFURLsWithLocalPaths(womValue: WomValue,
-                                         localizationPlan: Map[Furl, Path]): WomValue = {
+  private def replaceFURLsWithLocalPaths(womValue: WdlValues.V,
+                                         localizationPlan: Map[Furl, Path]): WdlValues.V = {
     val translation: Map[String, String] = localizationPlan.map {
       case (FurlDx(value, _, _), path) => value -> path.toString
       case (FurlLocal(p1), p2)         => p1 -> p2.toString
@@ -258,8 +258,8 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Recursively go into a womValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceLocalPathsWithURLs(womValue: WomValue,
-                                        path2furl: Map[Path, Furl]): WomValue = {
+  private def replaceLocalPathsWithURLs(womValue: WdlValues.V,
+                                        path2furl: Map[Path, Furl]): WdlValues.V = {
     val translation: Map[String, String] = path2furl.map {
       case (path, dxUrl: FurlDx)    => path.toString -> dxUrl.value
       case (path, local: FurlLocal) => path.toString -> local.path
@@ -273,7 +273,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, MetaValueElement],
-                           inputs: Map[InputDefinition, WomValue]): Set[Furl] = {
+                           inputs: Map[InputDefinition, WdlValues.V]): Set[Furl] = {
     inputs
       .map {
         case (iDef, womValue) =>
@@ -322,9 +322,9 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // just once.
   def localizeFiles(
       parameterMeta: Map[String, MetaValueElement],
-      inputs: Map[InputDefinition, WomValue],
+      inputs: Map[InputDefinition, WdlValues.V],
       inputsDir: Path
-  ): (Map[InputDefinition, WomValue], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
+  ): (Map[InputDefinition, WdlValues.V], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
     val fileURLs: Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
     Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -391,14 +391,14 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   }
 
   // We have task outputs, where files are stored locally. Upload the files to
-  // the cloud, and replace the WomValues with dxURLs.
+  // the cloud, and replace the WdlValues.Vs with dxURLs.
   //
   // Edge cases:
   // 1) If a file is already on the cloud, do not re-upload it. The content has not
   // changed because files are immutable.
   // 2) A file that was initially local, does not need to be uploaded.
-  def delocalizeFiles(outputs: Map[String, WomValue],
-                      furl2path: Map[Furl, Path]): Map[String, WomValue] = {
+  def delocalizeFiles(outputs: Map[String, WdlValues.V],
+                      furl2path: Map[Furl, Path]): Map[String, WdlValues.V] = {
     // Files that were local to begin with
     val localInputFiles: Set[Path] = furl2path.collect {
       case (FurlLocal(_), path) => path

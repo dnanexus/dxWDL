@@ -5,14 +5,14 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
-import dxWDL.base.WomTypeSerialization.typeName
+import dxWDL.base.WdlTypes.TSerialization.typeName
 import dxWDL.util._
 
 // A bunch of WDL source lines
 case class WdlCodeSnippet(value: String)
 
 case class WdlCodeGen(verbose: Verbose,
-                      typeAliases: Map[String, WomType],
+                      typeAliases: Map[String, WdlTypes.T],
                       language: Language.Value) {
 
   // A self contained WDL workflow
@@ -26,37 +26,37 @@ case class WdlCodeGen(verbose: Verbose,
     }
   }
 
-  def genDefaultValueOfType(wdlType: WomType): WomValue = {
+  def genDefaultValueOfType(wdlType: WdlTypes.T): WdlValues.V = {
     wdlType match {
-      case WomBooleanType    => WomBoolean(true)
-      case WomIntegerType    => WomInteger(0)
-      case WomFloatType      => WomFloat(0.0)
-      case WomStringType     => WomString("")
-      case WomSingleFileType => WomSingleFile("dummy.txt")
+      case WdlTypes.T_Boolean    => WdlValues.V_Boolean(true)
+      case WdlTypes.T_Int    => WdlValues.V_Int(0)
+      case WdlTypes.T_Float      => WdlValues.V_Float(0.0)
+      case WdlTypes.T_String     => WdlValues.V_String("")
+      case WdlTypes.T_File => WdlValues.V_File("dummy.txt")
 
       // We could convert an optional to a null value, but that causes
       // problems for the pretty printer.
-      // WomOptionalValue(wdlType, None)
-      case WomOptionalType(t) => genDefaultValueOfType(t)
+      // WdlValues.V_OptionalValue(wdlType, None)
+      case WdlTypes.T_Optional(t) => genDefaultValueOfType(t)
 
-      // The WomMap type HAS to appear before the array types, because
+      // The WdlValues.V_Map type HAS to appear before the array types, because
       // otherwise it is coerced into an array. The map has to
       // contain at least one key-value pair, otherwise you get a type error.
-      case WomMapType(keyType, valueType) =>
+      case WdlTypes.T_Map(keyType, valueType) =>
         val k = genDefaultValueOfType(keyType)
         val v = genDefaultValueOfType(valueType)
-        WomMap(WomMapType(keyType, valueType), Map(k -> v))
+        WdlValues.V_Map(WdlTypes.T_Map(keyType, valueType), Map(k -> v))
 
       // an empty array
       case WomMaybeEmptyArrayType(t) =>
-        WomArray(WomMaybeEmptyArrayType(t), List())
+        WdlValues.V_Array(WomMaybeEmptyArrayType(t), List())
 
       // Non empty array
       case WomNonEmptyArrayType(t) =>
-        WomArray(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+        WdlValues.V_Array(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
 
-      case WomPairType(lType, rType) =>
-        WomPair(genDefaultValueOfType(lType), genDefaultValueOfType(rType))
+      case WdlTypes.T_Pair(lType, rType) =>
+        WdlValues.V_Pair(genDefaultValueOfType(lType), genDefaultValueOfType(rType))
 
       case WomCompositeType(typeMap, structName) =>
         val m = typeMap.map {
@@ -120,7 +120,7 @@ task Add {
               case None =>
                 s"    ${typeName(cVar.womType)} ${cVar.name}"
               case Some(womValue) =>
-                s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWomString}"
+                s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWdlValues.V_String}"
             }
         }
         .mkString("\n")
@@ -131,7 +131,7 @@ task Add {
         .map {
           case cVar =>
             val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
+            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWdlValues.V_String}"
         }
         .mkString("\n")
 
@@ -167,8 +167,8 @@ task Add {
 
   def genDnanexusAppletStub(id: String,
                             appletName: String,
-                            inputSpec: Map[String, WomType],
-                            outputSpec: Map[String, WomType]): WdlCodeSnippet = {
+                            inputSpec: Map[String, WdlTypes.T],
+                            outputSpec: Map[String, WdlTypes.T]): WdlCodeSnippet = {
     val inputs = inputSpec
       .map {
         case (name, womType) =>
@@ -179,7 +179,7 @@ task Add {
       .map {
         case (name, womType) =>
           val defaultVal = genDefaultValueOfType(womType)
-          s"    ${typeName(womType)} $name = ${defaultVal.toWomString}"
+          s"    ${typeName(womType)} $name = ${defaultVal.toWdlValues.V_String}"
       }
       .mkString("\n")
 

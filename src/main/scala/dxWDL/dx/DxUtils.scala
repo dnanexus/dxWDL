@@ -31,31 +31,31 @@ object DxUtils {
   }
 
   // Is this a WDL type that maps to a native DX type?
-  def isNativeDxType(wdlType: WomType): Boolean = {
+  def isNativeDxType(wdlType: WdlTypes.T): Boolean = {
     wdlType match {
       // optional dx:native types
-      case WomOptionalType(WomBooleanType)           => true
-      case WomOptionalType(WomIntegerType)           => true
-      case WomOptionalType(WomFloatType)             => true
-      case WomOptionalType(WomStringType)            => true
-      case WomOptionalType(WomSingleFileType)        => true
-      case WomMaybeEmptyArrayType(WomBooleanType)    => true
-      case WomMaybeEmptyArrayType(WomIntegerType)    => true
-      case WomMaybeEmptyArrayType(WomFloatType)      => true
-      case WomMaybeEmptyArrayType(WomStringType)     => true
-      case WomMaybeEmptyArrayType(WomSingleFileType) => true
+      case WdlTypes.T_Optional(WdlTypes.T_Boolean)           => true
+      case WdlTypes.T_Optional(WdlTypes.T_Int)           => true
+      case WdlTypes.T_Optional(WdlTypes.T_Float)             => true
+      case WdlTypes.T_Optional(WdlTypes.T_String)            => true
+      case WdlTypes.T_Optional(WdlTypes.T_File)        => true
+      case WomMaybeEmptyArrayType(WdlTypes.T_Boolean)    => true
+      case WomMaybeEmptyArrayType(WdlTypes.T_Int)    => true
+      case WomMaybeEmptyArrayType(WdlTypes.T_Float)      => true
+      case WomMaybeEmptyArrayType(WdlTypes.T_String)     => true
+      case WomMaybeEmptyArrayType(WdlTypes.T_File) => true
 
       // compulsory dx:native types
-      case WomBooleanType                          => true
-      case WomIntegerType                          => true
-      case WomFloatType                            => true
-      case WomStringType                           => true
-      case WomSingleFileType                       => true
-      case WomNonEmptyArrayType(WomBooleanType)    => true
-      case WomNonEmptyArrayType(WomIntegerType)    => true
-      case WomNonEmptyArrayType(WomFloatType)      => true
-      case WomNonEmptyArrayType(WomStringType)     => true
-      case WomNonEmptyArrayType(WomSingleFileType) => true
+      case WdlTypes.T_Boolean                          => true
+      case WdlTypes.T_Int                          => true
+      case WdlTypes.T_Float                            => true
+      case WdlTypes.T_String                           => true
+      case WdlTypes.T_File                       => true
+      case WomNonEmptyArrayType(WdlTypes.T_Boolean)    => true
+      case WomNonEmptyArrayType(WdlTypes.T_Int)    => true
+      case WomNonEmptyArrayType(WdlTypes.T_Float)      => true
+      case WomNonEmptyArrayType(WdlTypes.T_String)     => true
+      case WomNonEmptyArrayType(WdlTypes.T_File) => true
 
       // A tricky, but important case, is `Array[File]+?`. This
       // cannot be converted into a dx file array, unfortunately.
