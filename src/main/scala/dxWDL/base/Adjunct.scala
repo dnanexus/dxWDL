@@ -1,7 +1,7 @@
 /** dxWDL supports reading some metadata from "adjunct" files - i.e. files in the same directory
   * as the WDL file.
 **/
-package dxWDL.util
+package dxWDL.base
 
 import java.nio.file.Path
 import dxWDL.base.BaseUtils
@@ -35,7 +35,7 @@ object Adjuncts {
     lazy val readmeRegexp = s"(?i)readme\\.${wdlName}\\.(.+)\\.md".r
     lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.${wdlName}\\.(.+)\\.md".r
 
-    parentDir.listFiles
+    val v : Array[(String, AdjunctFile)] = parentDir.listFiles
       .flatMap { file =>
         {
           file.getName match {
@@ -46,8 +46,13 @@ object Adjuncts {
             case _ => None
           }
         }
-      }
-      .groupBy(_._1)
-      .mapValues(_.map(_._2).toVector) // handle list that might have duplicates
+    }
+    // handle list that might have duplicates
+    val m : Map[String, Array[(String, AdjunctFile)]]= v.groupBy(_._1).toMap
+
+    // get rid of the extra copy of the filename
+    m.map{ case (name, fileTuples) =>
+      name -> fileTuples.map(_._2).toVector
+    }
   }
 }

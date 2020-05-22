@@ -1,6 +1,7 @@
 package dxWDL.base
 
 import java.nio.file.Path
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 // Exception used for AppInternError
 class AppInternalException private (ex: RuntimeException) extends RuntimeException(ex) {
@@ -67,3 +68,7 @@ object RunnerWfFragmentMode extends Enumeration {
 object Language extends Enumeration {
   val WDLvDraft2, WDLv1_0, WDLv2_0, CWLv1_0 = Value
 }
+
+case class WomBundle(primaryCallable : Option[TAT.Callable],
+                     allCallables : Map[String, TAT.Callable],
+                     aliases : Map[String, WdlTypes.T])
