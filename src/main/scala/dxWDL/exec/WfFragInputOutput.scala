@@ -1,8 +1,9 @@
 package dxWDL.exec
 
 import spray.json._
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
 
-import dxWDL.base.WomCompat._
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._

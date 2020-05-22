@@ -75,14 +75,13 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
-import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.types.TypedAbstractSyntax._
+import wdlTools.types.{Util => TUtil}
 import wdlTools.util.Util.prettyFormat
-
-import dxWDL.base.WomCompat._
 
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
-case class Block(nodes: Vector[TAT.WorkflowElement]) {
+case class Block(nodes: Vector[WorkflowElement]) {
   def prettyPrint: String = {
     val desc = nodes
       .map { node =>
@@ -97,7 +96,7 @@ case class Block(nodes: Vector[TAT.WorkflowElement]) {
   // Check that this block is valid.
   def validate(): Unit = {
     // There can be no calls in the first nodes
-    val allButLast: Vector[GraphNode] = this.nodes.dropRight(1)
+    val allButLast: Vector[WorkflowElement] = this.nodes.dropRight(1)
     val allCalls = Block.deepFindCalls(allButLast)
     assert(allCalls.size == 0)
   }
@@ -111,13 +110,13 @@ case class Block(nodes: Vector[TAT.WorkflowElement]) {
   // If the entire block is made up of expressions, return None
   def makeName: Option[String] = {
     nodes.collectFirst {
-      case TAT.Scatter(id, expr, body, _) =>
+      case Scatter(id, expr, body, _) =>
         val collection = TUtil.exprToString(expr)
         s"scatter (${id} in ${collection})"
-      case TAT.Conditional(expr, body, _) =>
+      case Conditional(expr, body, _) =>
         val cond = TUtil.exprToString(expr)
         s"if (${cond})"
-      case call : TAT.Call =>
+      case call : Call =>
         s"frag ${call.actualName}"
     }
   }
@@ -134,12 +133,12 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  def exprInputs(expr : WdlExpression) : Vector[String] = ???
+  def exprInputs(expr : Expr) : Vector[String] = ???
 
   // A trivial expression has no operators, it is either a constant WdlValues.V
   // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
   // is not.
-  def isTrivialExpression(expr: WdlExpression): Boolean = {
+  def isTrivialExpression(expr: Expr): Boolean = {
     val inputs = exprInputs(expr)
     if (inputs.size > 1)
       return false
@@ -155,108 +154,25 @@ object Block {
   // all the callee's arguments.
   def isCallWithNoSubexpressions(node: WorkflowElement): Boolean = {
     node match {
-      case call: TAT.Call =>
+      case call: Call =>
         call.inputs.forall {
-          case (name, expr: WomExpression) => isTrivialExpression(expr)
+          case (name, expr: Expr) => isTrivialExpression(expr)
         }
       case _ => false
     }
   }
 
-  // Split an entire workflow.
+  def splitToBlocks(elements : Vector[WorkflowElement]) : Vector[Block] = ???
+
+  // Split an entire workflow into blocks.
   //
-  // Sort the graph into a linear set of blocks, according to
-  // dependencies.  Each block is itself sorted. The dependencies
-  // impose a partial ordering on the graph. To make it correspond
-  // to the original WDL, we attempt to maintain the original line
-  // ordering.
-  //
-  // For example, in the workflow below:
-  // workflow foo {
-  //    call A
-  //    call B
-  //    call C
-  // }
-  // the block splitting algorithm could generate six permutions.
-  // For example:
-  //
-  //    1           2
-  //  [ call C ]  [ call A ]
-  //  [ call A ]  [ call B ]
-  //  [ call B ]  [ call C ]
-  //
-  // We choose option #2 because it resembles the original.
-  def splitGraph(stmts : Vector[WorkflowElement]) :
-      (Vector[GraphInputNode], // inputs
-       Vector[GraphInputNode], // missing inner inputs that propagate
-       Vector[Block], // blocks
-       Vector[GraphOutputNode]) // outputs
-  = {
-    var rest: Set[GraphNode] = graph.nodes
-    var blocks = Vector.empty[Block]
-
-    // separate out the inputs
-    val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
-    rest --= graph.inputNodes.toSet
-
-    // separate out the outputs
-    val outputBlock = graph.outputNodes.toVector
-    rest --= graph.outputNodes.toSet
-
-    if (graph.nodes.isEmpty)
-      return (inputBlock, innerInputs, Vector.empty, outputBlock)
-
-    // Create a separate block for each call. This maintains
-    // the sort order from the origial code.
-    //
-    for (callName <- callsLoToHi) {
-      findCallByName(callName, rest) match {
-        case None =>
-          // we already accounted for this call. Several
-          // calls can be in the same node. For example, a
-          // scatter can have many calls inside its subgraph.
-          ()
-        case Some(node) =>
-          assert(!rest.isEmpty)
-          rest = rest - node
-
-          // Build a vector where the callNode comes LAST. Choose
-          // the nodes from the ones that have not been picked yet.
-          val ancestors = deepAncestors(node).intersect(rest)
-          val nodes: Vector[GraphNode] =
-            (partialSortByDep(ancestors) :+ node)
-              .filter { x =>
-                !x.isInstanceOf[GraphInputNode]
-              }
-          val crnt = Block(nodes)
-          blocks :+= crnt
-          rest = rest -- nodes.toSet
-      }
-    }
-
-    val allBlocks =
-      if (rest.size > 0) {
-        // Add an additional block for anything not belonging to the calls
-        val lastBlock = partialSortByDep(rest)
-        blocks :+ Block(lastBlock)
-      } else {
-        blocks
-      }
-    allBlocks.foreach { b =>
-      b.validate()
-    }
-    (inputBlock, innerInputs, allBlocks, outputBlock)
-  }
-
   // An easy to use method that takes the workflow source
-  def split(graph: Graph, wfSource: String): (Vector[GraphInputNode], // inputs
-                                              Vector[GraphInputNode], // implicit inputs
-                                              Vector[Block], // blocks
-                                              Vector[GraphOutputNode]) // outputs
+  def split(wf: Workflow): (Vector[InputDefinition], // inputs
+                            Vector[InputDefinition], // implicit inputs
+                            Vector[Block], // blocks
+                            Vector[OutputDefinition]) // outputs
   = {
-    // sort from low to high according to the source lines.
-    val callsLoToHi: Vector[String] = ParseWomSourceFile(false).scanForCalls(graph, wfSource)
-    splitGraph(graph, callsLoToHi)
+    splitToBlocks(wf.body)
   }
 
   // A block of nodes that represents a call with no subexpressions. These
@@ -265,53 +181,23 @@ object Block {
   // For example, the WDL code:
   // call add { input: a=x, b=y }
   //
-  // Is represented by the graph:
-  // Block [
-  //   TaskCallInputExpressionNode(a, x, WdlTypes.T_Int, GraphNodeOutputPort(a))
-  //   TaskCallInputExpressionNode(b, y, WdlTypes.T_Int, GraphNodeOutputPort(b))
-  //   CommandCall(add, Set(a, b))
-  // ]
-  private def isSimpleCall(nodes: Seq[GraphNode], trivialExpressionsOnly: Boolean): Boolean = {
-    // find the call
-    val calls: Seq[CallNode] = nodes.collect {
-      case cNode: CallNode => cNode
-    }
-    if (calls.size != 1)
+  private def isSimpleCall(nodes: Vector[WorkflowElement], trivialExpressionsOnly: Boolean): Boolean = {
+    assert (nodes.size > 0)
+    if (nodes.size >= 2)
       return false
-    val oneCall = calls.head
-
-    // All the other nodes have to be call inputs
-    //
-    // Some of the inputs may be missing, which is why we
-    // have the -subsetOf- call.
-    val rest = nodes.toSet - oneCall
-    //val callInputs = oneCall.upstream.toSet
-    //if (!rest.subsetOf(callInputs))
-    //return false
-
-    // All the call inputs have to be simple expressions, if the call is
-    // to be called "simple"
-    val retval = rest.forall {
-      case expr: AnonymousExpressionNode =>
-        if (trivialExpressionsOnly)
-          isTrivialExpression(expr.womType, expr.womExpression)
-        else
-          true
-
-      // These are ignored
-      case _: PortBasedGraphOutputNode =>
-        true
-      case _: GraphInputNode =>
-        true
-
-      case other =>
-        false
+    // there is example a single node
+    val node = nodes.head
+    node match {
+      case call : Call =>
+        call.inputs.values.forall{
+          case (name, expr: Expr) => isTrivialExpression(expr)
+        }
+      case _ => false
     }
-    retval
   }
 
-  private def getOneCall(graph: Graph): CallNode = {
-    val calls = graph.nodes.collect {
+  private def getOneCall(nodes: Vector[WorkflowElement]): Call = {
+    val calls = nodes.collect {
       case node: CallNode => node
     }
     assert(calls.size == 1)
@@ -319,15 +205,15 @@ object Block {
   }
 
   // Deep search for all calls in a graph
-  def deepFindCalls(nodes: Seq[GraphNode]): Vector[CallNode] = {
+  def deepFindCalls(nodes: Vector[WorkflowElement]): Vector[Call] = {
     nodes
-      .foldLeft(Vector.empty[CallNode]) {
-        case (accu: Vector[CallNode], call: CallNode) =>
+      .foldLeft(Vector.empty[Call]) {
+        case (accu: Vector[Call], call: Call) =>
           accu :+ call
-        case (accu, ssc: ScatterNode) =>
-          accu ++ deepFindCalls(ssc.innerGraph.nodes.toVector)
-        case (accu, ifStmt: ConditionalNode) =>
-          accu ++ deepFindCalls(ifStmt.innerGraph.nodes.toVector)
+        case (accu, ssc: Scatter) =>
+          accu ++ deepFindCalls(ssc.body)
+        case (accu, ifStmt: Conditional) =>
+          accu ++ deepFindCalls(ifStmt.body)
         case (accu, _) =>
           accu
       }
@@ -357,31 +243,31 @@ object Block {
   //   Compound
   //      contains multiple calls and/or dependencies
   sealed trait Category {
-    val nodes: Vector[GraphNode]
+    val nodes: Vector[WorkflowElement]
   }
-  case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
-  case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-  case class CallWithSubexpressions(override val nodes: Vector[GraphNode], value: CallNode)
+  case class AllExpressions(override val nodes: Vector[WorkflowElement]) extends Category
+  case class CallDirect(override val nodes: Vector[WorkflowElement], value: Call) extends Category
+  case class CallWithSubexpressions(override val nodes: Vector[WorkflowElement], value: Call)
       extends Category
-  case class CallFragment(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-  case class CondOneCall(override val nodes: Vector[GraphNode],
-                         value: ConditionalNode,
-                         call: CallNode)
+  case class CallFragment(override val nodes: Vector[WorkflowElement], value: Call) extends Category
+  case class CondOneCall(override val nodes: Vector[WorkflowElement],
+                         value: Conditional,
+                         call: Call)
       extends Category
-  case class CondFullBlock(override val nodes: Vector[GraphNode], value: ConditionalNode)
+  case class CondFullBlock(override val nodes: Vector[WorkflowElement], value: Conditional)
       extends Category
-  case class ScatterOneCall(override val nodes: Vector[GraphNode],
-                            value: ScatterNode,
-                            call: CallNode)
+  case class ScatterOneCall(override val nodes: Vector[WorkflowElement],
+                            value: Scatter,
+                            call: Call)
       extends Category
-  case class ScatterFullBlock(override val nodes: Vector[GraphNode], value: ScatterNode)
+  case class ScatterFullBlock(override val nodes: Vector[WorkflowElement], value: Scatter)
       extends Category
 
   object Category {
-    def getInnerGraph(catg: Category): Graph = {
+    def getInnerGraph(catg: Category): Vector[WorkflowElement] = {
       catg match {
-        case cond: CondFullBlock   => cond.value.innerGraph
-        case sct: ScatterFullBlock => sct.value.innerGraph
+        case cond: CondFullBlock   => cond.body
+        case sct: ScatterFullBlock => sct.body
         case other =>
           throw new UnsupportedOperationException(
               s"${other.getClass.toString} does not have an inner graph"
@@ -401,47 +287,47 @@ object Block {
 
   def categorize(block: Block): Category = {
     assert(!block.nodes.isEmpty)
-    val allButLast: Vector[GraphNode] = block.nodes.dropRight(1)
+    val allButLast: Vector[WorkflowElement] = block.nodes.dropRight(1)
     assert(deepFindCalls(allButLast).isEmpty)
     val lastNode = block.nodes.last
     lastNode match {
-      case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
-        // The block comprises of expressions only
+      case _ if deepFindCalls(Vector(lastNode)).isEmpty =>
+        // The block comprises expressions only
         AllExpressions(allButLast :+ lastNode)
 
-      case callNode: CallNode =>
+      case callNode: Call =>
         if (isSimpleCall(block.nodes, true))
           CallDirect(allButLast, callNode)
-        else if (isSimpleCall(block.nodes.toSeq, false))
+        else if (isSimpleCall(block.nodes, false))
           CallWithSubexpressions(allButLast, callNode)
         else
           CallFragment(allButLast, callNode)
 
-      case condNode: ConditionalNode =>
-        if (isSimpleCall(condNode.innerGraph.nodes.toSeq, false)) {
-          CondOneCall(allButLast, condNode, getOneCall(condNode.innerGraph))
+      case condNode: Conditional =>
+        if (isSimpleCall(condNode.body, false)) {
+          CondOneCall(allButLast, condNode, getOneCall(condNode.body))
         } else {
           CondFullBlock(allButLast, condNode)
         }
 
-      case sctNode: ScatterNode =>
-        if (isSimpleCall(sctNode.innerGraph.nodes.toSeq, false)) {
-          ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.innerGraph))
+      case sctNode: Scatter =>
+        if (isSimpleCall(sctNode.body, false)) {
+          ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.body))
         } else {
           ScatterFullBlock(allButLast, sctNode)
         }
     }
   }
 
-  def getSubBlock(path: Vector[Int], graph: Graph, callsLoToHi: Vector[String]): Block = {
+  def getSubBlock(path: Vector[Int], nodes : Vector[WorkflowElement]): Block = {
     assert(path.size >= 1)
 
-    val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
+    val (_, _, blocks, _) = splitToBlocks(nodes)
     var subBlock = blocks(path.head)
     for (i <- path.tail) {
       val catg = categorize(subBlock)
       val innerGraph = Category.getInnerGraph(catg)
-      val (_, _, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
+      val (_, _, blocks2, _) = splitToBlocks(innerGraph)
       subBlock = blocks2(i)
     }
     return subBlock
@@ -469,87 +355,7 @@ object Block {
   // For each input also return whether is has a default. This makes it,
   // de facto, optional.
   //
-  def closure(block: Block): Map[String, (WdlTypes.T, Boolean)] = {
-    // make a deep list of all the nodes inside the block
-    val allBlockNodes: Set[GraphNode] = block.nodes
-      .map {
-        case sctNode: ScatterNode =>
-          sctNode.innerGraph.allNodes + sctNode
-        case cndNode: ConditionalNode =>
-          cndNode.innerGraph.allNodes + cndNode
-        case node: GraphNode =>
-          Set(node)
-      }
-      .flatten
-      .toSet
-
-    // Examine an input port, and keep it only if it points outside the block.
-    def keepOnlyOutsideRefs(inPort: GraphNodePort.InputPort): Option[(String, WdlTypes.T)] = {
-      if (allBlockNodes contains inPort.upstream.graphNode) None
-      else Some((inPort.name, inPort.womType))
-    }
-
-    // Examine only the outer input nodes, check that they
-    // originate in a node outside the block.
-    def getInputsToGraph(graph: Graph): Map[String, WdlTypes.T] = {
-      graph.nodes.flatMap {
-        case ogin: OuterGraphInputNode =>
-          if (allBlockNodes contains ogin.linkToOuterGraphNode)
-            None
-          else
-            Some((ogin.identifier.localName.value, ogin.womType))
-        case _ => None
-      }.toMap
-    }
-
-    val allInputs: Map[String, WdlTypes.T] = block.nodes.flatMap {
-      case scNode: ScatterNode =>
-        val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
-      case cnNode: ConditionalNode =>
-        val cnInputs = cnNode.conditionExpression.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        cnInputs ++ getInputsToGraph(cnNode.innerGraph)
-      case node: GraphNode =>
-        node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-    }.toMap
-
-    // make list of call arguments that have defaults.
-    // In the example below, it is "unpassed_arg_default".
-    // It has a default, so it can be omitted.
-    //
-    // workflow inner_wf {
-    //     call foo
-    // }
-    //
-    // task foo {
-    //     input {
-    //         Boolean unpassed_arg_default = true
-    //     }
-    //     command {}
-    //     output {}
-    // }
-    //
-    val optionalInputs: Set[String] = block.nodes.flatMap {
-      case cNode: CallNode =>
-        val missingCallArgs = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        val callee: Callable = cNode.callable
-        missingCallArgs.flatMap {
-          case (name, womType) =>
-            val inputDef: InputDefinition = callee.inputs.find {
-              case iDef: InputDefinition => iDef.name == name
-            }.get
-            if (inputDef.optional) Some(name)
-            else None
-        }
-      case _ => None
-    }.toSet
-
-    allInputs.map {
-      case (name, womType) =>
-        val hasDefault = optionalInputs contains name
-        name -> (womType, hasDefault)
-    }.toMap
-  }
+  def closure(block: Block): Map[String, (WdlTypes.T, Boolean)] = ???
 
   // Figure out all the outputs from a sequence of WDL statements.
   //
@@ -557,56 +363,15 @@ object Block {
   // the block.  For example, 'Int x' declared inside a scatter, is
   // 'Array[Int] x' outside the scatter.
   //
-  def outputs(block: Block): Map[String, WdlTypes.T] = {
-    val xtrnPorts: Vector[GraphNodePort.OutputPort] =
-      block.nodes.map {
-        case node: ExposedExpressionNode =>
-          node.outputPorts
-        case _: ExpressionNode =>
-          // an anonymous expression node, ignore it
-          Set.empty
-        case node =>
-          node.outputPorts
-      }.flatten
-
-    xtrnPorts.map { outputPort =>
-      // Is this really the fully qualified name?
-      val fqn = outputPort.identifier.localName.value
-      val womType = outputPort.womType
-      fqn -> womType
-    }.toMap
-  }
+  def outputs(block: Block): Map[String, WdlTypes.T] = ???
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: GraphOutputNode): Boolean = {
-    outputNode match {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        true
-      case expr: ExpressionBasedGraphOutputNode
-          if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
-        true
-      case expr: ExpressionBasedGraphOutputNode =>
-        // An expression that requires evaluation
-        false
-      case other =>
-        throw new Exception(s"unhandled output class ${other}")
-    }
-  }
+  def isSimpleOutput(outputNode: GraphOutputNode): Boolean = ???
 
   // Figure out what variables from the environment we need to pass
   // into the applet. In other words, the closure.
-  def outputClosure(outputNodes: Vector[GraphOutputNode]): Set[String] = {
-    outputNodes.foldLeft(Set.empty[String]) {
-      case (accu, PortBasedGraphOutputNode(id, womType, sourcePort)) =>
-        accu + sourcePort.name
-      case (accu, expr: ExpressionBasedGraphOutputNode) =>
-        accu ++ expr.inputPorts.map(_.name)
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
-
-    }
-  }
+  def outputClosure(outputNodes: Vector[OutputDefinition]): Set[String] = ???
 
   // is an output used directly as an input? For example, in the
   // small workflow below, 'lane' is used in such a manner.
@@ -623,11 +388,11 @@ object Block {
   //      String blah = lane
   //   }
   // }
-  def inputsUsedAsOutputs(inputNodes: Vector[GraphInputNode],
-                          outputNodes: Vector[GraphOutputNode]): Set[String] = {
+  def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
+                          outputNodes: Vector[OutputDefinition]): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes)
-    val inputs: Set[String] = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
+    val inputs: Set[String] = inputNodes.map(_.name).toSet
     //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
     inputs.intersect(outputs)
   }

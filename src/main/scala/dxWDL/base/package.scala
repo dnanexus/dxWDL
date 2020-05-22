@@ -1,7 +1,6 @@
 package dxWDL.base
 
 import java.nio.file.Path
-import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // Exception used for AppInternError
 class AppInternalException private (ex: RuntimeException) extends RuntimeException(ex) {
@@ -71,6 +70,5 @@ object Language extends Enumeration {
 
 // global definitions
 package object base {
-  type WomExpression = TAT.Expr
   type WorkflowSource = String
 }

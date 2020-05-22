@@ -4,10 +4,10 @@
 package dxWDL.exec
 
 import spray.json._
-import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base.{Utils, Verbose}
-import dxWDL.base.WomCompat._
 import dxWDL.util._
 
 case class WfInputs(wf: TAT.Workflow,

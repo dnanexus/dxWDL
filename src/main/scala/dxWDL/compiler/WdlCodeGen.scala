@@ -1,11 +1,11 @@
 package dxWDL.compiler
 
 import scala.util.matching.Regex
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
-import dxWDL.base.WdlTypes.TSerialization.typeName
+import dxWDL.base.WomTypeSerialization.typeName
 import dxWDL.util._
 
 // A bunch of WDL source lines

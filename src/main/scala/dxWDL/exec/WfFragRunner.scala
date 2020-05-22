@@ -37,10 +37,10 @@ package dxWDL.exec
 
 import java.nio.file.Paths
 import spray.json._
-import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
-import dxWDL.base.WomCompat._
 import dxWDL.dx._
 import dxWDL.util._
 

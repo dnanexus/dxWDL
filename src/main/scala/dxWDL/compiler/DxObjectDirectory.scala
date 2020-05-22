@@ -11,7 +11,7 @@ import scala.collection.mutable.HashSet
 import spray.json._
 
 import dxWDL.base._
-import dxWDL.base.Utils.CHECKSUM_PROP
+import dxWDL.base.BaseUtils.CHECKSUM_PROP
 import dxWDL.dx._
 
 // Keep all the information about an applet in packaged form
@@ -74,7 +74,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              false)
     val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
-    Utils.trace(
+    BaseUtils.trace(
         verbose.on,
         s"""|Found ${dxAppletsInFolder.size} applets
             |in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
@@ -93,7 +93,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              false)
     val t3 = System.nanoTime()
     diffMSec = (t3 - t2) / (1000 * 1000)
-    Utils.trace(
+    BaseUtils.trace(
         verbose.on,
         s"""|Found ${dxWorkflowsInFolder.size} workflows
             | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
@@ -155,7 +155,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     val nrApplets = dxAppletsInProject.size
     val t1 = System.nanoTime()
     val diffMSec = (t1 - t0) / (1000 * 1000)
-    Utils.trace(
+    BaseUtils.trace(
         verbose.on,
         s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)"
     )
@@ -231,7 +231,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
   //
   // Note: 'dx build' does not support workflow archiving at the moment.
   def archiveDxObject(objInfo: DxObjectInfo): Unit = {
-    Utils.trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
+    BaseUtils.trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
     val dxClass: String = objInfo.dxClass
     val destFolder = folder ++ "/." ++ dxClass + "_archive"
 

@@ -10,13 +10,12 @@ import wdlTools.util.{
   Util => WdlUtil,
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
-import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT}
+import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT, WdlTypes}
 import dxWDL.base.{Language, BaseUtils}
-import dxWDL.base.WomCompat._
 
 case class WomBundle(primaryCallable : Option[TAT.Callable],
                      allCallables : Map[String, TAT.Callable],
-                     aliases : Map[String, WdlType])
+                     aliases : Map[String, WdlTypes.T])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {

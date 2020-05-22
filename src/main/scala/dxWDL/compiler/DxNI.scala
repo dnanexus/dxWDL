@@ -66,11 +66,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.FLOAT             => WdlTypes.T_Optional(WdlTypes.T_Float)
         case DxIOClass.STRING            => WdlTypes.T_Optional(WdlTypes.T_String)
         case DxIOClass.FILE              => WdlTypes.T_Optional(WdlTypes.T_File)
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WdlTypes.T_Boolean)
-        case DxIOClass.ARRAY_OF_INTS     => WomMaybeEmptyArrayType(WdlTypes.T_Int)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomMaybeEmptyArrayType(WdlTypes.T_Float)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomMaybeEmptyArrayType(WdlTypes.T_String)
-        case DxIOClass.ARRAY_OF_FILES    => WomMaybeEmptyArrayType(WdlTypes.T_File)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, false)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, false)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, false)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, false)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, false)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -82,11 +82,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.FLOAT             => WdlTypes.T_Float
         case DxIOClass.STRING            => WdlTypes.T_String
         case DxIOClass.FILE              => WdlTypes.T_File
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WdlTypes.T_Boolean)
-        case DxIOClass.ARRAY_OF_INTS     => WomNonEmptyArrayType(WdlTypes.T_Int)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomNonEmptyArrayType(WdlTypes.T_Float)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomNonEmptyArrayType(WdlTypes.T_String)
-        case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WdlTypes.T_File)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, true)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, true)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, true)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, true)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, true)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -102,7 +102,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       aplName: String,
       desc: DxAppletDescribe
   ): (Map[String, WdlTypes.T], Map[String, WdlTypes.T]) = {
-    Utils.trace(verbose.on, s"analyzing applet ${aplName}")
+    BaseUtils.trace(verbose.on, s"analyzing applet ${aplName}")
     val inputSpec: Map[String, WdlTypes.T] =
       desc.inputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
@@ -136,8 +136,8 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       Some(taskCode)
     } catch {
       case e: Throwable =>
-        Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${aplName}")
-        Utils.warning(verbose, e.getMessage)
+        BaseUtils.warning(verbose, s"Unable to construct a WDL interface for applet ${aplName}")
+        BaseUtils.warning(verbose, e.getMessage)
         None
     }
   }
@@ -164,7 +164,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         desc.properties match {
           case None => None
           case Some(props) =>
-            props.get(Utils.CHECKSUM_PROP) match {
+            props.get(BaseUtils.CHECKSUM_PROP) match {
               case Some(_) => None
               case None    => Some(apl -> desc)
             }
@@ -181,7 +181,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     properties match {
       case None => false
       case Some(props) =>
-        props.get(Utils.CHECKSUM_PROP) match {
+        props.get(BaseUtils.CHECKSUM_PROP) match {
           case Some(_) => true
           case None    => false
         }
@@ -193,7 +193,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       case id if path.startsWith("app-")  => DxApp.getInstance(id)
       case id if id.startsWith("applet-") => DxApplet.getInstance(id)
       case _ =>
-        val fullPath = Utils.DX_URL_PREFIX + "/" + path
+        val fullPath = BaseUtils.DX_URL_PREFIX + "/" + path
         DxPath.resolveOnePath(fullPath, dxProject)
     }
     dxObj match {
@@ -277,7 +277,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           case _               => "app_"
         }
         if (!prefix.isEmpty)
-          Utils.warning(
+          BaseUtils.warning(
               verbose,
               s"""|app ${nameClean} does not start
                   |with a letter, adding the prefix '${prefix}'""".stripMargin
@@ -359,8 +359,8 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         Some(appToWdlInterface(dxApp))
       } catch {
         case e: Throwable =>
-          Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${appName}")
-          Utils.warning(verbose, e.getMessage)
+          BaseUtils.warning(verbose, s"Unable to construct a WDL interface for applet ${appName}")
+          BaseUtils.warning(verbose, e.getMessage)
           None
       }
     }
@@ -387,7 +387,7 @@ object DxNI {
     // pretty print into a buffer
     val lines = tasks.mkString("\n\n")
     val allLines = header + "\n" + lines
-    Utils.writeFileContent(outputPath, allLines)
+    BaseUtils.writeFileContent(outputPath, allLines)
   }
 
   // create headers for calling dx:applets and dx:workflows
@@ -410,7 +410,7 @@ object DxNI {
       case Right(path)  => s"path = ${path}"
     }
     if (dxNativeTasks.isEmpty) {
-      Utils.warning(verbose, s"Found no DX native applets in ${folderOrPathRepr}")
+      BaseUtils.warning(verbose, s"Found no DX native applets in ${folderOrPathRepr}")
       return
     }
     val projName = dxProject.describe().name
@@ -433,7 +433,7 @@ object DxNI {
     val dxni = new DxNI(verbose, language)
     val dxAppsAsTasks: Vector[String] = dxni.searchApps
     if (dxAppsAsTasks.isEmpty) {
-      Utils.warning(verbose, s"Found no DX global apps")
+      BaseUtils.warning(verbose, s"Found no DX global apps")
       return
     }
 

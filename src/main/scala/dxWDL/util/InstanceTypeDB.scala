@@ -29,9 +29,9 @@ package dxWDL.util
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
+import wdlTools.eval.WdlValues
 
 import dxWDL.base.{BaseUtils, Verbose}
-import dxWDL.base.WomCompat._
 import dxWDL.dx._
 
 // Request for an instance type
