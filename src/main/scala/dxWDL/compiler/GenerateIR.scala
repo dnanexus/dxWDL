@@ -82,24 +82,12 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       reorg: Either[Boolean, ReorgAttrs],
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Workflow, Vector[IR.Callable]) = {
-    // sort from low to high according to the source lines.
-    val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
-
     // Make a list of all task/workflow calls made inside the block. We will need to link
     // to the equivalent dx:applets and dx:workflows.
     val callablesUsedInWorkflow: Vector[IR.Callable] =
-      wf.graph.allNodes.collect {
-        case cNode: WorkflowCallNode =>
-          // We need to ignore calls to scatters that converted by
-          // wdl to internal workflows.
-          val localName = BaseUtils.getUnqualifiedName(cNode.callable.name)
-          if (localName.startsWith("Scatter"))
-            throw new Exception("""|The workflow contains a nested scatter, it is not
-                                   |handled currently due to a cromwell WOM library issue
-                                   |""".stripMargin.replaceAll("\n", " "))
-          callables(localName)
-        case cNode: CallNode =>
-          val localname = BaseUtils.getUnqualifiedName(cNode.callable.name)
+      wf.body.collect {
+        case cNode: TAT.Call =>
+          val localname = BaseUtils.getUnqualifiedName(cNode.callee.name)
           callables(localname)
       }.toVector
 
@@ -110,7 +98,6 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     val gir = new GenerateIRWorkflow(wf,
                                      wfSource,
                                      wfSourceStandAlone,
-                                     callsLoToHi,
                                      callables,
                                      language,
                                      verbose,
@@ -122,7 +109,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
   // Entry point for compiling tasks and workflows into IR
   private def compileCallable(
-      callable: Callable,
+    callable: TAT.Callable,
       typeAliases: Map[String, WdlTypes.T],
       taskDir: Map[String, String],
       workflowDir: Map[String, String],
@@ -132,7 +119,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       reorg: Either[Boolean, ReorgAttrs],
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Callable, Vector[IR.Callable]) = {
-    def compileTask2(task: CallableTaskDefinition) = {
+    def compileTask2(task: TAT.Task) = {
       val taskSourceCode = taskDir.get(task.name) match {
         case None    => throw new Exception(s"Did not find task ${task.name}")
         case Some(x) => x
@@ -141,12 +128,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         .apply(task, taskSourceCode, adjunctFiles)
     }
     callable match {
-      case exec: ExecutableTaskDefinition =>
-        val task = exec.callableTaskDefinition
+      case task: TAT.Task =>
         (compileTask2(task), Vector.empty)
-      case task: CallableTaskDefinition =>
-        (compileTask2(task), Vector.empty)
-      case wf: WorkflowDefinition =>
+      case wf: TAT.Workflow =>
         workflowDir.get(wf.name) match {
           case None =>
             throw new Exception(s"Did not find sources for workflow ${wf.name}")
@@ -168,8 +152,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
   }
 
   // Entrypoint
-  def apply(womBundle: wom.executable.WomBundle,
-            allSources: Map[String, WorkflowSource],
+  def apply(womBundle: WomBundle,
+            allSources: Map[String, String],
             language: Language.Value,
             locked: Boolean,
             reorg: Either[Boolean, ReorgAttrs],
@@ -177,11 +161,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     BaseUtils.trace(verbose.on, s"IR pass")
     BaseUtils.traceLevelInc()
 
-    // Scan the source files and extract the tasks. It is hard
-    // to generate WDL from the abstract syntax tree (AST). One
-    // issue is that tabs and special characters have to preserved.
-    // There is no built-in method for this.
-    val taskDir = allSources.foldLeft(Map.empty[String, String]) {
+    val taskDir = womBundle.allCallbles.foldLeft(Map.empty){
+      case (name, TAT.Task) => name -> task
+      case (_, _) => None
       case (accu, (filename, srcCode)) =>
         val d = ParseWomSourceFile(verbose.on).scanForTasks(srcCode)
         accu ++ d

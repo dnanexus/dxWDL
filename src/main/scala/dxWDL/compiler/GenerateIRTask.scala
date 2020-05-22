@@ -1,14 +1,7 @@
 package dxWDL.compiler
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
-import wom.callable.CallableTaskDefinition
-import wom.callable.Callable._
-import wom.callable.MetaValueElement._
-import wom.callable.MetaValueElement
-import wom.expression.{ValueAsAnExpression, WomExpression}
-import wom.types._
-import wom.values._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -23,16 +16,14 @@ case class GenerateIRTask(verbose: Verbose,
                           defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
-  private class DynamicInstanceTypesException private (ex: Exception) extends RuntimeException(ex) {
-    def this() = this(new RuntimeException("Runtime instance type calculation required"))
+  private class DynamicInstanceTypesException extends RuntimeException {
+    def this() = this("Runtime instance type calculation required")
   }
 
   def evalWomExpression(expr: WomExpression): WdlValues.V = {
-    val result: ErrorOr[WdlValues.V] =
-      expr.evaluateValue(Map.empty[String, WdlValues.V], wom.expression.NoIoFunctionSet)
-    result match {
-      case Invalid(_)         => throw new DynamicInstanceTypesException()
-      case Valid(x: WdlValues.V) => x
+    WomValueAnalysis.ifConstEval(WdlTypes.T_String, expr) match {
+      case None => throw new DynamicInstanceTypesException()
+      case Some(x) => x
     }
   }
 
@@ -240,7 +231,7 @@ case class GenerateIRTask(verbose: Verbose,
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
   // native applet.
-  def apply(task: CallableTaskDefinition,
+  def apply(task: TAT.Task,
             taskSourceCode: String,
             adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")

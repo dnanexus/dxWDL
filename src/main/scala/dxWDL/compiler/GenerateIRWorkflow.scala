@@ -2,22 +2,17 @@
   */
 package dxWDL.compiler
 
-import wom.callable.WorkflowDefinition
-import wom.callable.MetaValueElement._
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
-import wom.types._
-import wom.values._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.WdlTypes
+
 import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
 import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
 
-case class GenerateIRWorkflow(wf: WorkflowDefinition,
+case class GenerateIRWorkflow(wf: TAT.Workflow,
                               wfSourceCode: String,
                               wfSourceStandAlone: String,
-                              callsLoToHi: Vector[String],
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose,
