@@ -475,7 +475,12 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     val rep =
       try {
-        DXAPI.userDescribe(billTo, req, classOf[JsonNode])
+        if(billTo.startsWith("org")) {
+          DXAPI.orgDescribe(billTo, req, classOf[JsonNode])
+        }
+        else {
+          DXAPI.userDescribe(billTo, req, classOf[JsonNode])
+        }
       } catch {
         case e: Throwable =>
           throw new Exception("Insufficient permissions")
@@ -557,10 +562,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   private def queryWithPrices(dxProject: DxProject): InstanceTypeDB = {
     // Figure out the available instances by describing the project
     val allAvailableIT = queryAvailableInstanceTypes(dxProject)
-
     // get billTo and region from the project
     val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
-
     // get the pricing model
     val pm = getPricingModel(billTo, region)
 
