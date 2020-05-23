@@ -68,6 +68,18 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
+  def triageDockerImageFromValue(dockerValue: WdlValues.V): IR.DockerImage =  {
+    dockerValue match {
+      case WdlValues.V_String(url) if url.startsWith(BaseUtils.DX_URL_PREFIX) =>
+        // A constant image specified with a DX URL
+        val dxfile = DxPath.resolveDxURLFile(url)
+        IR.DockerImageDxFile(url, dxfile)
+      case _ =>
+        // Probably a public docker image
+        IR.DockerImageNetwork
+    }
+  }
+
   // Process a docker image, if there is one
   def triageDockerImage(dockerExpr: Option[TAT.Expr]): IR.DockerImage = {
     dockerExpr match {
@@ -75,15 +87,7 @@ case class GenerateIRTask(verbose: Verbose,
         IR.DockerImageNone
       case Some(expr) if WomValueAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
         val wdlConst = WomValueAnalysis.evalConst(WdlTypes.T_String, expr)
-        wdlConst match {
-          case WdlValues.V_String(url) if url.startsWith(BaseUtils.DX_URL_PREFIX) =>
-            // A constant image specified with a DX URL
-            val dxfile = DxPath.resolveDxURLFile(url)
-            IR.DockerImageDxFile(url, dxfile)
-          case _ =>
-            // Probably a public docker image
-            IR.DockerImageNetwork
-        }
+        triageDockerImageFromValue(wdlConst)
       case _ =>
         // Image will be downloaded from the network
         IR.DockerImageNetwork
@@ -322,17 +326,21 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Handle any dx-specific runtime hints, other than "type" and "id" which are handled above
-    val runtimeHints = unwrapRuntimeHints(task.runtimeAttributes.attributes)
+    val runtimeAttrs : Map[String, TAT.Expr] = task.runtime match {
+      case None => Map.empty
+      case Some(TAT.RuntimeSection(kvs, _)) => kvs
+    }
+    val runtimeHints = unwrapRuntimeHints(runtimeAttrs)
 
     // Handle any task metadata
     val meta = task.meta match {
-      case None => Map.empty
-      case Some(ParameterMetaSection(kvs, _)) => kvs
+      case None => Map.empty[String, TAT.MetaValue]
+      case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val taskAttr = unwrapTaskMeta(meta, adjunctFiles)
 
     // Figure out if we need to use docker
-    val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
+    val docker = triageDockerImage(runtimeAttrs.get("docker"))
 
     val taskCleanedSourceCode = docker match {
       case IR.DockerImageDxFile(orgURL, dxFile) =>
@@ -354,7 +362,7 @@ case class GenerateIRTask(verbose: Verbose,
         // overall defaults
         defaultRuntimeAttrs.m.get("docker") match {
           case None         => IR.DockerImageNone
-          case Some(wValue) => triageDockerImage(Some(ValueAsAnExpression(wValue)))
+          case Some(wValue) => triageDockerImageFromValue(wValue)
         }
       case other => other
     }
