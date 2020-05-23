@@ -75,13 +75,47 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
-import wdlTools.types.TypedAbstractSyntax._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.{Util => TUtil, WdlTypes}
 import wdlTools.util.Util.prettyFormat
 
-// A sorted group of graph nodes, that match some original
-// set of WDL statements.
-case class Block(nodes: Vector[WorkflowElement]) {
+case class BlockInput(name: String, wdlType: WdlTypes.T, optional : Boolean)
+case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
+
+// Block: a continuous list of workflow elements from a user
+// workflow.
+//
+// INPUTS: all the inputs required for a block. For example,
+// in the workflow:
+//
+// workflow optionals {
+//   input {
+//     Boolean flag
+//   }
+//   Int? rain = 13
+//   if (flag) {
+//     call opt_MaybeInt as mi3 { input: a=rain }
+//   }
+// }
+//
+// The conditional block:
+//    if (flag) {
+//     call opt_MaybeInt as mi3 { input: a=rain }
+//    }
+// requires "flag" and "rain".
+//
+// For each input also return whether is has a default. This makes it,
+// de facto, optional.
+//
+// OUTPUTS: all the outputs from a sequence of WDL statements.
+//
+// Note: The type outside a scatter/conditional block is *different* than the type in
+// the block.  For example, 'Int x' declared inside a scatter, is
+// 'Array[Int] x' outside the scatter.
+//
+case class Block(inputs : Vector[BlockInput],
+                 nodes: Vector[TAT.WorkflowElement],
+                 outputs : Vector[BlockOutput]) {
   def prettyPrint: String = {
     val desc = nodes
       .map { node =>
@@ -91,14 +125,6 @@ case class Block(nodes: Vector[WorkflowElement]) {
     s"""|Block [
         |${desc}
         |]""".stripMargin
-  }
-
-  // Check that this block is valid.
-  def validate(): Unit = {
-    // There can be no calls in the first nodes
-    val allButLast: Vector[WorkflowElement] = this.nodes.dropRight(1)
-    val allCalls = Block.deepFindCalls(allButLast)
-    assert(allCalls.size == 0)
   }
 
   // Create a human readable name for a block of statements
@@ -133,16 +159,16 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  def exprInputs(expr : Expr) : Vector[String] = ???
+  def exprInputs(expr : TAT.Expr) : Vector[String] = ???
 
   // A trivial expression has no operators, it is either a constant WdlValues.V
   // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
   // is not.
-  def isTrivialExpression(expr: Expr): Boolean = {
+  def isTrivialExpression(expr: TAT.Expr): Boolean = {
     val inputs = exprInputs(expr)
     if (inputs.size > 1)
       return false
-    if (WdlValueAnalysis.isExpressionConst(expr.wdlType, expr))
+    if (WomValueAnalysis.isExpressionConst(expr.wdlType, expr))
       return true
     // The expression may have one input, but could still have an operator.
     // For example: x+1, x + x.
@@ -152,32 +178,32 @@ object Block {
   // The block is a singleton with one statement which is a call. The call
   // has no subexpressions. Note that the call may not provide
   // all the callee's arguments.
-  def isCallWithNoSubexpressions(node: WorkflowElement): Boolean = {
+  def isCallWithNoSubexpressions(node: TAT.WorkflowElement): Boolean = {
     node match {
       case call: Call =>
         call.inputs.forall {
-          case (name, expr: Expr) => isTrivialExpression(expr)
+          case (name, expr: TAT.Expr) => isTrivialExpression(expr)
         }
       case _ => false
     }
   }
 
-  def splitToBlocks(elements : Vector[WorkflowElement]) : Vector[Block] = ???
+  def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = ???
 
   // split a part of a workflow
-  def split(statements : Vector[WorkflowElement]): (Vector[InputDefinition], // inputs
-                                                    Vector[InputDefinition], // implicit inputs
-                                                    Vector[Block], // blocks
-                                                    Vector[OutputDefinition]) // outputs
+  def split(statements : Vector[TAT.WorkflowElement]): (Vector[TAT.InputDefinition], // inputs
+                                                        Vector[TAT.InputDefinition], // implicit inputs
+                                                        Vector[Block], // blocks
+                                                        Vector[TAT.OutputDefinition]) // outputs
   = ???
 
   // Split an entire workflow into blocks.
   //
   // An easy to use method that takes the workflow source
-  def splitWorkflow(wf : TAT.Workflow): (Vector[InputDefinition], // inputs
-                                         Vector[InputDefinition], // implicit inputs
+  def splitWorkflow(wf : TAT.Workflow): (Vector[TAT.InputDefinition], // inputs
+                                         Vector[TAT.InputDefinition], // implicit inputs
                                          Vector[Block], // blocks
-                                         Vector[OutputDefinition]) // outputs
+                                         Vector[TAT.OutputDefinition]) // outputs
   = ???
 
   // A block of nodes that represents a call with no subexpressions. These
@@ -186,7 +212,7 @@ object Block {
   // For example, the WDL code:
   // call add { input: a=x, b=y }
   //
-  private def isSimpleCall(nodes: Vector[WorkflowElement], trivialExpressionsOnly: Boolean): Boolean = {
+  private def isSimpleCall(nodes: Vector[TAT.WorkflowElement], trivialExpressionsOnly: Boolean): Boolean = {
     assert (nodes.size > 0)
     if (nodes.size >= 2)
       return false
@@ -195,13 +221,13 @@ object Block {
     node match {
       case call : Call =>
         call.inputs.values.forall{
-          case (name, expr: Expr) => isTrivialExpression(expr)
+          case (name, expr: TAT.Expr) => isTrivialExpression(expr)
         }
       case _ => false
     }
   }
 
-  private def getOneCall(nodes: Vector[WorkflowElement]): Call = {
+  private def getOneCall(nodes: Vector[TAT.WorkflowElement]): Call = {
     val calls = nodes.collect {
       case node: CallNode => node
     }
@@ -210,7 +236,7 @@ object Block {
   }
 
   // Deep search for all calls in a graph
-  def deepFindCalls(nodes: Vector[WorkflowElement]): Vector[Call] = {
+  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[Call] = {
     nodes
       .foldLeft(Vector.empty[Call]) {
         case (accu: Vector[Call], call: Call) =>
@@ -248,28 +274,28 @@ object Block {
   //   Compound
   //      contains multiple calls and/or dependencies
   sealed trait Category {
-    val nodes: Vector[WorkflowElement]
+    val nodes: Vector[TAT.WorkflowElement]
   }
-  case class AllExpressions(nodes: Vector[WorkflowElement]) extends Category
-  case class CallDirect(nodes: Vector[WorkflowElement], value: Call) extends Category
-  case class CallWithSubexpressions(nodes: Vector[WorkflowElement], value: Call)
+  case class AllExpressions(nodes: Vector[TAT.WorkflowElement]) extends Category
+  case class CallDirect(nodes: Vector[TAT.WorkflowElement], value: TAT.Call) extends Category
+  case class CallWithSubexpressions(nodes: Vector[TAT.WorkflowElement], value: TAT.Call)
       extends Category
-  case class CallFragment(nodes: Vector[WorkflowElement], value: Call) extends Category
-  case class CondOneCall(nodes: Vector[WorkflowElement],
-                         value: Conditional,
-                         call: Call)
+  case class CallFragment(nodes: Vector[TAT.WorkflowElement], value: TAT.Call) extends Category
+  case class CondOneCall(nodes: Vector[TAT.WorkflowElement],
+                         value: TAT.Conditional,
+                         call: TAT.Call)
       extends Category
-  case class CondFullBlock(nodes: Vector[WorkflowElement], value: Conditional)
+  case class CondFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Conditional)
       extends Category
-  case class ScatterOneCall(nodes: Vector[WorkflowElement],
-                            value: Scatter,
-                            call: Call)
+  case class ScatterOneCall(nodes: Vector[TAT.WorkflowElement],
+                            value: TAT.Scatter,
+                            call: TAT.Call)
       extends Category
-  case class ScatterFullBlock(nodes: Vector[WorkflowElement], value: Scatter)
+  case class ScatterFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Scatter)
       extends Category
 
   object Category {
-    def getInnerGraph(catg: Category): Vector[WorkflowElement] = {
+    def getInnerGraph(catg: Category): Vector[TAT.WorkflowElement] = {
       catg match {
         case cond: CondFullBlock   => cond.body
         case sct: ScatterFullBlock => sct.body
@@ -292,7 +318,7 @@ object Block {
 
   def categorize(block: Block): Category = {
     assert(!block.nodes.isEmpty)
-    val allButLast: Vector[WorkflowElement] = block.nodes.dropRight(1)
+    val allButLast: Vector[TAT.WorkflowElement] = block.nodes.dropRight(1)
     assert(deepFindCalls(allButLast).isEmpty)
     val lastNode = block.nodes.last
     lastNode match {
@@ -324,7 +350,7 @@ object Block {
     }
   }
 
-  def getSubBlock(path: Vector[Int], nodes : Vector[WorkflowElement]): Block = {
+  def getSubBlock(path: Vector[Int], nodes : Vector[TAT.WorkflowElement]): Block = {
     assert(path.size >= 1)
 
     val (_, _, blocks, _) = splitToBlocks(nodes)
@@ -338,45 +364,15 @@ object Block {
     return subBlock
   }
 
-  // Find all the inputs required for a block. For example,
-  // in the workflow:
-  //
-  // workflow optionals {
-  //   input {
-  //     Boolean flag
-  //   }
-  //   Int? rain = 13
-  //   if (flag) {
-  //     call opt_MaybeInt as mi3 { input: a=rain }
-  //   }
-  // }
-  //
-  // The conditional block:
-  //    if (flag) {
-  //     call opt_MaybeInt as mi3 { input: a=rain }
-  //    }
-  // requires "flag" and "rain".
-  //
-  // For each input also return whether is has a default. This makes it,
-  // de facto, optional.
-  //
-  def closure(block: Block): Map[String, (WdlTypes.T, Boolean)] = ???
-
-  // Figure out all the outputs from a sequence of WDL statements.
-  //
-  // Note: The type outside a scatter/conditional block is *different* than the type in
-  // the block.  For example, 'Int x' declared inside a scatter, is
-  // 'Array[Int] x' outside the scatter.
-  //
-  def outputs(block: Block): Map[String, WdlTypes.T] = ???
+  // We are building an applet for the output section of a workflow.
+  // The outputs have expressions, and we need to figure out which
+  // variables they refer to. This will allow the calculations to proceeed
+  // inside a stand alone applet.
+  def outputClosure(outputs : Vector[TAT.OutputDefinition]) : Set[String] = ???
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: GraphOutputNode): Boolean = ???
-
-  // Figure out what variables from the environment we need to pass
-  // into the applet. In other words, the closure.
-  def outputClosure(outputNodes: Vector[OutputDefinition]): Set[String] = ???
+  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = ???
 
   // is an output used directly as an input? For example, in the
   // small workflow below, 'lane' is used in such a manner.
@@ -393,8 +389,8 @@ object Block {
   //      String blah = lane
   //   }
   // }
-  def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
-                          outputNodes: Vector[OutputDefinition]): Set[String] = {
+  def inputsUsedAsOutputs(inputNodes: Vector[TAT.InputDefinition],
+                          outputNodes: Vector[TAT.OutputDefinition]): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes)
     val inputs: Set[String] = inputNodes.map(_.name).toSet

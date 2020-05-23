@@ -217,9 +217,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   // Find the closure of a block. All the variables defined earlier
   // that are required for the calculation.
   private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
-    val allInputs = Block.closure(block)
-    allInputs.flatMap {
-      case (name, (womType, isOptionalArg)) =>
+    block.inputs.flatMap {
+      case BlockInput(name, womType, isOptionalArg) =>
         lookupInEnv(name, womType, env, isOptionalArg)
     }.toMap
   }
@@ -228,17 +227,18 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   // node for each of these external references.
   private def graphClosure(inputNodes: Vector[TAT.InputDefinition],
                            subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
-    val allInputs: Map[String, (WdlTypes.T, Boolean)] = subBlocks
-      .map { block =>
-        Block.closure(block)
-      }
+    val allInputs: Vector[BlockInput] = subBlocks
+      .map { block => block.inputs }
       .flatten
-      .toMap
+      .toVector
+    val allInputs2 : Map[String, (WdlTypes.T, Boolean)] = allInputs.map{ bInput =>
+      bInput.name -> (bInput.wdlType, bInput.optional)
+    }.toMap
 
     val regularInputNames: Set[String] = inputNodes.map(_.name).toSet
 
     // remove the regular inputs
-    allInputs.filter {
+    allInputs2.filter {
       case (name, _) =>
         !(regularInputNames contains name)
     }.toMap
@@ -347,7 +347,9 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }.toMap
 
     // Figure out the block outputs
-    val outputs: Map[String, WdlTypes.T] = Block.outputs(block)
+    val outputs: Map[String, WdlTypes.T] = block.outputs.map{ bOut =>
+      bOut.name -> bOut.wdlType
+    }.toMap
 
     // create a cVar definition from each block output. The dx:stage
     // will output these cVars.
@@ -453,13 +455,13 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           // All the variables are already in the environment, so there
           // is no need to do any extra work. Compile directly into a workflow
           // stage.
-          Utils.trace(verbose.on, s"Compiling call ${call.callable.name} as stage")
+          Utils.trace(verbose.on, s"Compiling call ${call.actualName} as stage")
           val stage = compileCall(call, env, locked)
 
           // Add bindings for the output variables. This allows later calls to refer
           // to these results.
           for (cVar <- stage.outputs) {
-            val fqn = call.identifier.localName.value ++ "." + cVar.name
+            val fqn = call.actualName ++ "." + cVar.name
             val cVarFqn = cVar.copy(name = fqn)
             env = env + (fqn -> LinkedVar(cVarFqn, IR.SArgLink(stage.id, cVar)))
           }
@@ -491,24 +493,24 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (allStageInfo, env)
   }
 
-  private def buildSimpleWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv): (CVar, SArg) = {
-    outputNode match {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        val cVar = CVar(id.fullyQualifiedName.value, womType, None)
-        val source = sourcePort.name
-        (cVar, getSArgFromEnv(source, env))
-      case expr: ExpressionBasedGraphOutputNode
-          if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
-        val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
-        val source = expr.womExpression.sourceString
-        (cVar, getSArgFromEnv(source, env))
-      case expr: ExpressionBasedGraphOutputNode =>
+  private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition, env: CallEnv): (CVar, SArg) = {
+    output.expr match {
+      case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
+        // the output is a constant
+        val womConst = WomValueAnalysis.evalConst(output.wdlType, output.expr)
+        val cVar = CVar(output.name, output.wdlType, Some(womConst))
+        val sArg = IR.SArgConst(womConst)
+        (cVar, sArg)
+      case TAT.ExprIdentifier(id, _, _) =>
+        // The output is a reference to a previously defined variable
+        val cVar = CVar(output.name, output.wdlType, None)
+        val sArg = getSArgFromEnv(id, env)
+        (cVar, sArg)
+      case _ =>
         // An expression that requires evaluation
         throw new Exception(
-            s"Internal error: non trivial expressions are handled elsewhere ${expr}"
+            s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
         )
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
     }
   }
 
@@ -549,7 +551,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //    them artificially with a separate stage that collects the outputs.
   private def buildOutputStage(wfName: String,
                                wfSourceStandAlone: String,
-                               outputNodes: Vector[GraphOutputNode],
+                               outputNodes: Vector[TAT.OutputDefinition],
                                env: CallEnv): (IR.Stage, IR.Applet) = {
     // Figure out what variables from the environment we need to pass
     // into the applet.
@@ -565,20 +567,27 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
-    val outputVars: Vector[CVar] = outputNodes.map {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        CVar(id.workflowLocalName, womType, None)
-      case expr: ExpressionBasedGraphOutputNode =>
-        CVar(expr.graphOutputPort.name, expr.womType, None)
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
+    val outputVars: Vector[CVar] = outputNodes.map { output =>
+      output.expr match {
+        case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
+          // the output is a constant
+          val womConst = WomValueAnalysis.evalConst(output.wdlType, output.expr)
+          CVar(output.name, output.wdlType, Some(womConst))
+      case TAT.ExprIdentifier(id, _, _) =>
+          // The output is a reference to a previously defined variable
+          CVar(output.name, output.wdlType, None)
+      case _ =>
+        // An expression that requires evaluation
+        throw new Exception(
+            s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
+        )
+      }
     }.toVector
 
     val updatedOutputVars: Vector[CVar] = reorg match {
       case Left(_)             => outputVars
       case Right(_) if locked  => outputVars
       case Right(_) if !locked => addOutputStatus(outputVars)
-
     }
 
     val appletKind: IR.AppletKind = reorg match {
@@ -588,7 +597,6 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       // This is checked in Main.scala
       case Right(_) if locked  => IR.AppletKindWfOutputs
       case Right(_) if !locked => IR.AppletKindWfCustomReorgOutputs
-
     }
 
     val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
@@ -678,34 +686,38 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   }
 
   private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
-    val wfAttrs = wf.meta.flatMap {
-      case (IR.META_TITLE, MetaValueElementString(text)) => Some(IR.WorkflowAttrTitle(text))
-      case (IR.META_DESCRIPTION, MetaValueElementString(text)) =>
+    val kvs : Map[String, TAT.MetaValue] = wf.meta match {
+      case None => Map.empty
+      case Some(TAT.MetaSection(kvs, _)) => kvs
+    }
+    val wfAttrs = kvs.flatMap {
+      case (IR.META_TITLE, TAT.MetaValueString(text)) => Some(IR.WorkflowAttrTitle(text))
+      case (IR.META_DESCRIPTION, TAT.MetaValueString(text)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, MetaValueElementString(text))   => Some(IR.WorkflowAttrSummary(text))
-      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.WorkflowAttrVersion(text))
-      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
-      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+      case (IR.META_SUMMARY, TAT.MetaValueString(text))   => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text))   => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_DETAILS, TAT.MetaValueObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
+      case (IR.META_TYPES, TAT.MetaValueArray(array)) =>
         Some(IR.WorkflowAttrTypes(array.map {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid type: ${other}")
         }))
-      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+      case (IR.META_TAGS, TAT.MetaValueArray(array)) =>
         Some(IR.WorkflowAttrTags(array.map {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
-      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
+      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
         Some(IR.WorkflowAttrProperties(fields.mapValues {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
-        }))
-      case (IR.META_CALL_NAMES, MetaValueElementObject(fields)) =>
+        }.toMap))
+      case (IR.META_CALL_NAMES, TAT.MetaValueObject(fields)) =>
         Some(IR.WorkflowAttrCallNames(fields.mapValues {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid call name value: ${other}")
-        }))
-      case (IR.META_RUN_ON_SINGLE_NODE, MetaValueElementBoolean(value)) =>
+        }.toMap))
+      case (IR.META_RUN_ON_SINGLE_NODE, TAT.MetaValueBoolean(value)) =>
         Some(IR.WorkflowAttrRunOnSingleNode(value))
       case _ => None
     }.toVector
@@ -811,7 +823,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   private def compileWorkflowRegular(
       inputNodes: Vector[TAT.InputDefinition],
-      outputNodes: Vector[GraphOutputNode],
+      outputNodes: Vector[TAT.OutputDefinition],
       subBlocks: Vector[Block]
   ): (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) = {
     // Create a special applet+stage for the inputs. This is a substitute for
@@ -859,7 +871,6 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //
   private def apply2() = {
     Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
-    val graph = wf.innerGraph
 
     // Create a stage per call/scatter-block/declaration-block
     val (inputNodes, _, subBlocks, outputNodes) = Block.splitWorkflow(wf)
