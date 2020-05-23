@@ -161,11 +161,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     BaseUtils.trace(verbose.on, s"IR pass")
     BaseUtils.traceLevelInc()
 
-    val taskDir = womBundle.allCallbles.foldLeft(Map.empty){
-      case (name, TAT.Task) => name -> task
-      case (_, _) => None
-      case (accu, (filename, srcCode)) =>
-        val d = ParseWomSourceFile(verbose.on).scanForTasks(srcCode)
+    val taskDir = allSources.foldLeft(Map.empty[String, String]){
+      case (accu, (filename, wdlSourceCode)) =>
+        val d = ParseWomSourceFile(verbose.on).scanForTasks(wdlSourceCode)
         accu ++ d
     }
     BaseUtils.trace(verbose.on, s"tasks=${taskDir.keys}")
@@ -192,9 +190,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
     // Only the toplevel workflow may be unlocked. This happens
     // only if the user specifically compiles it as "unlocked".
-    def isLocked(callable: Callable): Boolean = {
+    def isLocked(callable: TAT.Callable): Boolean = {
       (callable, womBundle.primaryCallable) match {
-        case (wf: WorkflowDefinition, Some(wf2: WorkflowDefinition)) =>
+        case (wf: TAT.Workflow, Some(wf2: TAT.Workflow)) =>
           if (wf.name == wf2.name)
             locked
           else

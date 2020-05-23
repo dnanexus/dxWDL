@@ -71,4 +71,4 @@ object Language extends Enumeration {
 
 case class WomBundle(primaryCallable : Option[TAT.Callable],
                      allCallables : Map[String, TAT.Callable],
-                     aliases : Map[String, WdlTypes.T])
+                     typeAliases : Map[String, WdlTypes.T])

@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import wdlTools.types.WdlTypes._
+import wdlTools.types.WdlTypes
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.dx._

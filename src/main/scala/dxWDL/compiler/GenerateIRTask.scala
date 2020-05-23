@@ -1,5 +1,6 @@
 package dxWDL.compiler
 
+import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes
 
@@ -16,11 +17,11 @@ case class GenerateIRTask(verbose: Verbose,
                           defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
-  private class DynamicInstanceTypesException extends RuntimeException {
+  private class DynamicInstanceTypesException(message: String) extends RuntimeException(message) {
     def this() = this("Runtime instance type calculation required")
   }
 
-  def evalWomExpression(expr: WomExpression): WdlValues.V = {
+  def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
     WomValueAnalysis.ifConstEval(WdlTypes.T_String, expr) match {
       case None => throw new DynamicInstanceTypesException()
       case Some(x) => x
@@ -34,9 +35,13 @@ case class GenerateIRTask(verbose: Verbose,
   // that, in the general case, could be calculated only at runtime.
   // At compile time, constants expressions are handled. Some can
   // only be evaluated at runtime.
-  private def calcInstanceType(task: CallableTaskDefinition): IR.InstanceType = {
+  private def calcInstanceType(task: TAT.Task): IR.InstanceType = {
     def evalAttr(attrName: String): Option[WdlValues.V] = {
-      task.runtimeAttributes.attributes.get(attrName) match {
+      val attributes : Map[String, TAT.Expr] = task.runtime match {
+        case None => Map.empty
+        case Some(TAT.RuntimeSection(kvs, _)) => kvs
+      }
+      attributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
           defaultRuntimeAttrs.m.get(attrName)
@@ -64,14 +69,14 @@ case class GenerateIRTask(verbose: Verbose,
   }
 
   // Process a docker image, if there is one
-  def triageDockerImage(dockerExpr: Option[WomExpression]): IR.DockerImage = {
+  def triageDockerImage(dockerExpr: Option[TAT.Expr]): IR.DockerImage = {
     dockerExpr match {
       case None =>
         IR.DockerImageNone
-      case Some(expr) if WdlValues.VAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
-        val wdlConst = WdlValues.VAnalysis.evalConst(WdlTypes.T_String, expr)
+      case Some(expr) if WomValueAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
+        val wdlConst = WomValueAnalysis.evalConst(WdlTypes.T_String, expr)
         wdlConst match {
-          case WdlValues.V_String(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
+          case WdlValues.V_String(url) if url.startsWith(BaseUtils.DX_URL_PREFIX) =>
             // A constant image specified with a DX URL
             val dxfile = DxPath.resolveDxURLFile(url)
             IR.DockerImageDxFile(url, dxfile)
@@ -86,38 +91,38 @@ case class GenerateIRTask(verbose: Verbose,
   }
 
   private def unwrapTaskMeta(
-      meta: Map[String, MetaValueElement],
+      meta: Map[String, TAT.MetaValue],
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): Vector[IR.TaskAttr] = {
     val appAttrs = meta.flatMap {
-      case (IR.META_TITLE, MetaValueElementString(text))       => Some(IR.TaskAttrTitle(text))
-      case (IR.META_DESCRIPTION, MetaValueElementString(text)) => Some(IR.TaskAttrDescription(text))
-      case (IR.META_SUMMARY, MetaValueElementString(text))     => Some(IR.TaskAttrSummary(text))
-      case (IR.META_DEVELOPER_NOTES, MetaValueElementString(text)) =>
+      case (IR.META_TITLE, TAT.MetaValueString(text))       => Some(IR.TaskAttrTitle(text))
+      case (IR.META_DESCRIPTION, TAT.MetaValueString(text)) => Some(IR.TaskAttrDescription(text))
+      case (IR.META_SUMMARY, TAT.MetaValueString(text))     => Some(IR.TaskAttrSummary(text))
+      case (IR.META_DEVELOPER_NOTES, TAT.MetaValueString(text)) =>
         Some(IR.TaskAttrDeveloperNotes(text))
-      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.TaskAttrVersion(text))
-      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.TaskAttrDetails(fields))
-      case (IR.META_OPEN_SOURCE, MetaValueElementBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
-      case (IR.META_CATEGORIES, MetaValueElementArray(array)) =>
+      case (IR.META_VERSION, TAT.MetaValueString(text))   => Some(IR.TaskAttrVersion(text))
+      case (IR.META_DETAILS, TAT.MetaValueObject(fields)) => Some(IR.TaskAttrDetails(fields))
+      case (IR.META_OPEN_SOURCE, TAT.MetaValueBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
+      case (IR.META_CATEGORIES, TAT.MetaValueArray(array)) =>
         Some(IR.TaskAttrCategories(array.map {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid category: ${other}")
         }))
-      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+      case (IR.META_TYPES, TAT.MetaValueArray(array)) =>
         Some(IR.TaskAttrTypes(array.map {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid type: ${other}")
         }))
-      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+      case (IR.META_TAGS, TAT.MetaValueArray(array)) =>
         Some(IR.TaskAttrTags(array.map {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
-      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
+      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
         Some(IR.TaskAttrProperties(fields.mapValues {
-          case MetaValueElementString(text) => text
+          case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
-        }))
+                                   }.toMap))
       case _ => None
     }.toVector
 
@@ -144,8 +149,8 @@ case class GenerateIRTask(verbose: Verbose,
 
   private def unwrapWomStringArray(array: WdlValues.V): Vector[String] = {
     array match {
-      case WdlValues.V_Array(WomMaybeEmptyArrayType(WdlTypes.T_String), strings) =>
-        strings.map(unwrapWdlValues.V_String).toVector
+      case WdlValues.V_Array(strings) =>
+        strings.map(unwrapWomString).toVector
       case _ => throw new Exception("Expected WdlValues.V_Array")
     }
   }
@@ -157,7 +162,7 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapWomInteger(value: WomValue): Int = {
+  private def unwrapWomInteger(value: WdlValues.V): Int = {
     value match {
       case WdlValues.V_Int(i) => i
       case _             => throw new Exception("Expected WdlValues.V_Int")
@@ -181,32 +186,32 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapRuntimeHints(hints: Map[String, WomExpression]): Vector[IR.RuntimeHint] = {
+  private def unwrapRuntimeHints(hints: Map[String, TAT.Expr]): Vector[IR.RuntimeHint] = {
     val hintKeys = Set(IR.HINT_ACCESS, IR.HINT_IGNORE_REUSE, IR.HINT_RESTART, IR.HINT_TIMEOUT)
 
     hints
       .filterKeys(hintKeys)
       .mapValues(evalWomExpression)
       .flatMap {
-        case (IR.HINT_ACCESS, WomObject(values, _)) =>
+        case (IR.HINT_ACCESS, WdlValues.V_Object(values)) =>
           Some(
               IR.RuntimeHintAccess(
-                  network = values.get("network").map(unwrapWdlValues.V_StringArray),
-                  project = values.get("project").map(unwrapWdlValues.V_String),
-                  allProjects = values.get("allProjects").map(unwrapWdlValues.V_String),
-                  developer = values.get("developer").map(unwrapWdlValues.V_Boolean),
-                  projectCreation = values.get("projectCreation").map(unwrapWdlValues.V_Boolean)
+                  network = values.get("network").map(unwrapWomStringArray),
+                  project = values.get("project").map(unwrapWomString),
+                  allProjects = values.get("allProjects").map(unwrapWomString),
+                  developer = values.get("developer").map(unwrapWomBoolean),
+                  projectCreation = values.get("projectCreation").map(unwrapWomBoolean)
               )
           )
         case (IR.HINT_IGNORE_REUSE, WdlValues.V_Boolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
         case (IR.HINT_RESTART, WdlValues.V_Int(i))      => Some(IR.RuntimeHintRestart(default = Some(i)))
-        case (IR.HINT_RESTART, WomObject(values, _)) =>
+        case (IR.HINT_RESTART, WdlValues.V_Object(values)) =>
           Some(
               IR.RuntimeHintRestart(
-                  values.get("max").map(unwrapWdlValues.V_Int),
-                  values.get("default").map(unwrapWdlValues.V_Int),
+                  values.get("max").map(unwrapWomInteger),
+                  values.get("default").map(unwrapWomInteger),
                   values.get("errors").map {
-                    case WdlValues.V_Map(WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Int), fields) =>
+                    case WdlValues.V_Map(fields) =>
                       fields.map {
                         case (WdlValues.V_String(s), WdlValues.V_Int(i)) => (s -> i)
                         case other                         => throw new Exception(s"Invalid restart map entry ${other}")
@@ -216,15 +221,33 @@ case class GenerateIRTask(verbose: Verbose,
               )
           )
         case (IR.HINT_TIMEOUT, WdlValues.V_String(s)) => Some(parseDuration(s))
-        case (IR.HINT_TIMEOUT, WomObject(values, _)) =>
+        case (IR.HINT_TIMEOUT, WdlValues.V_Object(values)) =>
           Some(
-              IR.RuntimeHintTimeout(values.get("days").map(unwrapWdlValues.V_Int),
-                                    values.get("hours").map(unwrapWdlValues.V_Int),
-                                    values.get("minutes").map(unwrapWdlValues.V_Int))
+              IR.RuntimeHintTimeout(values.get("days").map(unwrapWomInteger),
+                                    values.get("hours").map(unwrapWomInteger),
+                                    values.get("minutes").map(unwrapWomInteger))
           )
         case _ => None
       }
       .toVector
+  }
+
+  private def lookupInputParam(iName : String,
+                               task : TAT.Task) : Option[TAT.MetaValue] = {
+    task.parameterMeta match {
+      case None => None
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        kvs.get(iName)
+      }
+  }
+
+  private def lookupMetaParam(iName : String,
+                              task : TAT.Task) : Option[TAT.MetaValue] = {
+    task.meta match {
+      case None => None
+      case Some(TAT.MetaSection(kvs, _)) =>
+        kvs.get(iName)
+      }
   }
 
   // Compile a WDL task into an applet.
@@ -234,20 +257,21 @@ case class GenerateIRTask(verbose: Verbose,
   def apply(task: TAT.Task,
             taskSourceCode: String,
             adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
-    Utils.trace(verbose.on, s"Compiling task ${task.name}")
+    BaseUtils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
-      case RequiredInputDefinition(iName, womType, _, paramMeta) => {
+      case TAT.RequiredInputDefinition(iName, womType, _) => {
         // This is a task "input" parameter declaration of the form:
         //     Int y
+        val paramMeta = lookupInputParam(iName, task)
         val attr = ParameterMeta.unwrap(paramMeta, womType)
-        Some(CVar(iName.value, womType, None, attr))
+        Some(CVar(iName, womType, None, attr))
       }
 
-      case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, paramMeta) =>
-        WdlValues.VAnalysis.ifConstEval(womType, defaultExpr) match {
+      case TAT.OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _) =>
+        WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None =>
             // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
@@ -257,24 +281,21 @@ case class GenerateIRTask(verbose: Verbose,
           case Some(value) =>
             // This is a task "input" parameter definition of the form:
             //    Int y = 3
+            val paramMeta = lookupInputParam(iName, task)
             val attr = ParameterMeta.unwrap(paramMeta, womType)
-            Some(CVar(iName.value, womType, Some(value), attr))
+            Some(CVar(iName, womType, Some(value), attr))
         }
 
-      // An input whose value should always be calculated from the default, and is
-      // not allowed to be overridden.
-      case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
-        None
-
-      case OptionalInputDefinition(iName, WdlTypes.T_Optional(womType), _, paramMeta) =>
+      case TAT.OptionalInputDefinition(iName, WdlTypes.T_Optional(womType), _) =>
+        val paramMeta = lookupInputParam(iName, task)
         val attr = ParameterMeta.unwrap(paramMeta, womType)
-        Some(CVar(iName.value, WdlTypes.T_Optional(womType), None, attr))
+        Some(CVar(iName, WdlTypes.T_Optional(womType), None, attr))
     }.toVector
 
     // create dx:applet outputs
     val outputs: Vector[CVar] = task.outputs.map {
-      case OutputDefinition(id, womType, expr) =>
-        val defaultValue = WdlValues.VAnalysis.ifConstEval(womType, expr) match {
+      case TAT.OutputDefinition(id, womType, expr, _) =>
+        val defaultValue = WomValueAnalysis.ifConstEval(womType, expr) match {
           case None =>
             // This is an expression to be evaluated at runtime
             None
@@ -282,17 +303,17 @@ case class GenerateIRTask(verbose: Verbose,
             // A constant, we can assign it now.
             Some(value)
         }
-        CVar(id.value, womType, defaultValue)
+        CVar(id, womType, defaultValue)
     }.toVector
 
     val instanceType = calcInstanceType(task)
 
     val kind =
-      (task.meta.get(IR.HINT_APP_TYPE), task.meta.get(IR.HINT_APP_ID)) match {
-        case (Some(MetaValueElementString("native")), Some(MetaValueElementString(id))) =>
+      (lookupMetaParam(IR.HINT_APP_TYPE, task), lookupMetaParam(IR.HINT_APP_ID, task)) match {
+        case (Some(TAT.MetaValueString("native")), Some(TAT.MetaValueString(id))) =>
           // wrapper for a native applet.
           // make sure the runtime block is empty
-          if (!task.runtimeAttributes.attributes.isEmpty)
+          if (task.runtime.isDefined)
             throw new Exception(s"Native task ${task.name} should have an empty runtime block")
           IR.AppletKindNative(id)
         case (_, _) =>
@@ -304,7 +325,11 @@ case class GenerateIRTask(verbose: Verbose,
     val runtimeHints = unwrapRuntimeHints(task.runtimeAttributes.attributes)
 
     // Handle any task metadata
-    val taskAttr = unwrapTaskMeta(task.meta, adjunctFiles)
+    val meta = task.meta match {
+      case None => Map.empty
+      case Some(ParameterMetaSection(kvs, _)) => kvs
+    }
+    val taskAttr = unwrapTaskMeta(meta, adjunctFiles)
 
     // Figure out if we need to use docker
     val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))

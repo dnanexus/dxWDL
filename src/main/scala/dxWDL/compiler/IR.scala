@@ -8,9 +8,8 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import wom.callable.{CallableTaskDefinition, MetaValueElement}
-import wom.types.WdlTypes.T
-import wom.values.WdlValues.V
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.eval.WdlValues
 
 import dxWDL.base.Utils
 import dxWDL.dx.{ConstraintOper, DxFile, DxWorkflowStage}
@@ -47,7 +46,7 @@ object IR {
   final case class TaskAttrSummary(text: String) extends TaskAttr
   final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
   final case class TaskAttrVersion(text: String) extends TaskAttr
-  final case class TaskAttrDetails(details: Map[String, MetaValueElement]) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, TAT.MetaValue]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
@@ -59,7 +58,7 @@ object IR {
   final case class WorkflowAttrDescription(text: String) extends WorkflowAttr
   final case class WorkflowAttrSummary(text: String) extends WorkflowAttr
   final case class WorkflowAttrVersion(text: String) extends WorkflowAttr
-  final case class WorkflowAttrDetails(details: Map[String, MetaValueElement]) extends WorkflowAttr
+  final case class WorkflowAttrDetails(details: Map[String, TAT.MetaValue]) extends WorkflowAttr
   final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
@@ -162,7 +161,7 @@ object IR {
       extends PatternsRepr
 
   // TODO: we can probably get rid of some of the repr types and just leave them as
-  // MetaValueElements
+  // TAT.MetaValue
 
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
@@ -334,7 +333,7 @@ object IR {
   //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
   sealed trait AppletKind
   case class AppletKindNative(id: String) extends AppletKind
-  case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
+  case class AppletKindTask(task: TAT.Task) extends AppletKind
   case class AppletKindWfFragment(calls: Vector[String],
                                   blockPath: Vector[Int],
                                   fqnDictTypes: Map[String, WdlTypes.T])
