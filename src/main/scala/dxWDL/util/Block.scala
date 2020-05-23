@@ -76,7 +76,7 @@ These are not blocks, because we need a subworkflow to run them:
 package dxWDL.util
 
 import wdlTools.types.TypedAbstractSyntax._
-import wdlTools.types.{Util => TUtil}
+import wdlTools.types.{Util => TUtil, WdlTypes}
 import wdlTools.util.Util.prettyFormat
 
 // A sorted group of graph nodes, that match some original
@@ -164,16 +164,21 @@ object Block {
 
   def splitToBlocks(elements : Vector[WorkflowElement]) : Vector[Block] = ???
 
+  // split a part of a workflow
+  def split(statements : Vector[WorkflowElement]): (Vector[InputDefinition], // inputs
+                                                    Vector[InputDefinition], // implicit inputs
+                                                    Vector[Block], // blocks
+                                                    Vector[OutputDefinition]) // outputs
+  = ???
+
   // Split an entire workflow into blocks.
   //
   // An easy to use method that takes the workflow source
-  def split(wf: Workflow): (Vector[InputDefinition], // inputs
-                            Vector[InputDefinition], // implicit inputs
-                            Vector[Block], // blocks
-                            Vector[OutputDefinition]) // outputs
-  = {
-    splitToBlocks(wf.body)
-  }
+  def splitWorkflow(wf : TAT.Workflow): (Vector[InputDefinition], // inputs
+                                         Vector[InputDefinition], // implicit inputs
+                                         Vector[Block], // blocks
+                                         Vector[OutputDefinition]) // outputs
+  = ???
 
   // A block of nodes that represents a call with no subexpressions. These
   // can be compiled directly into a dx:workflow stage.
@@ -245,22 +250,22 @@ object Block {
   sealed trait Category {
     val nodes: Vector[WorkflowElement]
   }
-  case class AllExpressions(override val nodes: Vector[WorkflowElement]) extends Category
-  case class CallDirect(override val nodes: Vector[WorkflowElement], value: Call) extends Category
-  case class CallWithSubexpressions(override val nodes: Vector[WorkflowElement], value: Call)
+  case class AllExpressions(nodes: Vector[WorkflowElement]) extends Category
+  case class CallDirect(nodes: Vector[WorkflowElement], value: Call) extends Category
+  case class CallWithSubexpressions(nodes: Vector[WorkflowElement], value: Call)
       extends Category
-  case class CallFragment(override val nodes: Vector[WorkflowElement], value: Call) extends Category
-  case class CondOneCall(override val nodes: Vector[WorkflowElement],
+  case class CallFragment(nodes: Vector[WorkflowElement], value: Call) extends Category
+  case class CondOneCall(nodes: Vector[WorkflowElement],
                          value: Conditional,
                          call: Call)
       extends Category
-  case class CondFullBlock(override val nodes: Vector[WorkflowElement], value: Conditional)
+  case class CondFullBlock(nodes: Vector[WorkflowElement], value: Conditional)
       extends Category
-  case class ScatterOneCall(override val nodes: Vector[WorkflowElement],
+  case class ScatterOneCall(nodes: Vector[WorkflowElement],
                             value: Scatter,
                             call: Call)
       extends Category
-  case class ScatterFullBlock(override val nodes: Vector[WorkflowElement], value: Scatter)
+  case class ScatterFullBlock(nodes: Vector[WorkflowElement], value: Scatter)
       extends Category
 
   object Category {

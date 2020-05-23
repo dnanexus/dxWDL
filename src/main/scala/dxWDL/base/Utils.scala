@@ -21,7 +21,7 @@ class InvalidInputException(s: String) extends Exception(s) {}
 
 class IllegalArgumentException(s: String) extends Exception(s) {}
 
-object BaseUtils {
+object Utils {
   val APPLET_LOG_MSG_LIMIT = 1000
   val CHECKSUM_PROP = "dxWDL_checksum"
   val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
