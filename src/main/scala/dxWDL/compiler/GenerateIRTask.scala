@@ -70,7 +70,7 @@ case class GenerateIRTask(verbose: Verbose,
 
   def triageDockerImageFromValue(dockerValue: WdlValues.V): IR.DockerImage =  {
     dockerValue match {
-      case WdlValues.V_String(url) if url.startsWith(BaseUtils.DX_URL_PREFIX) =>
+      case WdlValues.V_String(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
         // A constant image specified with a DX URL
         val dxfile = DxPath.resolveDxURLFile(url)
         IR.DockerImageDxFile(url, dxfile)
@@ -261,7 +261,7 @@ case class GenerateIRTask(verbose: Verbose,
   def apply(task: TAT.Task,
             taskSourceCode: String,
             adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
-    BaseUtils.trace(verbose.on, s"Compiling task ${task.name}")
+    Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
     // actually expressions.

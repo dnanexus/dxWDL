@@ -2,7 +2,7 @@ package dxWDL.util
 
 import java.nio.file.{Path}
 
-import dxWDL.base.BaseUtils
+import dxWDL.base.Utils
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -59,11 +59,11 @@ case class DxPathConfig(homeDir: Path,
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
   def createCleanDirs(): Unit = {
-    BaseUtils.safeMkdir(metaDir)
-    BaseUtils.safeMkdir(inputFilesDir)
-    BaseUtils.safeMkdir(outputFilesDir)
-    BaseUtils.safeMkdir(tmpDir)
-    BaseUtils.safeMkdir(dxfuseMountpoint)
+    Utils.safeMkdir(metaDir)
+    Utils.safeMkdir(inputFilesDir)
+    Utils.safeMkdir(outputFilesDir)
+    Utils.safeMkdir(tmpDir)
+    Utils.safeMkdir(dxfuseMountpoint)
   }
 }
 

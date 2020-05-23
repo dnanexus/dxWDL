@@ -25,10 +25,10 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
               // We need the task/workflow itself ("add", "concat"). We are
               // assuming that the namespace can be flattened; there are
               // no lib.add and lib2.add.
-              BaseUtils.getUnqualifiedName(call.callee.name)
+              Utils.getUnqualifiedName(call.callee.name)
           }.toSet
       }
-      BaseUtils.getUnqualifiedName(callable.name) -> deps
+      Utils.getUnqualifiedName(callable.name) -> deps
     }.toMap
 
     // Find executables such that all of their dependencies are
@@ -37,7 +37,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       val readyNames = ready.map(_.name).toSet
       val satisfiedCallables = callables.filter { c =>
         val deps = immediateDeps(c.name)
-        BaseUtils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
+        Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
         deps.subsetOf(readyNames)
       }
       if (satisfiedCallables.isEmpty) {
@@ -59,8 +59,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     var accu = Vector.empty[TAT.Callable]
     var crnt = allCallables
     while (!crnt.isEmpty) {
-      BaseUtils.trace(verbose2, s"accu=${accu.map(_.name)}")
-      BaseUtils.trace(verbose2, s"crnt=${crnt.map(_.name)}")
+      Utils.trace(verbose2, s"accu=${accu.map(_.name)}")
+      Utils.trace(verbose2, s"crnt=${crnt.map(_.name)}")
       val execsToCompile = next(crnt, accu)
       accu = accu ++ execsToCompile
       val alreadyCompiled: Set[String] = accu.map(_.name).toSet
@@ -87,7 +87,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     val callablesUsedInWorkflow: Vector[IR.Callable] =
       wf.body.collect {
         case cNode: TAT.Call =>
-          val localname = BaseUtils.getUnqualifiedName(cNode.callee.name)
+          val localname = Utils.getUnqualifiedName(cNode.callee.name)
           callables(localname)
       }.toVector
 
@@ -158,15 +158,15 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
             locked: Boolean,
             reorg: Either[Boolean, ReorgAttrs],
             adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]): IR.Bundle = {
-    BaseUtils.trace(verbose.on, s"IR pass")
-    BaseUtils.traceLevelInc()
+    Utils.trace(verbose.on, s"IR pass")
+    Utils.traceLevelInc()
 
     val taskDir = allSources.foldLeft(Map.empty[String, String]){
       case (accu, (filename, wdlSourceCode)) =>
         val d = ParseWomSourceFile(verbose.on).scanForTasks(wdlSourceCode)
         accu ++ d
     }
-    BaseUtils.trace(verbose.on, s"tasks=${taskDir.keys}")
+    Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
     val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
       case (accu, (filename, srcCode)) =>
@@ -177,12 +177,12 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
             accu + (wfName -> wfSource)
         }
     }
-    BaseUtils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
-    BaseUtils.traceLevelInc()
+    Utils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
+    Utils.traceLevelInc()
 
     val depOrder: Vector[TAT.Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
-    BaseUtils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
-    BaseUtils.traceLevelDec()
+    Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
+    Utils.traceLevelDec()
 
     // compile the tasks/workflows from bottom to top.
     var allCallables = Map.empty[String, IR.Callable]
@@ -227,14 +227,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     // We already compiled all the individual wdl:tasks and
     // wdl:workflows, let's find the entrypoint.
     val primary = womBundle.primaryCallable.map { callable =>
-      allCallables(BaseUtils.getUnqualifiedName(callable.name))
+      allCallables(Utils.getUnqualifiedName(callable.name))
     }
     val allCallablesSortedNames = allCallablesSorted.map { _.name }
-    BaseUtils.trace(verbose.on, s"allCallables=${allCallables.map(_._1)}")
-    BaseUtils.trace(verbose.on, s"allCallablesSorted=${allCallablesSortedNames}")
+    Utils.trace(verbose.on, s"allCallables=${allCallables.map(_._1)}")
+    Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSortedNames}")
     assert(allCallables.size == allCallablesSortedNames.size)
 
-    BaseUtils.traceLevelDec()
+    Utils.traceLevelDec()
     IR.Bundle(primary, allCallables, allCallablesSortedNames, womBundle.typeAliases)
   }
 }

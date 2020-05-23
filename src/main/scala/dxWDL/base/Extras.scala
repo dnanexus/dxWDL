@@ -420,7 +420,7 @@ object Extras {
     val fields = jsv.asJsObject.fields
     for (k <- fields.keys) {
       if (!(RUNTIME_ATTRS contains k))
-        BaseUtils.warning(
+        Utils.warning(
             verbose,
             s"""|Unsupported runtime attribute ${k},
                 |we currently support ${RUNTIME_ATTRS}
@@ -699,7 +699,7 @@ object Extras {
     veryifyReorgApp(reorgAppId)
     verifyInputs(reorgConf)
 
-    BaseUtils.trace(
+    Utils.trace(
         verbose.on,
         s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
             |it may misplace or outright delete files.

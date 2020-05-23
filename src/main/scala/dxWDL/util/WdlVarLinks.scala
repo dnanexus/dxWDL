@@ -72,8 +72,8 @@ case class WdlVarLinksConverter(verbose: Verbose,
       case (WdlTypes.T_File, WdlValues.V_File(path)) => handleFile(path)
       case (WdlTypes.T_String, WdlValues.V_File(path))     => JsString(path)
       case (WdlTypes.T_String, WdlValues.V_String(buf)) =>
-        if (buf.length > BaseUtils.MAX_STRING_LEN)
-          throw new AppInternalException(s"string is longer than ${BaseUtils.MAX_STRING_LEN}")
+        if (buf.length > Utils.MAX_STRING_LEN)
+          throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
         JsString(buf)
       case (WdlTypes.T_Boolean, WdlValues.V_Boolean(b))      => JsBoolean(b)
       case (WdlTypes.T_Boolean, WdlValues.V_String("true"))  => JsBoolean(true)
@@ -288,7 +288,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
                 bindName: String,
                 encodeDots: Boolean = true): List[(String, JsValue)] = {
     def nodots(s: String): String =
-      BaseUtils.encodeAppletVarName(BaseUtils.transformVarName(s))
+      Utils.encodeAppletVarName(Utils.transformVarName(s))
     val bindEncName =
       if (encodeDots) nodots(bindName)
       else bindName
@@ -310,7 +310,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
       (bindEncName, jsv)
     }
     def mkComplex(wdlType: WdlTypes.T): Map[String, JsValue] = {
-      val bindEncName_F = bindEncName + BaseUtils.FLAT_FILES_SUFFIX
+      val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
       wvl.dxlink match {
         case DxlValue(jsn) =>
           // files that are embedded in the structure
@@ -321,7 +321,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
           val jsn1 = JsObject("___" -> jsn)
           Map(bindEncName -> jsn1, bindEncName_F -> JsArray(jsFiles))
         case DxlStage(dxStage, ioRef, varEncName) =>
-          val varEncName_F = varEncName + BaseUtils.FLAT_FILES_SUFFIX
+          val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           ioRef match {
             case IORef.Input =>
               Map(
@@ -335,7 +335,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
               )
           }
         case DxlWorkflowInput(varEncName) =>
-          val varEncName_F = varEncName + BaseUtils.FLAT_FILES_SUFFIX
+          val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           Map(
               bindEncName ->
                 JsObject(
@@ -347,13 +347,13 @@ case class WdlVarLinksConverter(verbose: Verbose,
                 )
           )
         case DxlExec(dxJob, varEncName) =>
-          val varEncName_F = varEncName + BaseUtils.FLAT_FILES_SUFFIX
+          val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
           Map(bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
               bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F)))
       }
     }
 
-    val wdlType = BaseUtils.stripOptional(wvl.wdlType)
+    val wdlType = Utils.stripOptional(wvl.wdlType)
     if (DxUtils.isNativeDxType(wdlType)) {
       // Types that are supported natively in DX
       List(mkSimple())

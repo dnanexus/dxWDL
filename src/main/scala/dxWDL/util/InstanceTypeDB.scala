@@ -31,7 +31,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wdlTools.eval.WdlValues
 
-import dxWDL.base.{BaseUtils, Verbose}
+import dxWDL.base.{Utils, Verbose}
 import dxWDL.dx._
 
 // Request for an instance type
@@ -563,7 +563,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     } catch {
       // Insufficient permissions to describe the user, we cannot get the price list.
       case e: Throwable =>
-        BaseUtils.warning(
+        Utils.warning(
             verbose,
             """|Warning: insufficient permissions to retrieve the
                |instance price list. This will result in suboptimal machine choices,

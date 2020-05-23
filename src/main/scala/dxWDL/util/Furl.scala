@@ -15,8 +15,8 @@
 
 package dxWDL.util
 
-import dxWDL.base.BaseUtils
-import dxWDL.base.BaseUtils.DX_URL_PREFIX
+import dxWDL.base.Utils
+import dxWDL.base.Utils.DX_URL_PREFIX
 import dxWDL.dx._
 
 sealed trait Furl
@@ -48,7 +48,7 @@ object Furl {
 
   def parse(path: String): Furl = {
     path match {
-      case _ if path.startsWith(BaseUtils.DX_URL_PREFIX) =>
+      case _ if path.startsWith(Utils.DX_URL_PREFIX) =>
         parseDxFurl(path)
       case _ if path contains "://" =>
         throw new Exception(s"protocol not supported, cannot access ${path}")

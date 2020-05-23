@@ -13,7 +13,7 @@ import wdlTools.util.{
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
 import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT, WdlTypes}
-import dxWDL.base.{Language, BaseUtils}
+import dxWDL.base.{Language, Utils}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
@@ -35,7 +35,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // identical definitions are somehow, through the magic of Scala,
           // unequal.
           case Some(existing) if (existing != callable) =>
-            BaseUtils.error(s"""|${key} appears with two different callable definitions
+            Utils.error(s"""|${key} appears with two different callable definitions
                                 |1)
                                 |${callable}
                                 |
