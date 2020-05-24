@@ -9,9 +9,10 @@ file type is very different between WDL and DNAx.
 package dxWDL.util
 
 import spray.json._
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
-import dxWDL.base.WomCompat._
 import dxWDL.dx._
 
 // A union of all the different ways of building a value
@@ -30,12 +31,12 @@ case class DxlStage(dxStage: DxWorkflowStage, ioRef: IORef.Value, varName: Strin
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 
-case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
+case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 
 case class WdlVarLinksConverter(verbose: Verbose,
                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                                 typeAliases: Map[String, WdlTypes.T]) {
-  val wdlTypeSerializer = WdlTypes.TSerialization(typeAliases)
+  val wdlTypeSerializer = WomTypeSerialization(typeAliases)
 
   private def isDoubleOptional(t: WdlTypes.T): Boolean = {
     t match {
@@ -100,9 +101,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // an array of values.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(_, m)) =>
         // general case
-        val keys: WdlValues.V = WdlValues.V_Array(WdlTypes.T_Array(keyType), m.keys.toVector)
+        val keys: WdlValues.V = WdlValues.V_Array(WdlTypes.T_Array(keyType, false), m.keys.toVector)
         val kJs = jsFromWdlValues.V(keys.wdlType, keys)
-        val values: WdlValues.V = WdlValues.V_Array(WdlTypes.T_Array(valueType), m.values.toVector)
+        val values: WdlValues.V = WdlValues.V_Array(WdlTypes.T_Array(valueType, false), m.values.toVector)
         val vJs = jsFromWdlValues.V(values.wdlType, values)
         JsObject("keys" -> kJs, "values" -> vJs)
 
@@ -112,24 +113,24 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // Base case: empty array
       case (_, WdlValues.V_Array(_, ar)) if ar.length == 0 =>
         JsArray(Vector.empty)
-      case (WdlTypes.T_Array(t), null) =>
+      case (WdlTypes.T_Array(t, _), null) =>
         JsArray(Vector.empty)
 
       // Non empty array
-      case (WdlTypes.T_Array(t), WdlValues.V_Array(_, elems)) =>
+      case (WdlTypes.T_Array(t, _), WdlValues.V_Array(_, elems)) =>
         val jsVals = elems.map { x =>
           jsFromWdlValues.V(t, x)
         }
         JsArray(jsVals.toVector)
 
       // Strip optional type
-      case (WdlTypes.T_Optional(t), WdlValues.V_OptionalValue(_, Some(w))) =>
+      case (WdlTypes.T_Optional(t), WdlValues.V_Optional(_, Some(w))) =>
         jsFromWdlValues.V(t, w)
-      case (WdlTypes.T_Optional(t), WdlValues.V_OptionalValue(_, None)) =>
+      case (WdlTypes.T_Optional(t), WdlValues.V_Optional(_, None)) =>
         JsNull
       case (WdlTypes.T_Optional(t), w) =>
         jsFromWdlValues.V(t, w)
-      case (t, WdlValues.V_OptionalValue(_, Some(w))) =>
+      case (t, WdlValues.V_Optional(_, Some(w))) =>
         jsFromWdlValues.V(t, w)
 
       // structs
@@ -224,11 +225,11 @@ case class WdlVarLinksConverter(verbose: Verbose,
         WdlValues.V_Pair(left, right)
 
       // empty array
-      case (WdlTypes.T_Array(t), JsNull) =>
+      case (WdlTypes.T_Array(t, _), JsNull) =>
         WdlValues.V_Array(List.empty[WdlValues.V])
 
       // array
-      case (WdlTypes.T_Array(t), JsArray(vec)) =>
+      case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         val wVec: Seq[WdlValues.V] = vec.map { elem: JsValue =>
           jobInputToWdlValues.V(name, t, elem)
         }
@@ -238,7 +239,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
         WdlValues.V_OptionalValue(t, None)
       case (WdlTypes.T_Optional(t), jsv) =>
         val value = jobInputToWdlValues.V(name, t, jsv)
-        WdlValues.V_OptionalValue(t, Some(value))
+        WdlValues.V_Optional(t, Some(value))
 
       // structs
       case (WdlTypes.T_Struct(typeMap, Some(structName)), JsObject(fields)) =>

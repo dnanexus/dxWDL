@@ -9,10 +9,9 @@ import java.security.MessageDigest
 import scala.collection.immutable.TreeMap
 import spray.json._
 
-import wom.callable.MetaValueElement
-import wom.callable.MetaValueElement._
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base._
 import dxWDL.util._
@@ -289,16 +288,19 @@ case class Native(dxWDLrtId: Option[String],
         case WdlTypes.T_File => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
-        case WomNonEmptyArrayType(WdlTypes.T_Boolean)      => mkPrimitiveArray("boolean", optional)
-        case WomNonEmptyArrayType(WdlTypes.T_Int)      => mkPrimitiveArray("int", optional)
-        case WomNonEmptyArrayType(WdlTypes.T_Float)        => mkPrimitiveArray("float", optional)
-        case WomNonEmptyArrayType(WdlTypes.T_String)       => mkPrimitiveArray("string", optional)
-        case WomNonEmptyArrayType(WdlTypes.T_File)   => mkPrimitiveArray("file", optional)
-        case WomMaybeEmptyArrayType(WdlTypes.T_Boolean)    => mkPrimitiveArray("boolean", true)
-        case WomMaybeEmptyArrayType(WdlTypes.T_Int)    => mkPrimitiveArray("int", true)
-        case WomMaybeEmptyArrayType(WdlTypes.T_Float)      => mkPrimitiveArray("float", true)
-        case WomMaybeEmptyArrayType(WdlTypes.T_String)     => mkPrimitiveArray("string", true)
-        case WomMaybeEmptyArrayType(WdlTypes.T_File) => mkPrimitiveArray("file", true)
+        // non-empty array
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, true)    => mkPrimitiveArray("boolean", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Int, true)      => mkPrimitiveArray("int", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Float, true)        => mkPrimitiveArray("float", optional)
+        case WdlTypes.T_Array(WdlTypes.T_String, true)       => mkPrimitiveArray("string", optional)
+        case WdlTypes.T_Array(WdlTypes.T_File, true)   => mkPrimitiveArray("file", optional)
+
+        // array that may be empty
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, false)    => mkPrimitiveArray("boolean", true)
+        case WdlTypes.T_Array(WdlTypes.T_Int, false)    => mkPrimitiveArray("int", true)
+        case WdlTypes.T_Array(WdlTypes.T_Float, false)      => mkPrimitiveArray("float", true)
+        case WdlTypes.T_Array(WdlTypes.T_String, false)     => mkPrimitiveArray("string", true)
+        case WdlTypes.T_Array(WdlTypes.T_File, false) => mkPrimitiveArray("file", true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
@@ -740,16 +742,15 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  private def metaValueToJs(value: MetaValueElement): JsValue = {
+  private def metaValueToJs(value: TAT.MetaValue): JsValue = {
     value match {
-      case MetaValueElementString(text)   => JsString(text)
-      case MetaValueElementInteger(i)     => JsNumber(i)
-      case MetaValueElementFloat(f)       => JsNumber(f)
-      case MetaValueElementBoolean(b)     => JsBoolean(b)
-      case MetaValueElementArray(array)   => JsArray(array.map(metaValueToJs))
-      case MetaValueElementObject(fields) => JsObject(fields.mapValues(metaValueToJs))
-      case MetaValueElementNull           => JsNull
-      case other                          => throw new Exception(s"Expected MetaValueElement, got ${other}")
+      case TAT.MetaValueNull           => JsNull
+      case TAT.MetaValueBoolean(b)     => JsBoolean(b)
+      case TAT.MetaValueInt(i)     => JsNumber(i)
+      case TAT.MetaValueFloat(f)       => JsNumber(f)
+      case TAT.MetaValueString(text)   => JsString(text)
+      case TAT.MetaValueObject(fields) => JsObject(fields.mapValues(metaValueToJs).toMap)
+      case TAT.MetaValueArray(array)   => JsArray(array.map(metaValueToJs).toVector)
     }
   }
 
@@ -760,7 +761,7 @@ case class Native(dxWDLrtId: Option[String],
       case f: Double    => JsNumber(f)
       case b: Boolean   => JsBoolean(b)
       case a: Vector[_] => JsArray(a.map(anyToJs))
-      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
+      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs).toMap)
       case other        => throw new EOFException(s"Unsupported value ${other}")
     }
   }
@@ -791,9 +792,9 @@ case class Native(dxWDLrtId: Option[String],
               // merge default and user-specified tags
               Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
             case IR.TaskAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs)))
+              Some("properties" -> JsObject(props.mapValues(anyToJs).toMap))
             case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
+              Some("details" -> JsObject(details.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
             //case IR.TaskAttrOpenSource(isOpenSource) =>
@@ -1056,7 +1057,7 @@ case class Native(dxWDLrtId: Option[String],
               "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
               "fqnDictTypes" -> JsObject(fqnDictTypes.map {
                 case (k, t) =>
-                  val tStr = WdlTypes.TSerialization(typeAliases).toString(t)
+                  val tStr = WomTypeSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
               }.toMap)
           )
@@ -1066,7 +1067,7 @@ case class Native(dxWDLrtId: Option[String],
           // meta information used for running workflow fragments
           val fqnDictTypes = JsObject(applet.inputVars.map {
             case cVar =>
-              val tStr = WdlTypes.TSerialization(typeAliases).toString(cVar.womType)
+              val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
               cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
@@ -1340,9 +1341,9 @@ case class Native(dxWDLrtId: Option[String],
             case IR.WorkflowAttrTags(array) =>
               Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
             case IR.WorkflowAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs)))
+              Some("properties" -> JsObject(props.mapValues(anyToJs).toMap))
             case IR.WorkflowAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
+              Some("details" -> JsObject(details.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
             // These will be implemented in a future PR

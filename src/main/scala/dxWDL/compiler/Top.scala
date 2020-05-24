@@ -9,7 +9,7 @@ import dxWDL.base._
 import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
 import dxWDL.dx._
 import dxWDL.util._
-import wdlTools.syntax.{AbstractSyntax => AST, AstTools}
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 case class Top(cOpt: CompilerOptions) {
   val verbose = cOpt.verbose
@@ -110,30 +110,28 @@ case class Top(cOpt: CompilerOptions) {
 
   // check the declarations in [graph], and make sure they
   // do not contain the reserved '___' substring.
-  private def checkDeclarations(varNames: Seq[String]): Unit = {
+  private def checkDeclarations(varNames: Vector[String]): Unit = {
     for (varName <- varNames)
       if (varName contains "___")
         throw new Exception(s"Variable ${varName} is using the reserved substring ___")
   }
 
   // check that streaming annotations are only done for files.
-  private def validate(callable: AST.Callable): Unit = {
+  private def validate(callable: TAT.Callable): Unit = {
     callable match {
-      case wf: AST.Workflow =>
+      case wf: TAT.Workflow =>
         if (wf.parameterMeta.size > 0)
           Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
-        val callInfo = AstTools.callableInfo(wf)
-        checkDeclarations(callInfo.input)
-        checkDeclarations(callInfo.output)
-        val allDeclarations : Vector[Declaration] = wf.body.collect{
-          case d : Declaration => d
+        checkDeclarations(wf.inputs.map(_.name).toVector)
+        checkDeclarations(wf.outputs.map(_.name).toVector)
+        val allDeclarations : Vector[TAT.Declaration] = wf.body.collect{
+          case d : TAT.Declaration => d
         }
         checkDeclarations(allDeclarations.map(_.name).toSeq)
 
-      case task: AST.Task =>
-        val callInfo = AstTools.callableInfo(task)
-        checkDeclarations(callInfo.input.map(_.name).toSeq)
-        checkDeclarations(callInfo.output.map(_.name).toSeq)
+      case task: TAT.Task =>
+        checkDeclarations(task.inputs.map(_.name).toSeq)
+        checkDeclarations(task.outputs.map(_.name).toSeq)
     }
   }
 

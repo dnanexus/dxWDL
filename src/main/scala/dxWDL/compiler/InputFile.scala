@@ -23,8 +23,8 @@ package dxWDL.compiler
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -79,7 +79,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         val rFiles = findDxFiles(rType, r)
         lFiles ++ rFiles
 
-      case (WdlTypes.T_Array(t), JsArray(vec)) =>
+      case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         vec.flatMap(findDxFiles(t, _))
 
       case (WdlTypes.T_Optional(t), JsNull) =>
@@ -89,7 +89,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         findDxFiles(t, jsv)
 
       // structs
-      case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+      case (WdlTypes.T_Struct(structName, typeMap), JsObject(fields)) =>
         fields.flatMap {
           case (key, value) =>
             val t: WdlTypes.T = typeMap(key)
@@ -213,7 +213,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             val vWom = womValueFromCromwellJSON(valueType, v)
             kWom -> vWom
         }.toMap
-        WdlValues.V_Map(WdlTypes.T_Map(keyType, valueType), m)
+        WdlValues.V_Map(m)
 
       // a few ways of writing a pair: an object, or an array
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
@@ -228,24 +228,24 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         WdlValues.V_Pair(left, right)
 
       // empty array
-      case (WdlTypes.T_Array(t), JsNull) =>
-        WdlValues.V_Array(WdlTypes.T_Array(t), List.empty[WdlValues.V])
+      case (WdlTypes.T_Array(t, _), JsNull) =>
+        WdlValues.V_Array(Vector.empty[WdlValues.V])
 
       // array
-      case (WdlTypes.T_Array(t), JsArray(vec)) =>
-        val wVec: Seq[WdlValues.V] = vec.map { elem: JsValue =>
+      case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
+        val wVec: Vector[WdlValues.V] = vec.map { elem: JsValue =>
           womValueFromCromwellJSON(t, elem)
         }
-        WdlValues.V_Array(WdlTypes.T_Array(t), wVec)
+        WdlValues.V_Array(wVec)
 
       case (WdlTypes.T_Optional(t), JsNull) =>
-        WdlValues.V_OptionalValue(t, None)
+        WdlValues.V_Null
       case (WdlTypes.T_Optional(t), jsv) =>
         val value = womValueFromCromwellJSON(t, jsv)
-        WdlValues.V_OptionalValue(t, Some(value))
+        WdlValues.V_Optional(value)
 
       // structs
-      case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+      case (WdlTypes.T_Struct(structName, typeMap), JsObject(fields)) =>
         // convert each field
         val m = fields.map {
           case (key, value) =>
@@ -253,7 +253,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             val elem: WdlValues.V = womValueFromCromwellJSON(t, value)
             key -> elem
         }.toMap
-        WomObject(m, WomCompositeType(typeMap, Some(structName)))
+        WdlValues.V_Struct(structName, m)
 
       case _ =>
         throw new AppInternalException(

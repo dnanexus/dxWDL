@@ -2,7 +2,8 @@ package dxWDL.dx
 
 import spray.json._
 import scala.collection.immutable.TreeMap
-import wom.types._
+import wdlTools.types.WdlTypes
+
 import dxWDL.base._
 
 // Information used to link applets that call other applets. For example, a scatter

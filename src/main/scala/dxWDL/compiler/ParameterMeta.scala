@@ -10,17 +10,22 @@ object ParameterMeta {
   // Anything not a string will be filtered out.
   private def unwrapMetaStringArray(array: Vector[TAT.MetaValue]): Vector[String] = {
     array.flatMap {
-      case MetaValueString(str) => Some(str)
+      case TAT.MetaValueString(str) => Some(str)
       case _                           => None
     }.toVector
   }
 
-  private def unwrapWomArrayType(womType: WomTypes.T): WomTypes.T = {
-    var wt = womType
-    while (wt.isInstanceOf[WdlTypes.T_Array]) {
-      wt = wt.asInstanceOf[WdlTypes.T_Array].memberType
+  // strip muli-layer array types and get the member
+  //
+  // examples:
+  // input             output
+  // Array[T]          T
+  // Array[Array[T]]   T
+  private def unwrapWomArrayType(womType: WdlTypes.T): WdlTypes.T = {
+    womType match {
+      case WdlTypes.T_Array(t, _) => unwrapWomArrayType(t)
+      case x => x
     }
-    wt
   }
 
   // Convert a patterns WOM object value to IR
@@ -87,7 +92,7 @@ object ParameterMeta {
     (womType, value) match {
       case (WdlTypes.T_String, TAT.MetaValueString(str)) =>
         IR.ChoiceReprString(value = str)
-      case (WdlTypes.T_Int, TAT.MetaValueInteger(i)) =>
+      case (WdlTypes.T_Int, TAT.MetaValueInt(i)) =>
         IR.ChoiceReprInteger(value = i)
       case (WdlTypes.T_Float, TAT.MetaValueFloat(f)) =>
         IR.ChoiceReprFloat(value = f)
@@ -150,7 +155,7 @@ object ParameterMeta {
     (womType, value) match {
       case (WdlTypes.T_String, Some(TAT.MetaValueString(str))) =>
         IR.SuggestionReprString(value = str)
-      case (WdlTypes.T_Int, Some(TAT.MetaValueInteger(i))) =>
+      case (WdlTypes.T_Int, Some(TAT.MetaValueInt(i))) =>
         IR.SuggestionReprInteger(value = i)
       case (WdlTypes.T_Float, Some(TAT.MetaValueFloat(f))) =>
         IR.SuggestionReprFloat(value = f)
@@ -219,7 +224,7 @@ object ParameterMeta {
     (womType, value) match {
       case (WdlTypes.T_String, TAT.MetaValueString(str)) =>
         IR.DefaultReprString(value = str)
-      case (WdlTypes.T_Int, TAT.MetaValueInteger(i)) =>
+      case (WdlTypes.T_Int, TAT.MetaValueInt(i)) =>
         IR.DefaultReprInteger(value = i)
       case (WdlTypes.T_Float, TAT.MetaValueFloat(f)) =>
         IR.DefaultReprFloat(value = f)
@@ -227,9 +232,9 @@ object ParameterMeta {
         IR.DefaultReprBoolean(value = b)
       case (WdlTypes.T_File, TAT.MetaValueString(file)) =>
         IR.DefaultReprFile(value = file)
-      case (womArrayType: WdlTypes.T_Array, TAT.MetaValueArray(array)) =>
-        def helper(wt: WdlTypes.T)(mv: TAT.MetaValue) = metaDefaultToIR(mv, wt)
-        IR.DefaultReprArray(array.map(helper(womArrayType.memberType)))
+      case (WdlTypes.T_Array(t, _), TAT.MetaValueArray(array)) =>
+        def helper(mv: TAT.MetaValue) = metaDefaultToIR(mv, t)
+        IR.DefaultReprArray(array.map(helper))
       case _ =>
         throw new Exception(
             "Default keyword is only valid for primitive-, file-, and array-type parameters, and "
@@ -267,13 +272,13 @@ object ParameterMeta {
             Some(metaPatternsObjToIR(obj))
           // Try to parse the choices key, which will be an array of either values or objects
           case (IR.PARAM_META_CHOICES, TAT.MetaValueArray(array)) =>
-            val wt = unwrapWdlTypes.T_Array(womType)
+            val wt = unwrapWomArrayType(womType)
             Some(IR.IOAttrChoices(metaChoicesArrayToIR(array, wt)))
           case (IR.PARAM_META_SUGGESTIONS, TAT.MetaValueArray(array)) =>
-            val wt = unwrapWdlTypes.T_Array(womType)
+            val wt = unwrapWomArrayType(womType)
             Some(IR.IOAttrSuggestions(metaSuggestionsArrayToIR(array, wt)))
           case (IR.PARAM_META_TYPE, dx_type: TAT.MetaValue) =>
-            val wt = unwrapWdlTypes.T_Array(womType)
+            val wt = unwrapWomArrayType(womType)
             wt match {
               case WdlTypes.T_File => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
               case _                 => throw new Exception("'dx_type' can only be specified for File parameters")
