@@ -160,7 +160,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   }
 
   // throw an exception if this WDL program is invalid
-  def validateWdlCode(wdlWfSource: String): Unit = {
+  def validateWdlCode(wdlWfSource: String, language : Option[Language.Value] = None) : Unit = {
     val opts =
       Options(typeChecking = WdlTypeCheckingRegime.Strict,
               antlr4Trace = false,
@@ -171,7 +171,16 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val parser = new Parsers(opts).getParser(sourceCode)
     val doc = parser.parseDocument(sourceCode)
     val typeInfer = new TypeInfer(opts)
-    val (_, _) = typeInfer.apply(doc)
+    val (tDoc, _) = typeInfer.apply(doc)
+
+    // Check that this is the correct language version
+    language match {
+      case None => ()
+      case Some(requiredLang) =>
+        val docLang = languageFromVersion(tDoc.version.value)
+        if (docLang != requiredLang)
+          throw new Exception(s"document has wrong version ${docLang}, should be ${requiredLang}")
+    }
   }
 
 

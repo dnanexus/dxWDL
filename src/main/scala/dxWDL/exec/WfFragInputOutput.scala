@@ -2,6 +2,7 @@ package dxWDL.exec
 
 import spray.json._
 import wdlTools.eval.WdlValues
+import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes
 
 import dxWDL.base._
@@ -14,10 +15,11 @@ case class WfFragInput(blockPath: Vector[Int],
 
 case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
                              dxProject: DxProject,
-                             runtimeDebugLevel: Int,
-                             typeAliases: Map[String, WdlTypes.T]) {
+                             typeAliases: Map[String, WdlTypes.T],
+                             wdlVersion : WdlVersion,
+                             runtimeDebugLevel: Int) {
   val verbose = runtimeDebugLevel >= 1
-  val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel, typeAliases)
+  val jobInputOutput = JobInputOutput(dxIoFunctions, typeAliases, wdlVersion, runtimeDebugLevel)
 
   private def loadWorkflowMetaInfo(
       metaInfo: Map[String, JsValue]

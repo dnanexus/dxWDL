@@ -691,16 +691,16 @@ object Main extends App {
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
 
-    val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
+    val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     val taskRunner = exec.TaskRunner(
       task,
       document,
       typeAliases,
-        instanceTypeDB,
-        dxPathConfig,
-        dxIoFunctions,
-        jobInputOutput,
+      instanceTypeDB,
+      dxPathConfig,
+      dxIoFunctions,
+      jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
         rtDebugLvl
@@ -770,7 +770,7 @@ object Main extends App {
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
+      new exec.WfFragInputOutput(dxIoFunctions, dxProject, typeAliases, document.version.value, rtDebugLvl)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)

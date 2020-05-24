@@ -4,7 +4,7 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 
-case class WdlValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
+case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
 
   // Serialization of a WOM value to JSON
   private def womToJSON(t: WdlTypes.T, w: WdlValues.V): JsValue = {

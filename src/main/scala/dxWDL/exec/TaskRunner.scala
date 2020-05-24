@@ -22,7 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
-import wdlTools.eval.WdlValues
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
@@ -90,7 +90,7 @@ case class TaskRunner(task: TAT.Task,
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
-  val evaluator : wdlTools.eval.Eval = {
+  val evaluator : WdlExprEval = {
     val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
                                          antlr4Trace = false,
                                          localDirectories = Vector.empty,
@@ -99,14 +99,14 @@ case class TaskRunner(task: TAT.Task,
                                            dxIoFunctions.config.tmpDir,
                                            dxIoFunctions.config.stdout,
                                            dxIoFunctions.config.stderr)
-    wdlTools.eval.Eval(evalOpts, evalCfg, doc.version.value, None)
+    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, WdlValues.V], dxUrl2path: Map[Furl, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, v) =>
-        (name, WdlValues.VSerialization(typeAliases).toJSON(v))
+        (name, WomValueSerialization(typeAliases).toJSON(v))
     }.toMap
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
       case (FurlLocal(url), path) =>
@@ -135,7 +135,7 @@ case class TaskRunner(task: TAT.Task,
     }
     val localizedInputs = locInputsM.map {
       case (key, jsVal) =>
-        key -> WdlValues.VSerialization(typeAliases).fromJSON(jsVal)
+        key -> WomValueSerialization(typeAliases).fromJSON(jsVal)
     }.toMap
     val dxUrl2path = dxUrlM.map {
       case (key, JsString(path)) => Furl.parse(key) -> Paths.get(path)
@@ -159,7 +159,7 @@ case class TaskRunner(task: TAT.Task,
           case Some(dra) => dra.m.get("docker")
         }
       case Some(expr) =>
-        evaluator.applyExprAndCoerce(expr, WdlValues.V_String, env)
+        evaluator.applyExprAndCoerce(expr, WdlValues.V_String, EvalContext(env))
     }
     dImg match {
       case None               => None

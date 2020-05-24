@@ -61,10 +61,8 @@ package dxWDL.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
-import wom.callable.Callable._
-import wom.graph._
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -103,8 +101,8 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
     exportTypes.map {
-      case (eVarName, womType) =>
-        eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
+      case (eVarName, wdlType) =>
+        eVarName -> WdlVarLinks(wdlType, DxlExec(dxSubJob, eVarName))
     }.toMap
   }
 
@@ -188,40 +186,43 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   }
 
   // collect field [name] from all child jobs, by looking at their
-  // outputs. Coerce to the correct [womType].
+  // outputs. Coerce to the correct [wdlType].
   private def collectCallField(name: String,
-                               womType: WdlTypes.T,
+                               wdlType: WdlTypes.T,
                                childJobsComplete: Vector[ChildExecDesc]): WdlValues.V = {
     val vec: Vector[WdlValues.V] =
       childJobsComplete.flatMap {
         case childExec =>
           val dxName = Utils.transformVarName(name)
           val fieldValue = childExec.outputs.get(dxName)
-          (womType, fieldValue) match {
+          (wdlType, fieldValue) match {
             case (WdlTypes.T_Optional(_), None) =>
               // Optional field that has not been returned
               None
             case (WdlTypes.T_Optional(_), Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, womType, jsv))
+              Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
             case (_, None) =>
               // Required output that is missing
               throw new Exception(s"Could not find compulsory field <${name}> in results")
             case (_, Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, womType, jsv))
+              Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
           }
       }.toVector
-    WdlValues.V_Array(WdlTypes.T_Array(womType), vec)
+    WdlValues.V_Array(vec)
   }
 
   // aggregate call results
-  def aggregateResults(call: CallNode,
+  def aggregateResults(call: TAT.Call,
                        childJobsComplete: Vector[ChildExecDesc]): Map[String, WdlVarLinks] = {
-    call.callable.outputs.map { cot: OutputDefinition =>
-      val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
-      val womType = cot.womType
-      val value: WdlValues.V = collectCallField(cot.name, womType, childJobsComplete)
-      val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
-      fullName -> wvl
+    call.callee.output.map {
+      case (oName, wdlType) =>
+        val fullName = s"${call.actualName}.${oName}"
+        val value: WdlValues.V = collectCallField(oName, wdlType, childJobsComplete)
+
+        // We get an array from collecting the values of a particular field
+        val arrayType = WdlTypes.T_Array(wdlType, false)
+        val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
+        fullName -> wvl
     }.toMap
   }
 
@@ -232,9 +233,12 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
       childJobsComplete: Vector[ChildExecDesc]
   ): Map[String, WdlVarLinks] = {
     execLinkInfo.outputs.map {
-      case (name, womType) =>
-        val value: WdlValues.V = collectCallField(name, womType, childJobsComplete)
-        val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
+      case (name, wdlType) =>
+        val value: WdlValues.V = collectCallField(name, wdlType, childJobsComplete)
+
+        // We get an array from collecting the values of a particular field
+        val arrayType = WdlTypes.T_Array(wdlType, false)
+        val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
         name -> wvl
     }.toMap
   }

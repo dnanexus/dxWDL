@@ -26,6 +26,7 @@ case class WdlCodeGen(verbose: Verbose,
     }
   }
 
+  // create a wdl-value of a specific type.
   def genDefaultValueOfType(wdlType: WdlTypes.T): WdlValues.V = {
     wdlType match {
       case WdlTypes.T_Boolean    => WdlValues.V_Boolean(true)
@@ -45,29 +46,66 @@ case class WdlCodeGen(verbose: Verbose,
       case WdlTypes.T_Map(keyType, valueType) =>
         val k = genDefaultValueOfType(keyType)
         val v = genDefaultValueOfType(valueType)
-        WdlValues.V_Map(WdlTypes.T_Map(keyType, valueType), Map(k -> v))
+        WdlValues.V_Map(Map(k -> v))
 
       // an empty array
-      case WomMaybeEmptyArrayType(t) =>
-        WdlValues.V_Array(WomMaybeEmptyArrayType(t), List())
+      case WdlTypes.T_Array(t, false) =>
+        WdlValues.V_Array(Vector.empty)
 
       // Non empty array
-      case WomNonEmptyArrayType(t) =>
-        WdlValues.V_Array(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+      case WdlTypes.T_Array(t, true) =>
+        WdlValues.V_Array(Vector(genDefaultValueOfType(t)))
 
       case WdlTypes.T_Pair(lType, rType) =>
         WdlValues.V_Pair(genDefaultValueOfType(lType), genDefaultValueOfType(rType))
 
-      case WomCompositeType(typeMap, structName) =>
-        val m = typeMap.map {
+      case WdlTypes.T_Struct(structName, typeMap) =>
+        val members = typeMap.map {
           case (fieldName, t) =>
             fieldName -> genDefaultValueOfType(t)
         }.toMap
-        WomObject(m, WomObjectType)
+        WdlValues.V_Struct(structName, members)
 
       case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
   }
+
+  def wdlString(value : WdlValues.V) : String = {
+    value match {
+      case WdlValues.V_Null => "null"
+      case WdlValues.V_Boolean(value) => value.toString
+      case WdlValues.V_Int(value) => value.toString
+      case WdlValues.V_Float(value) => value.toString
+      case WdlValues.V_String(value) => value
+      case WdlValues.V_File(value) => value
+
+        // compound values
+      case WdlValues.V_Pair(l, r) =>
+        s"(${wdlString(l)} , ${wdlString(r)})"
+      case WdlValues.V_Array(value) =>
+        "[" + value.map(wdlString).mkString(",") + "]"
+      case WdlValues.V_Map(value) =>
+        val m = value.map{ case (k,v) =>
+          s"${wdlString(k)} : ${wdlString(v)}"
+        }.toVector
+        s"""{${m.mkString(", ")}"""
+
+      case WdlValues.V_Optional(value) =>
+        wdlString(value)
+      case WdlValues.V_Struct(name, members) =>
+        val membersStr = members.map{ case (k, v) =>
+          s""" "${k}" : ${wdlString(v)}"""
+        }.toVector
+        s"""{ ${membersStr.mkString(", ")} }"""
+
+      case WdlValues.V_Object(members) =>
+        val membersStr = members.map{ case (k, v) =>
+          s"${k} : ${wdlString(v)}"
+        }.toVector
+        s"""object { ${membersStr.mkString(", ")} }"""
+    }
+  }
+
 
   /*
 Create a header for a task/workflow. This is an empty task
@@ -119,8 +157,8 @@ task Add {
             cVar.default match {
               case None =>
                 s"    ${typeName(cVar.womType)} ${cVar.name}"
-              case Some(womValue) =>
-                s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWdlValues.V_String}"
+              case Some(wValue) =>
+                s"    ${typeName(cVar.womType)} ${cVar.name} = ${wdlString(wValue)}"
             }
         }
         .mkString("\n")
@@ -131,7 +169,7 @@ task Add {
         .map {
           case cVar =>
             val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWdlValues.V_String}"
+            s"    ${typeName(cVar.womType)} ${cVar.name} = ${wdlString(defaultVal)}"
         }
         .mkString("\n")
 
@@ -179,7 +217,7 @@ task Add {
       .map {
         case (name, womType) =>
           val defaultVal = genDefaultValueOfType(womType)
-          s"    ${typeName(womType)} $name = ${defaultVal.toWdlValues.V_String}"
+          s"    ${typeName(womType)} $name = ${wdlString(defaultVal)}"
       }
       .mkString("\n")
 
@@ -225,7 +263,7 @@ task Add {
                              |
                              |${taskSourceCode}
                              |""".stripMargin
-    ParseWomSourceFile(false).validateWdlCode(taskStandalone, language)
+    ParseWomSourceFile(false).validateWdlCode(taskStandalone, Some(language))
 
     WdlCodeSnippet(taskSourceCode)
   }
@@ -285,7 +323,7 @@ task Add {
   private def typeAliasDefinitions: String = {
     val sortedTypeAliases = SortTypeAliases(verbose).apply(typeAliases.toVector)
     val snippetVec = sortedTypeAliases.map {
-      case (name, WomCompositeType(typeMap, _)) =>
+      case (name, WdlTypes.T_Struct(_, typeMap)) =>
         val fieldLines = typeMap
           .map {
             case (fieldName, womType) =>
@@ -312,7 +350,7 @@ task Add {
            originalTaskSource).mkString("\n")
 
     // Make sure this is actually valid WDL
-    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)
+    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, Some(language))
 
     WdlCodeSnippet(wdlWfSource)
   }
@@ -364,7 +402,7 @@ task Add {
            wfWithoutImportCalls).mkString("\n")
 
     // Make sure this is actually valid WDL
-    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)
+    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, Some(language))
 
     WdlCodeSnippet(wdlWfSource)
   }

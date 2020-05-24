@@ -17,7 +17,7 @@ object ExecLinkInfo {
   // Serialize applet input definitions, so they could be used
   // at runtime.
   def writeJson(ali: ExecLinkInfo, typeAliases: Map[String, WdlTypes.T]): JsValue = {
-    val womTypeConverter = WdlTypes.TSerialization(typeAliases)
+    val womTypeConverter = WomTypeSerialization(typeAliases)
 
     val appInputDefs: Map[String, JsString] = ali.inputs.map {
       case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
@@ -34,7 +34,7 @@ object ExecLinkInfo {
   }
 
   def readJson(aplInfo: JsValue, typeAliases: Map[String, WdlTypes.T]): ExecLinkInfo = {
-    val womTypeConverter = WdlTypes.TSerialization(typeAliases)
+    val womTypeConverter = WomTypeSerialization(typeAliases)
 
     val name = aplInfo.asJsObject.fields("name") match {
       case JsString(x) => x
