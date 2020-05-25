@@ -25,7 +25,8 @@ projects = ["dxWDL",
             "dxWDL_Sydney",
             "dxWDL_Azure",
             "dxWDL_Amsterdam",
-            "dxWDL_Berlin"]
+            "dxWDL_Berlin",
+            "dxWDL_China"]
 
 target_folder = "/release_test"
 

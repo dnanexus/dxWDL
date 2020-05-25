@@ -33,7 +33,8 @@ RELEASE_DICT = {
     "aws:ap-southeast-2" : "dxWDL_Sydney",
     "azure:westus" : "dxWDL_Azure",
     "azure:westeurope" : "dxWDL_Amsterdam",
-    "aws:eu-central-1" : "dxWDL_Berlin"
+    "aws:eu-central-1" : "dxWDL_Berlin",
+    "aws:cn-north-1" : "dxWDL_China"
 }
 
 # 1. Use the clone-asset app to copy the file into [region].
