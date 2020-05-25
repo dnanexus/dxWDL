@@ -37,7 +37,7 @@ package dxWDL.exec
 
 import java.nio.file.Paths
 import spray.json._
-import wdlTools.eval.WdlValues
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
@@ -77,37 +77,26 @@ case class WfFragRunner(wf: TAT.Workflow,
     gSeqNum
   }
 
-  private def evaluateWomExpression(expr: WomExpression,
-                                    womType: WdlTypes.T,
-                                    env: Map[String, WdlValues.V]): WdlValues.V = {
-    val result: ErrorOr[WdlValues.V] =
-      expr.evaluateValue(env, dxIoFunctions)
-    val value = result match {
-      case Invalid(errors) =>
-        val envDbg = env
-          .map {
-            case (key, value) => s"    ${key} -> ${value.toString}"
-          }
-          .mkString("\n")
-        throw new Exception(s"""|Failed to evaluate expression ${expr.sourceString}
-                                |Errors:
-                                |${errors}
-                                |
-                                |Environment:
-                                |${envDbg}
-                                |""".stripMargin)
-      case Valid(x: WdlValues.V) => x
-    }
-
-    // cast the result value to the correct type
-    // For example, an expression like:
-    //   Float x = "3.2"
-    // requires casting from string to float
-    womType.coerceRawValue(value).get
+  val evaluator : WdlExprEval = {
+    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+                                         antlr4Trace = false,
+                                         localDirectories = Vector.empty,
+                                         verbosity = wdlTools.util.Verbosity.Quiet)
+    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
+                                           dxIoFunctions.config.tmpDir,
+                                           dxIoFunctions.config.stdout,
+                                           dxIoFunctions.config.stderr)
+    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
-  private def getCallLinkInfo(call: CallNode): ExecLinkInfo = {
-    val calleeName = call.callable.name
+  private def evaluateWomExpression(expr: TAT.Expr,
+                                    womType: WdlTypes.T,
+                                    env: Map[String, WdlValues.V]): WdlValues.V = {
+    evaluator.applyExprAndCoerce(expr, womType, EvalContext(env))
+  }
+
+  private def getCallLinkInfo(call: TAT.Call): ExecLinkInfo = {
+    val calleeName = call.callee.name
     execLinkInfo.get(calleeName) match {
       case None =>
         throw new AppInternalException(s"Could not find linking information for ${calleeName}")
@@ -116,7 +105,8 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // This method is exposed so that we can unit-test it.
-  def evalExpressions(nodes: Seq[GraphNode], env: Map[String, WdlValues.V]): Map[String, WdlValues.V] = {
+  def evalExpressions(nodes: Seq[GraphNode],
+                      env: Map[String, WdlValues.V]): Map[String, WdlValues.V] = {
     val partialOrderNodes = Block.partialSortByDep(nodes.toSet)
     partialOrderNodes.foldLeft(env) {
       // simple expression

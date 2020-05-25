@@ -103,10 +103,11 @@ case class TaskRunner(task: TAT.Task,
   }
 
   // serialize the task inputs to json, and then write to a file.
-  def writeEnvToDisk(localizedInputs: Map[String, WdlValues.V], dxUrl2path: Map[Furl, Path]): Unit = {
+  def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
+                     dxUrl2path: Map[Furl, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
-      case (name, v) =>
-        (name, WomValueSerialization(typeAliases).toJSON(v))
+      case (name, (t, v)) =>
+        (name, WomValueSerialization(typeAliases).toJSON(t, v))
     }.toMap
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
       case (FurlLocal(url), path) =>
@@ -376,7 +377,7 @@ case class TaskRunner(task: TAT.Task,
     inputs
       .map {
         case (inp, value) =>
-          s"${i} -> ${value}"
+          s"${inp.name} -> (${inp.wdlType}, ${value})"
       }
       .mkString("\n")
   }
@@ -384,7 +385,7 @@ case class TaskRunner(task: TAT.Task,
   // Calculate the input variables for the task, download the input files,
   // and build a shell script to run the command.
   def prolog(taskInputs: Map[TAT.InputDefinition, WdlValues.V]) :
-      (Map[String, WdlValues.V], Map[Furl, Path]) =
+      (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) =
   {
     Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
@@ -392,15 +393,20 @@ case class TaskRunner(task: TAT.Task,
       printDirStruct()
 
     Utils.appletLog(verbose, s"Task source code:")
-    Utils.appletLog(verbose, doc.sourceCode, 10000)
+    Utils.appletLog(verbose, document.sourceCode, 10000)
     Utils.appletLog(verbose, s"inputs: ${inputsDbg(taskInputs)}")
+
+    val parameterMeta : Map[String, TAT.MetaValue] = task.parameterMeta match {
+      case None => Map.empty
+      case Some(TAT.ParameterMetaSection(kvs, _)) => kvs
+    }
 
     // Download/stream all input files.
     //
     // Note: this may be overly conservative,
     // because some of the files may not actually be accessed.
     val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
-      jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
+      jobInputOutput.localizeFiles(parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
     // build a manifest for dxda, if there are files to download
     val DxdaManifest(manifestJs) = dxdaManifest
@@ -414,14 +420,20 @@ case class TaskRunner(task: TAT.Task,
       Utils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
-    val inputs = localizedInputs.map {
-      case (inpDfn, value) =>
-        inpDfn.name -> value
-    }.toMap
+    val inputsWithTypes : Map[String, (WdlTypes.T, WdlValues.V)] =
+      localizedInputs.map {
+        case (inpDfn, value) =>
+          inpDfn.name -> (inpDfn.wdlType, value)
+      }.toMap
+    val inputs : Map[String, WdlValues.V] =
+      inputsWithTypes.map{
+        case (k, (t, v)) => k -> v
+      }
+
     val docker = dockerImage(inputs)
 
     // instantiate the command
-    val command = evaluator.applyCommand(task.command, inputs)
+    val command = evaluator.applyCommand(task.command, EvalContext(inputs))
 
     // Write shell script to a file. It will be executed by the dx-applet shell code.
     writeBashScript(command)
@@ -433,10 +445,10 @@ case class TaskRunner(task: TAT.Task,
     }
 
     // Record the localized inputs, we need them in the epilog
-    (inputs, dxUrl2path)
+    (inputsWithTypes, dxUrl2path)
   }
 
-  def epilog(localizedInputValues: Map[String, WdlValues.V],
+  def epilog(localizedInputs: Map[String, WdlValues.V],
              dxUrl2path: Map[Furl, Path]): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
     if (maxVerboseLevel)
@@ -445,21 +457,24 @@ case class TaskRunner(task: TAT.Task,
     // Evaluate the output declarations. Add outputs evaluated to
     // the environment, so they can be referenced by expressions in the next
     // lines.
-    val outputsLocal: Map[String, WdlValues.V] = task.outputs.foldLeft(localizedInputs) {
-      case (outDef: TAT.OutputDefinition, envFull) =>
-        val value = evaluator.applyExprAndCoerce(outDef.expr, outDef.wdlType, envFull)
-        envFull + (outDef.name -> value)
-    }.toMap
+    val outputsLocal: Map[String, (WdlTypes.T, WdlValues.V)] =
+      task.outputs.foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
+        case (env, outDef: TAT.OutputDefinition) =>
+          val envNoTypes = env.map{ case (k, (t, v)) => k -> v}
+          val value = evaluator.applyExprAndCoerce(outDef.expr, outDef.wdlType,
+                                                   EvalContext(envNoTypes ++ localizedInputs))
+          env + (outDef.name -> (outDef.wdlType, value))
+      }.toMap
 
-    val outputs: Map[String, WdlValues.V] =
+    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
       // Upload output files to the platform.
       jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
       .map {
-        case (outputVarName, womValue) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+        case (outputVarName, (wdlType, womValue)) =>
+          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, womValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList
@@ -474,15 +489,20 @@ case class TaskRunner(task: TAT.Task,
   // Do not download the files, if there are any. We may be
   // calculating the instance type in the workflow runner, outside
   // the task.
-  def calcInstanceType(taskInputs: Map[InputDefinition, WdlValues.V]): String = {
+  def calcInstanceType(taskInputs: Map[TAT.InputDefinition, WdlValues.V]): String = {
     // evaluate the declarations
     val inputs = taskInputs.map {
       case (inpDfn, value) =>
         inpDfn.name -> value
     }.toMap
 
+    val runtimeAttrs : Map[String, TAT.Expr] = task.runtime match {
+      case None => Map.empty
+      case Some(TAT.RuntimeSection(kvs, _)) => kvs
+    }
+
     def evalAttr(attrName: String): Option[WdlValues.V] = {
-      task.runtimeAttributes.attributes.get(attrName) match {
+      runtimeAttrs.get(attrName) match {
         case None =>
           // try the defaults
           defaultRuntimeAttrs match {
@@ -490,7 +510,7 @@ case class TaskRunner(task: TAT.Task,
             case Some(dra) => dra.m.get(attrName)
           }
         case Some(expr) =>
-          Some(evaluator.applyExprAndCoerce(expr, WdlValues.V_String, inputs))
+          Some(evaluator.applyExprAndCoerce(expr, WdlTypes.T_String, EvalContext(inputs)))
       }
     }
 
@@ -564,8 +584,8 @@ case class TaskRunner(task: TAT.Task,
     // is exactly the same as the parent, we can immediately exit the parent job.
     val outputs: Map[String, JsValue] = task.outputs
       .map {
-        case (outDef: OutputDefinition) =>
-          val wvl = WdlVarLinks(outDef.womType, DxlExec(dxSubJob, outDef.name))
+        case (outDef: TAT.OutputDefinition) =>
+          val wvl = WdlVarLinks(outDef.wdlType, DxlExec(dxSubJob, outDef.name))
           wdlVarLinksConverter.genFields(wvl, outDef.name)
       }
       .flatten

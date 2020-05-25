@@ -405,15 +405,15 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // 1) If a file is already on the cloud, do not re-upload it. The content has not
   // changed because files are immutable.
   // 2) A file that was initially local, does not need to be uploaded.
-  def delocalizeFiles(outputs: Map[String, WdlValues.V],
-                      furl2path: Map[Furl, Path]): Map[String, WdlValues.V] = {
+  def delocalizeFiles(outputs: Map[String, (WdlTypes.T, WdlValues.V)],
+                      furl2path: Map[Furl, Path]): Map[String, (WdlTypes.T, WdlValues.V)] = {
     // Files that were local to begin with
     val localInputFiles: Set[Path] = furl2path.collect {
       case (FurlLocal(_), path) => path
     }.toSet
 
     val localOutputFilesAll: Vector[Path] = outputs.values
-      .map(findFiles)
+      .map{ case (t,v) => findFiles(v) }
       .flatten
       .toVector
       .map {
@@ -458,9 +458,9 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
     // Replace the files that need to be uploaded, file paths with FURLs
     outputs.map {
-      case (outputName, womValue) =>
-        val v1 = replaceLocalPathsWithURLs(womValue, path2furl)
-        outputName -> v1
+      case (outputName, (wdlType, wdlValue)) =>
+        val v1 = replaceLocalPathsWithURLs(wdlValue, path2furl)
+        outputName -> (wdlType, v1)
     }.toMap
   }
 }

@@ -49,7 +49,7 @@ case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
           case (key, JsString(value)) =>
             // Transform back to a fully qualified name with dots
             val orgKeyName = Utils.revTransformVarName(key)
-            val womType = WdlTypes.TSerialization(typeAliases).fromString(value)
+            val womType = WomTypeSerialization(typeAliases).fromString(value)
             orgKeyName -> womType
           case other => throw new Exception(s"Bad value ${other}")
         }.toMap
