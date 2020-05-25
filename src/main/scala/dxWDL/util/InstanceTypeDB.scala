@@ -562,8 +562,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   private def queryWithPrices(dxProject: DxProject): InstanceTypeDB = {
     // Figure out the available instances by describing the project
     val allAvailableIT = queryAvailableInstanceTypes(dxProject)
+
     // get billTo and region from the project
     val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
+
     // get the pricing model
     val pm = getPricingModel(billTo, region)
 
