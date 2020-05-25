@@ -188,6 +188,10 @@ object Block {
     }
   }
 
+  // figure out all the outputs from a block of statements
+  //
+  def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = ???
+
   def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = ???
 
   // split a part of a workflow
