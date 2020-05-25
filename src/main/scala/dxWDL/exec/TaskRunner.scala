@@ -152,14 +152,19 @@ case class TaskRunner(task: TAT.Task,
 
   // Figure out if a docker image is specified. If so, return it as a string.
   private def dockerImageEval(env: Map[String, WdlValues.V]): Option[String] = {
-    val dImg: Option[WdlValues.V] = task.runtimeAttributes.attributes.get("docker") match {
+      val attributes : Map[String, TAT.Expr] = task.runtime match {
+        case None => Map.empty
+        case Some(TAT.RuntimeSection(kvs, _)) => kvs
+      }
+    val dImg: Option[WdlValues.V] = attributes.get("docker") match {
       case None =>
         defaultRuntimeAttrs match {
           case None      => None
           case Some(dra) => dra.m.get("docker")
         }
       case Some(expr) =>
-        evaluator.applyExprAndCoerce(expr, WdlValues.V_String, EvalContext(env))
+        val value = evaluator.applyExprAndCoerce(expr, WdlTypes.T_String, EvalContext(env))
+        Some(value)
     }
     dImg match {
       case None               => None
@@ -367,11 +372,10 @@ case class TaskRunner(task: TAT.Task,
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
 
-  private def inputsDbg(inputs: Map[InputDefinition, WdlValues.V]): String = {
+  private def inputsDbg(inputs: Map[TAT.InputDefinition, WdlValues.V]): String = {
     inputs
       .map {
         case (inp, value) =>
-          val i = WomPrettyPrint.apply(inp)
           s"${i} -> ${value}"
       }
       .mkString("\n")
