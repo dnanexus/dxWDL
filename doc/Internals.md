@@ -145,7 +145,7 @@ is compiled into an applet with the following `dxapp.json`:
 ```
 
 The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`,
-under which it run the shell command `samtools view -c ${bam}`.
+under which it runs the shell command `samtools view -c ${bam}`.
 
 ## A Linear Workflow
 
@@ -238,7 +238,7 @@ fragment comprises a series of declarations followed by (1) a call, or
 do not support variable lookup, expressions, or evaluation. This means
 that we need to launch a job even for a trivial expression. The
 compiler tries to batch such evaluations together, to minimize the
-number of jobs. For example,workflow `linear2` is split into three fragments.
+number of jobs. For example, workflow `linear2` is split into three stages, the last two of which are fragments.
 
 ```wdl
 workflow linear2 {
@@ -364,7 +364,7 @@ It is compiled into:
 
 The fragment is executed by an applet that calculates the WDL
 expressions `range(n)`, iterates on it, and launches a child job for
-each vlues of `item`. In order to massage the results into the proper
+each value of `item`. In order to massage the results into the proper
 WDL types, we run a collect sub-job that waits for the child jobs to
 complete, and returns an array of integers.
 

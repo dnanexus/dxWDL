@@ -454,6 +454,7 @@ These attributes can be specified in the `runtime` section of the WDL task, but 
   * `developer`: Boolean - whether the applet is a developer, i.e. can create new applets
   * `projectCreation`: Boolean - whether the applet can create new projects
 * `dx_ignore_reuse`: Boolean - whether to allow the outputs of the applet to be reused
+* `dx_instance_type`: String - DNAnexus instance type which the applet will use.
 
 ## Example tasks with DNAnexus-specific metadata and runtime
 
