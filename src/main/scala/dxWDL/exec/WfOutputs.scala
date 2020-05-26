@@ -37,7 +37,7 @@ case class WfOutputs(wf: TAT.Workflow,
   private def evaluateWomExpression(expr: TAT.Expr,
                                     womType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
-    evaluator.applyExprAndCoerce(expr, womType, env)
+    evaluator.applyExprAndCoerce(expr, womType, EvalContext(env))
   }
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -45,31 +45,27 @@ case class WfOutputs(wf: TAT.Workflow,
       : Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
-    val outputNodes: Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
     Utils.appletLog(
         verbose,
         s"""|Evaluating workflow outputs
-            |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
+            |${WomPrettyPrintApproxWdl.graphOutputs(wf.outputs)}
             |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
-    val allInputs = Block.closure(Block(wf.innerGraph.outputNodes.toVector))
+    val allInputs = Block.outputClosure(wf.outputs)
     val envInitialFilled: Map[String, WdlValues.V] = allInputs.flatMap {
-      case (name, (womType, hasDefaultVal)) =>
-        (envInitial.get(name), womType) match {
+      case (name, wdlType) =>
+        (envInitial.get(name), wdlType) match {
           case (None, WdlTypes.T_Optional(t)) =>
-            Some(name -> WdlValues.V_OptionalValue(t, None))
-          case (None, _) if hasDefaultVal =>
-            None
+            Some(name -> WdlValues.V_Null)
           case (None, _) =>
             // input is missing, and there is no default at the callee,
-            Utils.warning(utlVerbose,
-                          s"input is missing for ${name}, and there is no default at the callee")
+            Utils.warning(utlVerbose, s"value is missing for ${name}")
             None
-          case (Some(x), _) =>
-            Some(name -> x)
+          case (Some((t,v)), _) =>
+            Some(name -> v)
         }
     }.toMap
 
@@ -77,33 +73,18 @@ case class WfOutputs(wf: TAT.Workflow,
     // the environment, so they can be referenced by expressions in the next
     // lines.
     var envFull = envInitialFilled
-    val outputs: Map[String, WdlValues.V] = outputNodes.map {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        val value = envFull.get(sourcePort.name) match {
-          case None =>
-            throw new Exception(s"could not find ${sourcePort}")
-          case Some(value) =>
-            value
-        }
-        val name = id.workflowLocalName
+    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wf.outputs.map {
+      case TAT.OutputDefinition(name, wdlType, expr, _) =>
+        val value = evaluateWomExpression(expr, wdlType, envFull)
         envFull += (name -> value)
-        name -> value
-
-      case expr: ExpressionBasedGraphOutputNode =>
-        val value = evaluateWomExpression(expr.womExpression, expr.womType, envFull)
-        val name = expr.graphOutputPort.name
-        envFull += (name -> value)
-        name -> value
-
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
+        name -> (wdlType, value)
     }.toMap
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
       .map {
-        case (outputVarName, womValue) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+        case (outputVarName, (wdlType, wdlValue)) =>
+          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList

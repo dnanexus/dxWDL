@@ -77,7 +77,6 @@ package dxWDL.util
 
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.{Util => TUtil, WdlTypes}
-import wdlTools.util.Util.prettyFormat
 
 case class BlockInput(name: String, wdlType: WdlTypes.T, optional : Boolean)
 case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
@@ -116,17 +115,6 @@ case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
 case class Block(inputs : Vector[BlockInput],
                  nodes: Vector[TAT.WorkflowElement],
                  outputs : Vector[BlockOutput]) {
-  def prettyPrint: String = {
-    val desc = nodes
-      .map { node =>
-      "    " + prettyFormat.apply(node) + "\n"
-      }
-      .mkString("")
-    s"""|Block [
-        |${desc}
-        |]""".stripMargin
-  }
-
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
@@ -136,13 +124,13 @@ case class Block(inputs : Vector[BlockInput],
   // If the entire block is made up of expressions, return None
   def makeName: Option[String] = {
     nodes.collectFirst {
-      case Scatter(id, expr, body, _) =>
+      case TAT.Scatter(id, expr, body, _) =>
         val collection = TUtil.exprToString(expr)
         s"scatter (${id} in ${collection})"
-      case Conditional(expr, body, _) =>
+      case TAT.Conditional(expr, body, _) =>
         val cond = TUtil.exprToString(expr)
         s"if (${cond})"
-      case call : Call =>
+      case call : TAT.Call =>
         s"frag ${call.actualName}"
     }
   }
@@ -159,30 +147,17 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  def exprInputs(expr : TAT.Expr) : Vector[String] = ???
+  //def exprInputs(expr : TAT.Expr) : Vector[String] = ???
 
-  // A trivial expression has no operators, it is either a constant WdlValues.V
-  // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
-  // is not.
-  def isTrivialExpression(expr: TAT.Expr): Boolean = {
-    val inputs = exprInputs(expr)
-    if (inputs.size > 1)
-      return false
-    if (WomValueAnalysis.isExpressionConst(expr.wdlType, expr))
-      return true
-    // The expression may have one input, but could still have an operator.
-    // For example: x+1, x + x.
-    expr.sourceString == inputs.head
-  }
 
   // The block is a singleton with one statement which is a call. The call
   // has no subexpressions. Note that the call may not provide
   // all the callee's arguments.
   def isCallWithNoSubexpressions(node: TAT.WorkflowElement): Boolean = {
     node match {
-      case call: Call =>
+      case call: TAT.Call =>
         call.inputs.forall {
-          case (name, expr: TAT.Expr) => isTrivialExpression(expr)
+          case (name, expr) => WomValueAnalysis.isTrivialExpression(expr)
         }
       case _ => false
     }
@@ -210,6 +185,40 @@ object Block {
                                          Vector[TAT.OutputDefinition]) // outputs
   = ???
 
+  // We are building an applet for the output section of a workflow.
+  // The outputs have expressions, and we need to figure out which
+  // variables they refer to. This will allow the calculations to proceeed
+  // inside a stand alone applet.
+  def outputClosure(outputs : Vector[TAT.OutputDefinition]) : Map[String, WdlTypes.T] = ???
+
+  // Does this output require evaluation? If so, we will need to create
+  // another applet for this.
+  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = ???
+
+  // is an output used directly as an input? For example, in the
+  // small workflow below, 'lane' is used in such a manner.
+  //
+  // This makes a difference, because in locked dx:workflows, it is
+  // not possible to access a workflow input directly from a workflow
+  // output. It is only allowed to access a stage input/output.
+  //
+  // workflow inner {
+  //   input {
+  //      String lane
+  //   }
+  //   output {
+  //      String blah = lane
+  //   }
+  // }
+  def inputsUsedAsOutputs(inputNodes: Vector[TAT.InputDefinition],
+                          outputNodes: Vector[TAT.OutputDefinition]): Set[String] = {
+    // Figure out all the variables needed to calculate the outputs
+    val outputs: Set[String] = outputClosure(outputNodes).map(_._1).toSet
+    val inputs: Set[String] = inputNodes.map(_.name).toSet
+    //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
+    inputs.intersect(outputs)
+  }
+
   // A block of nodes that represents a call with no subexpressions. These
   // can be compiled directly into a dx:workflow stage.
   //
@@ -223,31 +232,34 @@ object Block {
     // there is example a single node
     val node = nodes.head
     node match {
-      case call : Call =>
+      case call : TAT.Call if trivialExpressionsOnly =>
         call.inputs.values.forall{
-          case (name, expr: TAT.Expr) => isTrivialExpression(expr)
+          case expr => WomValueAnalysis.isTrivialExpression(expr)
         }
+      case call : TAT.Call =>
+        // any input expression is allowed
+        true
       case _ => false
     }
   }
 
-  private def getOneCall(nodes: Vector[TAT.WorkflowElement]): Call = {
+  private def getOneCall(nodes: Vector[TAT.WorkflowElement]): TAT.Call = {
     val calls = nodes.collect {
-      case node: CallNode => node
+      case node: TAT.Call => node
     }
     assert(calls.size == 1)
     calls.head
   }
 
   // Deep search for all calls in a graph
-  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[Call] = {
+  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
     nodes
-      .foldLeft(Vector.empty[Call]) {
-        case (accu: Vector[Call], call: Call) =>
+      .foldLeft(Vector.empty[TAT.Call]) {
+        case (accu, call : TAT.Call) =>
           accu :+ call
-        case (accu, ssc: Scatter) =>
+        case (accu, ssc: TAT.Scatter) =>
           accu ++ deepFindCalls(ssc.body)
-        case (accu, ifStmt: Conditional) =>
+        case (accu, ifStmt: TAT.Conditional) =>
           accu ++ deepFindCalls(ifStmt.body)
         case (accu, _) =>
           accu
@@ -301,8 +313,8 @@ object Block {
   object Category {
     def getInnerGraph(catg: Category): Vector[TAT.WorkflowElement] = {
       catg match {
-        case cond: CondFullBlock   => cond.body
-        case sct: ScatterFullBlock => sct.body
+        case cond: CondFullBlock   => cond.value.body
+        case sct: ScatterFullBlock => sct.value.body
         case other =>
           throw new UnsupportedOperationException(
               s"${other.getClass.toString} does not have an inner graph"
@@ -330,7 +342,7 @@ object Block {
         // The block comprises expressions only
         AllExpressions(allButLast :+ lastNode)
 
-      case callNode: Call =>
+      case callNode: TAT.Call =>
         if (isSimpleCall(block.nodes, true))
           CallDirect(allButLast, callNode)
         else if (isSimpleCall(block.nodes, false))
@@ -338,14 +350,14 @@ object Block {
         else
           CallFragment(allButLast, callNode)
 
-      case condNode: Conditional =>
+      case condNode: TAT.Conditional =>
         if (isSimpleCall(condNode.body, false)) {
           CondOneCall(allButLast, condNode, getOneCall(condNode.body))
         } else {
           CondFullBlock(allButLast, condNode)
         }
 
-      case sctNode: Scatter =>
+      case sctNode: TAT.Scatter =>
         if (isSimpleCall(sctNode.body, false)) {
           ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.body))
         } else {
@@ -357,48 +369,14 @@ object Block {
   def getSubBlock(path: Vector[Int], nodes : Vector[TAT.WorkflowElement]): Block = {
     assert(path.size >= 1)
 
-    val (_, _, blocks, _) = splitToBlocks(nodes)
+    val blocks = splitToBlocks(nodes)
     var subBlock = blocks(path.head)
     for (i <- path.tail) {
       val catg = categorize(subBlock)
       val innerGraph = Category.getInnerGraph(catg)
-      val (_, _, blocks2, _) = splitToBlocks(innerGraph)
+      val blocks2 = splitToBlocks(innerGraph)
       subBlock = blocks2(i)
     }
     return subBlock
-  }
-
-  // We are building an applet for the output section of a workflow.
-  // The outputs have expressions, and we need to figure out which
-  // variables they refer to. This will allow the calculations to proceeed
-  // inside a stand alone applet.
-  def outputClosure(outputs : Vector[TAT.OutputDefinition]) : Set[String] = ???
-
-  // Does this output require evaluation? If so, we will need to create
-  // another applet for this.
-  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = ???
-
-  // is an output used directly as an input? For example, in the
-  // small workflow below, 'lane' is used in such a manner.
-  //
-  // This makes a difference, because in locked dx:workflows, it is
-  // not possible to access a workflow input directly from a workflow
-  // output. It is only allowed to access a stage input/output.
-  //
-  // workflow inner {
-  //   input {
-  //      String lane
-  //   }
-  //   output {
-  //      String blah = lane
-  //   }
-  // }
-  def inputsUsedAsOutputs(inputNodes: Vector[TAT.InputDefinition],
-                          outputNodes: Vector[TAT.OutputDefinition]): Set[String] = {
-    // Figure out all the variables needed to calculate the outputs
-    val outputs: Set[String] = outputClosure(outputNodes)
-    val inputs: Set[String] = inputNodes.map(_.name).toSet
-    //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
-    inputs.intersect(outputs)
   }
 }

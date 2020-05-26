@@ -27,10 +27,9 @@ case class WfInputs(wf: TAT.Workflow,
     Utils.appletLog(verbose, s"Environment: ${inputs}")
     Utils.appletLog(
         verbose,
-/*        s"""|Artificial applet for unlocked workflow inputs
-            |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
-            |""".stripMargin*/
-        "Artificial applet for unlocked workflow inputs"
+        s"""|Artificial applet for unlocked workflow inputs
+            |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs)}
+            |""".stripMargin
     )
 
     // convert the WDL values to JSON

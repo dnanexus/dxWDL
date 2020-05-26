@@ -70,7 +70,7 @@ object WomValueAnalysis {
   // read from disk, and uploaded to the platform.  A file can't
   // have a constant string as an input, this has to be a dnanexus
   // link.
-  private def requiresEvaluation(womType: WdlTypes.T, value: WdlValues.V): Boolean = {
+  def requiresEvaluation(womType: WdlTypes.T, value: WdlValues.V): Boolean = {
     def isMutableFile(constantFileStr: String): Boolean = {
       constantFileStr match {
         case path if path.startsWith(Utils.DX_URL_PREFIX) =>
@@ -86,6 +86,7 @@ object WomValueAnalysis {
 
     (womType, value) match {
       // Base case: primitive types.
+      case (_, WdlValues.V_Null) => false
       case (WdlTypes.T_Boolean, _)                   => false
       case (WdlTypes.T_Int, _)                   => false
       case (WdlTypes.T_Float, _)                     => false
@@ -107,16 +108,20 @@ object WomValueAnalysis {
           requiresEvaluation(rType, r)
 
       // Strip optional type
-      case (WdlTypes.T_Optional(t), WdlValues.V_OptionalValue(_, Some(w))) =>
+      case (WdlTypes.T_Optional(t), WdlValues.V_Optional(w)) =>
         requiresEvaluation(t, w)
       case (WdlTypes.T_Optional(t), w) =>
         requiresEvaluation(t, w)
-
-      // missing value
-      case (_, WdlValues.V_OptionalValue(_, None)) => false
+      case (t, WdlValues.V_Optional(w)) =>
+        requiresEvaluation(t, w)
 
       // struct -- make sure all of its fields do not require evaluation
-      case (WomCompositeType(typeMap: Map[String, WdlTypes.T], _), WomObject(valueMap, _)) =>
+      case (WdlTypes.T_Struct(sname1, typeMap: Map[String, WdlTypes.T]),
+            WdlValues.T_Struct(sname2, valueMap)) =>
+        if (sname1 != sname2) {
+          // should we throw an exception here?
+          return false
+        }
         typeMap.exists {
           case (name, t) =>
             val value: WdlValues.V = valueMap(name)
@@ -124,11 +129,26 @@ object WomValueAnalysis {
         }
 
       case (_, _) =>
-        throw new Exception(
-            s"""|Unsupported combination type=(${womType.stableName},${womType})
-                |value=(${value.toWdlValues.V_String}, ${value})""".stripMargin
-              .replaceAll("\n", " ")
-        )
+        // anything else require evaluation
+        true
+    }
+  }
+
+  // A trivial expression has no operators, it is either a constant WdlValues.V
+  // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
+  // is not.
+  def isTrivialExpression(expr: TAT.Expr): Boolean = {
+    expr match {
+      case _ : WdlValues.ValueNull => true
+      case _ : WdlValues.ValueNone => true
+      case _ : WdlValues.ValueBoolean => true
+      case _ : WdlValues.ValueInt => true
+      case _ : WdlValues.ValueFloat => true
+      case _ : WdlValues.ValueString => true
+      case _ : WdlValues.ValueFile => true
+      case _ : WdlValues.ValueDirectory => true
+      case _ : WdlValues.ExprIdentifier => true
+      case _  => false
     }
   }
 

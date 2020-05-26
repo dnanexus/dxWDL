@@ -644,12 +644,10 @@ case class WfFragRunner(wf: TAT.Workflow,
     val block = Block.getSubBlock(blockPath, wf.body)
     Utils.appletLog(
       verbose,
-      // Build a replacement for WomPretty...
-/*        s"""|Block ${blockPath} to execute:
-            |${WomPrettyPrintApproxWdl.block(block)}
-            |
- |""".stripMargin*/
-        s"Block ${blockPath} to execute"
+      s"""|Block ${blockPath} to execute:
+          |${WomPrettyPrintApproxWdl.block(block)}
+          |
+          |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,
