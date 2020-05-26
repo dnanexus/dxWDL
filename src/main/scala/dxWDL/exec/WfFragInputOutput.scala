@@ -10,7 +10,7 @@ import dxWDL.dx._
 import dxWDL.util._
 
 case class WfFragInput(blockPath: Vector[Int],
-                       env: Map[String, WdlValues.V],
+                       env: Map[String, (WdlTypes.T, WdlValues.V)],
                        execLinkInfo: Map[String, ExecLinkInfo])
 
 case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
@@ -72,7 +72,7 @@ case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
 
     // What remains are inputs from other stages. Convert from JSON
     // to wom values
-    val env: Map[String, WdlValues.V] = regularFields.map {
+    val env: Map[String, (WdlTypes.T, WdlValues.V)] = regularFields.map {
       case (name, jsValue) =>
         val fqn = Utils.revTransformVarName(name)
         val womType = fqnDictTypes.get(fqn) match {
@@ -80,7 +80,8 @@ case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
             throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
           case Some(x) => x
         }
-        fqn -> jobInputOutput.unpackJobInput(fqn, womType, jsValue)
+        val value = jobInputOutput.unpackJobInput(fqn, womType, jsValue)
+        fqn -> (womType, value)
     }.toMap
 
     WfFragInput(blockPath, env, execLinkInfo)

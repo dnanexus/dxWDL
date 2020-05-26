@@ -22,7 +22,7 @@ case class WfInputs(wf: TAT.Workflow,
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
-  def apply(inputs: Map[String, WdlValues.V]): Map[String, JsValue] = {
+  def apply(inputs: Map[String, (WdlTypes.T, WdlValues.V)]): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${inputs}")
     Utils.appletLog(

@@ -40,7 +40,9 @@ case class WfOutputs(wf: TAT.Workflow,
     evaluator.applyExprAndCoerce(expr, womType, env)
   }
 
-  def apply(envInitial: Map[String, WdlValues.V], addStatus: Boolean = false): Map[String, JsValue] = {
+  def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
+            addStatus: Boolean = false)
+      : Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
     val outputNodes: Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
