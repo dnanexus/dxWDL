@@ -4,7 +4,7 @@
 package dxWDL.exec
 
 import spray.json._
-import wdlTools.eval.WdlValues
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base.{Utils, Verbose}
@@ -31,10 +31,10 @@ case class WfOutputs(wf: TAT.Workflow,
                                            dxIoFunctions.config.tmpDir,
                                            dxIoFunctions.config.stdout,
                                            dxIoFunctions.config.stderr)
-    wdlTools.eval.Eval(evalOpts, evalCfg, doc.version.value, None)
+    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
-  private def evaluateWomExpression(expr: WomExpression,
+  private def evaluateWomExpression(expr: TAT.Expr,
                                     womType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
     evaluator.applyExprAndCoerce(expr, womType, env)

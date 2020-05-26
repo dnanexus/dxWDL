@@ -27,16 +27,17 @@ case class WfInputs(wf: TAT.Workflow,
     Utils.appletLog(verbose, s"Environment: ${inputs}")
     Utils.appletLog(
         verbose,
-        s"""|Artificial applet for unlocked workflow inputs
+/*        s"""|Artificial applet for unlocked workflow inputs
             |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
-            |""".stripMargin
+            |""".stripMargin*/
+        "Artificial applet for unlocked workflow inputs"
     )
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = inputs
       .map {
-        case (outputVarName, womValue) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+        case (outputVarName, (womType, womValue)) =>
+          val wvl = wdlVarLinksConverter.importFromWDL(womType, womValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList
