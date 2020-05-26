@@ -1,60 +1,17 @@
 package dxWDL.util
 
-import java.nio.file.{Paths}
 import wdlTools.eval.WdlValues
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil, WdlTypes}
+import wdlTools.eval.Coercion
 
 import dxWDL.base.Utils
 
 object WomValueAnalysis {
-  // These are used for evaluating if a WOM expression is constant.
-  // Ideally, we should not be using any of the IO functions, since
-  // these checks may be part of the compilation process.
-  private val tmpDir = Paths.get("/tmp")
-  private val dxPathConfig = DxPathConfig(homeDir = tmpDir,
-                                               metaDir = tmpDir,
-                                               inputFilesDir = tmpDir,
-                                               outputFilesDir = tmpDir,
-                                               tmpDir = tmpDir,
-                                               instanceTypeDB = null,
-                                               womSourceCodeEncoded = null,
-                                               stdout = null,
-                                               stderr = null,
-                                               dockerSubmitScript = null,
-                                               script = null,
-                                               rcPath = null,
-                                               dockerCid = null,
-                                               setupStreams = null,
-                                               dxdaManifest = null,
-                                               dxfuseManifest = null,
-                                               dxfuseMountpoint = null,
-                                               runnerTaskEnv = null,
-                                               streamAllFiles = false,
-                                               verbose = false)
-  private val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, 0)
 
-  private val evaluator : wdlTools.eval.Eval = {
-    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
-                                         antlr4Trace = false,
-                                         localDirectories = Vector.empty,
-                                         verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
-                                           dxIoFunctions.config.tmpDir,
-                                           dxIoFunctions.config.stdout,
-                                           dxIoFunctions.config.stderr)
-    wdlTools.eval.Eval(evalOpts, evalCfg, doc.version.value, None)
-  }
+  private class ExprNotConst(message: String) extends RuntimeException(message)
 
-  private def evaluateWomExpression(expr: TAT.Expr,
-                                    womType: WdlTypes.T,
-                                    env: Map[String, WdlValues.V]): Option[WdlValues.V] = {
-    try {
-      Some(evaluator.applyExprAndCoerce(expr, womType, env))
-    } catch {
-      case _ : Throwable => None
-    }
-  }
-
+  // Evaluate a constant wdl expression. Throw an exception if it isn't a constant.
+  //
   // Examine task foo:
   //
   // task foo {
@@ -70,7 +27,7 @@ object WomValueAnalysis {
   // read from disk, and uploaded to the platform.  A file can't
   // have a constant string as an input, this has to be a dnanexus
   // link.
-  def requiresEvaluation(womType: WdlTypes.T, value: WdlValues.V): Boolean = {
+  def evalConst(expr: TAT.Expr): WdlValues.V = {
     def isMutableFile(constantFileStr: String): Boolean = {
       constantFileStr match {
         case path if path.startsWith(Utils.DX_URL_PREFIX) =>
@@ -84,53 +41,39 @@ object WomValueAnalysis {
       }
     }
 
-    (womType, value) match {
+    expr match {
       // Base case: primitive types.
-      case (_, WdlValues.V_Null) => false
-      case (WdlTypes.T_Boolean, _)                   => false
-      case (WdlTypes.T_Int, _)                   => false
-      case (WdlTypes.T_Float, _)                     => false
-      case (WdlTypes.T_String, _)                    => false
-      case (WdlTypes.T_File, WdlValues.V_String(s))     => isMutableFile(s)
-      case (WdlTypes.T_File, WdlValues.V_File(s)) => isMutableFile(s)
+      case _ : TAT.ValueNull => WdlValues.V_Null
+      case _ : TAT.ValueNone => WdlValues.V_Null
+      case b : TAT.ValueBoolean =>  WdlValues.V_Boolean(b.value)
+      case i : TAT.ValueInt => WdlValues.V_Int(i.value)
+      case x : TAT.ValueFloat => WdlValues.V_Float(x.value)
+      case s : TAT.ValueString => WdlValues.V_String(s.value)
+      case fl : TAT.ValueFile =>
+        if (isMutableFile(fl.value))
+          throw new Exception(s"file ${fl.value} is mutable")
+        WdlValues.V_File(fl.value)
 
-      // arrays
-      case (WdlTypes.T_Array(t), WdlValues.V_Array(_, elems)) =>
-        elems.exists(e => requiresEvaluation(t, e))
-
-      // maps
-      case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(_, m)) =>
-        m.keys.exists(k => requiresEvaluation(keyType, k)) ||
-          m.values.exists(v => requiresEvaluation(valueType, v))
-
-      case (WdlTypes.T_Pair(lType, rType), WdlValues.V_Pair(l, r)) =>
-        requiresEvaluation(lType, l) ||
-          requiresEvaluation(rType, r)
-
-      // Strip optional type
-      case (WdlTypes.T_Optional(t), WdlValues.V_Optional(w)) =>
-        requiresEvaluation(t, w)
-      case (WdlTypes.T_Optional(t), w) =>
-        requiresEvaluation(t, w)
-      case (t, WdlValues.V_Optional(w)) =>
-        requiresEvaluation(t, w)
-
-      // struct -- make sure all of its fields do not require evaluation
-      case (WdlTypes.T_Struct(sname1, typeMap: Map[String, WdlTypes.T]),
-            WdlValues.T_Struct(sname2, valueMap)) =>
-        if (sname1 != sname2) {
-          // should we throw an exception here?
-          return false
+      // compound values
+      case TAT.ExprPair(l, r, _, _) =>
+        WdlValues.V_Pair(evalConst(l), evalConst(r))
+      case TAT.ExprArray(elems, _, _) =>
+        WdlValues.V_Array(elems.map(evalConst(_)).toVector)
+      case TAT.ExprMap(m, _, _) =>
+        WdlValues.V_Map(m.map{
+                          case (k, v) => evalConst(k) -> evalConst(v)
+                        })
+      case TAT.ExprObject(m, wdlType, _) =>
+        val m2 = m.map{
+          case (k, v) => k -> evalConst(v)
         }
-        typeMap.exists {
-          case (name, t) =>
-            val value: WdlValues.V = valueMap(name)
-            requiresEvaluation(t, value)
+        wdlType match {
+          case WdlTypes.T_Struct(name, _) => WdlValues.V_Struct(name, m2)
+          case WdlTypes.T_Object =>  WdlValues.V_Object(m2)
         }
-
-      case (_, _) =>
+      case expr =>
         // anything else require evaluation
-        true
+        throw new ExprNotConst(s"${TUtil.exprToString(expr)}")
     }
   }
 
@@ -139,15 +82,15 @@ object WomValueAnalysis {
   // is not.
   def isTrivialExpression(expr: TAT.Expr): Boolean = {
     expr match {
-      case _ : WdlValues.ValueNull => true
-      case _ : WdlValues.ValueNone => true
-      case _ : WdlValues.ValueBoolean => true
-      case _ : WdlValues.ValueInt => true
-      case _ : WdlValues.ValueFloat => true
-      case _ : WdlValues.ValueString => true
-      case _ : WdlValues.ValueFile => true
-      case _ : WdlValues.ValueDirectory => true
-      case _ : WdlValues.ExprIdentifier => true
+      case _ : TAT.ValueNull => true
+      case _ : TAT.ValueNone => true
+      case _ : TAT.ValueBoolean => true
+      case _ : TAT.ValueInt => true
+      case _ : TAT.ValueFloat => true
+      case _ : TAT.ValueString => true
+      case _ : TAT.ValueFile => true
+      case _ : TAT.ValueDirectory => true
+      case _ : TAT.ExprIdentifier => true
       case _  => false
     }
   }
@@ -155,25 +98,27 @@ object WomValueAnalysis {
   // Check if the WDL expression is a constant. If so, calculate and return it.
   // Otherwise, return None.
   //
-  def ifConstEval(womType: WdlTypes.T, expr: TAT.Expr): Option[WdlValues.V] = {
-    evaluateWomExpression(expr, womType, Map.empty) match {
-      case None => None
-      case Some(value: WdlValues.V) if requiresEvaluation(womType, value) =>
-        // There are WDL constants that require evaluation.
+  def ifConstEval(wdlType: WdlTypes.T, expr: TAT.Expr): Option[WdlValues.V] = {
+    try {
+      val value = evalConst(expr)
+      val coercion = new Coercion(None)
+      val valueWithCorrectType = coercion.coerceTo(wdlType, value, expr.text)
+      Some(valueWithCorrectType)
+    } catch {
+      case _ : ExprNotConst =>
         None
-      case Some(value) => Some(value)
     }
   }
 
-  def isExpressionConst(womType: WdlTypes.T, expr: TAT.Expr): Boolean = {
-    ifConstEval(womType, expr) match {
+  def isExpressionConst(wdlType: WdlTypes.T, expr: TAT.Expr): Boolean = {
+    ifConstEval(wdlType, expr) match {
       case None    => false
       case Some(_) => true
     }
   }
 
-  def evalConst(womType: WdlTypes.T, expr: TAT.Expr): WdlValues.V = {
-    ifConstEval(womType, expr) match {
+  def evalConst(wdlType: WdlTypes.T, expr: TAT.Expr): WdlValues.V = {
+    ifConstEval(wdlType, expr) match {
       case None           => throw new Exception(s"Expression ${expr} is not a WDL constant")
       case Some(wdlValue) => wdlValue
     }

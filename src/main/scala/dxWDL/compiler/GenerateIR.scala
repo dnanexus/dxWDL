@@ -6,7 +6,6 @@ import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes
 
 import dxWDL.base._
-import dxWDL.util._
 
 case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")

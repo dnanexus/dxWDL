@@ -1,6 +1,5 @@
 package dxWDL.base
 
-import com.typesafe.config.ConfigFactory
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
@@ -117,8 +116,6 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // Resolves for:
     // - Where we run from
     // - Where the file is
-    val allSources = HashMap.empty[String, WorkflowSource]
-    val adjunctFiles = HashMap.empty[String, Vector[Adjuncts.AdjunctFile]]
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath

@@ -9,7 +9,6 @@ package dxWDL.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
-import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base.Utils

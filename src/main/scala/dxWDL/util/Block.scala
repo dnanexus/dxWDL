@@ -193,7 +193,9 @@ object Block {
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = ???
+  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = {
+    WomValueAnalysis.isTrivialExpression(outputNode.expr)
+  }
 
   // is an output used directly as an input? For example, in the
   // small workflow below, 'lane' is used in such a manner.

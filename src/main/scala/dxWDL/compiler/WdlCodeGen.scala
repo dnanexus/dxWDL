@@ -6,7 +6,6 @@ import wdlTools.types.WdlTypes
 
 import dxWDL.base._
 import dxWDL.base.WomTypeSerialization.typeName
-import dxWDL.util._
 
 // A bunch of WDL source lines
 case class WdlCodeSnippet(value: String)

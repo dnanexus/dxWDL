@@ -30,6 +30,7 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wdlTools.eval.WdlValues
+//import wdlTools.types.{Util => TUtil}
 
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.dx._
@@ -285,9 +286,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return InstanceTypeReq(Some(iType), None, None, None, None)
       case Some(x) =>
         throw new Exception(
-            s"""|dxInstaceType has to evaluate to a
-                |WdlValues.V_String type ${x.toWdlValues.V_String}""".stripMargin
-              .replaceAll("\n", " ")
+          s"""|dxInstaceType has to evaluate to a
+              |String type ${x}""".stripMargin
+            .replaceAll("\n", " ")
         )
     }
 
@@ -338,7 +339,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val memMib: Double = memBytes / (1024 * 1024).toDouble
         Some(memMib.toInt)
       case Some(x) =>
-        throw new Exception(s"Memory has to evaluate to a WdlValues.V_String type ${x.toWdlValues.V_String}")
+        throw new Exception(s"Memory has to evaluate to a String type ${x}")
     }
 
     // Examples: "local-disk 1024 HDD"
@@ -359,7 +360,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           }
         Some(i)
       case Some(x) =>
-        throw new Exception(s"Disk space has to evaluate to a WdlValues.V_String type ${x.toWdlValues.V_String}")
+        throw new Exception(s"Disk space has to evaluate to a String type ${x}")
     }
 
     // Examples: "1", "12"
@@ -428,8 +429,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       }.toVector
     }
 
+    val availableField = "availableInstanceTypes"
     val req = JsObject("fields" ->
-                         JsObject("availableInstanceTypes" -> JsTrue))
+                         JsObject(availableField -> JsTrue))
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
@@ -596,12 +598,12 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // sort the prices from low to high, and then replace
     // with rank.
-    var crnt_price = 0
     val sortedInstances = db.instances.sortWith(_.price < _.price)
-    val opaque = sortedInstances.map { it =>
-      crnt_price += 1
-      it.copy(price = crnt_price)
+    val (_, opaqueInstances) = sortedInstances.foldLeft((1.0, Vector.empty[DxInstanceType])) {
+      case ((crntPrice, accu), instance) =>
+        val instanceOpq = instance.copy(price = crntPrice.toFloat)
+        (crntPrice + 1, accu :+ instanceOpq)
     }
-    InstanceTypeDB(true, opaque)
+    InstanceTypeDB(true, opaqueInstances)
   }
 }
