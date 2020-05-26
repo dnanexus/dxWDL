@@ -278,10 +278,14 @@ case class WfFragRunner(wf: TAT.Workflow,
                                   taskInputs: Map[TAT.InputDefinition, WdlValues.V]): Option[String] = {
     // Note: if none of these attributes are specified, the return value is None.
     val instanceAttrs = Set("memory", "disks", "cpu")
+    val attributes : Map[String, TAT.Expr] = task.runtime match {
+      case None => Map.empty
+      case Some(TAT.RuntimeSection(kvs, _)) => kvs
+    }
     val allConst = instanceAttrs.forall { attrName =>
-      task.runtimeAttributes.attributes.get(attrName) match {
+      attributes.get(attrName) match {
         case None       => true
-        case Some(expr) => WdlValues.VAnalysis.isExpressionConst(WdlTypes.T_String, expr)
+        case Some(expr) => WomValueAnalysis.isExpressionConst(WdlTypes.T_String, expr)
       }
     }
     if (allConst)
@@ -300,14 +304,14 @@ case class WfFragRunner(wf: TAT.Workflow,
                                     runtimeDebugLevel)
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
-      Utils.appletLog(verbose, s"Precalculated instance type for ${task.unqualifiedName}: ${iType}")
+      Utils.appletLog(verbose, s"Precalculated instance type for ${task.name}: ${iType}")
       Some(iType)
     } catch {
       case e: Throwable =>
         Utils.appletLog(
             verbose,
             s"""|Failed to precalculate the instance type for
-                |task ${task.unqualifiedName}.
+                |task ${task.name}.
                 |
                 |${e}
                 |""".stripMargin
@@ -383,11 +387,11 @@ case class WfFragRunner(wf: TAT.Workflow,
     // If this is a call to a task that computes the required instance type at runtime,
     // do the calculation right now. This saves a job relaunch down the road.
     val instanceType: Option[String] = taskDir.get(calleeName) match {
-        case Some(task) =>
-          val taskInputs = jobInputOutput.loadInputs(callInputsJSON, task)
-          preCalcInstanceType(task, taskInputs)
-        case (_, _) => None
-      }
+      case None => None
+      case Some(task) =>
+        val taskInputs = jobInputOutput.loadInputs(callInputsJSON, task)
+        preCalcInstanceType(task, taskInputs)
+    }
     execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)
   }
 
@@ -435,8 +439,8 @@ case class WfFragRunner(wf: TAT.Workflow,
   //   call zinc as inc3 { input: a = num}
   // }
   //
-  private def execConditionalCall(cnNond : TAT.Conditional,
-                                  call: CallNode,
+  private def execConditionalCall(cnNode : TAT.Conditional,
+                                  call: TAT.Call,
                                   env: Map[String, WdlValues.V]): Map[String, WdlVarLinks] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
@@ -502,8 +506,9 @@ case class WfFragRunner(wf: TAT.Workflow,
   // create a short, easy to read, description for a scatter element.
   private def readableNameForScatterItem(item: WdlValues.V): Option[String] = {
     item match {
-      case WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) =>
-        Some(item.toWdlValues.V_String)
+      case WdlValues.V_Boolean(b) => Some(b.toString)
+      case WdlValues.V_Int(i) => Some(i.toString)
+      case WdlValues.V_Float(x) => Some(x.toString)
       case WdlValues.V_String(s) =>
         Some(s)
       case WdlValues.V_File(path) =>
@@ -516,9 +521,9 @@ case class WfFragRunner(wf: TAT.Workflow,
           case (Some(ls1), Some(rs1)) => Some(s"(${ls1}, ${rs1})")
           case _                      => None
         }
-      case WdlValues.V_OptionalValue(_, Some(x)) =>
+      case WdlValues.V_Optional(x) =>
         readableNameForScatterItem(x)
-      case WdlValues.V_Array(_, arrValues) =>
+      case WdlValues.V_Array(arrValues) =>
         // Create a name by concatenating the initial elements of the array.
         // Limit the total size of the name.
         val arrBeginning = arrValues.slice(0, 3)
@@ -530,17 +535,11 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // Evaluate the collection on which we are scattering
-  private def evalScatterCollection(
-      sctNode: ScatterNode,
-      env: Map[String, WdlValues.V]
-  ): (ScatterVariableNode, Seq[WdlValues.V]) = {
-    // WDL has exactly one variable
-    assert(sctNode.scatterVariableNodes.size == 1)
-    val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+  private def evalScatterCollection(sct: TAT.Scatter,
+                                    env: Map[String, WdlValues.V])
+      : (String, Vector[WdlValues.V]) = {
     val collectionRaw: WdlValues.V =
-      evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
-                            WdlTypes.T_Array(svNode.womType),
-                            env)
+      evaluateWomExpression(sct.expr, sct.expr.wdlType, env)
     val collection: Seq[WdlValues.V] = collectionRaw match {
       case x: WdlValues.V_Array => x.value
       case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
@@ -555,21 +554,22 @@ case class WfFragRunner(wf: TAT.Workflow,
             .replaceAll("\n", " ")
       )
     }
-    (svNode, collection)
+    (sct.identifier, collection.toVector)
   }
 
   // Launch a subjob to collect and marshal the call results.
   // Remove the declarations already calculated
-  private def collectScatter(sctNode: ScatterNode,
+  private def collectScatter(sct: TAT.Scatter,
                              childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
-    val resultTypes: Map[String, WdlTypes.T_Array] = sctNode.outputMapping.map {
-      case scp: ScatterGathererPort =>
-        scp.identifier.localName.value -> scp.womType
-    }.toMap
-    val promises = collectSubJobs.launch(childJobs, resultTypes)
+    val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(sct.body)
+    val resultArrayTypes = resultTypes.map{
+      case (k, t) =>
+        k -> WdlTypes.T_Array(t, false)
+    }
+    val promises = collectSubJobs.launch(childJobs, resultArrayTypes)
     val promisesStr = promises.mkString("\n")
 
-    Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
+    Utils.appletLog(verbose, s"resultTypes=${resultArrayTypes}")
     Utils.appletLog(verbose, s"promises=${promisesStr}")
     promises
   }
