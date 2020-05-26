@@ -238,7 +238,7 @@ fragment comprises a series of declarations followed by (1) a call, or
 do not support variable lookup, expressions, or evaluation. This means
 that we need to launch a job even for a trivial expression. The
 compiler tries to batch such evaluations together, to minimize the
-number of jobs. For example, workflow `linear2` is split into three applets, the last two of which are fragments.
+number of jobs. For example, workflow `linear2` is split into three stages, the last two of which are fragments.
 
 ```wdl
 workflow linear2 {
