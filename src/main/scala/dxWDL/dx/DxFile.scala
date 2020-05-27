@@ -5,6 +5,7 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
+
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
@@ -106,23 +107,23 @@ object DxFile {
     val desc = descJs.asJsObject
       .getFields("project", "id", "name", "folder", "created", "modified", "archivalState") match {
       case Seq(JsString(project),
-               JsString(id),
-               JsString(name),
-               JsString(folder),
-               JsNumber(created),
-               JsNumber(modified),
-               JsString(archivalState)) =>
+      JsString(id),
+      JsString(name),
+      JsString(folder),
+      JsNumber(created),
+      JsNumber(modified),
+      JsString(archivalState)) =>
         DxFileDescribe(project,
-                       id,
-                       name,
-                       folder,
-                       created.toLong,
-                       modified.toLong,
-                       0,
-                       DxArchivalState.fromString(archivalState),
-                       None,
-                       None,
-                       None)
+          id,
+          name,
+          folder,
+          created.toLong,
+          modified.toLong,
+          0,
+          DxArchivalState.fromString(archivalState),
+          None,
+          None,
+          None)
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")
     }
@@ -132,7 +133,7 @@ object DxFile {
     val sizeRaw = descJs.asJsObject.fields.get("size").getOrElse(JsNumber(0))
     val size = sizeRaw match {
       case JsNumber(x) => x.toLong
-      case other       => throw new Exception(s"size ${other} is not a number")
+      case other => throw new Exception(s"size ${other} is not a number")
     }
 
     desc.copy(size = size)
@@ -161,14 +162,16 @@ object DxFile {
     }.toMap
   }
 
+
+
   // Describe a large number of platform objects in bulk.
   private def submitRequest(objs: Vector[DxFile],
                             extraFields: Vector[String]): Map[DxFile, DxFileDescribe] = {
     val requestFields = Map(
-        "objects" ->
-          JsArray(objs.map { x: DxObject =>
-            JsString(x.id)
-          })
+      "id" ->
+        JsArray(objs.map { x: DxFile =>
+          JsString(x.id)
+        })
     )
 
     // extra describe options, if specified
@@ -180,21 +183,60 @@ object DxFile {
           fieldName -> JsBoolean(true)
         }.toMap
         Map(
-            "classDescribeOptions" -> JsObject(
-                "*" -> JsObject(m)
-            )
+          "classDescribeOptions" -> JsObject(
+            "*" -> JsObject(m)
+          )
         )
       }
-    val request = JsObject(requestFields ++ extraDescribeFields)
 
-    val response = DXAPI.systemDescribeDataObjects(DxUtils.jsonNodeOfJsValue(request),
-                                                   classOf[JsonNode],
-                                                   DxUtils.dxEnv)
-    val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val resultsPerObj: Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x
-      case other            => throw new Exception(s"API call returned invalid data ${other}")
+    val isSameProject = objs.head.project.isDefined && objs.forall(_.project == objs.head.project)
+    val projectScope: Map[String, JsValue] =
+      if (!isSameProject) {
+        Map.empty
+      } else {
+        Map("scope" -> JsObject({
+          "project" -> JsString(objs.head.project.get.id)
+        }))
+      }
+    var request: JsObject = JsObject(requestFields ++ extraDescribeFields ++ projectScope + ("describe" -> JsTrue) + ("limit" -> JsNumber(1)))
+//    var request: JsObject = JsObject(requestFields ++ extraDescribeFields ++ projectScope + ("describe" -> JsTrue) )
+    val repJs: JsObject =
+    {
+      var lastResp: JsonNode = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+      var resp: JsObject = DxUtils.jsValueOfJsonNode(lastResp).asJsObject
+
+      while(!lastResp.get("next").isNull) {
+        request = JsObject(request.fields + ("starting" -> lastResp.get("next").toString.parseJson))
+        lastResp = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
+//        val results = DxUtils.mergeJsObjects(resp, DxUtils.jsValueOfJsonNode(lastResp).asJsObject)
+//        print("\n ______\n")
+//
+//        print(resp)
+//        resp  =  DxUtils.mergeJsObjects(resp, DxUtils.jsValueOfJsonNode(lastResp).asJsObject)
+        resp  =  JsObject(
+          "next" -> DxUtils.jsValueOfJsonNode(lastResp).asJsObject.fields.get("next").get,
+          //          "results" -> JsArray((resp.getFields("results") ++ DxUtils.jsValueOfJsonNode(lastResp).asJsObject.fields.get("results")).toVector)
+          //           https://github.com/spray/spray-json/issues/72 .. spray library cannot merge objects... :/
+          "results" -> DxUtils.mergeJsArrays(JsArray(resp.fields.get("results").get), JsArray(DxUtils.jsValueOfJsonNode(lastResp).asJsObject.fields.get("results").get))
+          //          "results" ->  DxUtils.jsValueOfJsonNode(lastResp).asJsObject.fields.get("results").get
+        )
+      }
+      print(resp)
+      System.exit(23)
+      resp
+
     }
+
+    print(repJs)
+    System.exit(2)
+    val resultsPerObj: Vector[JsValue] = repJs.fields.get("results") match {
+      case Some(JsArray(x)) => x
+      case other => throw new Exception(s"API call returned invalid data ${other}")
+    }
+    print("\nRESULTS PER OBJ\n")
+
+    print(resultsPerObj)
+    System.exit(5)
     resultsPerObj.zipWithIndex.map {
       case (jsv, i) =>
         val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
@@ -234,15 +276,80 @@ object DxFile {
     val extraFieldsStr = extraFields
       .map {
         case Field.Details => "details"
-        case Field.Parts   => "parts"
+        case Field.Parts => "parts"
       }
       .toSet
       .toVector
-
+    if(false) submitRequest(Vector.empty, Vector.empty)
+    if(false) old_submitRequest(Vector.empty, Vector.empty)
     // iterate on the ranges
     slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
       case (accu, objRange) =>
         accu ++ submitRequest(objRange.toVector, extraFieldsStr)
     }
+  }
+
+
+  // __ OLD
+
+  // Describe a large number of platform objects in bulk.
+  private def old_submitRequest(objs: Vector[DxFile],
+                            extraFields: Vector[String]): Map[DxFile, DxFileDescribe] = {
+    val requestFields = Map(
+      "objects" ->
+        JsArray(objs.map { x: DxObject =>
+          JsString(x.id)
+        })
+    )
+
+    // extra describe options, if specified
+    val extraDescribeFields: Map[String, JsValue] =
+      if (extraFields.isEmpty) {
+        Map.empty
+      } else {
+        val m = extraFields.map { fieldName =>
+          fieldName -> JsBoolean(true)
+        }.toMap
+        Map(
+          "classDescribeOptions" -> JsObject(
+            "*" -> JsObject(m)
+          )
+        )
+      }
+    val request = JsObject(requestFields ++ extraDescribeFields)
+
+    val response = DXAPI.systemDescribeDataObjects(DxUtils.jsonNodeOfJsValue(request),
+      classOf[JsonNode],
+      DxUtils.dxEnv)
+    val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
+    print("\n ____ \n ")
+    print(repJs.asJsObject)
+    System.exit(6)
+    val resultsPerObj: Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
+      case Some(JsArray(x)) => x
+      case other => throw new Exception(s"API call returned invalid data ${other}")
+    }
+    print(resultsPerObj)
+    resultsPerObj.zipWithIndex.map {
+      case (jsv, i) =>
+        val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
+          case None =>
+            throw new ResourceNotFoundException(s""""${objs(i).id}" is not a recognized ID""", 404)
+          case Some(descJs) =>
+            val dxDesc = parseJsonFileDesribe(descJs)
+
+            // The parts may be empty, only files have it, and we don't always ask for it.
+            val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
+            val details = descJs.asJsObject.fields.get("details")
+            val dxDescFull = dxDesc.copy(parts = parts, details = details)
+
+            // This could be a container, not a project.
+            val dxContainer = DxProject.getInstance(dxDesc.project)
+            val dxFile = DxFile.getInstance(dxDesc.id, dxContainer)
+
+            (dxFile, dxDescFull)
+        }
+        dxFile -> dxFullDesc
+    }.toMap
   }
 }

@@ -108,6 +108,43 @@ object DxUtils {
     jsNode.toString().parseJson
   }
 
+  def mergeJsObjects(value1: JsObject, value2: JsObject):JsObject = {
+    (value1, value2) match {
+      case (obj1: JsObject, obj2: JsObject) => {
+        val map1 = obj1.fields
+        val map2 = obj2.fields
+        val diff1 = map1.keySet.diff(map2.keySet)
+        val diff2 = map2.keySet.diff(map1.keySet)
+        val intersect = map1.keySet.intersect(map2.keySet)
+        val merged = intersect.map { key =>
+          val val1 = map1(key)
+          val val2 = map2(key)
+          (val1, val2) match {
+            case (val1: JsObject, val2: JsObject) => (key -> mergeJsObjects(val1, val2))
+            case (_, val2) => (key -> val2)
+          }
+        }.toMap
+        val distinct = map1.filter(t => diff1(t._1)) ++ map2.filter(t => diff2(t._1))
+        JsObject(distinct ++ merged)
+      }
+      case (_, val2) => val2
+    }
+  }
+
+  def mergeJsArrays(value1: JsArray, value2: JsArray): JsArray = {
+    (value1, value2) match {
+      case (val1: JsArray, val2: JsArray) => {
+        val el1 = val1.elements
+        val el2 = val2.elements
+        val all_el = el1 ++ el2
+        JsArray(all_el)
+      }
+      case (_, val2) => val2
+    }
+  }
+
+
+
   // Create a dx link to a field in an execution. The execution could
   // be a job or an analysis.
   def makeEBOR(dxExec: DxExecution, fieldName: String): JsValue = {

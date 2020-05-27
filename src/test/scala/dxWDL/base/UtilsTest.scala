@@ -1,5 +1,8 @@
 package dxWDL.base
 
+import dxWDL.dx.{DxProject, DxUtils}
+//import dxWDL.util.InstanceTypeDB
+import dxWDL.dx.DxFile
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 
@@ -41,4 +44,24 @@ class UtilsTest extends FlatSpec with Matchers {
 
     Utils.buildLimitedSizeName(Vector.empty, 4) should be("[]")
   }
+
+  it should "query correctly" in {
+    DxFile.getInstance("file-Fq5jpkQ0ffPKB7gV3g13KyB8")
+//    val file = DxFile("file-Fq5jpkQ0ffPKB7gV3g13KyB8")
+    val project :Option[DxProject] = Option(DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v"))
+//    val project2 :Option[DxProject] = Option(DxProject("project-FfQ65z003g2BK9yY0zxg5B2v"))
+    val people = Vector(
+        DxFile("file-Fq5k02j0ffP5JXfB3bKx4PXg",project),
+        DxFile("file-Fq5k0280ffPKp6vk3fp686fY",project),
+      DxFile("file-Fq5k02Q0ffPKp6vk3fp686fb",project),
+      DxFile("file-Fq5k02Q0ffPKp6vk3fp686fb",Option.empty),
+      //        DxFile("file-Fpjg4XQ08kGzfGk9748xK1Xq",project2),
+    )
+    DxFile.bulkDescribe(people)
+
+  }
+
 }
+
+
+
