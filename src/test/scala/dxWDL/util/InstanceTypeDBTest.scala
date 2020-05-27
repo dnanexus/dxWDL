@@ -3,9 +3,9 @@ package dxWDL.util
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.values._
-
 import dxWDL.base._
 import dxWDL.base.Utils
+import dxWDL.dx.DxProject
 
 class InstanceTypeDBTest extends FlatSpec with Matchers {
 
@@ -414,5 +414,18 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
       // No non-GPU instance has 8 cpus
       db.chooseAttrs(None, None, Some(8), Some(false))
     }
+  }
+
+  it should "Query returns correct pricing models for org and user" in {
+    val userBilltoProject = DxProject("project-Fq78Pz80jfVXvy7fJV2jzJfB")
+    val orgBilltoProject = DxProject("project-Fq78JVj09vZZK3x3J66QXpf6")
+    val userQueryHash = "828185749"
+    val orgQueryHash = "653205030"
+
+    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on=false, quiet=true, null)).hashCode()
+    val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on=false, quiet=true, null)).hashCode()
+
+    assert(userResult.toString == userQueryHash)
+    assert(orgResult.toString == orgQueryHash)
   }
 }
