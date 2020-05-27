@@ -123,7 +123,7 @@ case class GenerateIRTask(verbose: Verbose,
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
       case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
-        Some(IR.TaskAttrProperties(fields.mapValues {
+        Some(IR.TaskAttrProperties(fields.view.mapValues {
           case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
                                    }.toMap))
@@ -194,8 +194,8 @@ case class GenerateIRTask(verbose: Verbose,
     val hintKeys = Set(IR.HINT_ACCESS, IR.HINT_IGNORE_REUSE, IR.HINT_RESTART, IR.HINT_TIMEOUT)
 
     hints
-      .filterKeys(hintKeys)
-      .mapValues(evalWomExpression)
+      .view.filterKeys(hintKeys).toMap
+      .view.mapValues(evalWomExpression).toMap
       .flatMap {
         case (IR.HINT_ACCESS, WdlValues.V_Object(values)) =>
           Some(

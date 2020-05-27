@@ -4,14 +4,17 @@ import java.nio.file.Path
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 // Exception used for AppInternError
-class AppInternalException private (ex: RuntimeException) extends RuntimeException(ex) {
-  def this(message: String) = this(new RuntimeException(message))
-}
+class AppInternalException(s : String) extends RuntimeException(s)
 
 // Exception used for AppError
-class AppException private (ex: RuntimeException) extends RuntimeException(ex) {
-  def this(message: String) = this(new RuntimeException(message))
-}
+class AppException(s : String) extends RuntimeException(s)
+
+class PermissionDeniedException(s: String) extends Exception(s)
+
+class InvalidInputException(s: String) extends Exception(s)
+
+class IllegalArgumentException(s: String) extends Exception(s)
+
 
 object IORef extends Enumeration {
   val Input, Output = Value

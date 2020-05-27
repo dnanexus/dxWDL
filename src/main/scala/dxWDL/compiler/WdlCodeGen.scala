@@ -102,6 +102,9 @@ case class WdlCodeGen(verbose: Verbose,
           s"${k} : ${wdlString(v)}"
         }.toVector
         s"""object { ${membersStr.mkString(", ")} }"""
+
+      case other =>
+        throw new Exception(s"Unhandled value ${other}")
     }
   }
 

@@ -708,12 +708,12 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
       case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
-        Some(IR.WorkflowAttrProperties(fields.mapValues {
+        Some(IR.WorkflowAttrProperties(fields.view.mapValues {
           case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
         }.toMap))
       case (IR.META_CALL_NAMES, TAT.MetaValueObject(fields)) =>
-        Some(IR.WorkflowAttrCallNames(fields.mapValues {
+        Some(IR.WorkflowAttrCallNames(fields.view.mapValues {
           case TAT.MetaValueString(text) => text
           case other                        => throw new Exception(s"Invalid call name value: ${other}")
         }.toMap))

@@ -27,8 +27,8 @@ object ExecLinkInfo {
     }.toMap
     JsObject(
         "name" -> JsString(ali.name),
-        "inputs" -> JsObject(TreeMap(appInputDefs.toArray: _*)),
-        "outputs" -> JsObject(TreeMap(appOutputDefs.toArray: _*)),
+        "inputs" -> JsObject(appInputDefs.to(TreeMap)),
+        "outputs" -> JsObject(appOutputDefs.to(TreeMap)),
         "id" -> JsString(ali.dxExec.getId)
     )
   }

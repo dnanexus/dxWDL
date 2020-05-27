@@ -87,8 +87,6 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // dive into the imported documents and fold them into the top-level
     // document
     imports.foldLeft(topLevelBInfo) {
-      case (accu : BInfo, imp) if imp.doc == None =>
-        accu
       case (accu : BInfo, imp) =>
         val flatImpBInfo = dfsFlatten(imp.doc)
         BInfo(

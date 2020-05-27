@@ -749,7 +749,7 @@ case class Native(dxWDLrtId: Option[String],
       case TAT.MetaValueInt(i)     => JsNumber(i)
       case TAT.MetaValueFloat(f)       => JsNumber(f)
       case TAT.MetaValueString(text)   => JsString(text)
-      case TAT.MetaValueObject(fields) => JsObject(fields.mapValues(metaValueToJs).toMap)
+      case TAT.MetaValueObject(fields) => JsObject(fields.view.mapValues(metaValueToJs).toMap)
       case TAT.MetaValueArray(array)   => JsArray(array.map(metaValueToJs).toVector)
     }
   }
@@ -761,7 +761,7 @@ case class Native(dxWDLrtId: Option[String],
       case f: Double    => JsNumber(f)
       case b: Boolean   => JsBoolean(b)
       case a: Vector[_] => JsArray(a.map(anyToJs))
-      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs).toMap)
+      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].view.mapValues(anyToJs).toMap)
       case other        => throw new EOFException(s"Unsupported value ${other}")
     }
   }
@@ -792,9 +792,9 @@ case class Native(dxWDLrtId: Option[String],
               // merge default and user-specified tags
               Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
             case IR.TaskAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs).toMap))
+              Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
             case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs).toMap))
+              Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
             //case IR.TaskAttrOpenSource(isOpenSource) =>
@@ -1341,9 +1341,9 @@ case class Native(dxWDLrtId: Option[String],
             case IR.WorkflowAttrTags(array) =>
               Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
             case IR.WorkflowAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs).toMap))
+              Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
             case IR.WorkflowAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs).toMap))
+              Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
             // These will be implemented in a future PR

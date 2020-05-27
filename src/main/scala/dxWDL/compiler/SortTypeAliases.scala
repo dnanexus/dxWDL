@@ -22,8 +22,6 @@ case class SortTypeAliases(verbose: Verbose) {
         dependencies(memberType)
       case WdlTypes.T_Map(keyType, valueType) =>
         dependencies(keyType) ++ dependencies(valueType)
-      case WdlTypes.T_Array(memberType, _) =>
-        dependencies(memberType)
       case WdlTypes.T_Optional(memberType) =>
         dependencies(memberType)
       case WdlTypes.T_Pair(lType, rType) =>
@@ -68,8 +66,9 @@ case class SortTypeAliases(verbose: Verbose) {
   }
 
   private def getNames(ta: Vector[WdlTypes.T]): Vector[String] = {
-    ta.map {
-      case WdlTypes.T_Struct(name, _) => name
+    ta.flatMap {
+      case WdlTypes.T_Struct(name, _) => Some(name)
+      case _ => None
     }.toVector
   }
 

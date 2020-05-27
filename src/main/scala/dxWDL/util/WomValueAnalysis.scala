@@ -69,7 +69,7 @@ object WomValueAnalysis {
         }
         wdlType match {
           case WdlTypes.T_Struct(name, _) => WdlValues.V_Struct(name, m2)
-          case WdlTypes.T_Object =>  WdlValues.V_Object(m2)
+          case _  =>  WdlValues.V_Object(m2)
         }
       case expr =>
         // anything else require evaluation

@@ -6,7 +6,7 @@ import java.nio.charset.{StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import java.util.zip.{GZIPOutputStream, GZIPInputStream}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.immutable.TreeMap
 import scala.concurrent._
 import spray.json._
@@ -14,12 +14,6 @@ import ExecutionContext.Implicits.global
 import scala.sys.process._
 
 import wdlTools.types.WdlTypes
-
-class PermissionDeniedException(s: String) extends Exception(s) {}
-
-class InvalidInputException(s: String) extends Exception(s) {}
-
-class IllegalArgumentException(s: String) extends Exception(s) {}
 
 object Utils {
   val APPLET_LOG_MSG_LIMIT = 1000
@@ -333,11 +327,12 @@ object Utils {
   def makeDeterministic(jsValue: JsValue): JsValue = {
     jsValue match {
       case JsObject(m: Map[String, JsValue]) =>
-        val m2 = m.map {
-          case (k, v) => k -> makeDeterministic(v)
-        }.toMap
-        val tree = TreeMap(m2.toArray: _*)
-        JsObject(tree)
+        // deterministically sort maps by using a tree-map instead
+        // a hash-map
+        val mTree = m
+          .map { case (k, v) => k -> makeDeterministic(v) }
+          .to(TreeMap)
+        JsObject(mTree)
       case other =>
         other
     }

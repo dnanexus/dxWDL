@@ -300,6 +300,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                 // }
                 // We also support two aliases, dx_stream and localizationOptional
                 value
+                  .view
                   .filterKeys(
                       Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
                   )

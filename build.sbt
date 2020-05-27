@@ -52,18 +52,22 @@ assemblyMergeStrategy in assembly := customMergeStrategy.value
 //resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
 libraryDependencies ++= Seq(
-    // antlr4 lexer + parser
-    "org.antlr" % "antlr4" % "4.8",
+  // antlr4 lexer + parser
+  "org.antlr" % "antlr4" % "4.8",
 
   // JSON jackson parser
   "com.fasterxml.jackson.core" % "jackson-databind" % "2.11.0",
 
-    "io.spray" %% "spray-json" % "1.3.5",
-    "com.typesafe" % "config" % "1.3.3",
+  "io.spray" %% "spray-json" % "1.3.5",
+  "com.typesafe" % "config" % "1.3.3",
 
-    //---------- Test libraries -------------------//
-    "org.scalactic" % "scalactic_2.13" % "3.1.1",
-    "org.scalatest" % "scalatest_2.13" % "3.1.1" % "test"
+  // http support and libraries used in dxjava remains
+  "com.google.guava" % "guava" % "18.0",
+  "org.apache.httpcomponents" % "httpclient" % "4.5",
+
+  //---------- Test libraries -------------------//
+  "org.scalactic" % "scalactic_2.13" % "3.1.1",
+  "org.scalatest" % "scalatest_2.13" % "3.1.1" % "test"
 )
 
 // If an exception is thrown during tests, show the full

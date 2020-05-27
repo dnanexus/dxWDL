@@ -1062,7 +1062,7 @@ object Main extends App {
         |    -verboseKey [module]     Detailed information for a specific module
         |""".stripMargin
 
-  val termination = dispatchCommand(args)
+  val termination = dispatchCommand(args.toSeq)
 
   termination match {
     case SuccessfulTermination(s) =>
