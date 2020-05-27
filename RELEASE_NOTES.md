@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.47.1 26-May-2020
+- Log dxda and dxfuse version in applet execution
+
 ## 1.47  14-May-2020
 - Improvements to `exectree` option
 - Upgrade dxfuse to v0.22.2
