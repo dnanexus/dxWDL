@@ -377,6 +377,9 @@ case class Native(dxWDLrtId: Option[String],
     s"""|    # evaluate input arguments, and download input files
         |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
         |
+        |    echo "Using dxda version: $$(dx-download-agent version)"
+        |    echo "Using dxfuse version: $$(dxfuse -version)"
+        |
         |    # run the dx-download-agent (dxda) on a manifest of files
         |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
         |       head -n 20 ${dxPathConfig.dxdaManifest}
