@@ -2,50 +2,57 @@ package dxWDL.base
 
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wom.values._
-import wom.types._
+import wdlTools.eval.WdlValues._
+import wdlTools.types.WdlTypes._
 
 class WomValueSerializationTest extends FlatSpec with Matchers {
   val personType =
-    WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), Some("Person"))
-  val houseType = WomCompositeType(
-      Map("street" -> WomStringType, "zip code" -> WomIntegerType, "owner" -> personType),
-      Some("House")
-  )
-  val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
+    T_Struct("Person",
+                      Map("name" -> T_String, "age" -> T_Int))
+  val houseType = T_Struct("House",
+                           Map("street" -> T_String,
+                               "zip code" -> T_Int,
+                               "owner" -> personType))
+  val typeAliases: Map[String, T] = Map("Person" -> personType, "House" -> houseType)
   val valueSerializer = WomValueSerialization(typeAliases)
 
-  val valueTestCases: List[WomValue] = List(
+  val valueTestCases: List[(T, V)] = List(
       // primitive types
-      WomBoolean(false),
-      WomInteger(12),
-      WomFloat(1.4),
-      WomString("charming"),
-      WomSingleFile("/tmp/foo.txg"),
-      // arrays
-      WomArray(WomArrayType(WomIntegerType), Vector(WomInteger(4), WomInteger(5))),
-      // compounds
-      WomOptionalValue(WomIntegerType, Some(WomInteger(13))),
-      WomPair(WomString("A"), WomArray(WomArrayType(WomStringType), Vector.empty)),
-      // map with string keys
-      WomMap(
-          WomMapType(WomStringType, WomIntegerType),
-          Map(WomString("A") -> WomInteger(1),
-              WomString("C") -> WomInteger(4),
-              WomString("G") -> WomInteger(5),
-              WomString("T") -> WomInteger(5))
-      ),
-      // map with non-string keys
-      WomMap(WomMapType(WomIntegerType, WomSingleFileType),
-             Map(WomInteger(1) -> WomSingleFile("/tmp/A.txt"),
-                 WomInteger(3) -> WomSingleFile("/tmp/B.txt"))),
+    (T_Boolean, V_Boolean(false)),
+    (T_Int, V_Int(12)),
+    (T_Float, V_Float(1.4)),
+    (T_String, V_String("charming")),
+    (T_File, V_File("/tmp/foo.txg")),
+
+    // arrays
+    (T_Array(T_Int, false), V_Array(Vector(V_Int(4), V_Int(5)))),
+
+    // compounds
+    (T_Optional(T_Int), V_Optional(V_Int(13))),
+    (T_Pair(T_String, T_Array(T_Int)), V_Pair(V_String("A"), V_Array(Vector.empty))),
+
+    // map with string keys
+    (T_Map(T_String, T_Int),
+     V_Map(Map(
+             V_String("A") -> V_Int(1),
+             V_String("C") -> V_Int(4),
+             V_String("G") -> V_Int(5),
+             V_String("T") -> V_Int(5))
+     )),
+
+    // map with non-string keys
+    (T_Map(T_Int, T_File),
+     V_Map(Map(V_Int(1) -> V_File("/tmp/A.txt"),
+               V_Int(3) -> V_File("/tmp/B.txt")))),
+
       // structs
-      WomObject(Map("name" -> WomString("Bradly"), "age" -> WomInteger(42)), personType)
+    (T_Struct("Person", Map("name" -> T_String, "age" -> T_Int)),
+     V_Struct("Person", Map("name" -> V_String("Bradly"), "age" -> V_Int(42))))
   )
 
   it should "work on a variety of values" in {
-    for (v <- valueTestCases) {
-      valueSerializer.fromJSON(valueSerializer.toJSON(v)) should be(v)
+    for ((t, v) <- valueTestCases) {
+      valueSerializer.fromJSON(valueSerializer.toJSON(t, v)) should be(v)
     }
   }
 
@@ -54,13 +61,6 @@ class WomValueSerializationTest extends FlatSpec with Matchers {
 
     assertThrows[Exception] {
       valueSerializer.fromJSON(badJson)
-    }
-  }
-
-  it should "detect bad objects" in {
-    val invalidObject = WomObject(Map("name" -> WomString("Bradly"), "age" -> WomInteger(42)))
-    assertThrows[Exception] {
-      valueSerializer.toJSON(invalidObject)
     }
   }
 }

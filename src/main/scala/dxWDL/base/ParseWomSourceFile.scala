@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
-import wdlTools.syntax.{Parsers, WdlVersion}
+import wdlTools.syntax.Parsers
 import wdlTools.util.{
   Options,
   SourceCode => WdlSourceCode,
@@ -96,14 +96,6 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
   }
 
-  private def languageFromVersion(version : WdlVersion): Language.Value = {
-    version match {
-      case WdlVersion.Draft_2  => Language.WDLvDraft2
-      case WdlVersion.V1       => Language.WDLv1_0
-      case other               => throw new Exception(s"Unsupported dielect ${other}")
-    }
-  }
-
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source code; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
@@ -148,7 +140,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // merge everything into one bundle.
     val flatInfo : BInfo = dfsFlatten(tMainDoc)
 
-    (languageFromVersion(tMainDoc.version.value),
+    (Language.fromWdlVersion(tMainDoc.version.value),
      WomBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      flatInfo.sources,
      flatInfo.adjunctFiles)
@@ -172,7 +164,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     language match {
       case None => ()
       case Some(requiredLang) =>
-        val docLang = languageFromVersion(tDoc.version.value)
+        val docLang = Language.fromWdlVersion(tDoc.version.value)
         if (docLang != requiredLang)
           throw new Exception(s"document has wrong version ${docLang}, should be ${requiredLang}")
     }

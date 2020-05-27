@@ -12,7 +12,7 @@ import dxWDL.Main
 import dxWDL.Main.SuccessfulTermination
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.dx._
-import dxWDL.util.ParseWomSourceFile
+import dxWDL.base.ParseWomSourceFile
 import spray.json._
 
 // This test module requires being logged in to the platform.
@@ -1049,10 +1049,10 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
               "hours" -> JsNumber(0),
               "minutes" -> JsNumber(0)
           )
-          JsObject(fields.mapValues {
+          JsObject(fields.view.mapValues {
             case JsObject(inner) => JsObject(defaults ++ inner)
             case _               => throw new Exception("Expected JsObject")
-          })
+          }.toMap)
         case _ => throw new Exception("Expected JsObject")
       }
     }

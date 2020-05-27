@@ -5,7 +5,7 @@ import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wom.values._
+import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
 
 class ExtrasTest extends FlatSpec with Matchers {
@@ -461,12 +461,12 @@ class ExtrasTest extends FlatSpec with Matchers {
          |}""".stripMargin.parseJson
 
     val extras = Extras.parse(runtimeAttrs, verbose)
-    val dockerOpt: Option[WomValue] = extras.defaultRuntimeAttributes.m.get("docker")
+    val dockerOpt: Option[WdlValues.V] = extras.defaultRuntimeAttributes.m.get("docker")
     dockerOpt match {
       case None =>
         throw new Exception("Wrong type for dockerOpt")
       case Some(docker) =>
-        docker should equal(WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+        docker should equal(WdlValues.V_String("quay.io/encode-dcc/atac-seq-pipeline:v1"))
     }
   }
 

@@ -2,7 +2,7 @@ package dxWDL.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wom.values._
+import wdlTools.eval.WdlValues._
 
 import dxWDL.base._
 import dxWDL.base.Utils
@@ -156,43 +156,43 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     db.apply(
         InstanceTypeDB.parse(None,
-                             Some(WomString("3 GB")),
-                             Some(WomString("local-disk 10 HDD")),
-                             Some(WomString("1")),
+                             Some(V_String("3 GB")),
+                             Some(V_String("local-disk 10 HDD")),
+                             Some(V_String("1")),
                              None)
     ) should equal("mem1_ssd1_x2")
     db.apply(
         InstanceTypeDB.parse(None,
-                             Some(WomString("37 GB")),
-                             Some(WomString("local-disk 10 HDD")),
-                             Some(WomString("6")),
+                             Some(V_String("37 GB")),
+                             Some(V_String("local-disk 10 HDD")),
+                             Some(V_String("6")),
                              None)
     ) should equal("mem3_ssd1_x8")
     db.apply(
         InstanceTypeDB
-          .parse(None, Some(WomString("2 GB")), Some(WomString("local-disk 100 HDD")), None, None)
+          .parse(None, Some(V_String("2 GB")), Some(V_String("local-disk 100 HDD")), None, None)
     ) should equal("mem1_ssd1_x8")
     db.apply(
         InstanceTypeDB
-          .parse(None, Some(WomString("2.1GB")), Some(WomString("local-disk 100 HDD")), None, None)
+          .parse(None, Some(V_String("2.1GB")), Some(V_String("local-disk 100 HDD")), None, None)
     ) should equal("mem1_ssd1_x8")
 
-    db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x8")), None, None, None, None)) should equal(
+    db.apply(InstanceTypeDB.parse(Some(V_String("mem3_ssd1_x8")), None, None, None, None)) should equal(
         "mem3_ssd1_x8"
     )
 
     db.apply(
         InstanceTypeDB.parse(None,
-                             Some(WomString("235 GB")),
-                             Some(WomString("local-disk 550 HDD")),
-                             Some(WomString("32")),
+                             Some(V_String("235 GB")),
+                             Some(V_String("local-disk 550 HDD")),
+                             Some(V_String("32")),
                              None)
     ) should equal("mem3_ssd1_x32")
-    db.apply(InstanceTypeDB.parse(Some(WomString("mem3_ssd1_x32")), None, None, None, None)) should equal(
+    db.apply(InstanceTypeDB.parse(Some(V_String("mem3_ssd1_x32")), None, None, None, None)) should equal(
         "mem3_ssd1_x32"
     )
 
-    db.apply(InstanceTypeDB.parse(None, None, None, Some(WomString("8")), None)) should equal(
+    db.apply(InstanceTypeDB.parse(None, None, None, Some(V_String("8")), None)) should equal(
         "mem1_ssd1_x8"
     )
   }
@@ -238,75 +238,75 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
   it should "catch parsing errors" in {
     assertThrows[Exception] {
       // illegal request format
-      InstanceTypeDB.parse(Some(WomInteger(4)), None, None, None, None)
+      InstanceTypeDB.parse(Some(V_Int(4)), None, None, None, None)
     }
 
     // memory specification
-    InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("230MB")), None, None, None) shouldBe
       InstanceTypeReq(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None, None)
 
-    InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("230MiB")), None, None, None) shouldBe
       InstanceTypeReq(None, Some(230), None, None, None)
 
-    InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("230GB")), None, None, None) shouldBe
       InstanceTypeReq(None,
                       Some(((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
                       None,
                       None,
                       None)
 
-    InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("230GiB")), None, None, None) shouldBe
       InstanceTypeReq(None, Some(230 * 1024), None, None, None)
 
-    InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("1000 TB")), None, None, None) shouldBe
       InstanceTypeReq(None,
                       Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
                       None,
                       None,
                       None)
 
-    InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None, None) shouldBe
+    InstanceTypeDB.parse(None, Some(V_String("1000 TiB")), None, None, None) shouldBe
       InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, None)
 
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, Some(WomString("230 44 34 GB")), None, None, None)
+      InstanceTypeDB.parse(None, Some(V_String("230 44 34 GB")), None, None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
+      InstanceTypeDB.parse(None, Some(V_String("230.x GB")), None, None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, Some(WomString("230.x GB")), None, None, None)
+      InstanceTypeDB.parse(None, Some(V_String("230.x GB")), None, None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, Some(WomFloat(230.3)), None, None, None)
+      InstanceTypeDB.parse(None, Some(V_Float(230.3)), None, None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, Some(WomString("230 XXB")), None, None, None)
+      InstanceTypeDB.parse(None, Some(V_String("230 XXB")), None, None, None)
     }
 
     // disk spec
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, None, Some(WomString("just give me a disk")), None, None)
+      InstanceTypeDB.parse(None, None, Some(V_String("just give me a disk")), None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, None, Some(WomString("local-disk xxxx")), None, None)
+      InstanceTypeDB.parse(None, None, Some(V_String("local-disk xxxx")), None, None)
     }
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, None, Some(WomInteger(1024)), None, None)
+      InstanceTypeDB.parse(None, None, Some(V_Int(1024)), None, None)
     }
 
     // cpu
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, None, None, Some(WomString("xxyy")), None)
+      InstanceTypeDB.parse(None, None, None, Some(V_String("xxyy")), None)
     }
-    InstanceTypeDB.parse(None, None, None, Some(WomInteger(1)), None) shouldBe InstanceTypeReq(
+    InstanceTypeDB.parse(None, None, None, Some(V_Int(1)), None) shouldBe InstanceTypeReq(
         None,
         None,
         None,
         Some(1),
         None
     )
-    InstanceTypeDB.parse(None, None, None, Some(WomFloat(1.2)), None) shouldBe InstanceTypeReq(
+    InstanceTypeDB.parse(None, None, None, Some(V_Float(1.2)), None) shouldBe InstanceTypeReq(
         None,
         None,
         None,
@@ -315,15 +315,15 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     )
 
     assertThrows[Exception] {
-      InstanceTypeDB.parse(None, None, None, Some(WomBoolean(false)), None)
+      InstanceTypeDB.parse(None, None, None, Some(V_Boolean(false)), None)
     }
 
     // gpu
     InstanceTypeDB
-      .parse(None, Some(WomString("1000 TiB")), None, None, Some(WomBoolean(true))) shouldBe
+      .parse(None, Some(V_String("1000 TiB")), None, None, Some(V_Boolean(true))) shouldBe
       InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None, Some(true))
 
-    InstanceTypeDB.parse(None, None, None, None, Some(WomBoolean(false))) shouldBe
+    InstanceTypeDB.parse(None, None, None, None, Some(V_Boolean(false))) shouldBe
       InstanceTypeReq(None, None, None, None, Some(false))
   }
 

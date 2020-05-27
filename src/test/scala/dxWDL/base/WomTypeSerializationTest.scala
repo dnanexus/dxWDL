@@ -1,29 +1,30 @@
 package dxWDL.base
 
 import org.scalatest.{FlatSpec, Matchers}
-import wom.types._
+import wdlTools.types.WdlTypes
 
 class WomTypeSerializationTest extends FlatSpec with Matchers {
 
-  val testCases: List[WomType] = List(
+  val testCases: List[WdlTypes.T] = List(
       // Primitive types
-      WomNothingType,
-      WomBooleanType,
-      WomIntegerType,
-      WomLongType,
-      WomFloatType,
-      WomStringType,
-      WomSingleFileType,
-      // array
-      WomMaybeEmptyArrayType(WomStringType),
-      WomNonEmptyArrayType(WomSingleFileType),
+      WdlTypes.T_Boolean,
+      WdlTypes.T_Int,
+      WdlTypes.T_Float,
+      WdlTypes.T_String,
+      WdlTypes.T_File,
+
+    // arrays
+      WdlTypes.T_Array(WdlTypes.T_String, false),
+      WdlTypes.T_Array(WdlTypes.T_File, true),
+
       // maps
-      WomMapType(WomStringType, WomSingleFileType),
-      WomMapType(WomStringType, WomMapType(WomFloatType, WomIntegerType)),
+      WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_File),
+      WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Map(WdlTypes.T_Float, WdlTypes.T_Int)),
+
       // optionals
-      WomOptionalType(WomLongType),
-      WomOptionalType(WomMaybeEmptyArrayType(WomBooleanType)),
-      WomPairType(WomIntegerType, WomStringType)
+      WdlTypes.T_Optional(WdlTypes.T_Int),
+      WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Boolean, false)),
+      WdlTypes.T_Pair(WdlTypes.T_Int, WdlTypes.T_String)
   )
 
   it should "work for various WDL types" in {
@@ -35,20 +36,21 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   }
 
   val personType =
-    WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), Some("Person"))
-  val houseType = WomCompositeType(
-      Map("street" -> WomStringType, "zip code" -> WomIntegerType, "owner" -> personType),
-      Some("House")
+    WdlTypes.T_Struct("Person",
+                      Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
+  val houseType = WdlTypes.T_Struct(
+    "House",
+    Map("street" -> WdlTypes.T_String, "zip code" -> WdlTypes.T_Int, "owner" -> personType)
   )
 
-  val structTestCases: List[WomType] = List(
+  val structTestCases: List[WdlTypes.T] = List(
       personType,
-      WomPairType(personType, houseType),
-      WomOptionalType(houseType)
+      WdlTypes.T_Pair(personType, houseType),
+      WdlTypes.T_Optional(houseType)
   )
 
   it should "work for structs" in {
-    val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
     val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (t <- structTestCases) {
@@ -64,22 +66,13 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
   )
 
   it should "detect bad type descriptions" in {
-    val typeAliases: Map[String, WomType] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
     val typeSerialize = WomTypeSerialization(typeAliases)
 
     for (typeDesc <- badTypeNames) {
       assertThrows[Exception] {
         typeSerialize.fromString(typeDesc)
       }
-    }
-  }
-
-  it should "detect objects that aren't structs" in {
-    val typeSerialize = WomTypeSerialization(Map.empty)
-    val objectWithoutName =
-      WomCompositeType(Map("name" -> WomStringType, "age" -> WomIntegerType), None)
-    assertThrows[Exception] {
-      typeSerialize.toString(objectWithoutName)
     }
   }
 }

@@ -3,12 +3,6 @@ package dxWDL.util
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
-import wom.callable.{WorkflowDefinition}
-import wom.executable.WomBundle
-import wom.graph._
-import wom.graph.expression._
-import wom.types._
-
 import dxWDL.base.Utils
 
 class BlockTest extends FlatSpec with Matchers {

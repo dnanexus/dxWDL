@@ -1,9 +1,8 @@
-package dxWDL.util
+package dxWDL.base
 
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.CallableTaskDefinition
-import wom.callable.MetaValueElement._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -122,9 +121,9 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
-                            "id" -> MetaValueElementString("applet-xxxx")))
+    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
+                            "id" -> TAT.MetaValueString("applet-xxxx")))
   }
 
   it should "parse the meta section in wdl 1.0" in {
@@ -148,9 +147,9 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
-                            "id" -> MetaValueElementString("applet-xxxx")))
+    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
+                            "id" -> TAT.MetaValueString("applet-xxxx")))
   }
 
   // The scanForTasks method takes apart the source WOM code, and then puts
@@ -198,8 +197,8 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
-                            "id" -> MetaValueElementString("applet-xxxx")))
+    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
+                            "id" -> TAT.MetaValueString("applet-xxxx")))
   }
 }

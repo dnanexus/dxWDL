@@ -2,10 +2,10 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-import wom.types._
+import wdlTools.types.WdlTypes
 
 import dxWDL.base.{Utils, Verbose}
-import dxWDL.util.ParseWomSourceFile
+import dxWDL.base.ParseWomSourceFile
 
 class SortTypeAliasesTest extends FlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
@@ -18,10 +18,10 @@ class SortTypeAliasesTest extends FlatSpec with Matchers {
   it should "sort type aliases properly" in {
     val path = pathFromBasename("struct", "many_structs.wdl")
     val wfSourceCode = Utils.readFileContent(path)
-    val (_, _, typeAliases: Map[String, WomType]) =
+    val (_, _, typeAliases: Map[String, WdlTypes.T], _) =
       ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
-    val defs: Vector[(String, WomType)] = SortTypeAliases(verbose).apply(typeAliases.toVector)
+    val defs: Vector[(String, WdlTypes.T)] = SortTypeAliases(verbose).apply(typeAliases.toVector)
     val defNames = defs.map { case (name, _) => name }.toVector
     defNames shouldBe (Vector("Coord", "Bunk", "Foo", "SampleReports", "SampleReportsArray"))
   }
