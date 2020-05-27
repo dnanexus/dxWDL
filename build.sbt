@@ -64,6 +64,7 @@ libraryDependencies ++= Seq(
   // http support and libraries used in dxjava remains
   "com.google.guava" % "guava" % "18.0",
   "org.apache.httpcomponents" % "httpclient" % "4.5",
+  "org.slf4j" % "slf4j-api" % "1.7.30",
 
   //---------- Test libraries -------------------//
   "org.scalactic" % "scalactic_2.13" % "3.1.1",
