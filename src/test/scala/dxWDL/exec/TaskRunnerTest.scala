@@ -1,7 +1,8 @@
 package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -13,7 +14,7 @@ import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-class TaskRunnerTest extends FlatSpec with Matchers {
+class TaskRunnerTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
     DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)

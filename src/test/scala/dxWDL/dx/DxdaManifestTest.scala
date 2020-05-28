@@ -1,10 +1,11 @@
 package dxWDL.dx
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 
-class DxdaManifestTest extends FlatSpec with Matchers {
+class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
   val TEST_PROJECT = "dxWDL_playground"
   lazy val dxTestProject: DxProject =

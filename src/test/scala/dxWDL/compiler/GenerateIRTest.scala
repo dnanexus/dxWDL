@@ -1,7 +1,8 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
 
 import wdlTools.eval.WdlValues
@@ -13,7 +14,7 @@ import dxWDL.dx._
 
 // These tests involve compilation -without- access to the platform.
 //
-class GenerateIRTest extends FlatSpec with Matchers {
+class GenerateIRTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)

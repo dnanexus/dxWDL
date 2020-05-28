@@ -1,11 +1,12 @@
 package dxWDL.compiler
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes._
 
 import dxWDL.base._
 
-class WdlCodeGenTest extends FlatSpec with Matchers {
+class WdlCodeGenTest extends AnyFlatSpec with Matchers {
   private val verbose = Verbose(false, true, Set.empty)
   private val wdlCodeGen = WdlCodeGen(verbose, Map.empty, Language.WDLv1_0)
 

@@ -1,11 +1,12 @@
 package dxWDL.dx
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import dxWDL.util._
 
-class DxfuseManifestTest extends FlatSpec with Matchers {
+class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   lazy val homeDir = Paths.get(System.getProperty("user.home"))
   lazy val dxPathConfig = DxPathConfig.apply(homeDir, false, runtimeDebugLevel >= 1)

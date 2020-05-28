@@ -1,12 +1,13 @@
 package dxWDL.util
 
 import java.io.File
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import dxWDL.base.ParseWomSourceFile
 import dxWDL.util.WomPrettyPrintApproxWdl
 
-class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
+class WomPrettyPrintApproxWdlTest extends AnyFlatSpec with Matchers {
 
   private def tryToPrintFile(path: File): Unit = {
     val wfSourceCode = scala.io.Source.fromFile(path).mkString

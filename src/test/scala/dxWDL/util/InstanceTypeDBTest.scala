@@ -1,13 +1,14 @@
 package dxWDL.util
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues._
 
 import dxWDL.base._
 import dxWDL.base.Utils
 
-class InstanceTypeDBTest extends FlatSpec with Matchers {
+class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   // The original list is at:
   // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json

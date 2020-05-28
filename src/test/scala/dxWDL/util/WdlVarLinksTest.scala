@@ -1,13 +1,14 @@
 package dxWDL.util
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes}
 
 import dxWDL.base.{Utils, Verbose}
 
-class WdlVarLinksTest extends FlatSpec with Matchers {
+class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
   private val verbose = Verbose(false, false, Set.empty)
 

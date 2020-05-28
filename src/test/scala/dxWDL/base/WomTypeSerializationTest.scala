@@ -1,9 +1,10 @@
 package dxWDL.base
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 
-class WomTypeSerializationTest extends FlatSpec with Matchers {
+class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   val testCases: List[WdlTypes.T] = List(
       // Primitive types

@@ -1,13 +1,14 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.base.ParseWomSourceFile
 
-class SortTypeAliasesTest extends FlatSpec with Matchers {
+class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)

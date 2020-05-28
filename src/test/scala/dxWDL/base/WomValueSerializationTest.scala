@@ -1,11 +1,12 @@
 package dxWDL.base
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues._
 import wdlTools.types.WdlTypes._
 
-class WomValueSerializationTest extends FlatSpec with Matchers {
+class WomValueSerializationTest extends AnyFlatSpec with Matchers {
   val personType =
     T_Struct("Person",
                       Map("name" -> T_String, "age" -> T_Int))

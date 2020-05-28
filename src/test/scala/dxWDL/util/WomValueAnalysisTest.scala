@@ -1,12 +1,13 @@
 package dxWDL.util
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base.ParseWomSourceFile
 
-class WomValueAnalysisTest extends FlatSpec with Matchers {
+class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
     val (wf: TAT.Workflow, _ , _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)

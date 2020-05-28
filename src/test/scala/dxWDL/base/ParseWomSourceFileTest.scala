@@ -1,12 +1,13 @@
 package dxWDL.base
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // These tests involve compilation -without- access to the platform.
 //
-class ParseWomSourceFileTest extends FlatSpec with Matchers {
+class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
   private val parseWomSourceFile = ParseWomSourceFile(false)
 
   private def normalize(s: String): String = {

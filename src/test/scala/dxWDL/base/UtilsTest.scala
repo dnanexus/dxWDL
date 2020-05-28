@@ -1,9 +1,10 @@
 package dxWDL.base
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 
-class UtilsTest extends FlatSpec with Matchers {
+class UtilsTest extends AnyFlatSpec with Matchers {
   val sentence = "I am major major"
 
   it should "Correctly compress and decompress" in {

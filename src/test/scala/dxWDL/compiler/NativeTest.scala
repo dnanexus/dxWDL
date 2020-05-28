@@ -3,7 +3,8 @@ package dxWDL.compiler
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Path, Paths}
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Inside._
 
@@ -20,7 +21,7 @@ import spray.json._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
+class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
@@ -907,9 +908,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
           case ("upstreamProjects", array: JsArray) =>
             array shouldBe expectedUpstreamProjects
           case ("whatsNew", JsString(value))       => value shouldBe expectedWhatsNew
-          case ("instanceTypeDB", JsString(value)) => Unit // ignore
-          case ("runtimeAttrs", JsObject(fields))  => Unit // ignore
-          case ("womSourceCode", JsString(value))  => Unit // ignore
+          case ("instanceTypeDB", JsString(value)) => () // ignore
+          case ("runtimeAttrs", JsObject(fields))  => () // ignore
+          case ("womSourceCode", JsString(value))  => () // ignore
           case other                               => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")
@@ -1102,11 +1103,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
       case Some(JsObject(fields)) =>
         fields.foreach {
           case ("whatsNew", JsString(value))                   => value shouldBe "v1.0: First release"
-          case ("womSourceCode", JsString(value))              => Unit // ignore
-          case ("delayWorkspaceDestruction", JsBoolean(value)) => Unit // ignore
-          case ("link_inc", JsObject(fields))                  => Unit // ignore
-          case ("link_mul", JsObject(fields))                  => Unit // ignore
-          case ("execTree", JsString(value))                   => Unit // ignore
+          case ("womSourceCode", JsString(value))              => ()
+          case ("delayWorkspaceDestruction", JsBoolean(value)) => ()
+          case ("link_inc", JsObject(fields))                  => ()
+          case ("link_mul", JsObject(fields))                  => ()
+          case ("execTree", JsString(value))                   => ()
           case other                                           => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")

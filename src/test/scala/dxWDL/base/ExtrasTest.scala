@@ -3,12 +3,14 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
 import spray.json._
 import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
 
-class ExtrasTest extends FlatSpec with Matchers {
+class ExtrasTest extends AnyFlatSpec with Matchers {
   val verbose = Verbose(true, true, Set.empty)
   val verbose2 = Verbose(false, true, Set.empty)
 

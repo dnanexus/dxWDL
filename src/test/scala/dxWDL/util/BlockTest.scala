@@ -1,15 +1,15 @@
 package dxWDL.util
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
-
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{ParseWomSourceFile, Utils, WomBundle}
 import dxWDL.util.{Block, BlockOutput}
 
-class BlockTest extends FlatSpec with Matchers {
+class BlockTest extends AnyFlatSpec with Matchers {
   private val parseWomSourceFile = ParseWomSourceFile(false)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
