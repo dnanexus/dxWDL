@@ -1,37 +1,36 @@
 package dxWDL.util
 
 import org.scalatest.{FlatSpec, Matchers}
-import wom.callable.WorkflowDefinition
-import wom.expression.WomExpression
-import wom.graph.expression.ExpressionNode
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 class WomValueAnalysisTest extends FlatSpec with Matchers {
 
-  def parseExpressions(wdlCode: String): Vector[ExpressionNode] = {
-    val (wf: WorkflowDefinition, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
-    val eNodes: Vector[ExpressionNode] = wf.innerGraph.nodes.collect {
-      case x: ExpressionNode => x
+  def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
+    val (wf: TAT.Workflow, _ , _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
+    wf.body.collect{
+      case d : Declaration => d
     }.toVector
-    eNodes
   }
 
   it should "evalConst" in {
     val allExpectedResults = Map(
-        "flag" -> Some(WomBoolean(true)),
-        "i" -> Some(WomInteger(8)),
-        "x" -> Some(WomFloat(2.718)),
-        "s" -> Some(WomString("hello world")),
+        "flag" -> Some(WdlValues.V_Boolean(true)),
+        "i" -> Some(WdlValues.V_Int(8)),
+        "x" -> Some(WdlValues.V_Float(2.718)),
+        "s" -> Some(WdlValues.V_String("hello world")),
         "ar1" -> Some(
-            WomArray(WomArrayType(WomStringType),
-                     Vector(WomString("A"), WomString("B"), WomString("C")))
+          WdlValues.V_Array(Vector(
+                              WdlValues.V_String("A"),
+                              WdlValues.V_String("B"),
+                              WdlValues.V_String("C")))
         ),
         "m1" -> Some(
-            WomMap(WomMapType(WomStringType, WomIntegerType),
-                   Map(WomString("X") -> WomInteger(1), WomString("Y") -> WomInteger(10)))
+          WdlValues.V_Map(Map(
+                            WdlValues.V_String("X") -> WdlValues.V_Int(1),
+                            WdlValues.V_String("Y") -> WdlValues.V_Int(10)))
         ),
-        "p" -> Some(WomPair(WomInteger(1), WomInteger(12))),
+        "p" -> Some(WdlValues.V_Pair(WdlValues.V_Int(1), WdlValues.V_Int(12))),
         "file2" -> None,
         "k" -> None,
         "readme" -> None
@@ -62,12 +61,12 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val expressions = parseExpressions(wdlCode)
-    for (node <- expressions) {
-      val id: String = node.identifier.localName.value
-      val expected: Option[WomValue] = allExpectedResults(id)
-      val expr: WomExpression = node.womExpression
-      val womType: WomType = node.womType
+    val declarations = parseExpressions(wdlCode)
+    for (decl <- declarations) {
+      val id: String = decl.name
+      val expected: Option[WdlValues.V] = allExpectedResults(id)
+      val expr : TAT.Expr = decl.expr.get
+      val womType : WdlTypes.T = decl.wdlType
 
       val retval = WomValueAnalysis.ifConstEval(womType, expr)
       retval shouldBe (expected)
@@ -95,10 +94,10 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val expressions = parseExpressions(wdlCode)
-    val node = expressions.head
+    val declarations = parseExpressions(wdlCode)
+    val node = declarations.head
     assertThrows[Exception] {
-      WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
+      WomValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
     }
   }
 
@@ -114,9 +113,8 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val expressions = parseExpressions(wdlCode)
-    val nodes = expressions.toList
-    for (node <- nodes)
-      WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
+    val declarations = parseExpressions(wdlCode)
+    for (node <- declarations)
+      WomValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
   }
 }

@@ -106,7 +106,10 @@ case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
 // For each input also return whether is has a default. This makes it,
 // de facto, optional.
 //
-// OUTPUTS: all the outputs from a sequence of WDL statements.
+// OUTPUTS: all the outputs from a sequence of WDL statements. This includes -only-
+// variables that are used after the block completes.
+//
+// ALL_OUTPUTS : all the outputs, including those that are unused.
 //
 // Note: The type outside a scatter/conditional block is *different* than the type in
 // the block.  For example, 'Int x' declared inside a scatter, is
@@ -114,7 +117,8 @@ case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
 //
 case class Block(inputs : Vector[BlockInput],
                  nodes: Vector[TAT.WorkflowElement],
-                 outputs : Vector[BlockOutput]) {
+                 outputs : Vector[BlockOutput],
+                 allOutputs : Vector[BlockOutput]) {
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
