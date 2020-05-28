@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wdlTools.eval.WdlValues
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{Language, ParseWomSourceFile, Utils, WdlRuntimeAttrs, WomBundle}
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}

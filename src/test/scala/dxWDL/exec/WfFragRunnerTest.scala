@@ -7,7 +7,7 @@ import spray.json._
 import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
-import dxWDL.base.{Language, ParseWomSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs, WomBundle}
+import dxWDL.base.{Language, ParseWomSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
 import dxWDL.util.{
   Block,
@@ -88,9 +88,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, dxIoFunctions) = setup()
 
-    val (language, womBundle, allSources, _) =
+    val (language, womBundle, _, _) =
       ParseWomSourceFile(false).apply(source, List.empty)
-    val wfSource = allSources.values.head
 
     val wf: TAT.Workflow = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf

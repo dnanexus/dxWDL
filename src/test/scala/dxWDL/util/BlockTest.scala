@@ -7,7 +7,7 @@ import wdlTools.types.WdlTypes
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{ParseWomSourceFile, Utils, WomBundle}
-import dxWDL.util.{Block, BlockInput, BlockOutput}
+import dxWDL.util.{Block, BlockOutput}
 
 class BlockTest extends FlatSpec with Matchers {
   private val parseWomSourceFile = ParseWomSourceFile(false)
