@@ -114,7 +114,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     }
   }
 
-  def parseOneResult(jsv: JsValue): (DxDataObject, DxObjectDescribe) = {
+  private def parseOneResult(jsv: JsValue): (DxDataObject, DxObjectDescribe) = {
     jsv.asJsObject.getFields("project", "id", "describe") match {
       case Seq(JsString(projectId), JsString(dxid), desc) =>
         val dxProj = DxProject.getInstance(projectId)
@@ -144,7 +144,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     JsObject(part1 ++ part2 ++ part3)
   }
 
-  // Submit a request for a limited number of objects
+  // Create a request for a limited number of objects
   private def createRequest(
       scope: JsValue,
       dxProject: DxProject,
@@ -210,11 +210,11 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
   }
 
-
+  // sends request - use createRequest beforehand in order to create a request
   private def sendRequest(request: JsObject): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv)
+                                               classOf[JsonNode],
+                                               DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {

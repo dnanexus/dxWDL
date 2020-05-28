@@ -180,9 +180,9 @@ object DxFile {
           fieldName -> JsBoolean(true)
         }.toMap
         Map(
-          "classDescribeOptions" -> JsObject(
-            "*" -> JsObject(m)
-          )
+            "classDescribeOptions" -> JsObject(
+               "*" -> JsObject(m)
+            )
         )
       }
 
