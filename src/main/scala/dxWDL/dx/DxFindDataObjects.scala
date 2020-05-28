@@ -114,7 +114,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     }
   }
 
-  private def parseOneResult(jsv: JsValue): (DxDataObject, DxObjectDescribe) = {
+  def parseOneResult(jsv: JsValue): (DxDataObject, DxObjectDescribe) = {
     jsv.asJsObject.getFields("project", "id", "describe") match {
       case Seq(JsString(projectId), JsString(dxid), desc) =>
         val dxProj = DxProject.getInstance(projectId)
@@ -145,7 +145,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
   }
 
   // Submit a request for a limited number of objects
-  private def submitRequest(
+  private def createRequest(
       scope: JsValue,
       dxProject: DxProject,
       cursor: Option[JsValue],
@@ -153,7 +153,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       propertyConstraints: Vector[String],
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean
-  ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
+  ): JsObject = {
     var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
@@ -201,17 +201,20 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
       }
 
-    val request = JsObject(
+    JsObject(
         reqFields ++ cursorField ++ limitField
           ++ classField ++ propertiesField
           ++ namePcreField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
+  }
 
+
+  private def sendRequest(request: JsObject): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
-                                               classOf[JsonNode],
-                                               DxUtils.dxEnv)
+      classOf[JsonNode],
+      DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {
@@ -228,6 +231,21 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       }
 
     (results.toMap, next)
+  }
+
+  def applyRequestDirectly(request: JsObject): Map[DxDataObject, DxObjectDescribe] = {
+    var allResults = Map.empty[DxDataObject, DxObjectDescribe]
+    var cursor: Map[String, JsValue] = Map.empty
+    do {
+      val req = JsObject(request.fields ++ cursor)
+      val (results, next) = sendRequest(req)
+      cursor = next match {
+        case None            => Map.empty
+        case Some(nextValue) => Map("starting" -> nextValue)
+      }
+      allResults = allResults ++ results
+    } while (cursor != Map.empty);
+    allResults
   }
 
   def apply(dxProject: DxProject,
@@ -247,13 +265,14 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
-      val (results, next) = submitRequest(scope,
-                                          dxProject,
-                                          cursor,
-                                          klassRestriction,
-                                          withProperties,
-                                          nameConstraints,
-                                          withInputOutputSpec)
+      val request = createRequest(scope,
+                                  dxProject,
+                                  cursor,
+                                  klassRestriction,
+                                  withProperties,
+                                  nameConstraints,
+                                  withInputOutputSpec)
+      val (results, next) = sendRequest(request)
       allResults = allResults ++ results
       cursor = next
     } while (cursor != None);
