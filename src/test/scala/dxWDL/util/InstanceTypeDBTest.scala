@@ -423,7 +423,7 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on=false, quiet=true, null))
     val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on=false, quiet=true, null))
 
-    assert(userResult.pricingAvailable)
-    assert(orgResult.pricingAvailable)
+    userResult.pricingAvailable shouldBe true
+    orgResult.pricingAvailable shouldBe true
   }
 }
