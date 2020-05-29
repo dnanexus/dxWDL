@@ -6,12 +6,11 @@ import scala.util.matching.Regex
 
 import wdlTools.syntax.Parsers
 import wdlTools.util.{
-  Options,
   SourceCode => WdlSourceCode,
   Util => WdlUtil,
   Verbosity => WdlVerbosity,
   TypeCheckingRegime => WdlTypeCheckingRegime}
-import wdlTools.types.{TypeInfer, TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.types.{TypeInfer, TypeOptions, TypedAbstractSyntax => TAT, WdlTypes}
 import dxWDL.base.{Language, Utils}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
@@ -72,6 +71,14 @@ case class ParseWomSourceFile(verbose: Boolean) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
+  private def makeOptions(imports: Seq[Path]) : TypeOptions = {
+    TypeOptions(
+      antlr4Trace = false,
+      localDirectories = imports.toVector,
+      verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
+      followImports = true,
+      typeChecking = WdlTypeCheckingRegime.Strict)
+  }
 
   // recurse into the imported packages
   //
@@ -110,11 +117,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
     val srcDir = mainAbsPath.getParent()
-    val opts =
-      Options(typeChecking = WdlTypeCheckingRegime.Strict,
-              antlr4Trace = false,
-              localDirectories = imports.toVector :+ srcDir,
-              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val opts = makeOptions(imports :+ srcDir)
     val parsers = new Parsers(opts)
     val typeInfer = new TypeInfer(opts)
     val mainDoc = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
@@ -148,11 +151,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   // throw an exception if this WDL program is invalid
   def validateWdlCode(wdlWfSource: String, language : Option[Language.Value] = None) : Unit = {
-    val opts =
-      Options(typeChecking = WdlTypeCheckingRegime.Strict,
-              antlr4Trace = false,
-              localDirectories = Vector.empty,
-              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val opts = makeOptions(Vector.empty)
     val lines = wdlWfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
     val parser = new Parsers(opts).getParser(sourceCode)
@@ -177,11 +176,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   //  * directory of type aliases
   def parseWdlWorkflow(wfSource: String):
       (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
-    val opts =
-      Options(typeChecking = WdlTypeCheckingRegime.Strict,
-              antlr4Trace = false,
-              localDirectories = Vector.empty,
-              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val opts = makeOptions(Vector.empty)
     val lines = wfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
     val parser = new Parsers(opts).getParser(sourceCode)
@@ -203,11 +198,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   }
 
   def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {
-    val opts =
-      Options(typeChecking = WdlTypeCheckingRegime.Strict,
-              antlr4Trace = false,
-              localDirectories = Vector.empty,
-              verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet)
+    val opts = makeOptions(Vector.empty)
     val lines = wfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
     val parser = new Parsers(opts).getParser(sourceCode)

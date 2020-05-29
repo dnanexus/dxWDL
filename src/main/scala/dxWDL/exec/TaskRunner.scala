@@ -22,8 +22,8 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
-import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -91,14 +91,14 @@ case class TaskRunner(task: TAT.Task,
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
   val evaluator : WdlExprEval = {
-    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
-                                         antlr4Trace = false,
-                                         localDirectories = Vector.empty,
-                                         verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
-                                           dxIoFunctions.config.tmpDir,
-                                           dxIoFunctions.config.stdout,
-                                           dxIoFunctions.config.stderr)
+    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+                               antlr4Trace = false,
+                               localDirectories = Vector.empty,
+                               verbosity = wdlTools.util.Verbosity.Quiet)
+    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
+                             dxIoFunctions.config.tmpDir,
+                             dxIoFunctions.config.stdout,
+                             dxIoFunctions.config.stderr)
     new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 

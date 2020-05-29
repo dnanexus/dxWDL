@@ -11,6 +11,8 @@ import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx._
+import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateMetaKVs}
+
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -421,66 +423,74 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
-    cgrepTask.parameterMeta shouldBe (
-        Map(
-            "in_file" -> TAT.MetaValueObject(
+    val sansText = Map(
+        "in_file" -> IR.MetaValueObject(
                 Map(
-                    "help" -> TAT.MetaValueString("The input file to be searched"),
-                    "patterns" -> TAT.MetaValueArray(
+                    "help" -> IR.MetaValueString("The input file to be searched"),
+                    "patterns" -> IR.MetaValueArray(
                         Vector(
-                            TAT.MetaValueString("*.txt"),
-                            TAT.MetaValueString("*.tsv")
+                            IR.MetaValueString("*.txt"),
+                            IR.MetaValueString("*.tsv")
                         )
                     ),
                     "group" ->
-                      TAT.MetaValueString("Common"),
+                      IR.MetaValueString("Common"),
                     "label" ->
-                      TAT.MetaValueString("Input file")
+                      IR.MetaValueString("Input file")
                 )
             ),
-            "pattern" -> TAT.MetaValueObject(
+            "pattern" -> IR.MetaValueObject(
                 Map(
                     "help" ->
-                      TAT.MetaValueString("The pattern to use to search in_file"),
+                      IR.MetaValueString("The pattern to use to search in_file"),
                     "group" ->
-                      TAT.MetaValueString("Common"),
+                      IR.MetaValueString("Common"),
                     "label" ->
-                      TAT.MetaValueString("Search pattern")
+                      IR.MetaValueString("Search pattern")
                 )
             ),
-            "out_file" -> TAT.MetaValueObject(
+            "out_file" -> IR.MetaValueObject(
                 Map(
-                    "patterns" -> TAT.MetaValueArray(
+                    "patterns" -> IR.MetaValueArray(
                         Vector(
-                            TAT.MetaValueString("*.txt"),
-                            TAT.MetaValueString("*.tsv")
+                            IR.MetaValueString("*.txt"),
+                            IR.MetaValueString("*.tsv")
                         )
                     ),
-                    "group" -> TAT.MetaValueString("Common"),
-                    "label" -> TAT.MetaValueString("Output file")
+                    "group" -> IR.MetaValueString("Common"),
+                    "label" -> IR.MetaValueString("Output file")
                 )
             )
-        )
     )
+
+    inside (cgrepTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe sansText
+    }
+
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    getParamMeta(cgrepTask, iDef) shouldBe (Some(
-        TAT.MetaValueObject(
+    val sansText2 =
+      IR.MetaValueObject(
             Map(
                 "group" ->
-                  TAT.MetaValueString("Common"),
+                  IR.MetaValueString("Common"),
                 "help" ->
-                  TAT.MetaValueString("The input file to be searched"),
-                "patterns" -> TAT.MetaValueArray(
+                  IR.MetaValueString("The input file to be searched"),
+                "patterns" -> IR.MetaValueArray(
                     Vector(
-                        TAT.MetaValueString("*.txt"),
-                        TAT.MetaValueString("*.tsv")
+                        IR.MetaValueString("*.txt"),
+                        IR.MetaValueString("*.tsv")
                     )
                 ),
                 "label" ->
-                  TAT.MetaValueString("Input file")
+                  IR.MetaValueString("Input file")
             )
         )
-    ))
+
+    inside (getParamMeta(cgrepTask, iDef)) {
+      case Some(metaValue) =>
+        translate(metaValue) shouldBe sansText2
+    }
   }
 
   // Check parameter_meta pattern: {"object"}
@@ -496,81 +506,88 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
-    cgrepTask.parameterMeta shouldBe (
+    val sansText =
         Map(
-            "in_file" -> TAT.MetaValueObject(
+          "in_file" -> IR.MetaValueObject(
                 Map(
                     "help" ->
-                      TAT.MetaValueString("The input file to be searched"),
-                    "patterns" -> TAT.MetaValueObject(
+                      IR.MetaValueString("The input file to be searched"),
+                    "patterns" -> IR.MetaValueObject(
                         Map(
-                            "class" -> TAT.MetaValueString("file"),
-                            "tag" -> TAT.MetaValueArray(
-                                Vector(TAT.MetaValueString("foo"),
-                                       TAT.MetaValueString("bar"))
+                            "class" -> IR.MetaValueString("file"),
+                            "tag" -> IR.MetaValueArray(
+                                Vector(IR.MetaValueString("foo"),
+                                       IR.MetaValueString("bar"))
                             ),
-                            "name" -> TAT.MetaValueArray(
-                                Vector(TAT.MetaValueString("*.txt"),
-                                       TAT.MetaValueString("*.tsv"))
+                            "name" -> IR.MetaValueArray(
+                                Vector(IR.MetaValueString("*.txt"),
+                                       IR.MetaValueString("*.tsv"))
                             )
                         )
                     ),
                     "group" ->
-                      TAT.MetaValueString("Common"),
+                      IR.MetaValueString("Common"),
                     "label" ->
-                      TAT.MetaValueString("Input file")
+                      IR.MetaValueString("Input file")
                 )
             ),
-            "pattern" -> TAT.MetaValueObject(
+            "pattern" -> IR.MetaValueObject(
                 Map(
                     "help" ->
-                      TAT.MetaValueString("The pattern to use to search in_file"),
+                      IR.MetaValueString("The pattern to use to search in_file"),
                     "group" ->
-                      TAT.MetaValueString("Common"),
+                      IR.MetaValueString("Common"),
                     "label" ->
-                      TAT.MetaValueString("Search pattern")
+                      IR.MetaValueString("Search pattern")
                 )
             ),
-            "out_file" -> TAT.MetaValueObject(
+            "out_file" -> IR.MetaValueObject(
                 Map(
-                    "patterns" -> TAT.MetaValueArray(
+                    "patterns" -> IR.MetaValueArray(
                         Vector(
-                            TAT.MetaValueString("*.txt"),
-                            TAT.MetaValueString("*.tsv")
+                            IR.MetaValueString("*.txt"),
+                            IR.MetaValueString("*.tsv")
                         )
                     ),
-                    "group" -> TAT.MetaValueString("Common"),
-                    "label" -> TAT.MetaValueString("Output file")
+                    "group" -> IR.MetaValueString("Common"),
+                    "label" -> IR.MetaValueString("Output file")
                 )
             )
         )
-    )
+    inside (cgrepTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe sansText
+    }
+
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    getParamMeta(cgrepTask, iDef) shouldBe (Some(
-        TAT.MetaValueObject(
+    val sansText2 =
+        IR.MetaValueObject(
             Map(
                 "group" ->
-                  TAT.MetaValueString("Common"),
+                  IR.MetaValueString("Common"),
                 "help" ->
-                  TAT.MetaValueString("The input file to be searched"),
-                "patterns" -> TAT.MetaValueObject(
+                  IR.MetaValueString("The input file to be searched"),
+                "patterns" -> IR.MetaValueObject(
                     Map(
-                        "class" -> TAT.MetaValueString("file"),
-                        "tag" -> TAT.MetaValueArray(
-                            Vector(TAT.MetaValueString("foo"),
-                                   TAT.MetaValueString("bar"))
+                        "class" -> IR.MetaValueString("file"),
+                        "tag" -> IR.MetaValueArray(
+                            Vector(IR.MetaValueString("foo"),
+                                   IR.MetaValueString("bar"))
                         ),
-                        "name" -> TAT.MetaValueArray(
-                            Vector(TAT.MetaValueString("*.txt"),
-                                   TAT.MetaValueString("*.tsv"))
+                        "name" -> IR.MetaValueArray(
+                            Vector(IR.MetaValueString("*.txt"),
+                                   IR.MetaValueString("*.tsv"))
                         )
                     )
                 ),
                 "label" ->
-                  TAT.MetaValueString("Input file")
+                  IR.MetaValueString("Input file")
             )
         )
-    ))
+    inside (getParamMeta(cgrepTask, iDef)) {
+      case Some(metaValue) =>
+        translate(metaValue) shouldBe sansText2
+    }
   }
 
   // Check parameter_meta `choices` keyword
@@ -935,62 +952,69 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
-    cgrepTask.parameterMeta shouldBe (
-        Map(
-            "in_file" -> TAT.MetaValueObject(
+    val sansText =
+      Map(
+            "in_file" -> IR.MetaValueObject(
                 Map(
                     "help" ->
-                      TAT.MetaValueString("The input file to be searched"),
-                    "group" -> TAT.MetaValueString("Common"),
-                    "label" -> TAT.MetaValueString("Input file")
+                      IR.MetaValueString("The input file to be searched"),
+                    "group" -> IR.MetaValueString("Common"),
+                    "label" -> IR.MetaValueString("Input file")
                 )
             ),
-            "pattern" -> TAT.MetaValueObject(
+            "pattern" -> IR.MetaValueObject(
                 Map(
                     "description" ->
-                      TAT.MetaValueString("The pattern to use to search in_file"),
-                    "group" -> TAT.MetaValueString("Common"),
-                    "label" -> TAT.MetaValueString("Search pattern")
+                      IR.MetaValueString("The pattern to use to search in_file"),
+                    "group" -> IR.MetaValueString("Common"),
+                    "label" -> IR.MetaValueString("Search pattern")
                 )
             ),
-            "s" -> TAT.MetaValueString("This is help for s")
+            "s" -> IR.MetaValueString("This is help for s")
+      )
+    inside (cgrepTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe sansText
+    }
+
+    val sansText2 =
+      IR.MetaValueObject(
+        Map(
+          "help" ->
+            IR.MetaValueString("The input file to be searched"),
+          "group" -> IR.MetaValueString("Common"),
+          "label" -> IR.MetaValueString("Input file")
         )
-    )
+      )
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    getParamMeta(cgrepTask, iDef) shouldBe (Some(
-        TAT.MetaValueObject(
-            Map(
-                "help" ->
-                  TAT.MetaValueString("The input file to be searched"),
-                "group" -> TAT.MetaValueString("Common"),
-                "label" -> TAT.MetaValueString("Input file")
-            )
-        )
-    ))
+    inside (getParamMeta(cgrepTask, iDef)) {
+      case Some(metaValue) =>
+        translate(metaValue) shouldBe sansText2
+    }
 
     val diffTask = getTaskByName("help_input_params_diff", bundle)
-    val paramMeta = diffTask.parameterMeta match {
-      case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) => Some(kvs)
-    }
-    paramMeta shouldBe (Some(
-        Map(
-            "a" -> TAT.MetaValueObject(
-                Map(
-                    "help" -> TAT.MetaValueString("lefthand file"),
-                    "group" -> TAT.MetaValueString("Files"),
-                    "label" -> TAT.MetaValueString("File A")
-                )
+
+    inside (diffTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe (
+          Map(
+            "a" -> IR.MetaValueObject(
+              Map(
+                "help" -> IR.MetaValueString("lefthand file"),
+                "group" -> IR.MetaValueString("Files"),
+                "label" -> IR.MetaValueString("File A")
+              )
             ),
-            "b" -> TAT.MetaValueObject(
-                Map(
-                    "help" -> TAT.MetaValueString("righthand file"),
-                    "group" -> TAT.MetaValueString("Files"),
-                    "label" -> TAT.MetaValueString("File B")
-                )
+            "b" -> IR.MetaValueObject(
+              Map(
+                "help" -> IR.MetaValueString("righthand file"),
+                "group" -> IR.MetaValueString("Files"),
+                "label" -> IR.MetaValueString("File B")
+              )
             )
+          )
         )
-                            ))
+    }
   }
 
   it should "recognize help in parameters_meta via CVar for input CVars" in {
@@ -1093,34 +1117,34 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
-                    "contactEmail" -> TAT.MetaValueString("joe@dev.com"),
-                    "upstreamVersion" -> TAT.MetaValueString("1.0"),
-                    "upstreamAuthor" -> TAT.MetaValueString("Joe Developer"),
-                    "upstreamUrl" -> TAT.MetaValueString("https://dev.com/joe"),
-                    "upstreamLicenses" -> TAT.MetaValueArray(
+                  "contactEmail" -> IR.MetaValueString("joe@dev.com"),
+                    "upstreamVersion" -> IR.MetaValueString("1.0"),
+                    "upstreamAuthor" -> IR.MetaValueString("Joe Developer"),
+                    "upstreamUrl" -> IR.MetaValueString("https://dev.com/joe"),
+                    "upstreamLicenses" -> IR.MetaValueArray(
                         Vector(
-                          TAT.MetaValueString("MIT")
+                          IR.MetaValueString("MIT")
                         )
                     ),
-                    "whatsNew" -> TAT.MetaValueArray(
+                    "whatsNew" -> IR.MetaValueArray(
                         Vector(
-                          TAT.MetaValueObject(
+                          IR.MetaValueObject(
                                 Map(
-                                    "version" -> TAT.MetaValueString("1.1"),
-                                    "changes" -> TAT.MetaValueArray(
+                                    "version" -> IR.MetaValueString("1.1"),
+                                    "changes" -> IR.MetaValueArray(
                                         Vector(
-                                          TAT.MetaValueString("Added parameter --foo"),
-                                          TAT.MetaValueString("Added cowsay easter-egg")
+                                          IR.MetaValueString("Added parameter --foo"),
+                                          IR.MetaValueString("Added cowsay easter-egg")
                                         )
                                     )
                                 )
                             ),
-                          TAT.MetaValueObject(
+                          IR.MetaValueObject(
                                 Map(
-                                    "version" -> TAT.MetaValueString("1.0"),
-                                    "changes" -> TAT.MetaValueArray(
+                                    "version" -> IR.MetaValueString("1.0"),
+                                    "changes" -> IR.MetaValueArray(
                                         Vector(
-                                          TAT.MetaValueString("Initial version")
+                                          IR.MetaValueString("Initial version")
                                         )
                                     )
                                 )
@@ -1185,23 +1209,26 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
-    cgrepTask.parameterMeta shouldBe (Map(
-        "in_file" -> TAT.MetaValueString("stream")
-    ))
+    inside (cgrepTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe Map("in_file" -> IR.MetaValueString("stream"))
+    }
+
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    getParamMeta(cgrepTask, iDef) shouldBe (Some(
-        TAT.MetaValueString("stream")
-    ))
+
+    inside (getParamMeta(cgrepTask, iDef)) {
+      case Some(metaValue) =>
+        translate(metaValue) shouldBe IR.MetaValueString("stream")
+    }
 
     val diffTask = getTaskByName("diff", bundle)
-    val paramMeta = diffTask.parameterMeta match {
-      case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) => Some(kvs)
+    inside (diffTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe Map(
+          "a" -> IR.MetaValueString("stream"),
+          "b" -> IR.MetaValueString("stream")
+        )
     }
-    paramMeta shouldBe (Some(Map(
-        "a" -> TAT.MetaValueString("stream"),
-        "b" -> TAT.MetaValueString("stream")
-    )))
   }
 
   it should "recognize the streaming object annotation" in {
@@ -1216,33 +1243,33 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
-    cgrepTask.parameterMeta shouldBe (Map(
-        "in_file" -> TAT.MetaValueObject(
-            Map("stream" -> TAT.MetaValueBoolean(true))
-        )
-    ))
+    inside (cgrepTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe Map(
+          "in_file" -> IR.MetaValueObject(
+            Map("stream" -> IR.MetaValueBoolean(true))
+          ))
+    }
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    getParamMeta(cgrepTask, iDef) shouldBe (Some(
-        TAT.MetaValueObject(
-            Map("stream" -> TAT.MetaValueBoolean(true))
+    inside (getParamMeta(cgrepTask, iDef)) {
+      case Some(metaValue) =>
+        translate(metaValue) shouldBe IR.MetaValueObject(
+          Map("stream" -> IR.MetaValueBoolean(true))
         )
-    ))
+    }
 
     val diffTask = getTaskByName("diff", bundle)
-    val paramMeta = diffTask.parameterMeta match {
-      case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) => Some(kvs)
-    }
-    paramMeta shouldBe (Some(
-        Map(
-            "a" -> TAT.MetaValueObject(
-                Map("stream" -> TAT.MetaValueBoolean(true))
+    inside (diffTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe Map(
+            "a" -> IR.MetaValueObject(
+                Map("stream" -> IR.MetaValueBoolean(true))
             ),
-            "b" -> TAT.MetaValueObject(
-                Map("stream" -> TAT.MetaValueBoolean(true))
+            "b" -> IR.MetaValueObject(
+                Map("stream" -> IR.MetaValueBoolean(true))
             )
         )
-    ))
+    }
   }
 
   it should "recognize the streaming annotation for wdl draft2" in {
@@ -1256,8 +1283,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
     val diffTask = getTaskByName("diff", bundle)
-    diffTask.parameterMeta shouldBe (Map("a" -> TAT.MetaValueString("stream"),
-                                         "b" -> TAT.MetaValueString("stream")))
+    inside (diffTask.parameterMeta) {
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        translateMetaKVs(kvs) shouldBe Map(
+          "a" -> IR.MetaValueString("stream"),
+          "b" -> IR.MetaValueString("stream"))
+    }
   }
 
   it should "handle an empty workflow" in {
@@ -1473,7 +1504,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             IR.WorkflowAttrVersion("1.0"),
             IR.WorkflowAttrProperties(Map("foo" -> "bar")),
             IR.WorkflowAttrDetails(
-                Map("whatsNew" -> TAT.MetaValueString("v1.0: First release"))
+              Map("whatsNew" -> IR.MetaValueString("v1.0: First release"))
             ),
             IR.WorkflowAttrTitle("Workflow with metadata"),
             IR.WorkflowAttrTypes(Vector("calculator")),

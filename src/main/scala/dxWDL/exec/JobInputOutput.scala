@@ -2,10 +2,9 @@ package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
-import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
 import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
-import wdlTools.util.{EvalConfig, Options}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
@@ -35,10 +34,10 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
 
   val evaluator : WdlExprEval = {
-    val evalOpts = Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
-                           antlr4Trace = false,
-                           localDirectories = Vector.empty,
-                           verbosity = wdlTools.util.Verbosity.Quiet)
+    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+                               antlr4Trace = false,
+                               localDirectories = Vector.empty,
+                               verbosity = wdlTools.util.Verbosity.Quiet)
     val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
@@ -291,9 +290,9 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
             // This is better than "iDef.parameterMeta", but it does not
             // work on draft2.
             parameterMeta.get(iDef.name) match {
-              case Some(TAT.MetaValueString(PARAM_META_STREAM)) =>
+              case Some(TAT.MetaValueString(PARAM_META_STREAM, _)) =>
                 findFiles(womValue)
-              case Some(TAT.MetaValueObject(value)) =>
+              case Some(TAT.MetaValueObject(value, _)) =>
                 // This enables the stream annotation in the object form of metadata value, e.g.
                 // bam_file : {
                 //   stream : true
@@ -305,7 +304,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                       Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
                   )
                   .headOption match {
-                  case Some((_, TAT.MetaValueBoolean(b))) if b =>
+                  case Some((_, TAT.MetaValueBoolean(b, _))) if b =>
                     findFiles(womValue)
                   case _ => Vector.empty
                 }

@@ -691,33 +691,34 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val wfAttrs = kvs.flatMap {
-      case (IR.META_TITLE, TAT.MetaValueString(text)) => Some(IR.WorkflowAttrTitle(text))
-      case (IR.META_DESCRIPTION, TAT.MetaValueString(text)) =>
+      case (IR.META_TITLE, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrTitle(text))
+      case (IR.META_DESCRIPTION, TAT.MetaValueString(text, _)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, TAT.MetaValueString(text))   => Some(IR.WorkflowAttrSummary(text))
-      case (IR.META_VERSION, TAT.MetaValueString(text))   => Some(IR.WorkflowAttrVersion(text))
-      case (IR.META_DETAILS, TAT.MetaValueObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
-      case (IR.META_TYPES, TAT.MetaValueArray(array)) =>
+      case (IR.META_SUMMARY, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
+        Some(IR.WorkflowAttrDetails(ParameterMeta.translateMetaKVs(fields)))
+      case (IR.META_TYPES, TAT.MetaValueArray(array, _)) =>
         Some(IR.WorkflowAttrTypes(array.map {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid type: ${other}")
         }))
-      case (IR.META_TAGS, TAT.MetaValueArray(array)) =>
+      case (IR.META_TAGS, TAT.MetaValueArray(array, _)) =>
         Some(IR.WorkflowAttrTags(array.map {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
-      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
+      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields, _)) =>
         Some(IR.WorkflowAttrProperties(fields.view.mapValues {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
         }.toMap))
-      case (IR.META_CALL_NAMES, TAT.MetaValueObject(fields)) =>
+      case (IR.META_CALL_NAMES, TAT.MetaValueObject(fields, _)) =>
         Some(IR.WorkflowAttrCallNames(fields.view.mapValues {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid call name value: ${other}")
         }.toMap))
-      case (IR.META_RUN_ON_SINGLE_NODE, TAT.MetaValueBoolean(value)) =>
+      case (IR.META_RUN_ON_SINGLE_NODE, TAT.MetaValueBoolean(value, _)) =>
         Some(IR.WorkflowAttrRunOnSingleNode(value))
       case _ => None
     }.toVector

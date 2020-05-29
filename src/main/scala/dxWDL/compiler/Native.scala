@@ -11,7 +11,6 @@ import spray.json._
 
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base._
 import dxWDL.util._
@@ -742,15 +741,15 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  private def metaValueToJs(value: TAT.MetaValue): JsValue = {
+  private def metaValueToJs(value: IR.MetaValue): JsValue = {
     value match {
-      case TAT.MetaValueNull           => JsNull
-      case TAT.MetaValueBoolean(b)     => JsBoolean(b)
-      case TAT.MetaValueInt(i)     => JsNumber(i)
-      case TAT.MetaValueFloat(f)       => JsNumber(f)
-      case TAT.MetaValueString(text)   => JsString(text)
-      case TAT.MetaValueObject(fields) => JsObject(fields.view.mapValues(metaValueToJs).toMap)
-      case TAT.MetaValueArray(array)   => JsArray(array.map(metaValueToJs).toVector)
+      case IR.MetaValueNull           => JsNull
+      case IR.MetaValueBoolean(b)     => JsBoolean(b)
+      case IR.MetaValueInt(i)     => JsNumber(i)
+      case IR.MetaValueFloat(f)       => JsNumber(f)
+      case IR.MetaValueString(text)   => JsString(text)
+      case IR.MetaValueObject(fields) => JsObject(fields.view.mapValues(metaValueToJs).toMap)
+      case IR.MetaValueArray(array)   => JsArray(array.map(metaValueToJs).toVector)
     }
   }
 
@@ -794,7 +793,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.TaskAttrProperties(props) =>
               Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
             case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
+            Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
             //case IR.TaskAttrOpenSource(isOpenSource) =>

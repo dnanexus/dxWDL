@@ -99,32 +99,33 @@ case class GenerateIRTask(verbose: Verbose,
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): Vector[IR.TaskAttr] = {
     val appAttrs = meta.flatMap {
-      case (IR.META_TITLE, TAT.MetaValueString(text))       => Some(IR.TaskAttrTitle(text))
-      case (IR.META_DESCRIPTION, TAT.MetaValueString(text)) => Some(IR.TaskAttrDescription(text))
-      case (IR.META_SUMMARY, TAT.MetaValueString(text))     => Some(IR.TaskAttrSummary(text))
-      case (IR.META_DEVELOPER_NOTES, TAT.MetaValueString(text)) =>
+      case (IR.META_TITLE, TAT.MetaValueString(text, _))       => Some(IR.TaskAttrTitle(text))
+      case (IR.META_DESCRIPTION, TAT.MetaValueString(text, _)) => Some(IR.TaskAttrDescription(text))
+      case (IR.META_SUMMARY, TAT.MetaValueString(text, _))     => Some(IR.TaskAttrSummary(text))
+      case (IR.META_DEVELOPER_NOTES, TAT.MetaValueString(text, _)) =>
         Some(IR.TaskAttrDeveloperNotes(text))
-      case (IR.META_VERSION, TAT.MetaValueString(text))   => Some(IR.TaskAttrVersion(text))
-      case (IR.META_DETAILS, TAT.MetaValueObject(fields)) => Some(IR.TaskAttrDetails(fields))
-      case (IR.META_OPEN_SOURCE, TAT.MetaValueBoolean(b)) => Some(IR.TaskAttrOpenSource(b))
-      case (IR.META_CATEGORIES, TAT.MetaValueArray(array)) =>
+      case (IR.META_VERSION, TAT.MetaValueString(text, _))   => Some(IR.TaskAttrVersion(text))
+      case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
+        Some(IR.TaskAttrDetails(ParameterMeta.translateMetaKVs(fields)))
+      case (IR.META_OPEN_SOURCE, TAT.MetaValueBoolean(b, _)) => Some(IR.TaskAttrOpenSource(b))
+      case (IR.META_CATEGORIES, TAT.MetaValueArray(array, _)) =>
         Some(IR.TaskAttrCategories(array.map {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid category: ${other}")
         }))
-      case (IR.META_TYPES, TAT.MetaValueArray(array)) =>
+      case (IR.META_TYPES, TAT.MetaValueArray(array, _)) =>
         Some(IR.TaskAttrTypes(array.map {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid type: ${other}")
         }))
-      case (IR.META_TAGS, TAT.MetaValueArray(array)) =>
+      case (IR.META_TAGS, TAT.MetaValueArray(array, _)) =>
         Some(IR.TaskAttrTags(array.map {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid tag: ${other}")
         }))
-      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields)) =>
+      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields, _)) =>
         Some(IR.TaskAttrProperties(fields.view.mapValues {
-          case TAT.MetaValueString(text) => text
+          case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
                                    }.toMap))
       case _ => None
@@ -314,7 +315,7 @@ case class GenerateIRTask(verbose: Verbose,
 
     val kind =
       (lookupMetaParam(IR.HINT_APP_TYPE, task), lookupMetaParam(IR.HINT_APP_ID, task)) match {
-        case (Some(TAT.MetaValueString("native")), Some(TAT.MetaValueString(id))) =>
+        case (Some(TAT.MetaValueString("native", _)), Some(TAT.MetaValueString(id, _))) =>
           // wrapper for a native applet.
           // make sure the runtime block is empty
           if (task.runtime.isDefined)

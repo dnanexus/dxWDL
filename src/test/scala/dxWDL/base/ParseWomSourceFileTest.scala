@@ -105,6 +105,19 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  private def validateTaskMeta(task : TAT.Task) : Unit = {
+    val kvs = task.meta match {
+      case Some(TAT.MetaSection(kvs, _)) => kvs
+      case _ => throw new Exception("sanity")
+    }
+    kvs.get("type") should matchPattern {
+      case Some(TAT.MetaValueString("native", _)) =>
+    }
+    kvs.get("id") should matchPattern {
+      case Some(TAT.MetaValueString("applet-xxxx", _)) =>
+    }
+  }
+
   it should "parse the meta section in wdl draft2" in {
     val srcCode =
       """|task native_sum_012 {
@@ -123,8 +136,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
-                            "id" -> TAT.MetaValueString("applet-xxxx")))
+    validateTaskMeta(task)
   }
 
   it should "parse the meta section in wdl 1.0" in {
@@ -149,8 +161,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
-                            "id" -> TAT.MetaValueString("applet-xxxx")))
+    validateTaskMeta(task)
   }
 
   // The scanForTasks method takes apart the source WOM code, and then puts
@@ -199,7 +210,6 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
-    task.meta shouldBe (Map("type" -> TAT.MetaValueString("native"),
-                            "id" -> TAT.MetaValueString("applet-xxxx")))
+    validateTaskMeta(task)
   }
 }

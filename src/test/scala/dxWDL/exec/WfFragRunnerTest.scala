@@ -5,8 +5,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 
-import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
 
 import dxWDL.base.{Language, ParseWomSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
@@ -72,14 +72,15 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                             env: Map[String, WdlValues.V],
                             dxIoFunctions: DxIoFunctions,
                             language : Language.Value): WdlValues.V = {
-    val evalOpts = wdlTools.util.Options(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    // build an object capable of evaluating WDL expressions
+    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
                                          antlr4Trace = false,
                                          localDirectories = Vector.empty,
                                          verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = wdlTools.util.EvalConfig(dxIoFunctions.config.homeDir,
-                                           dxIoFunctions.config.tmpDir,
-                                           dxIoFunctions.config.stdout,
-                                           dxIoFunctions.config.stderr)
+    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
+                             dxIoFunctions.config.tmpDir,
+                             dxIoFunctions.config.stdout,
+                             dxIoFunctions.config.stderr)
     val evaluator = new WdlExprEval(evalOpts, evalCfg, Language.toWdlVersion(language), None)
 
     evaluator.applyExpr(expr, EvalContext(env))

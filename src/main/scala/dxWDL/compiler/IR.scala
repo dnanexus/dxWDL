@@ -40,13 +40,25 @@ object IR {
   val META_CALL_NAMES = "call_names"
   val META_RUN_ON_SINGLE_NODE = "run_on_single_node"
 
+  // This is equivalent to the MetaValue type from the typed-abstract-syntax. It
+  // strips the text-source token so it would be easier to compare maps
+  // and complex structures.
+  sealed abstract class MetaValue
+  final case object MetaValueNull extends MetaValue
+  final case class MetaValueBoolean(value: Boolean) extends MetaValue
+  final case class MetaValueInt(value: Int) extends MetaValue
+  final case class MetaValueFloat(value: Double) extends MetaValue
+  final case class MetaValueString(value: String) extends MetaValue
+  final case class MetaValueObject(value: Map[String, MetaValue]) extends MetaValue
+  final case class MetaValueArray(value: Vector[MetaValue]) extends MetaValue
+
   sealed abstract class TaskAttr
   final case class TaskAttrTitle(text: String) extends TaskAttr
   final case class TaskAttrDescription(text: String) extends TaskAttr
   final case class TaskAttrSummary(text: String) extends TaskAttr
   final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
   final case class TaskAttrVersion(text: String) extends TaskAttr
-  final case class TaskAttrDetails(details: Map[String, TAT.MetaValue]) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, MetaValue]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
@@ -58,7 +70,7 @@ object IR {
   final case class WorkflowAttrDescription(text: String) extends WorkflowAttr
   final case class WorkflowAttrSummary(text: String) extends WorkflowAttr
   final case class WorkflowAttrVersion(text: String) extends WorkflowAttr
-  final case class WorkflowAttrDetails(details: Map[String, TAT.MetaValue]) extends WorkflowAttr
+  final case class WorkflowAttrDetails(details: Map[String, MetaValue]) extends WorkflowAttr
   final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
@@ -161,7 +173,7 @@ object IR {
       extends PatternsRepr
 
   // TODO: we can probably get rid of some of the repr types and just leave them as
-  // TAT.MetaValue
+  // MetaValue
 
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
