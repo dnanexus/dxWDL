@@ -28,9 +28,8 @@ class WdlCodeGenTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle maps, pairs, optionals" in {
-    genDefaultValue(T_Map(T_Int, T_String)) shouldBe ("""{0: ""}""")
-
-    genDefaultValue(T_Pair(T_Int, T_File)) shouldBe ("""(0, "dummy.txt")""")
+    genDefaultValue(T_Map(T_Int, T_String)) shouldBe ("""{0 : ""}""")
+    genDefaultValue(T_Pair(T_Int, T_File)) shouldBe ("""(0 , "dummy.txt")""")
     genDefaultValue(T_Optional(T_Float)) shouldBe ("0.0")
   }
 
@@ -40,6 +39,6 @@ class WdlCodeGenTest extends AnyFlatSpec with Matchers {
                                  "num_floors" -> T_Int,
                                  "street" -> T_String,
                                  "city" -> T_String))
-    genDefaultValue(houseType) shouldBe ("""object {height: 0, num_floors: 0, street: "", city: ""}""")
+    genDefaultValue(houseType) shouldBe """object { height : 0, num_floors : 0, street : "", city : "" }"""
   }
 }

@@ -75,27 +75,28 @@ case class WdlCodeGen(verbose: Verbose,
       case WdlValues.V_Boolean(value) => value.toString
       case WdlValues.V_Int(value) => value.toString
       case WdlValues.V_Float(value) => value.toString
-      case WdlValues.V_String(value) => value
-      case WdlValues.V_File(value) => value
+      case WdlValues.V_String(value) => s""""${value}""""
+      case WdlValues.V_File(value) => s""""${value}""""
 
         // compound values
       case WdlValues.V_Pair(l, r) =>
         s"(${wdlString(l)} , ${wdlString(r)})"
       case WdlValues.V_Array(value) =>
-        "[" + value.map(wdlString).mkString(",") + "]"
+        val elems = value.map(wdlString).mkString(",")
+        s"[${elems}]"
       case WdlValues.V_Map(value) =>
         val m = value.map{ case (k,v) =>
           s"${wdlString(k)} : ${wdlString(v)}"
-        }.toVector
-        s"""{${m.mkString(", ")}"""
+        }.mkString(", ")
+        s"""{${m}}"""
 
       case WdlValues.V_Optional(value) =>
         wdlString(value)
       case WdlValues.V_Struct(name, members) =>
         val membersStr = members.map{ case (k, v) =>
-          s""" "${k}" : ${wdlString(v)}"""
+          s"${k} : ${wdlString(v)}"
         }.toVector
-        s"""{ ${membersStr.mkString(", ")} }"""
+        s"""object { ${membersStr.mkString(", ")} }"""
 
       case WdlValues.V_Object(members) =>
         val membersStr = members.map{ case (k, v) =>

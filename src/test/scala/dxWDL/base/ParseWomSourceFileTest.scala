@@ -188,9 +188,9 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
     taskSourceCode shouldBe (srcCode)
   }
 
-  it should "parse the meta section in wdl 1.1/development" taggedAs (EdgeTest) in {
+  ignore should "parse the meta section in wdl 2.0" taggedAs (EdgeTest) in {
     val srcCode =
-      """|version development
+      """|version 2.0
          |
          |task add {
          |  input {
