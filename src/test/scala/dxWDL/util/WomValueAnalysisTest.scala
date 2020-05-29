@@ -34,9 +34,11 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
                             WdlValues.V_String("Y") -> WdlValues.V_Int(10)))
         ),
         "p" -> Some(WdlValues.V_Pair(WdlValues.V_Int(1), WdlValues.V_Int(12))),
-        "file2" -> None,
+        "j" -> None,
         "k" -> None,
-        "readme" -> None
+        "readme" -> None,
+        "s2" -> None,
+        "file2" -> None
     )
 
     // The workflow is a convenient packaging around WOM
@@ -50,17 +52,21 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
          |
          |    # constants
          |    Boolean flag = true
-         |    Int i = 3 + 5
+         |    Int i = 8
          |    Float x = 2.718
-         |    String s = "hello" + " world"
+         |    String s = "hello world"
          |    Array[String] ar1 = ["A", "B", "C"]
          |    Map[String, Int] m1 = {"X": 1, "Y": 10}
          |    Pair[Int, Int] p = (1, 12)
-         |    File? file2 = "/tmp/xxx.txt"
          |
          |    # evaluations
+         |    Int j = 3 + 5
          |    Int k = i + 5
+         |    String s2 = "hello" + " world"
+         |
+         |    # reading a file from local disk
          |    File readme = "/tmp/readme.md"
+         |    File? file2 = "/tmp/xxx.txt"
          |}
          |""".stripMargin
 

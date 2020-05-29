@@ -43,11 +43,10 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
 
       // general case, the keys are not strings.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(m)) =>
-        val keys: WdlValues.V = WdlValues.V_Array(m.keys.toVector)
-        val kJs = womToJSON(keyType, keys)
-        val values: WdlValues.V = WdlValues.V_Array(m.values.toVector)
-        val vJs = womToJSON(valueType, values)
-        JsObject("keys" -> kJs, "values" -> vJs)
+        val keys: Vector[JsValue] = m.keys.map(womToJSON(keyType, _)).toVector
+        val values: Vector[JsValue] = m.values.map(womToJSON(valueType, _)).toVector
+        JsObject("keys" -> JsArray(keys),
+                 "values" -> JsArray(values))
 
       case (WdlTypes.T_Pair(lType, rType), WdlValues.V_Pair(l, r)) =>
         val lJs = womToJSON(lType, l)

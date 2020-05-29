@@ -10,6 +10,19 @@ object WomValueAnalysis {
 
   private class ExprNotConst(message: String) extends RuntimeException(message)
 
+  def isMutableFile(constantFileStr: String): Boolean = {
+    constantFileStr match {
+      case path if path.startsWith(Utils.DX_URL_PREFIX) =>
+        // platform files are immutable
+        false
+      case path if path contains "://" =>
+        throw new Exception(s"protocol not supported, cannot access ${path}")
+      case _ =>
+        // anything else might be mutable
+        true
+    }
+  }
+
   // Evaluate a constant wdl expression. Throw an exception if it isn't a constant.
   //
   // Examine task foo:
@@ -28,19 +41,6 @@ object WomValueAnalysis {
   // have a constant string as an input, this has to be a dnanexus
   // link.
   def evalConst(expr: TAT.Expr): WdlValues.V = {
-    def isMutableFile(constantFileStr: String): Boolean = {
-      constantFileStr match {
-        case path if path.startsWith(Utils.DX_URL_PREFIX) =>
-          // platform files are immutable
-          false
-        case path if path contains "://" =>
-          throw new Exception(s"protocol not supported, cannot access ${path}")
-        case _ =>
-          // anything else might be mutable
-          true
-      }
-    }
-
     expr match {
       // Base case: primitive types.
       case _ : TAT.ValueNull => WdlValues.V_Null
@@ -51,7 +51,7 @@ object WomValueAnalysis {
       case s : TAT.ValueString => WdlValues.V_String(s.value)
       case fl : TAT.ValueFile =>
         if (isMutableFile(fl.value))
-          throw new Exception(s"file ${fl.value} is mutable")
+          throw new ExprNotConst(s"file ${fl.value} is mutable")
         WdlValues.V_File(fl.value)
 
       // compound values
@@ -74,6 +74,39 @@ object WomValueAnalysis {
       case expr =>
         // anything else require evaluation
         throw new ExprNotConst(s"${TUtil.exprToString(expr)}")
+    }
+  }
+
+  def checkForLocalFiles(v : WdlValues.V) : Unit = {
+    v match {
+      case WdlValues.V_Null => ()
+      case WdlValues.V_Boolean(_) => ()
+      case WdlValues.V_Int(_) => ()
+      case WdlValues.V_Float(_) => ()
+      case WdlValues.V_String(_) => ()
+      case WdlValues.V_File(value) =>
+        if (isMutableFile(value))
+          throw new ExprNotConst(s"file ${value} is mutable")
+        ()
+      case WdlValues.V_Pair(l, r) =>
+        checkForLocalFiles(l)
+        checkForLocalFiles(r)
+
+      case WdlValues.V_Array(value) =>
+        value.foreach(checkForLocalFiles(_))
+      case WdlValues.V_Map(value) =>
+        value.foreach{ case (k,v) =>
+          checkForLocalFiles(k)
+          checkForLocalFiles(v)
+        }
+      case WdlValues.V_Optional(value) =>
+        checkForLocalFiles(value)
+      case WdlValues.V_Struct(_, members) =>
+        members.values.foreach(checkForLocalFiles(_))
+      case WdlValues.V_Object(members) =>
+        members.values.foreach(checkForLocalFiles(_))
+      case other =>
+        throw new Exception(s"unhandled case ${other}")
     }
   }
 
@@ -103,6 +136,7 @@ object WomValueAnalysis {
       val value = evalConst(expr)
       val coercion = new Coercion(None)
       val valueWithCorrectType = coercion.coerceTo(wdlType, value, expr.text)
+      checkForLocalFiles(valueWithCorrectType)
       Some(valueWithCorrectType)
     } catch {
       case _ : ExprNotConst =>
