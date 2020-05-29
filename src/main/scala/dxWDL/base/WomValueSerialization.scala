@@ -69,6 +69,14 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
             key -> womToJSON(t, v)
         }.toMap
         JsObject(mJs)
+      case (WdlTypes.T_Struct(structName, typeMap), WdlValues.V_Struct(structName2, m)) =>
+        assert(structName == structName2)
+        val mJs: Map[String, JsValue] = m.map {
+          case (key, v) =>
+            val t: WdlTypes.T = typeMap(key)
+            key -> womToJSON(t, v)
+        }.toMap
+        JsObject(mJs)
 
       case (_, _) =>
         throw new Exception(

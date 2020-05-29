@@ -53,7 +53,6 @@ class WomValueSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "work on a variety of values" in {
     for ((t, v) <- valueTestCases) {
-      System.out.println(s"t=${t} v=${v}")
       valueSerializer.fromJSON(valueSerializer.toJSON(t, v)) should be(v)
     }
   }
