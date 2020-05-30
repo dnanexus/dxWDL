@@ -7,7 +7,7 @@ import wdlTools.types.WdlTypes
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{ParseWomSourceFile, Utils, WomBundle}
-import dxWDL.util.{Block, BlockOutput}
+import dxWDL.util.Block
 
 class BlockTest extends AnyFlatSpec with Matchers {
   private val parseWomSourceFile = ParseWomSourceFile(false)
@@ -17,9 +17,9 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  def mapFromOutputs(outputs : Vector[BlockOutput]) : Map[String, WdlTypes.T] = {
+  def mapFromOutputs(outputs : Vector[Block.OutputDefinition]) : Map[String, WdlTypes.T] = {
     outputs.map {
-      case BlockOutput(name, wdlType, _) => name -> wdlType
+      case Block.OutputDefinition(name, wdlType, _) => name -> wdlType
     }.toMap
   }
 
@@ -123,14 +123,16 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("compiler", "wf_with_output_expressions.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-    Block.outputClosure(wf.outputs).keys.toSet should be(Set("a", "b"))
+    val wfOutputs = wf.outputs.map(Block.translate)
+    Block.outputClosure(wfOutputs).keys.toSet should be(Set("a", "b"))
   }
 
   it should "calculate output closure for a workflow" in {
     val path = pathFromBasename("compiler", "cast.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-    Block.outputClosure(wf.outputs).keys.toSet should be(
+    val wfOutputs = wf.outputs.map(Block.translate)
+    Block.outputClosure(wfOutputs).keys.toSet should be(
       Set("Add.result", "SumArray.result", "SumArray2.result", "JoinMisc.result")
     )
   }
@@ -303,7 +305,9 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("util", "inputs_used_as_outputs.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-    Block.inputsUsedAsOutputs(wf.inputs, wf.outputs) shouldBe (Set("lane"))
+    val wfInputs = wf.inputs.map(Block.translate)
+    val wfOutputs = wf.outputs.map(Block.translate)
+    Block.inputsUsedAsOutputs(wfInputs, wfOutputs) shouldBe (Set("lane"))
   }
 
   it should "create correct inputs for a workflow with an unpassed argument" in {

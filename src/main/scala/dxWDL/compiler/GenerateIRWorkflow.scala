@@ -57,7 +57,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //   ...
   // }
   // We handle only the case where the default is a constant.
-  def buildWorkflowInput(input: TAT.InputDefinition): CVar = {
+  def buildWorkflowInput(input: Block.InputDefinition): CVar = {
     // figure out the meta attribute for this input, if it is
     // specified in the parameter meta section.
     val metaValue : Option[TAT.MetaValue] = wf.parameterMeta match {
@@ -68,9 +68,9 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     val attr = ParameterMeta.unwrap(metaValue, input.wdlType)
 
     input match {
-      case TAT.RequiredInputDefinition(id, wdlType, _) =>
+      case Block.RequiredInputDefinition(id, wdlType) =>
         CVar(id, wdlType, None, attr)
-      case TAT.OverridableInputDefinitionWithDefault(id, womType, defaultExpr, _) =>
+      case Block.OverridableInputDefinitionWithDefault(id, womType, defaultExpr) =>
         val defaultValue: WdlValues.V = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
                                                       | ${defaultExpr}
@@ -78,7 +78,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           case Some(value) => value
         }
         CVar(id, womType, Some(defaultValue), attr)
-      case TAT.OptionalInputDefinition(id, womType, _) =>
+      case Block.OptionalInputDefinition(id, womType) =>
         CVar(id, womType, None, attr)
     }
   }
@@ -218,21 +218,21 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   // that are required for the calculation.
   private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
     block.inputs.flatMap {
-      case BlockInput(name, womType, isOptionalArg) =>
-        lookupInEnv(name, womType, env, isOptionalArg)
+      case i : Block.InputDefinition =>
+        lookupInEnv(i.name, i.wdlType, env, Block.isOptional(i))
     }.toMap
   }
 
   // Find the closure of a graph, excluding the straightforward inputs. Create an input
   // node for each of these external references.
-  private def graphClosure(inputNodes: Vector[TAT.InputDefinition],
+  private def graphClosure(inputNodes: Vector[Block.InputDefinition],
                            subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
-    val allInputs: Vector[BlockInput] = subBlocks
+    val allInputs: Vector[Block.InputDefinition] = subBlocks
       .map { block => block.inputs }
       .flatten
       .toVector
     val allInputs2 : Map[String, (WdlTypes.T, Boolean)] = allInputs.map{ bInput =>
-      bInput.name -> (bInput.wdlType, bInput.optional)
+      bInput.name -> (bInput.wdlType, Block.isOptional(bInput))
     }.toMap
 
     val regularInputNames: Set[String] = inputNodes.map(_.name).toSet
@@ -251,7 +251,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                                  statements: Vector[TAT.WorkflowElement],
                                  blockPath: Vector[Int],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
-    val (inputNodes, _, subBlocks, outputNodes) =
+    val (inputNodes, subBlocks, outputNodes) =
       Block.split(statements)
     assert(subBlocks.size > 0)
 
@@ -493,7 +493,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (allStageInfo, env)
   }
 
-  private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition, env: CallEnv): (CVar, SArg) = {
+  private def buildSimpleWorkflowOutput(output: Block.OutputDefinition, env: CallEnv): (CVar, SArg) = {
     output.expr match {
       case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
         // the output is a constant
@@ -551,7 +551,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //    them artificially with a separate stage that collects the outputs.
   private def buildOutputStage(wfName: String,
                                wfSourceStandAlone: String,
-                               outputNodes: Vector[TAT.OutputDefinition],
+                               outputNodes: Vector[Block.OutputDefinition],
                                env: CallEnv): (IR.Stage, IR.Applet) = {
     // Figure out what variables from the environment we need to pass
     // into the applet.
@@ -737,9 +737,9 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   private def compileWorkflowLocked(
       wfName: String,
-      inputNodes: Vector[TAT.InputDefinition],
+      inputNodes: Vector[Block.InputDefinition],
       closureInputs: Map[String, (WdlTypes.T, Boolean)],
-      outputNodes: Vector[TAT.OutputDefinition],
+      outputNodes: Vector[Block.OutputDefinition],
       blockPath: Vector[Int],
       subBlocks: Vector[Block],
       level: IR.Level.Value
@@ -823,8 +823,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   }
 
   private def compileWorkflowRegular(
-      inputNodes: Vector[TAT.InputDefinition],
-      outputNodes: Vector[TAT.OutputDefinition],
+      inputNodes: Vector[Block.InputDefinition],
+      outputNodes: Vector[Block.OutputDefinition],
       subBlocks: Vector[Block]
   ): (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) = {
     // Create a special applet+stage for the inputs. This is a substitute for
@@ -875,19 +875,21 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
     // Create a stage per call/scatter-block/declaration-block
     val subBlocks = Block.splitWorkflow(wf)
+    val inputs = wf.inputs.map(Block.translate)
+    val outputs = wf.outputs.map(Block.translate)
 
     // compile into an IR workflow
     val (irwf, irCallables, wfOutputs) =
       if (locked) {
         compileWorkflowLocked(wf.name,
-                              wf.inputs,
+                              inputs,
                               Map.empty,
-                              wf.outputs,
+                              outputs,
                               Vector.empty,
                               subBlocks,
                               IR.Level.Top)
       } else {
-        compileWorkflowRegular(wf.inputs, wf.outputs, subBlocks)
+        compileWorkflowRegular(inputs, outputs, subBlocks)
       }
 
     // Add a workflow reorg applet if necessary

@@ -653,17 +653,17 @@ case class WfFragRunner(wf: TAT.Workflow,
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] = block.inputs.flatMap {
-      case BlockInput(name, womType, isOptional) =>
-        (envInitial.get(name), isOptional) match {
+      case inputDef : Block.InputDefinition =>
+        (envInitial.get(inputDef.name), Block.isOptional(inputDef)) match {
           case (None, true) =>
             None
           case (None, false) =>
             // input is missing, and there is no default.
             Utils.warning(utlVerbose,
-                          s"input is missing for ${name}, and there is no default at the callee")
+                          s"input is missing for ${inputDef.name}, and there is no default at the callee")
             None
           case (Some((t,v)), _) =>
-            Some(name -> (t,v))
+            Some(inputDef.name -> (t,v))
         }
     }.toMap
 

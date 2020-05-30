@@ -78,9 +78,6 @@ package dxWDL.util
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.{Util => TUtil, WdlTypes}
 
-case class BlockInput(name: String, wdlType: WdlTypes.T, optional : Boolean)
-case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
-
 // Block: a continuous list of workflow elements from a user
 // workflow.
 //
@@ -115,10 +112,10 @@ case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
 // the block.  For example, 'Int x' declared inside a scatter, is
 // 'Array[Int] x' outside the scatter.
 //
-case class Block(inputs : Vector[BlockInput],
+case class Block(inputs : Vector[Block.InputDefinition],
                  nodes: Vector[TAT.WorkflowElement],
-                 outputs : Vector[BlockOutput],
-                 allOutputs : Vector[BlockOutput]) {
+                 outputs : Vector[Block.OutputDefinition],
+                 allOutputs : Vector[Block.OutputDefinition]) {
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
@@ -141,6 +138,64 @@ case class Block(inputs : Vector[BlockInput],
 }
 
 object Block {
+  // These are the same definitions as in TypedAbstractSyntax,
+  // with the TextSource field stripped out. This is because the inputs
+  // and outputs here are compiler constructs, they have not been defined by the user.
+  // They are computed by the algorithm and assigned to blocks of
+  // statements.
+  sealed trait InputDefinition {
+    val name: String
+    val wdlType: WdlTypes.T
+  }
+
+  // A compulsory input that has no default, and must be provided by the caller
+  case class RequiredInputDefinition(name: String, wdlType: WdlTypes.T)
+      extends InputDefinition
+
+  // An input that has a default and may be skipped by the caller
+  case class OverridableInputDefinitionWithDefault(name: String,
+                                                   wdlType: WdlTypes.T,
+                                                   defaultExpr: TAT.Expr)
+      extends InputDefinition
+
+  // an input that may be omitted by the caller. In that case the value will
+  // be null (or None).
+  case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T_Optional)
+      extends InputDefinition
+
+  case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr: TAT.Expr)
+
+  def translate(i : TAT.InputDefinition) : InputDefinition = {
+    i match {
+      case TAT.RequiredInputDefinition(name, wdlType, _) =>
+        RequiredInputDefinition(name, wdlType)
+      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, expr, _) =>
+        OverridableInputDefinitionWithDefault(name, wdlType, expr)
+      case TAT.OptionalInputDefinition(name, wdlType, _) =>
+        OptionalInputDefinition(name, wdlType)
+    }
+  }
+
+  def translate(o : TAT.OutputDefinition) : OutputDefinition = {
+    OutputDefinition(o.name, o.wdlType, o.expr)
+  }
+
+  def isOptional(inputDef : InputDefinition) : Boolean = {
+    inputDef match {
+      case _ : RequiredInputDefinition => false
+      case _ : OverridableInputDefinitionWithDefault => true
+      case _ : OptionalInputDefinition => true
+    }
+  }
+
+  // Check that this block is valid.
+  def validate(b : Block): Unit = {
+    // The only calls allowed are in the last node
+    val allButLast = b.nodes.dropRight(1)
+    val allCalls = deepFindCalls(allButLast)
+    assert(allCalls.size == 0)
+  }
+
   // figure out the inputs from an expression
   //
   // For example:
@@ -154,46 +209,53 @@ object Block {
   //def exprInputs(expr : TAT.Expr) : Vector[String] = ???
 
 
-  // The block is a singleton with one statement which is a call. The call
-  // has no subexpressions. Note that the call may not provide
-  // all the callee's arguments.
-  def isCallWithNoSubexpressions(node: TAT.WorkflowElement): Boolean = {
-    node match {
-      case call: TAT.Call =>
-        call.inputs.forall {
-          case (name, expr) => WomValueAnalysis.isTrivialExpression(expr)
-        }
-      case _ => false
-    }
-  }
-
-  // figure out all the outputs from a block of statements
+  // create a block from a group of statements
   //
-  def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = ???
+  // requires calculating all the inputs and outputs
+  def make(elements : Vector[TAT.WorkflowElement]) : Block = ???
 
   // split a group of statements into blocks
-  def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = ???
-
-  // split a part of a workflow
-  def split(statements : Vector[TAT.WorkflowElement]): (Vector[TAT.InputDefinition], // inputs
-                                                        Vector[TAT.InputDefinition], // implicit inputs
-                                                        Vector[Block], // blocks
-                                                        Vector[TAT.OutputDefinition]) // outputs
-  = ???
-
-  // Split an entire workflow into blocks.
-  //
-  def splitWorkflow(wf : TAT.Workflow): Vector[Block] = splitToBlocks(wf.body)
+  def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = {
+/*    elements.foldLeft(Vector.empty[Block]) {
+      case
+ }*/
+    ???
+  }
 
   // We are building an applet for the output section of a workflow.
   // The outputs have expressions, and we need to figure out which
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
-  def outputClosure(outputs : Vector[TAT.OutputDefinition]) : Map[String, WdlTypes.T] = ???
+  def outputClosure(outputs : Vector[OutputDefinition]) : Map[String, WdlTypes.T] = ???
+
+  // figure out all the outputs from a block of statements
+  //
+  def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = {
+    val b = make(elements)
+    b.allOutputs.map{
+      case OutputDefinition(name, wdlType, _) =>
+        name -> wdlType
+    }.toMap
+  }
+
+  // split a part of a workflow
+  def split(statements : Vector[TAT.WorkflowElement]): (Vector[InputDefinition],
+                                                        Vector[Block],
+                                                        Vector[OutputDefinition]) = {
+    val top : Block = make(statements)
+    val subBlocks = splitToBlocks(statements)
+    (top.inputs, subBlocks, top.outputs)
+  }
+
+  // Split an entire workflow into blocks.
+  //
+  def splitWorkflow(wf : TAT.Workflow): Vector[Block] = {
+    splitToBlocks(wf.body)
+  }
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: TAT.OutputDefinition): Boolean = {
+  def isSimpleOutput(outputNode: OutputDefinition): Boolean = {
     WomValueAnalysis.isTrivialExpression(outputNode.expr)
   }
 
@@ -212,8 +274,8 @@ object Block {
   //      String blah = lane
   //   }
   // }
-  def inputsUsedAsOutputs(inputNodes: Vector[TAT.InputDefinition],
-                          outputNodes: Vector[TAT.OutputDefinition]): Set[String] = {
+  def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
+                          outputNodes: Vector[OutputDefinition]): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes).map(_._1).toSet
     val inputs: Set[String] = inputNodes.map(_.name).toSet

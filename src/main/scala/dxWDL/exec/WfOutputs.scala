@@ -54,7 +54,8 @@ case class WfOutputs(wf: TAT.Workflow,
 
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
-    val allInputs = Block.outputClosure(wf.outputs)
+    val wfOutputs = wf.outputs.map(Block.translate)
+    val allInputs = Block.outputClosure(wfOutputs)
     val envInitialFilled: Map[String, WdlValues.V] = allInputs.flatMap {
       case (name, wdlType) =>
         (envInitial.get(name), wdlType) match {
@@ -73,8 +74,8 @@ case class WfOutputs(wf: TAT.Workflow,
     // the environment, so they can be referenced by expressions in the next
     // lines.
     var envFull = envInitialFilled
-    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wf.outputs.map {
-      case TAT.OutputDefinition(name, wdlType, expr, _) =>
+    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
+      case Block.OutputDefinition(name, wdlType, expr) =>
         val value = evaluateWomExpression(expr, wdlType, envFull)
         envFull += (name -> value)
         name -> (wdlType, value)
