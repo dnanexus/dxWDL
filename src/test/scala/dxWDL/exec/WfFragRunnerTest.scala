@@ -97,7 +97,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       case Some(wf: TAT.Workflow) => wf
       case _                            => throw new Exception("sanity")
     }
-    val (inputNodes, _, subBlocks, outputNodes) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     val block = subBlocks(1)
 
@@ -119,7 +119,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
     val block = subBlocks(0)
 
     val env = Map.empty[String, (WdlTypes.T, WdlValues.V)]
@@ -151,7 +151,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
     val block = subBlocks.head
 
     val env = Map.empty[String, (WdlTypes.T, WdlValues.V)]
@@ -170,7 +170,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     val block = subBlocks.head
     val results = fragRunner.evalExpressions(block.nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
@@ -198,7 +198,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     // Make sure an exception is thrown if eval-expressions is called with
     // a wdl-call.
@@ -213,7 +213,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
     /*
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])
@@ -227,7 +227,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                              Map.empty[String, (WdlTypes.T, WdlValues.V)])
@@ -319,7 +319,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val (_, _, subBlocks, _) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                              Map.empty[String, (WdlTypes.T, WdlValues.V)])

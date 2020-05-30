@@ -171,6 +171,7 @@ object Block {
   //
   def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = ???
 
+  // split a group of statements into blocks
   def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = ???
 
   // split a part of a workflow
@@ -182,12 +183,7 @@ object Block {
 
   // Split an entire workflow into blocks.
   //
-  // An easy to use method that takes the workflow source
-  def splitWorkflow(wf : TAT.Workflow): (Vector[TAT.InputDefinition], // inputs
-                                         Vector[TAT.InputDefinition], // implicit inputs
-                                         Vector[Block], // blocks
-                                         Vector[TAT.OutputDefinition]) // outputs
-  = ???
+  def splitWorkflow(wf : TAT.Workflow): Vector[Block] = splitToBlocks(wf.body)
 
   // We are building an applet for the output section of a workflow.
   // The outputs have expressions, and we need to figure out which

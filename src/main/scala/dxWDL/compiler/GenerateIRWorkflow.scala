@@ -874,20 +874,20 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
     // Create a stage per call/scatter-block/declaration-block
-    val (inputNodes, _, subBlocks, outputNodes) = Block.splitWorkflow(wf)
+    val subBlocks = Block.splitWorkflow(wf)
 
     // compile into an IR workflow
     val (irwf, irCallables, wfOutputs) =
       if (locked) {
         compileWorkflowLocked(wf.name,
-                              inputNodes,
+                              wf.inputs,
                               Map.empty,
-                              outputNodes,
+                              wf.outputs,
                               Vector.empty,
                               subBlocks,
                               IR.Level.Top)
       } else {
-        compileWorkflowRegular(inputNodes, outputNodes, subBlocks)
+        compileWorkflowRegular(wf.inputs, wf.outputs, subBlocks)
       }
 
     // Add a workflow reorg applet if necessary
