@@ -641,7 +641,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
     // Find the fragment block to execute
-    val block = Block.getSubBlock(blockPath, wf.body)
+    val block = Block.getSubBlock(blockPath, wf)
     Utils.appletLog(
       verbose,
       s"""|Block ${blockPath} to execute:

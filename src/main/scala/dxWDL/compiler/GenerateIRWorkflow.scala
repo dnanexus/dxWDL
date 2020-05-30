@@ -225,7 +225,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   // Find the closure of a graph, excluding the straightforward inputs. Create an input
   // node for each of these external references.
-  private def graphClosure(inputNodes: Vector[TAT.InputDefinition],
+  private def graphClosure(inputNodes: Vector[TAT.BlockInput],
                            subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
     val allInputs: Vector[BlockInput] = subBlocks
       .map { block => block.inputs }
@@ -251,7 +251,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                                  statements: Vector[TAT.WorkflowElement],
                                  blockPath: Vector[Int],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
-    val (inputNodes, _, subBlocks, outputNodes) =
+    val (inputNodes, outputNodes, subBlocks) =
       Block.split(statements)
     assert(subBlocks.size > 0)
 
