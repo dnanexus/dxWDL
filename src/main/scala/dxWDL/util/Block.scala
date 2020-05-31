@@ -113,9 +113,8 @@ import wdlTools.types.{Util => TUtil, WdlTypes}
 // 'Array[Int] x' outside the scatter.
 //
 case class Block(inputs : Vector[Block.InputDefinition],
-                 nodes: Vector[TAT.WorkflowElement],
                  outputs : Vector[Block.OutputDefinition],
-                 allOutputs : Vector[Block.OutputDefinition]) {
+                 nodes: Vector[TAT.WorkflowElement]) {
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
@@ -188,6 +187,26 @@ object Block {
     }
   }
 
+  // Deep search for all calls in a graph
+  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
+    nodes
+      .foldLeft(Vector.empty[TAT.Call]) {
+        case (accu, call : TAT.Call) =>
+          accu :+ call
+        case (accu, ssc: TAT.Scatter) =>
+          accu ++ deepFindCalls(ssc.body)
+        case (accu, ifStmt: TAT.Conditional) =>
+          accu ++ deepFindCalls(ifStmt.body)
+        case (accu, _) =>
+          accu
+      }
+      .toVector
+  }
+
+  def deepFindCalls(node: TAT.WorkflowElement): Vector[TAT.Call] = {
+    deepFindCalls(Vector(node))
+  }
+
   // Check that this block is valid.
   def validate(b : Block): Unit = {
     // The only calls allowed are in the last node
@@ -206,20 +225,127 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  //def exprInputs(expr : TAT.Expr) : Vector[String] = ???
+  private def exprInputs(expr : TAT.Expr) : Vector[InputDefinition] = ???
 
+  private def callInputs(call : TAT.Call) : Vector[InputDefinition] = ???
+
+  private def makeOptional(t : WdlTypes.T) : WdlTypes.T = {
+    t match {
+      case _ : T_Optional => t
+      case _ => WdlTypes.T_Optional(t)
+    }
+  }
+
+  private def makeArray(t : WdlTypes.T) : WdlTypes.T = {
+    WdlTypes.T_Array(t, false)
+  }
 
   // create a block from a group of statements
   //
   // requires calculating all the inputs and outputs
-  def make(elements : Vector[TAT.WorkflowElement]) : Block = ???
+  private def makeBlock(elements : Vector[TAT.WorkflowElement]) : Block = {
+    // accumulate the inputs and outputs.
+    // start with an empty list of inputs and outputs.
+    val (inputs, outputs) = elements.foldLeft((Vector.empty[InputDefinition],
+                                               Vector.empty[OutputDefinition])) {
+      case ((inputs, outputs), elem) =>
+        elem match {
+          case decl : TAT.Declaration =>
+            (inputs ++ exprInputs(decl.expr),
+             outputs ++ OutputDefinition(decl.name, decl.wdlType))
 
-  // split a group of statements into blocks
-  def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = {
-/*    elements.foldLeft(Vector.empty[Block]) {
-      case
- }*/
-    ???
+          case call : TAT.Call =>
+            (inputs ++ callInputs(call),
+             outputs ++ OutputDefinition(call.actualName, call.wdlType))
+
+          case cond : TAT.Conditional =>
+            // recurse into body of conditional
+            val subBlock = makeBlock(cond.nodes)
+            // add an optional to all the the input types
+            val subBlockInputs = subBlock.inputs.map{
+              case RequiredInputDefinition(name, wdlType) =>
+                RequiredInputDefinition(name, makeOptional(wdlType))
+              case OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr) =>
+                OverridableInputDefinitionWithDefault(name, makeOptional(wdlType), defaultExpr)
+              case OptionalInputDefinition(name, wdlType) =>
+                OptionalInputDefinition(name, wdlType)
+            }
+            // make outputs optional
+            val subBlockOutputs = subBlock.outputs.map{
+              case OutputDefinition(name, wdlType, expr) =>
+                OutputDefinition(name, makeOptional(wdlType), expr)
+            }
+            (inputs ++ subBlockInputs ++ exprInputs(cond.expr),
+             outputs ++ subBlockOutputs)
+
+          case sct : TAT.Scatter =>
+            // recurse into body of the scatter
+            val subBlock = makeBlock(sct.nodes)
+            // add an array to all the the input types
+            val subBlockInputs = subBlock.inputs.map{
+              case RequiredInputDefinition(name, wdlType) =>
+                RequiredInputDefinition(name, makeArray(wdlType))
+              case OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr) =>
+                OverridableInputDefinitionWithDefault(name, makeArray(wdlType), defaultExpr)
+              case OptionalInputDefinition(name, wdlType) =>
+                OptionalInputDefinition(name, makeArray(wdlType))
+            }
+            // make outputs arrays
+            val subBlockOutputs = subBlock.outputs.map{
+              case OutputDefinition(name, wdlType, expr) =>
+                OutputDefinition(name, makeArray(wdlType), expr)
+            }
+            (inputs ++ subBlockInputs ++ exprInputs(sct.expr),
+             outputs ++ subBlockOutputs)
+        }
+    }
+    Block(inputs, outputs, elements)
+  }
+
+  // split a sequence of statements into blocks
+  //
+  private def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = {
+    // add to last part
+    def addToLastPart(parts : Vector[Vector[TAT.WorkflowElement]],
+                  elem : TAT.WorkflowElement) : Vector[Vector[TAT.WorkflowElement]] = {
+      val allButLast = parts.dropRight(1)
+      val last = parts.last :+ elem
+      allButLast :+ last
+    }
+    // add to last part and start a new one.
+    def startFresh(parts : Vector[Vector[TAT.WorkflowElement]],
+                   elem : TAT.WorkflowElement) : Vector[Vector[TAT.WorkflowElement]] = {
+      val parts2 = addToLastPart(parts, elem)
+      parts2 :+ Vector.empty[TAT.WorkflowElement]
+    }
+
+    // split into sub-sequences (parts). Each part is a vector of workflow elements.
+    // We start with a single empty part, which is an empty vector. This ensures that
+    // down the line there is at least one part.
+    val parts = elements.foldLeft(Vector(Vector.empty[TAT.WorkflowElement])) {
+      case (parts, decl : TAT.Declaration) =>
+        addToLastPart(parts, decl)
+      case (parts, call : TAT.Call) =>
+        startFresh(parts, call)
+      case (parts, cond : TAT.Conditional) if deepFindCalls(cond).size == 0 =>
+        addToLastPart(parts, cond)
+      case (parts, cond : TAT.Conditional) =>
+        startFresh(parts, cond)
+      case (parts, sct : TAT.Scatter) if deepFindCalls(sct).size == 0 =>
+        addToLastPart(parts, sct)
+      case (parts, sct : TAT.Scatter) =>
+        startFresh(parts, sct)
+    }
+
+    // if the last block is empty, drop it
+    val cleanParts =
+      if (parts.last.isEmpty)
+        parts.dropRight(1)
+      else
+        parts
+
+    // convert to blocks
+    cleanParts.map(makeBlock)
   }
 
   // We are building an applet for the output section of a workflow.
@@ -231,8 +357,8 @@ object Block {
   // figure out all the outputs from a block of statements
   //
   def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = {
-    val b = make(elements)
-    b.allOutputs.map{
+    val b = makeBlock(elements)
+    b.outputs.map{
       case OutputDefinition(name, wdlType, _) =>
         name -> wdlType
     }.toMap
@@ -242,7 +368,7 @@ object Block {
   def split(statements : Vector[TAT.WorkflowElement]): (Vector[InputDefinition],
                                                         Vector[Block],
                                                         Vector[OutputDefinition]) = {
-    val top : Block = make(statements)
+    val top : Block = makeBlock(statements)
     val subBlocks = splitToBlocks(statements)
     (top.inputs, subBlocks, top.outputs)
   }
@@ -313,22 +439,6 @@ object Block {
     }
     assert(calls.size == 1)
     calls.head
-  }
-
-  // Deep search for all calls in a graph
-  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
-    nodes
-      .foldLeft(Vector.empty[TAT.Call]) {
-        case (accu, call : TAT.Call) =>
-          accu :+ call
-        case (accu, ssc: TAT.Scatter) =>
-          accu ++ deepFindCalls(ssc.body)
-        case (accu, ifStmt: TAT.Conditional) =>
-          accu ++ deepFindCalls(ifStmt.body)
-        case (accu, _) =>
-          accu
-      }
-      .toVector
   }
 
   // These are the kinds of blocks that are run by the workflow-fragment-runner.
