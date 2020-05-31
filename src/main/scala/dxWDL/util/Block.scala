@@ -162,7 +162,7 @@ object Block {
   case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T_Optional)
       extends InputDefinition
 
-  case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr: TAT.Expr)
+  case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr: Option[TAT.Expr])
 
   def translate(i : TAT.InputDefinition) : InputDefinition = {
     i match {
@@ -176,7 +176,7 @@ object Block {
   }
 
   def translate(o : TAT.OutputDefinition) : OutputDefinition = {
-    OutputDefinition(o.name, o.wdlType, o.expr)
+    OutputDefinition(o.name, o.wdlType, Some(o.expr))
   }
 
   def isOptional(inputDef : InputDefinition) : Boolean = {
@@ -231,7 +231,7 @@ object Block {
 
   private def makeOptional(t : WdlTypes.T) : WdlTypes.T = {
     t match {
-      case _ : T_Optional => t
+      case _ : WdlTypes.T_Optional => t
       case _ => WdlTypes.T_Optional(t)
     }
   }
@@ -251,16 +251,20 @@ object Block {
       case ((inputs, outputs), elem) =>
         elem match {
           case decl : TAT.Declaration =>
-            (inputs ++ exprInputs(decl.expr),
-             outputs ++ OutputDefinition(decl.name, decl.wdlType))
+            val declInputs = decl.expr match {
+              case None => Vector.empty
+              case Some(expr) => exprInputs(expr)
+            }
+            (inputs ++ declInputs,
+             outputs :+ OutputDefinition(decl.name, decl.wdlType, decl.expr))
 
           case call : TAT.Call =>
             (inputs ++ callInputs(call),
-             outputs ++ OutputDefinition(call.actualName, call.wdlType))
+             outputs :+ OutputDefinition(call.actualName, call.wdlType, None))
 
           case cond : TAT.Conditional =>
             // recurse into body of conditional
-            val subBlock = makeBlock(cond.nodes)
+            val subBlock = makeBlock(cond.body)
             // add an optional to all the the input types
             val subBlockInputs = subBlock.inputs.map{
               case RequiredInputDefinition(name, wdlType) =>
@@ -280,7 +284,7 @@ object Block {
 
           case sct : TAT.Scatter =>
             // recurse into body of the scatter
-            val subBlock = makeBlock(sct.nodes)
+            val subBlock = makeBlock(sct.body)
             // add an array to all the the input types
             val subBlockInputs = subBlock.inputs.map{
               case RequiredInputDefinition(name, wdlType) =>
@@ -288,7 +292,8 @@ object Block {
               case OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr) =>
                 OverridableInputDefinitionWithDefault(name, makeArray(wdlType), defaultExpr)
               case OptionalInputDefinition(name, wdlType) =>
-                OptionalInputDefinition(name, makeArray(wdlType))
+                // not sure about this conversion
+                RequiredInputDefinition(name, makeArray(wdlType))
             }
             // make outputs arrays
             val subBlockOutputs = subBlock.outputs.map{
@@ -382,7 +387,10 @@ object Block {
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
   def isSimpleOutput(outputNode: OutputDefinition): Boolean = {
-    WomValueAnalysis.isTrivialExpression(outputNode.expr)
+    outputNode.expr match {
+      case None => true   // What happens here?
+      case Some(expr) => WomValueAnalysis.isTrivialExpression(expr)
+    }
   }
 
   // is an output used directly as an input? For example, in the
