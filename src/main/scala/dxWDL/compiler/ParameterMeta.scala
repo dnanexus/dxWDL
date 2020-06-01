@@ -25,7 +25,7 @@ object ParameterMeta {
   private def unwrapWomArrayType(womType: WdlTypes.T): WdlTypes.T = {
     womType match {
       case WdlTypes.T_Array(t, _) => unwrapWomArrayType(t)
-      case x => x
+      case x                      => x
     }
   }
 
@@ -282,7 +282,7 @@ object ParameterMeta {
             val wt = unwrapWomArrayType(womType)
             wt match {
               case WdlTypes.T_File => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
-              case _                 => throw new Exception("'dx_type' can only be specified for File parameters")
+              case _               => throw new Exception("'dx_type' can only be specified for File parameters")
             }
           case (IR.PARAM_META_DEFAULT, default: TAT.MetaValue) =>
             Some(IR.IOAttrDefault(metaDefaultToIR(default, womType)))
@@ -293,28 +293,27 @@ object ParameterMeta {
     }
   }
 
-
   // strip the source text token from meta values
-  def translateMetaValue(mv : TAT.MetaValue) : IR.MetaValue = {
+  def translateMetaValue(mv: TAT.MetaValue): IR.MetaValue = {
     mv match {
-      case TAT.MetaValueNull(_) => IR.MetaValueNull
+      case TAT.MetaValueNull(_)           => IR.MetaValueNull
       case TAT.MetaValueBoolean(value, _) => IR.MetaValueBoolean(value)
-      case TAT.MetaValueInt(value, _) => IR.MetaValueInt(value)
-      case TAT.MetaValueFloat(value, _)  => IR.MetaValueFloat(value)
-      case TAT.MetaValueString(value, _) => IR.MetaValueString(value)
-      case TAT.MetaValueObject(value, _) => IR.MetaValueObject(
-        value.map{
+      case TAT.MetaValueInt(value, _)     => IR.MetaValueInt(value)
+      case TAT.MetaValueFloat(value, _)   => IR.MetaValueFloat(value)
+      case TAT.MetaValueString(value, _)  => IR.MetaValueString(value)
+      case TAT.MetaValueObject(value, _) =>
+        IR.MetaValueObject(value.map {
           case (k, v) => k -> translateMetaValue(v)
         })
-      case TAT.MetaValueArray(value, _) => IR.MetaValueArray(
-        value.map{
+      case TAT.MetaValueArray(value, _) =>
+        IR.MetaValueArray(value.map {
           case v => translateMetaValue(v)
         }.toVector)
     }
   }
 
-  def translateMetaKVs(kvs : Map[String, TAT.MetaValue]) : Map[String, IR.MetaValue] = {
-    kvs.map{
+  def translateMetaKVs(kvs: Map[String, TAT.MetaValue]): Map[String, IR.MetaValue] = {
+    kvs.map {
       case (k, v) => k -> translateMetaValue(v)
     }.toMap
   }

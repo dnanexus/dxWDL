@@ -48,11 +48,11 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
   private def findDxFiles(womType: WdlTypes.T, jsValue: JsValue): Vector[JsValue] = {
     (womType, jsValue) match {
       // base case: primitive types
-      case (WdlTypes.T_Boolean, _)      => Vector.empty
-      case (WdlTypes.T_Int, _)      => Vector.empty
-      case (WdlTypes.T_Float, _)        => Vector.empty
-      case (WdlTypes.T_String, _)       => Vector.empty
-      case (WdlTypes.T_File, jsv) => Vector(jsv)
+      case (WdlTypes.T_Boolean, _) => Vector.empty
+      case (WdlTypes.T_Int, _)     => Vector.empty
+      case (WdlTypes.T_Float, _)   => Vector.empty
+      case (WdlTypes.T_String, _)  => Vector.empty
+      case (WdlTypes.T_File, jsv)  => Vector(jsv)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
@@ -191,12 +191,12 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   private def womValueFromCromwellJSON(womType: WdlTypes.T, jsValue: JsValue): WdlValues.V = {
     (womType, jsValue) match {
       // base case: primitive types
-      case (WdlTypes.T_Boolean, JsBoolean(b))   => WdlValues.V_Boolean(b.booleanValue)
-      case (WdlTypes.T_Int, JsNumber(bnm))  => WdlValues.V_Int(bnm.intValue)
-      case (WdlTypes.T_Float, JsNumber(bnm))    => WdlValues.V_Float(bnm.doubleValue)
-      case (WdlTypes.T_String, JsString(s))     => WdlValues.V_String(s)
-      case (WdlTypes.T_File, JsString(s)) => WdlValues.V_File(s)
-      case (WdlTypes.T_File, JsObject(_)) =>
+      case (WdlTypes.T_Boolean, JsBoolean(b)) => WdlValues.V_Boolean(b.booleanValue)
+      case (WdlTypes.T_Int, JsNumber(bnm))    => WdlValues.V_Int(bnm.intValue)
+      case (WdlTypes.T_Float, JsNumber(bnm))  => WdlValues.V_Float(bnm.doubleValue)
+      case (WdlTypes.T_String, JsString(s))   => WdlValues.V_String(s)
+      case (WdlTypes.T_File, JsString(s))     => WdlValues.V_File(s)
+      case (WdlTypes.T_File, JsObject(_))     =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxUtils.dxFileFromJsValue(jsValue)

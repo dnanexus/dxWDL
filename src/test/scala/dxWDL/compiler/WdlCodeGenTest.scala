@@ -34,11 +34,10 @@ class WdlCodeGenTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle structs" in {
-    val houseType = T_Struct("House",
-                             Map("height" -> T_Int,
-                                 "num_floors" -> T_Int,
-                                 "street" -> T_String,
-                                 "city" -> T_String))
+    val houseType = T_Struct(
+        "House",
+        Map("height" -> T_Int, "num_floors" -> T_Int, "street" -> T_String, "city" -> T_String)
+    )
     genDefaultValue(houseType) shouldBe """object { height : 0, num_floors : 0, street : "", city : "" }"""
   }
 }

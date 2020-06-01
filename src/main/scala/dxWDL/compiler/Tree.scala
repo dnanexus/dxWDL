@@ -9,7 +9,6 @@ import IR._
 import dxWDL.base.Utils
 import dxWDL.dx.{DxWorkflow, Field}
 
-
 case class Tree(execDict: Map[String, ExecRecord]) {
 
   private def kindToString(kind: AppletKind): String = {
@@ -98,42 +97,41 @@ object Tree {
   }
 
   /** Recursivly traverse the exec tree and generate an appropriate name + color based on the node type.
-   * The prefix is built up as recursive calls happen. This allows for mainaining the locations of branches
-   * in the tree. When a prefix made for a current node, it undergoes a transformation to strip out any
-   * extra characters from previous calls. This maintains the indenation level and tree branches.
-   *
-   * Color scheme:
-   *   'types' are in CYAN, types being Workflow, App, Task etc
-   *   'names' are in WHITE for all app types, and YELLOW for workflow types
-   *
-   * Step by step:
-   *
-   *       TREE                                            LEVEL               prettyPrint calls (approx)                                                         NOTES
-   * Workflow: four_levels                                 0. Workflow         0a. prettyPrint(IR.Workflow, None)
-   * ├───App Inputs: common                                1. App              1a. prettyPrint(IR.App, Some("common"), 3, "├───")
-   * ├───App Fragment: if ((username == "a"))              1. App              1b. prettyPrint(IR.AppFrag, Some("if ((username == "a"))", 3, "├───")              The starting prefix for 6 would be ├───└───, that combo gets fixed to be what you actually see by the replace rules
-   * │   └───Workflow: four_levels_block_0                 2. Workflow         2a. prettyPrint(IR.Workflow, None, 3, "│   └───")
-   * │       ├───App Task: c1                              3. App              3a. prettyPrint(IR.App, None, 3, "│       ├───")                                   The prefix in the step before this would have looked like "│   └───├───"
-   * │       └───App Task: c2                              3. App              3b. pretyyPrint(IR.App, None, 3, "│       └───")
-   * ├───App Fragment: scatter (i in [1, 4, 9])            1. App              1c. prettyPrint(IR.AppFrag, Some("scatter (i in [1, 4, 9])", 3, "├───")
-   * │   └───App Fragment: four_levels_frag_4              2. App              2b. prettyPrint(IR.AppFrag, Some("four_levels_frag_4"), 3, "├───├───")
-   * │       └───Workflow: four_levels_block_1_0           3. Workflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
-   * │           ├───App Fragment: if ((j == "john"))      4. App              4a. prettyPrint(IR.AppFrag, Some("if ((j == "john"))"), 3, "│           ├───")
-   * │           │   └───App Task: concat                  5. App              5a. prettyPrint(IR.App, None, 3, "│           │   └───")                           The prefix that would be 'fixed', into this was "│           ├───└───"
-   * │           └───App Fragment: if ((j == "clease"))    4. App              4b. prettyPrint(IR.AppFrag, Some("if ((j == "clease"))"), 3, "│           └───")
-   * └───App Outputs: outputs                              1. App              1d. prettyPrint(IR.AppFrag, Some("outputs"), 3, "└───")
-   * */
+    * The prefix is built up as recursive calls happen. This allows for mainaining the locations of branches
+    * in the tree. When a prefix made for a current node, it undergoes a transformation to strip out any
+    * extra characters from previous calls. This maintains the indenation level and tree branches.
+    *
+    * Color scheme:
+    *   'types' are in CYAN, types being Workflow, App, Task etc
+    *   'names' are in WHITE for all app types, and YELLOW for workflow types
+    *
+    * Step by step:
+    *
+    *       TREE                                            LEVEL               prettyPrint calls (approx)                                                         NOTES
+    * Workflow: four_levels                                 0. Workflow         0a. prettyPrint(IR.Workflow, None)
+    * ├───App Inputs: common                                1. App              1a. prettyPrint(IR.App, Some("common"), 3, "├───")
+    * ├───App Fragment: if ((username == "a"))              1. App              1b. prettyPrint(IR.AppFrag, Some("if ((username == "a"))", 3, "├───")              The starting prefix for 6 would be ├───└───, that combo gets fixed to be what you actually see by the replace rules
+    * │   └───Workflow: four_levels_block_0                 2. Workflow         2a. prettyPrint(IR.Workflow, None, 3, "│   └───")
+    * │       ├───App Task: c1                              3. App              3a. prettyPrint(IR.App, None, 3, "│       ├───")                                   The prefix in the step before this would have looked like "│   └───├───"
+    * │       └───App Task: c2                              3. App              3b. pretyyPrint(IR.App, None, 3, "│       └───")
+    * ├───App Fragment: scatter (i in [1, 4, 9])            1. App              1c. prettyPrint(IR.AppFrag, Some("scatter (i in [1, 4, 9])", 3, "├───")
+    * │   └───App Fragment: four_levels_frag_4              2. App              2b. prettyPrint(IR.AppFrag, Some("four_levels_frag_4"), 3, "├───├───")
+    * │       └───Workflow: four_levels_block_1_0           3. Workflow          3c. prettyPrint(IR.Workflow, None, 3, "│       └───")
+    * │           ├───App Fragment: if ((j == "john"))      4. App              4a. prettyPrint(IR.AppFrag, Some("if ((j == "john"))"), 3, "│           ├───")
+    * │           │   └───App Task: concat                  5. App              5a. prettyPrint(IR.App, None, 3, "│           │   └───")                           The prefix that would be 'fixed', into this was "│           ├───└───"
+    * │           └───App Fragment: if ((j == "clease"))    4. App              4b. prettyPrint(IR.AppFrag, Some("if ((j == "clease"))"), 3, "│           └───")
+    * └───App Outputs: outputs                              1. App              1d. prettyPrint(IR.AppFrag, Some("outputs"), 3, "└───")
+    * */
   def generateTreeFromJson(TreeJS: JsObject,
                            stageDesc: Option[String] = None,
                            prefix: String = ""): String = {
 
     TreeJS.fields.get("kind") match {
       case Some(JsString("workflow")) => processWorkflow(prefix, TreeJS)
-      case Some(JsString(x))                   => processApplets(prefix, stageDesc, TreeJS)
-      case _                                   => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
+      case Some(JsString(x))          => processApplets(prefix, stageDesc, TreeJS)
+      case _                          => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
     }
   }
-
 
   private def determineDisplayName(stageDesc: Option[String], name: String): String = {
     stageDesc match {

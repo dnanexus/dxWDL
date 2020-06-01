@@ -239,9 +239,9 @@ object WdlRuntimeAttrs extends DefaultJsonProtocol {
     }
     private def writeWomValue(wValue: WdlValues.V): JsValue = wValue match {
       case WdlValues.V_Boolean(b) => JsBoolean(b)
-      case WdlValues.V_Int(i) => JsNumber(i)
+      case WdlValues.V_Int(i)     => JsNumber(i)
       case WdlValues.V_String(s)  => JsString(s)
-      case other         => throw new Exception(s"Unsupported wom value value ${other}")
+      case other                  => throw new Exception(s"Unsupported wom value value ${other}")
     }
 
     def read(jsv: JsValue): WdlRuntimeAttrs = {

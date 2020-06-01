@@ -15,9 +15,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     // tasks don't depend on anything else. They are at the bottom of the dependency
     // tree.
     val immediateDeps: Map[String, Set[String]] = allCallables.map { callable =>
-      val deps : Set[String] = callable match {
-        case _ : TAT.Task => Set.empty[String]
-        case wf : TAT.Workflow =>
+      val deps: Set[String] = callable match {
+        case _: TAT.Task => Set.empty[String]
+        case wf: TAT.Workflow =>
           wf.body.collect {
             case call: TAT.Call =>
               // The name is fully qualified, for example, lib.add, lib.concat.
@@ -72,7 +72,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
   }
 
   private def compileWorkflow(
-    wf: TAT.Workflow,
+      wf: TAT.Workflow,
       typeAliases: Map[String, WdlTypes.T],
       wfSource: String,
       callables: Map[String, IR.Callable],
@@ -108,7 +108,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
   // Entry point for compiling tasks and workflows into IR
   private def compileCallable(
-    callable: TAT.Callable,
+      callable: TAT.Callable,
       typeAliases: Map[String, WdlTypes.T],
       taskDir: Map[String, String],
       workflowDir: Map[String, String],
@@ -160,7 +160,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     Utils.trace(verbose.on, s"IR pass")
     Utils.traceLevelInc()
 
-    val taskDir = allSources.foldLeft(Map.empty[String, String]){
+    val taskDir = allSources.foldLeft(Map.empty[String, String]) {
       case (accu, (filename, wdlSourceCode)) =>
         val d = ParseWomSourceFile(verbose.on).scanForTasks(wdlSourceCode)
         accu ++ d

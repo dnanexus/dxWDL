@@ -124,8 +124,8 @@ case class Top(cOpt: CompilerOptions) {
           Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
         checkDeclarations(wf.inputs.map(_.name).toVector)
         checkDeclarations(wf.outputs.map(_.name).toVector)
-        val allDeclarations : Vector[TAT.Declaration] = wf.body.collect{
-          case d : TAT.Declaration => d
+        val allDeclarations: Vector[TAT.Declaration] = wf.body.collect {
+          case d: TAT.Declaration => d
         }
         checkDeclarations(allDeclarations.map(_.name).toSeq)
 
@@ -266,10 +266,11 @@ case class Top(cOpt: CompilerOptions) {
           case Some(primary) =>
             val tree = new Tree(cResults.execDict)
             val treeRepr = execTree.get match { // Safe get because we check isDefined above
-              case PrettyTreePrinter => Left(
-                Tree.generateTreeFromJson(tree.apply(primary).asJsObject)
-              )
-              case JsonTreePrinter   => Right(tree.apply(primary)) // Convert to string
+              case PrettyTreePrinter =>
+                Left(
+                    Tree.generateTreeFromJson(tree.apply(primary).asJsObject)
+                )
+              case JsonTreePrinter => Right(tree.apply(primary)) // Convert to string
             }
             (wf.dxExec.getId, Some(treeRepr))
         }

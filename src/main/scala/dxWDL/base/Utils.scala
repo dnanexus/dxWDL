@@ -239,7 +239,7 @@ object Utils {
   def isOptional(t: WdlTypes.T): Boolean = {
     t match {
       case WdlTypes.T_Optional(_) => true
-      case t                  => false
+      case t                      => false
     }
   }
 
@@ -248,7 +248,7 @@ object Utils {
   def stripOptional(t: WdlTypes.T): WdlTypes.T = {
     t match {
       case WdlTypes.T_Optional(x) => stripOptional(x)
-      case x                  => x
+      case x                      => x
     }
   }
 
@@ -363,6 +363,5 @@ object Utils {
     }
     "[" + concat + "]"
   }
-
 
 }

@@ -13,8 +13,8 @@ case class SortTypeAliases(verbose: Verbose) {
   private def dependencies(a: WdlTypes.T): Set[String] = {
     a match {
       // Base case: primitive types.
-      case WdlTypes.T_Boolean | WdlTypes.T_Int | WdlTypes.T_Float |
-          WdlTypes.T_String | WdlTypes.T_File | WdlTypes.T_Directory =>
+      case WdlTypes.T_Boolean | WdlTypes.T_Int | WdlTypes.T_Float | WdlTypes.T_String |
+          WdlTypes.T_File | WdlTypes.T_Directory =>
         Set.empty
 
       // compound types
@@ -44,7 +44,7 @@ case class SortTypeAliases(verbose: Verbose) {
     val d = dependencies(a)
     a match {
       case WdlTypes.T_Struct(name, _) => d - name
-      case _                               => d
+      case _                          => d
     }
   }
 
@@ -68,7 +68,7 @@ case class SortTypeAliases(verbose: Verbose) {
   private def getNames(ta: Vector[WdlTypes.T]): Vector[String] = {
     ta.flatMap {
       case WdlTypes.T_Struct(name, _) => Some(name)
-      case _ => None
+      case _                          => None
     }.toVector
   }
 

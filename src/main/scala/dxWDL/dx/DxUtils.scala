@@ -34,28 +34,28 @@ object DxUtils {
   def isNativeDxType(wdlType: WdlTypes.T): Boolean = {
     wdlType match {
       // optional dx:native types
-      case WdlTypes.T_Optional(WdlTypes.T_Boolean)           => true
-      case WdlTypes.T_Optional(WdlTypes.T_Int)           => true
-      case WdlTypes.T_Optional(WdlTypes.T_Float)             => true
-      case WdlTypes.T_Optional(WdlTypes.T_String)            => true
+      case WdlTypes.T_Optional(WdlTypes.T_Boolean)     => true
+      case WdlTypes.T_Optional(WdlTypes.T_Int)         => true
+      case WdlTypes.T_Optional(WdlTypes.T_Float)       => true
+      case WdlTypes.T_Optional(WdlTypes.T_String)      => true
       case WdlTypes.T_Optional(WdlTypes.T_File)        => true
-      case WdlTypes.T_Array(WdlTypes.T_Boolean, false)    => true
-      case WdlTypes.T_Array(WdlTypes.T_Int, false)    => true
-      case WdlTypes.T_Array(WdlTypes.T_Float, false)      => true
-      case WdlTypes.T_Array(WdlTypes.T_String, false)     => true
-      case WdlTypes.T_Array(WdlTypes.T_File, false) => true
+      case WdlTypes.T_Array(WdlTypes.T_Boolean, false) => true
+      case WdlTypes.T_Array(WdlTypes.T_Int, false)     => true
+      case WdlTypes.T_Array(WdlTypes.T_Float, false)   => true
+      case WdlTypes.T_Array(WdlTypes.T_String, false)  => true
+      case WdlTypes.T_Array(WdlTypes.T_File, false)    => true
 
       // compulsory dx:native types
-      case WdlTypes.T_Boolean                          => true
-      case WdlTypes.T_Int                          => true
-      case WdlTypes.T_Float                            => true
-      case WdlTypes.T_String                           => true
-      case WdlTypes.T_File                       => true
-      case WdlTypes.T_Array(WdlTypes.T_Boolean, true)    => true
-      case WdlTypes.T_Array(WdlTypes.T_Int, true)    => true
-      case WdlTypes.T_Array(WdlTypes.T_Float, true)      => true
-      case WdlTypes.T_Array(WdlTypes.T_String, true)     => true
-      case WdlTypes.T_Array(WdlTypes.T_File, true) => true
+      case WdlTypes.T_Boolean                         => true
+      case WdlTypes.T_Int                             => true
+      case WdlTypes.T_Float                           => true
+      case WdlTypes.T_String                          => true
+      case WdlTypes.T_File                            => true
+      case WdlTypes.T_Array(WdlTypes.T_Boolean, true) => true
+      case WdlTypes.T_Array(WdlTypes.T_Int, true)     => true
+      case WdlTypes.T_Array(WdlTypes.T_Float, true)   => true
+      case WdlTypes.T_Array(WdlTypes.T_String, true)  => true
+      case WdlTypes.T_Array(WdlTypes.T_File, true)    => true
 
       // A tricky, but important case, is `Array[File]+?`. This
       // cannot be converted into a dx file array, unfortunately.

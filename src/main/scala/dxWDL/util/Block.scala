@@ -78,8 +78,8 @@ package dxWDL.util
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.{Util => TUtil, WdlTypes}
 
-case class BlockInput(name: String, wdlType: WdlTypes.T, optional : Boolean)
-case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
+case class BlockInput(name: String, wdlType: WdlTypes.T, optional: Boolean)
+case class BlockOutput(name: String, wdlType: WdlTypes.T, expr: TAT.Expr)
 
 // Block: a continuous list of workflow elements from a user
 // workflow.
@@ -115,10 +115,10 @@ case class BlockOutput(name: String, wdlType: WdlTypes.T, expr : TAT.Expr)
 // the block.  For example, 'Int x' declared inside a scatter, is
 // 'Array[Int] x' outside the scatter.
 //
-case class Block(inputs : Vector[BlockInput],
+case class Block(inputs: Vector[BlockInput],
                  nodes: Vector[TAT.WorkflowElement],
-                 outputs : Vector[BlockOutput],
-                 allOutputs : Vector[BlockOutput]) {
+                 outputs: Vector[BlockOutput],
+                 allOutputs: Vector[BlockOutput]) {
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
@@ -134,7 +134,7 @@ case class Block(inputs : Vector[BlockInput],
       case TAT.Conditional(expr, body, _) =>
         val cond = TUtil.exprToString(expr)
         s"if (${cond})"
-      case call : TAT.Call =>
+      case call: TAT.Call =>
         s"frag ${call.actualName}"
     }
   }
@@ -153,7 +153,6 @@ object Block {
   //
   //def exprInputs(expr : TAT.Expr) : Vector[String] = ???
 
-
   // The block is a singleton with one statement which is a call. The call
   // has no subexpressions. Note that the call may not provide
   // all the callee's arguments.
@@ -169,31 +168,22 @@ object Block {
 
   // figure out all the outputs from a block of statements
   //
-  def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = ???
-
-  def splitToBlocks(elements : Vector[TAT.WorkflowElement]) : Vector[Block] = ???
+  def allOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, WdlTypes.T] = ???
 
   // split a part of a workflow
-  def split(statements : Vector[TAT.WorkflowElement]): (Vector[TAT.InputDefinition], // inputs
-                                                        Vector[TAT.InputDefinition], // implicit inputs
-                                                        Vector[Block], // blocks
-                                                        Vector[TAT.OutputDefinition]) // outputs
-  = ???
+  def split(
+      statements: Vector[TAT.WorkflowElement]
+  ): (Vector[BlockInput], Vector[BlockOutput], Vector[Block]) = ???
 
   // Split an entire workflow into blocks.
   //
-  // An easy to use method that takes the workflow source
-  def splitWorkflow(wf : TAT.Workflow): (Vector[TAT.InputDefinition], // inputs
-                                         Vector[TAT.InputDefinition], // implicit inputs
-                                         Vector[Block], // blocks
-                                         Vector[TAT.OutputDefinition]) // outputs
-  = ???
+  def splitWorkflow(wf: TAT.Workflow): Vector[Block] = ???
 
   // We are building an applet for the output section of a workflow.
   // The outputs have expressions, and we need to figure out which
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
-  def outputClosure(outputs : Vector[TAT.OutputDefinition]) : Map[String, WdlTypes.T] = ???
+  def outputClosure(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = ???
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
@@ -231,18 +221,19 @@ object Block {
   // For example, the WDL code:
   // call add { input: a=x, b=y }
   //
-  private def isSimpleCall(nodes: Vector[TAT.WorkflowElement], trivialExpressionsOnly: Boolean): Boolean = {
-    assert (nodes.size > 0)
+  private def isSimpleCall(nodes: Vector[TAT.WorkflowElement],
+                           trivialExpressionsOnly: Boolean): Boolean = {
+    assert(nodes.size > 0)
     if (nodes.size >= 2)
       return false
-    // there is example a single node
+    // there is exactly a single node
     val node = nodes.head
     node match {
-      case call : TAT.Call if trivialExpressionsOnly =>
-        call.inputs.values.forall{
+      case call: TAT.Call if trivialExpressionsOnly =>
+        call.inputs.values.forall {
           case expr => WomValueAnalysis.isTrivialExpression(expr)
         }
-      case call : TAT.Call =>
+      case call: TAT.Call =>
         // any input expression is allowed
         true
       case _ => false
@@ -261,7 +252,7 @@ object Block {
   def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
     nodes
       .foldLeft(Vector.empty[TAT.Call]) {
-        case (accu, call : TAT.Call) =>
+        case (accu, call: TAT.Call) =>
           accu :+ call
         case (accu, ssc: TAT.Scatter) =>
           accu ++ deepFindCalls(ssc.body)
@@ -303,15 +294,11 @@ object Block {
   case class CallWithSubexpressions(nodes: Vector[TAT.WorkflowElement], value: TAT.Call)
       extends Category
   case class CallFragment(nodes: Vector[TAT.WorkflowElement], value: TAT.Call) extends Category
-  case class CondOneCall(nodes: Vector[TAT.WorkflowElement],
-                         value: TAT.Conditional,
-                         call: TAT.Call)
+  case class CondOneCall(nodes: Vector[TAT.WorkflowElement], value: TAT.Conditional, call: TAT.Call)
       extends Category
   case class CondFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Conditional)
       extends Category
-  case class ScatterOneCall(nodes: Vector[TAT.WorkflowElement],
-                            value: TAT.Scatter,
-                            call: TAT.Call)
+  case class ScatterOneCall(nodes: Vector[TAT.WorkflowElement], value: TAT.Scatter, call: TAT.Call)
       extends Category
   case class ScatterFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Scatter)
       extends Category
@@ -372,15 +359,15 @@ object Block {
     }
   }
 
-  def getSubBlock(path: Vector[Int], nodes : Vector[TAT.WorkflowElement]): Block = {
+  def getSubBlock(path: Vector[Int], wf: TAT.Workflow): Block = {
     assert(path.size >= 1)
 
-    val blocks = splitToBlocks(nodes)
+    val blocks = splitWorkflow(wf)
     var subBlock = blocks(path.head)
     for (i <- path.tail) {
       val catg = categorize(subBlock)
-      val innerGraph = Category.getInnerGraph(catg)
-      val blocks2 = splitToBlocks(innerGraph)
+      val innerNodes = Category.getInnerGraph(catg)
+      val blocks2 = split(subBlock, innerNodes)
       subBlock = blocks2(i)
     }
     return subBlock

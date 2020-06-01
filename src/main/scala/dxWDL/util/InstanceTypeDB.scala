@@ -286,15 +286,15 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return InstanceTypeReq(Some(iType), None, None, None, None)
       case Some(x) =>
         throw new Exception(
-          s"""|dxInstaceType has to evaluate to a
-              |String type ${x}""".stripMargin
-            .replaceAll("\n", " ")
+            s"""|dxInstaceType has to evaluate to a
+                |String type ${x}""".stripMargin
+              .replaceAll("\n", " ")
         )
     }
 
     // Examples for memory specification: "4000 MB", "1 GB"
     val memoryMB: Option[Int] = wdlMemoryMB match {
-      case None                 => None
+      case None                          => None
       case Some(WdlValues.V_String(buf)) =>
         // extract number
         val numRex = """(\d+\.?\d*)""".r
@@ -375,15 +375,15 @@ object InstanceTypeDB extends DefaultJsonProtocol {
               throw new Exception(s"Parse error for cpu specification ${buf}")
           }
         Some(i)
-      case Some(WdlValues.V_Int(i)) => Some(i)
-      case Some(WdlValues.V_Float(x))   => Some(x.toInt)
-      case Some(x)             => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
+      case Some(WdlValues.V_Int(i))   => Some(i)
+      case Some(WdlValues.V_Float(x)) => Some(x.toInt)
+      case Some(x)                    => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
     }
 
     val gpu: Option[Boolean] = wdlGpu match {
-      case None                   => None
+      case None                            => None
       case Some(WdlValues.V_Boolean(flag)) => Some(flag)
-      case Some(x)                => throw new Exception(s"Gpu has to be a boolean ${x}")
+      case Some(x)                         => throw new Exception(s"Gpu has to be a boolean ${x}")
     }
 
     return InstanceTypeReq(None, memoryMB, diskGB, cpu, gpu)
@@ -430,8 +430,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     }
 
     val availableField = "availableInstanceTypes"
-    val req = JsObject("fields" ->
-                         JsObject(availableField -> JsTrue))
+    val req = JsObject(
+        "fields" ->
+          JsObject(availableField -> JsTrue)
+    )
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
@@ -458,8 +460,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   // view the user account. The compiler may not have these
   // permissions, causing this method to throw an exception.
   private def getPricingModel(billTo: String, region: String): Map[String, Float] = {
-    val req = JsObject("fields" ->
-                         JsObject("pricingModelsByRegion" -> JsTrue))
+    val req = JsObject(
+        "fields" ->
+          JsObject("pricingModelsByRegion" -> JsTrue)
+    )
     val rep =
       try {
         DXAPI.userDescribe(billTo, req, classOf[JsonNode])

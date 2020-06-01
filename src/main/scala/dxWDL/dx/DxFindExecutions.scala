@@ -18,15 +18,15 @@ object DxFindExecutions {
   private def submitRequest(parentJob: Option[DxJob],
                             cursor: Option[JsValue],
                             limit: Option[Int]): (Vector[DxExecution], Option[JsValue]) = {
-    val parentField : Map[String, JsValue] = parentJob match {
+    val parentField: Map[String, JsValue] = parentJob match {
       case None      => Map.empty
       case Some(job) => Map("parentJob" -> JsString(job.getId))
     }
-    val cursorField : Map[String, JsValue] = cursor match {
+    val cursorField: Map[String, JsValue] = cursor match {
       case None              => Map.empty
       case Some(cursorValue) => Map("starting" -> cursorValue)
     }
-    val limitField : Map[String, JsValue] = limit match {
+    val limitField: Map[String, JsValue] = limit match {
       case None    => Map.empty
       case Some(i) => Map("limit" -> JsNumber(i))
     }

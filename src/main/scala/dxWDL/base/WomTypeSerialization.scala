@@ -8,12 +8,12 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
   def toString(t: T): String = {
     t match {
       // Base case: primitive types.
-      case T_Any        => "Any"
-      case T_Boolean    => "Boolean"
-      case T_Int    => "Integer"
-      case T_Float      => "Float"
-      case T_String     => "String"
-      case T_File => "File"
+      case T_Any       => "Any"
+      case T_Boolean   => "Boolean"
+      case T_Int       => "Integer"
+      case T_Float     => "Float"
+      case T_String    => "String"
+      case T_File      => "File"
       case T_Directory => "Directory"
 
       // compound types
@@ -86,12 +86,12 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
 
   def fromString(str: String): T = {
     str match {
-      case "Any" => T_Any
-      case "Boolean" => T_Boolean
-      case "Integer" => T_Int
-      case "Float" => T_Float
-      case "String" => T_String
-      case "File" => T_File
+      case "Any"       => T_Any
+      case "Boolean"   => T_Boolean
+      case "Integer"   => T_Int
+      case "Float"     => T_Float
+      case "String"    => T_String
+      case "File"      => T_File
       case "Directory" => T_Directory
 
       case _ if str.contains("[") && str.contains("]") =>
@@ -101,14 +101,14 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
         val inner = str.substring(openParen + 1, closeParen)
         outer match {
           case "MaybeEmptyArray" => T_Array(fromString(inner), false)
-          case "NonEmptyArray" => T_Array(fromString(inner), true)
+          case "NonEmptyArray"   => T_Array(fromString(inner), true)
           case "Map"             =>
             // split a string like "KK, VV" into (KK, VV)
             val (ks, vs) = splitInTwo(inner)
             val kt = fromString(ks)
             val vt = fromString(vs)
             T_Map(kt, vt)
-          case "Option"        => T_Optional(fromString(inner))
+          case "Option" => T_Optional(fromString(inner))
           case "Pair" =>
             val (ls, rs) = splitInTwo(inner)
             val lt = fromString(ls)
@@ -132,12 +132,12 @@ object WomTypeSerialization {
   def typeName(t: T): String = {
     t match {
       // Base case: primitive types.
-      case T_Any        => "Any"
-      case T_Boolean    => "Boolean"
-      case T_Int    => "Integer"
-      case T_Float      => "Float"
-      case T_String     => "String"
-      case T_File => "File"
+      case T_Any       => "Any"
+      case T_Boolean   => "Boolean"
+      case T_Int       => "Integer"
+      case T_Float     => "Float"
+      case T_String    => "String"
+      case T_File      => "File"
       case T_Directory => "Directory"
 
       // compound types

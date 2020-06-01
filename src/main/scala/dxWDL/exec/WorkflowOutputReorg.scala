@@ -16,7 +16,7 @@ import dxWDL.dx._
 import dxWDL.util._
 
 case class WorkflowOutputReorg(wf: TAT.Workflow,
-                               document : TAT.Document,
+                               document: TAT.Document,
                                typeAliases: Map[String, WdlTypes.T],
                                dxPathConfig: DxPathConfig,
                                dxIoFunctions: DxIoFunctions,

@@ -60,11 +60,11 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   def buildWorkflowInput(input: TAT.InputDefinition): CVar = {
     // figure out the meta attribute for this input, if it is
     // specified in the parameter meta section.
-    val metaValue : Option[TAT.MetaValue] = wf.parameterMeta match {
+    val metaValue: Option[TAT.MetaValue] = wf.parameterMeta match {
       case None => None
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         kvs.get(input.name)
-      }
+    }
     val attr = ParameterMeta.unwrap(metaValue, input.wdlType)
 
     input match {
@@ -73,8 +73,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case TAT.OverridableInputDefinitionWithDefault(id, womType, defaultExpr, _) =>
         val defaultValue: WdlValues.V = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
-                                                      | ${defaultExpr}
-                                                      |""".stripMargin)
+                                               | ${defaultExpr}
+                                               |""".stripMargin)
           case Some(value) => value
         }
         CVar(id, womType, Some(defaultValue), attr)
@@ -225,13 +225,15 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   // Find the closure of a graph, excluding the straightforward inputs. Create an input
   // node for each of these external references.
-  private def graphClosure(inputNodes: Vector[TAT.InputDefinition],
+  private def graphClosure(inputNodes: Vector[TAT.BlockInput],
                            subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
     val allInputs: Vector[BlockInput] = subBlocks
-      .map { block => block.inputs }
+      .map { block =>
+        block.inputs
+      }
       .flatten
       .toVector
-    val allInputs2 : Map[String, (WdlTypes.T, Boolean)] = allInputs.map{ bInput =>
+    val allInputs2: Map[String, (WdlTypes.T, Boolean)] = allInputs.map { bInput =>
       bInput.name -> (bInput.wdlType, bInput.optional)
     }.toMap
 
@@ -251,7 +253,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                                  statements: Vector[TAT.WorkflowElement],
                                  blockPath: Vector[Int],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
-    val (inputNodes, _, subBlocks, outputNodes) =
+    val (inputNodes, outputNodes, subBlocks) =
       Block.split(statements)
     assert(subBlocks.size > 0)
 
@@ -347,7 +349,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }.toMap
 
     // Figure out the block outputs
-    val outputs: Map[String, WdlTypes.T] = block.outputs.map{ bOut =>
+    val outputs: Map[String, WdlTypes.T] = block.outputs.map { bOut =>
       bOut.name -> bOut.wdlType
     }.toMap
 
@@ -395,7 +397,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         // add the iteration variable to the inner environment
         val iterWdlType = sctNode.expr.wdlType match {
           case WdlTypes.T_Array(t, _) => t
-          case other => throw new Exception("scatter doesn't have an array expression")
+          case other                  => throw new Exception("scatter doesn't have an array expression")
         }
         val cVar = CVar(sctNode.identifier, iterWdlType, None)
         val innerEnv = env + (sctNode.identifier -> LinkedVar(cVar, IR.SArgEmpty))
@@ -493,7 +495,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (allStageInfo, env)
   }
 
-  private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition, env: CallEnv): (CVar, SArg) = {
+  private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition,
+                                        env: CallEnv): (CVar, SArg) = {
     output.expr match {
       case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
         // the output is a constant
@@ -573,14 +576,14 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           // the output is a constant
           val womConst = WomValueAnalysis.evalConst(output.wdlType, output.expr)
           CVar(output.name, output.wdlType, Some(womConst))
-      case TAT.ExprIdentifier(id, _, _) =>
+        case TAT.ExprIdentifier(id, _, _) =>
           // The output is a reference to a previously defined variable
           CVar(output.name, output.wdlType, None)
-      case _ =>
-        // An expression that requires evaluation
-        throw new Exception(
-            s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
-        )
+        case _ =>
+          // An expression that requires evaluation
+          throw new Exception(
+              s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
+          )
       }
     }.toVector
 
@@ -686,16 +689,16 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   }
 
   private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
-    val kvs : Map[String, TAT.MetaValue] = wf.meta match {
-      case None => Map.empty
+    val kvs: Map[String, TAT.MetaValue] = wf.meta match {
+      case None                          => Map.empty
       case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val wfAttrs = kvs.flatMap {
       case (IR.META_TITLE, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrTitle(text))
       case (IR.META_DESCRIPTION, TAT.MetaValueString(text, _)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrSummary(text))
-      case (IR.META_VERSION, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_SUMMARY, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrVersion(text))
       case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
         Some(IR.WorkflowAttrDetails(ParameterMeta.translateMetaKVs(fields)))
       case (IR.META_TYPES, TAT.MetaValueArray(array, _)) =>

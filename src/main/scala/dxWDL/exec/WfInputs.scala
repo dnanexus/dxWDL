@@ -11,7 +11,7 @@ import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
 case class WfInputs(wf: TAT.Workflow,
-                    document : TAT.Document,
+                    document: TAT.Document,
                     typeAliases: Map[String, WdlTypes.T],
                     dxPathConfig: DxPathConfig,
                     dxIoFunctions: DxIoFunctions,

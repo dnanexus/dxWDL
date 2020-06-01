@@ -47,7 +47,7 @@ import dxWDL.util._
 case class WfFragRunner(wf: TAT.Workflow,
                         taskDir: Map[String, TAT.Task],
                         typeAliases: Map[String, WdlTypes.T],
-                        document : TAT.Document,
+                        document: TAT.Document,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
@@ -78,11 +78,11 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // build an object capable of evaluating WDL expressions
-  val evaluator : WdlExprEval = {
+  val evaluator: WdlExprEval = {
     val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
-                                         antlr4Trace = false,
-                                         localDirectories = Vector.empty,
-                                         verbosity = wdlTools.util.Verbosity.Quiet)
+                               antlr4Trace = false,
+                               localDirectories = Vector.empty,
+                               verbosity = wdlTools.util.Verbosity.Quiet)
     val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
@@ -94,7 +94,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                                     womType: WdlTypes.T,
                                     env: Map[String, (WdlTypes.T, WdlValues.V)]): WdlValues.V = {
     // strip the types
-    val envStripped = env.map{ case (k, (t, v)) => k -> v }
+    val envStripped = env.map { case (k, (t, v)) => k -> v }
     evaluator.applyExprAndCoerce(expr, womType, EvalContext(envStripped))
   }
 
@@ -108,9 +108,10 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // This method is exposed so that we can unit-test it.
-  def evalExpressions(nodes: Seq[TAT.WorkflowElement],
-                      env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, (WdlTypes.T, WdlValues.V)] = {
+  def evalExpressions(
+      nodes: Seq[TAT.WorkflowElement],
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
     nodes.foldLeft(env) {
       case (env, TAT.Declaration(name, wdlType, exprOpt, _)) =>
         val value = exprOpt match {
@@ -140,23 +141,23 @@ case class WfFragRunner(wf: TAT.Workflow,
           }.toVector
 
         // build a mapping from from result-key to its type
-        val resultTypes : Map[String, WdlTypes.T] = Block.allOutputs(body)
+        val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(body)
 
         val initResults: Map[String, (WdlTypes.T, Vector[WdlValues.V])] = resultTypes.map {
-          case (key,t) => key -> (t, Vector.empty[WdlValues.V])
+          case (key, t) => key -> (t, Vector.empty[WdlValues.V])
         }.toMap
 
-          // merge the vector of results, each of which is a map
+        // merge the vector of results, each of which is a map
         val results: Map[String, (WdlTypes.T, Vector[WdlValues.V])] =
           vm.foldLeft(initResults) {
-            case (accu, m) =>
-              accu.map {
-                case (key, (t, arValues)) =>
-                  val (_, value : WdlValues.V) = m(key)
-                  key -> (t, (arValues :+ value))
-              }
-          }.toMap
-
+              case (accu, m) =>
+                accu.map {
+                  case (key, (t, arValues)) =>
+                    val (_, value: WdlValues.V) = m(key)
+                    key -> (t, (arValues :+ value))
+                }
+            }
+            .toMap
 
         // Add the wom array type to each vector
         val resultsFull = results.map {
@@ -167,7 +168,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
       case (env, TAT.Conditional(expr, body, _)) =>
         // evaluate the condition
-        val condValue : Boolean = evaluateWomExpression(expr, expr.wdlType, env) match {
+        val condValue: Boolean = evaluateWomExpression(expr, expr.wdlType, env) match {
           case b: WdlValues.V_Boolean => b.value
           case other =>
             throw new AppInternalException(s"Unexpected condition expression value ${other}")
@@ -177,13 +178,14 @@ case class WfFragRunner(wf: TAT.Workflow,
           if (!condValue) {
             // condition is false, return None for all the values
             val resultTypes = Block.allOutputs(body)
-            resultTypes.map{ case (key, womType) =>
+            resultTypes.map {
+              case (key, womType) =>
                 key -> (womType, WdlValues.V_Null)
             }
           } else {
             // condition is true, evaluate the internal block.
             val results = evalExpressions(body, env)
-            results.map{
+            results.map {
               case (key, (t, value)) =>
                 key -> (WdlTypes.T_Optional(t), WdlValues.V_Optional(value))
             }
@@ -277,12 +279,14 @@ case class WfFragRunner(wf: TAT.Workflow,
 
   // Figure out what instance type to launch at task in. Return None if the instance
   // type is a constant, and is already set.
-  private def preCalcInstanceType(task: TAT.Task,
-                                  taskInputs: Map[TAT.InputDefinition, WdlValues.V]): Option[String] = {
+  private def preCalcInstanceType(
+      task: TAT.Task,
+      taskInputs: Map[TAT.InputDefinition, WdlValues.V]
+  ): Option[String] = {
     // Note: if none of these attributes are specified, the return value is None.
     val instanceAttrs = Set("memory", "disks", "cpu")
-    val attributes : Map[String, TAT.Expr] = task.runtime match {
-      case None => Map.empty
+    val attributes: Map[String, TAT.Expr] = task.runtime match {
+      case None                             => Map.empty
       case Some(TAT.RuntimeSection(kvs, _)) => kvs
     }
     val allConst = instanceAttrs.forall { attrName =>
@@ -400,8 +404,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
   // create promises to this call. This allows returning
   // from the parent job immediately.
-  private def genPromisesForCall(call: TAT.Call,
-                                 dxExec: DxExecution): Map[String, WdlVarLinks] = {
+  private def genPromisesForCall(call: TAT.Call, dxExec: DxExecution): Map[String, WdlVarLinks] = {
     val linkInfo = getCallLinkInfo(call)
     val callName = call.actualName
     linkInfo.outputs.map {
@@ -417,12 +420,14 @@ case class WfFragRunner(wf: TAT.Workflow,
   // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
   // under WDL version 1.0, it is compiled as "i".
   // We just want the "i" component.
-  def evalCallInputs(call: TAT.Call,
-                     env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, (WdlTypes.T, WdlValues.V)] = {
-    call.inputs.map{ case (key, expr) =>
-      val value = evaluateWomExpression(expr, expr.wdlType, env)
-      key -> (expr.wdlType, value)
+  def evalCallInputs(
+      call: TAT.Call,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
+    call.inputs.map {
+      case (key, expr) =>
+        val value = evaluateWomExpression(expr, expr.wdlType, env)
+        key -> (expr.wdlType, value)
     }.toMap
   }
 
@@ -433,7 +438,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       evaluateWomExpression(cnNode.expr, WdlTypes.T_Boolean, env)
     condValueRaw match {
       case b: WdlValues.V_Boolean => b.value
-      case other         => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+      case other                  => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
   }
 
@@ -444,10 +449,11 @@ case class WfFragRunner(wf: TAT.Workflow,
   //   call zinc as inc3 { input: a = num}
   // }
   //
-  private def execConditionalCall(cnNode : TAT.Conditional,
-                                  call: TAT.Call,
-                                  env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, WdlVarLinks] = {
+  private def execConditionalCall(
+      cnNode: TAT.Conditional,
+      call: TAT.Call,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, WdlVarLinks] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -463,7 +469,7 @@ case class WfFragRunner(wf: TAT.Workflow,
           // be careful not to make double optionals
           val optionalType = womType match {
             case WdlTypes.T_Optional(_) => womType
-            case _                  => WdlTypes.T_Optional(womType)
+            case _                      => WdlTypes.T_Optional(womType)
           }
           key -> WdlVarLinks(optionalType, dxl)
       }.toMap
@@ -481,9 +487,10 @@ case class WfFragRunner(wf: TAT.Workflow,
   //   call zinc as inc5 { input: a = b * 4 }
   // }
   //
-  private def execConditionalSubblock(cnNode: TAT.Conditional,
-                                      env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, WdlVarLinks] = {
+  private def execConditionalSubblock(
+      cnNode: TAT.Conditional,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, WdlVarLinks] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -503,7 +510,7 @@ case class WfFragRunner(wf: TAT.Workflow,
           // be careful not to make double optionals
           val optionalType = womType match {
             case WdlTypes.T_Optional(_) => womType
-            case _                  => WdlTypes.T_Optional(womType)
+            case _                      => WdlTypes.T_Optional(womType)
           }
           varName -> WdlVarLinks(optionalType, DxlExec(dxExec, varName))
       }.toMap
@@ -514,8 +521,8 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def readableNameForScatterItem(item: WdlValues.V): Option[String] = {
     item match {
       case WdlValues.V_Boolean(b) => Some(b.toString)
-      case WdlValues.V_Int(i) => Some(i.toString)
-      case WdlValues.V_Float(x) => Some(x.toString)
+      case WdlValues.V_Int(i)     => Some(i.toString)
+      case WdlValues.V_Float(x)   => Some(x.toString)
       case WdlValues.V_String(s) =>
         Some(s)
       case WdlValues.V_File(path) =>
@@ -542,14 +549,15 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // Evaluate the collection on which we are scattering
-  private def evalScatterCollection(sct: TAT.Scatter,
-                                    env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : (String, WdlTypes.T, Vector[WdlValues.V]) = {
+  private def evalScatterCollection(
+      sct: TAT.Scatter,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): (String, WdlTypes.T, Vector[WdlValues.V]) = {
     val collectionRaw: WdlValues.V =
       evaluateWomExpression(sct.expr, sct.expr.wdlType, env)
     val collection: Seq[WdlValues.V] = collectionRaw match {
       case x: WdlValues.V_Array => x.value
-      case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+      case other                => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
 
     // Limit the number of elements in the collection. Each one spawns a job; this strains the platform
@@ -564,7 +572,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     val elemType = sct.expr.wdlType match {
       case WdlTypes.T_Array(t, _) => t
-      case other => throw new Exception("sanity, scatter collection is not an array")
+      case other                  => throw new Exception("sanity, scatter collection is not an array")
     }
     (sct.identifier, elemType, collection.toVector)
   }
@@ -574,7 +582,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def collectScatter(sct: TAT.Scatter,
                              childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
     val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(sct.body)
-    val resultArrayTypes = resultTypes.map{
+    val resultArrayTypes = resultTypes.map {
       case (k, t) =>
         k -> WdlTypes.T_Array(t, false)
     }
@@ -586,10 +594,11 @@ case class WfFragRunner(wf: TAT.Workflow,
     promises
   }
 
-  private def execScatterCall(sctNode: TAT.Scatter,
-                              call: TAT.Call,
-                              env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, WdlVarLinks] = {
+  private def execScatterCall(
+      sctNode: TAT.Scatter,
+      call: TAT.Call,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, WdlVarLinks] = {
     val (svNode, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
@@ -605,9 +614,10 @@ case class WfFragRunner(wf: TAT.Workflow,
     collectScatter(sctNode, childJobs)
   }
 
-  private def execScatterSubblock(sctNode: TAT.Scatter,
-                                  env: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, WdlVarLinks] = {
+  private def execScatterSubblock(
+      sctNode: TAT.Scatter,
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, WdlVarLinks] = {
     val (svNode, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // There must be exactly one sub-workflow
@@ -641,13 +651,13 @@ case class WfFragRunner(wf: TAT.Workflow,
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
     // Find the fragment block to execute
-    val block = Block.getSubBlock(blockPath, wf.body)
+    val block = Block.getSubBlock(blockPath, wf)
     Utils.appletLog(
-      verbose,
-      s"""|Block ${blockPath} to execute:
-          |${WomPrettyPrintApproxWdl.block(block)}
-          |
-          |""".stripMargin
+        verbose,
+        s"""|Block ${blockPath} to execute:
+            |${WomPrettyPrintApproxWdl.block(block)}
+            |
+            |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,
@@ -662,8 +672,8 @@ case class WfFragRunner(wf: TAT.Workflow,
             Utils.warning(utlVerbose,
                           s"input is missing for ${name}, and there is no default at the callee")
             None
-          case (Some((t,v)), _) =>
-            Some(name -> (t,v))
+          case (Some((t, v)), _) =>
+            Some(name -> (t, v))
         }
     }.toMap
 

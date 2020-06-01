@@ -51,11 +51,9 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
   private def addBaseDir(womValue: WdlValues.V): WdlValues.V = {
     womValue match {
       // primitive types, pass through
-      case WdlValues.V_Boolean(_) |
-          WdlValues.V_Int(_) |
-          WdlValues.V_Float(_) |
-          WdlValues.V_String(_) |
-          WdlValues.V_Null => womValue
+      case WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) |
+          WdlValues.V_String(_) | WdlValues.V_Null =>
+        womValue
 
       // single file
       case WdlValues.V_File(s) => WdlValues.V_File(pathFromBasename(s).toString)
@@ -174,7 +172,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     }
 
     // 3. epilog
-    val envNoTypes = env.map{ case (k, (t, v)) => k -> v}
+    val envNoTypes = env.map { case (k, (t, v)) => k -> v }
     val outputFields: Map[String, JsValue] = taskRunner.epilog(envNoTypes, dxUrl2path)
 
     outputFieldsExpected match {

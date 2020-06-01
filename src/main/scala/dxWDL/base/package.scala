@@ -5,17 +5,16 @@ import wdlTools.syntax.WdlVersion
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 // Exception used for AppInternError
-class AppInternalException(s : String) extends RuntimeException(s)
+class AppInternalException(s: String) extends RuntimeException(s)
 
 // Exception used for AppError
-class AppException(s : String) extends RuntimeException(s)
+class AppException(s: String) extends RuntimeException(s)
 
 class PermissionDeniedException(s: String) extends Exception(s)
 
 class InvalidInputException(s: String) extends Exception(s)
 
 class IllegalArgumentException(s: String) extends Exception(s)
-
 
 object IORef extends Enumeration {
   val Input, Output = Value
@@ -72,24 +71,24 @@ object RunnerWfFragmentMode extends Enumeration {
 object Language extends Enumeration {
   val WDLvDraft2, WDLv1_0, WDLv2_0, CWLv1_0 = Value
 
-  def toWdlVersion(value : Value) : WdlVersion = {
+  def toWdlVersion(value: Value): WdlVersion = {
     value match {
       case WDLvDraft2 => WdlVersion.Draft_2
-      case WDLv1_0 => WdlVersion.V1
-      case WDLv2_0 => WdlVersion.V2
-      case other => throw new Exception(s"${other} is not a wdl version")
+      case WDLv1_0    => WdlVersion.V1
+      case WDLv2_0    => WdlVersion.V2
+      case other      => throw new Exception(s"${other} is not a wdl version")
     }
   }
-  def fromWdlVersion(version : WdlVersion): Value = {
+  def fromWdlVersion(version: WdlVersion): Value = {
     version match {
-      case WdlVersion.Draft_2  => Language.WDLvDraft2
-      case WdlVersion.V1       => Language.WDLv1_0
-      case WdlVersion.V2       => Language.WDLv2_0
-      case other               => throw new Exception(s"Unsupported dielect ${other}")
+      case WdlVersion.Draft_2 => Language.WDLvDraft2
+      case WdlVersion.V1      => Language.WDLv1_0
+      case WdlVersion.V2      => Language.WDLv2_0
+      case other              => throw new Exception(s"Unsupported dielect ${other}")
     }
   }
 }
 
-case class WomBundle(primaryCallable : Option[TAT.Callable],
-                     allCallables : Map[String, TAT.Callable],
-                     typeAliases : Map[String, WdlTypes.T])
+case class WomBundle(primaryCallable: Option[TAT.Callable],
+                     allCallables: Map[String, TAT.Callable],
+                     typeAliases: Map[String, WdlTypes.T])

@@ -70,11 +70,10 @@ object TaskRunnerUtils {
   }
 }
 
-
 // We can't use the name Task, because that would confuse it with the
 // WDL language definition.
 case class TaskRunner(task: TAT.Task,
-                      document : TAT.Document,
+                      document: TAT.Document,
                       typeAliases: Map[String, WdlTypes.T],
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
@@ -90,7 +89,7 @@ case class TaskRunner(task: TAT.Task,
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
-  val evaluator : WdlExprEval = {
+  val evaluator: WdlExprEval = {
     val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
@@ -153,10 +152,10 @@ case class TaskRunner(task: TAT.Task,
 
   // Figure out if a docker image is specified. If so, return it as a string.
   private def dockerImageEval(env: Map[String, WdlValues.V]): Option[String] = {
-      val attributes : Map[String, TAT.Expr] = task.runtime match {
-        case None => Map.empty
-        case Some(TAT.RuntimeSection(kvs, _)) => kvs
-      }
+    val attributes: Map[String, TAT.Expr] = task.runtime match {
+      case None                             => Map.empty
+      case Some(TAT.RuntimeSection(kvs, _)) => kvs
+    }
     val dImg: Option[WdlValues.V] = attributes.get("docker") match {
       case None =>
         defaultRuntimeAttrs match {
@@ -168,7 +167,7 @@ case class TaskRunner(task: TAT.Task,
         Some(value)
     }
     dImg match {
-      case None               => None
+      case None                        => None
       case Some(WdlValues.V_String(s)) => Some(s)
       case Some(other) =>
         throw new AppInternalException(s"docker is not a string expression ${other}")
@@ -384,9 +383,9 @@ case class TaskRunner(task: TAT.Task,
 
   // Calculate the input variables for the task, download the input files,
   // and build a shell script to run the command.
-  def prolog(taskInputs: Map[TAT.InputDefinition, WdlValues.V]) :
-      (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) =
-  {
+  def prolog(
+      taskInputs: Map[TAT.InputDefinition, WdlValues.V]
+  ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
     Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     if (maxVerboseLevel)
@@ -396,8 +395,8 @@ case class TaskRunner(task: TAT.Task,
     Utils.appletLog(verbose, document.sourceCode, 10000)
     Utils.appletLog(verbose, s"inputs: ${inputsDbg(taskInputs)}")
 
-    val parameterMeta : Map[String, TAT.MetaValue] = task.parameterMeta match {
-      case None => Map.empty
+    val parameterMeta: Map[String, TAT.MetaValue] = task.parameterMeta match {
+      case None                                   => Map.empty
       case Some(TAT.ParameterMetaSection(kvs, _)) => kvs
     }
 
@@ -420,13 +419,13 @@ case class TaskRunner(task: TAT.Task,
       Utils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
-    val inputsWithTypes : Map[String, (WdlTypes.T, WdlValues.V)] =
+    val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
       localizedInputs.map {
         case (inpDfn, value) =>
           inpDfn.name -> (inpDfn.wdlType, value)
       }.toMap
-    val inputs : Map[String, WdlValues.V] =
-      inputsWithTypes.map{
+    val inputs: Map[String, WdlValues.V] =
+      inputsWithTypes.map {
         case (k, (t, v)) => k -> v
       }
 
@@ -458,13 +457,16 @@ case class TaskRunner(task: TAT.Task,
     // the environment, so they can be referenced by expressions in the next
     // lines.
     val outputsLocal: Map[String, (WdlTypes.T, WdlValues.V)] =
-      task.outputs.foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
-        case (env, outDef: TAT.OutputDefinition) =>
-          val envNoTypes = env.map{ case (k, (t, v)) => k -> v}
-          val value = evaluator.applyExprAndCoerce(outDef.expr, outDef.wdlType,
-                                                   EvalContext(envNoTypes ++ localizedInputs))
-          env + (outDef.name -> (outDef.wdlType, value))
-      }.toMap
+      task.outputs
+        .foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
+          case (env, outDef: TAT.OutputDefinition) =>
+            val envNoTypes = env.map { case (k, (t, v)) => k -> v }
+            val value = evaluator.applyExprAndCoerce(outDef.expr,
+                                                     outDef.wdlType,
+                                                     EvalContext(envNoTypes ++ localizedInputs))
+            env + (outDef.name -> (outDef.wdlType, value))
+        }
+        .toMap
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
       // Upload output files to the platform.
@@ -496,8 +498,8 @@ case class TaskRunner(task: TAT.Task,
         inpDfn.name -> value
     }.toMap
 
-    val runtimeAttrs : Map[String, TAT.Expr] = task.runtime match {
-      case None => Map.empty
+    val runtimeAttrs: Map[String, TAT.Expr] = task.runtime match {
+      case None                             => Map.empty
       case Some(TAT.RuntimeSection(kvs, _)) => kvs
     }
 

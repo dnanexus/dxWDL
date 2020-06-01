@@ -28,11 +28,11 @@ case class WdlCodeGen(verbose: Verbose,
   // create a wdl-value of a specific type.
   def genDefaultValueOfType(wdlType: WdlTypes.T): WdlValues.V = {
     wdlType match {
-      case WdlTypes.T_Boolean    => WdlValues.V_Boolean(true)
-      case WdlTypes.T_Int    => WdlValues.V_Int(0)
-      case WdlTypes.T_Float      => WdlValues.V_Float(0.0)
-      case WdlTypes.T_String     => WdlValues.V_String("")
-      case WdlTypes.T_File => WdlValues.V_File("dummy.txt")
+      case WdlTypes.T_Boolean => WdlValues.V_Boolean(true)
+      case WdlTypes.T_Int     => WdlValues.V_Int(0)
+      case WdlTypes.T_Float   => WdlValues.V_Float(0.0)
+      case WdlTypes.T_String  => WdlValues.V_String("")
+      case WdlTypes.T_File    => WdlValues.V_File("dummy.txt")
 
       // We could convert an optional to a null value, but that causes
       // problems for the pretty printer.
@@ -69,38 +69,43 @@ case class WdlCodeGen(verbose: Verbose,
     }
   }
 
-  def wdlString(value : WdlValues.V) : String = {
+  def wdlString(value: WdlValues.V): String = {
     value match {
-      case WdlValues.V_Null => "null"
+      case WdlValues.V_Null           => "null"
       case WdlValues.V_Boolean(value) => value.toString
-      case WdlValues.V_Int(value) => value.toString
-      case WdlValues.V_Float(value) => value.toString
-      case WdlValues.V_String(value) => s""""${value}""""
-      case WdlValues.V_File(value) => s""""${value}""""
+      case WdlValues.V_Int(value)     => value.toString
+      case WdlValues.V_Float(value)   => value.toString
+      case WdlValues.V_String(value)  => s""""${value}""""
+      case WdlValues.V_File(value)    => s""""${value}""""
 
-        // compound values
+      // compound values
       case WdlValues.V_Pair(l, r) =>
         s"(${wdlString(l)} , ${wdlString(r)})"
       case WdlValues.V_Array(value) =>
         val elems = value.map(wdlString).mkString(",")
         s"[${elems}]"
       case WdlValues.V_Map(value) =>
-        val m = value.map{ case (k,v) =>
-          s"${wdlString(k)} : ${wdlString(v)}"
-        }.mkString(", ")
+        val m = value
+          .map {
+            case (k, v) =>
+              s"${wdlString(k)} : ${wdlString(v)}"
+          }
+          .mkString(", ")
         s"""{${m}}"""
 
       case WdlValues.V_Optional(value) =>
         wdlString(value)
       case WdlValues.V_Struct(name, members) =>
-        val membersStr = members.map{ case (k, v) =>
-          s"${k} : ${wdlString(v)}"
+        val membersStr = members.map {
+          case (k, v) =>
+            s"${k} : ${wdlString(v)}"
         }.toVector
         s"""object { ${membersStr.mkString(", ")} }"""
 
       case WdlValues.V_Object(members) =>
-        val membersStr = members.map{ case (k, v) =>
-          s"${k} : ${wdlString(v)}"
+        val membersStr = members.map {
+          case (k, v) =>
+            s"${k} : ${wdlString(v)}"
         }.toVector
         s"""object { ${membersStr.mkString(", ")} }"""
 
@@ -108,7 +113,6 @@ case class WdlCodeGen(verbose: Verbose,
         throw new Exception(s"Unhandled value ${other}")
     }
   }
-
 
   /*
 Create a header for a task/workflow. This is an empty task
