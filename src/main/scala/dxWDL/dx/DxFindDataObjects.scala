@@ -249,21 +249,6 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     (results.toMap, next)
   }
 
-  def applyRequestDirectly(request: JsObject): Map[DxDataObject, DxObjectDescribe] = {
-    var allResults = Map.empty[DxDataObject, DxObjectDescribe]
-    var cursor: Map[String, JsValue] = Map.empty
-    do {
-      val req = JsObject(request.fields ++ cursor)
-      val (results, next) = sendRequest(req)
-      cursor = next match {
-        case None            => Map.empty
-        case Some(nextValue) => Map("starting" -> nextValue)
-      }
-      allResults = allResults ++ results
-    } while (cursor != Map.empty);
-    allResults
-  }
-
   def apply(dxProject: DxProject,
             folder: Option[String],
             recurse: Boolean,
