@@ -146,22 +146,31 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
   // Create a request for a limited number of objects
   private def createRequest(
-      scope: JsValue,
-      dxProject: DxProject,
+      scope: Option[JsValue],
+      dxProject: Option[DxProject],
       cursor: Option[JsValue],
       klass: Option[String],
       propertyConstraints: Vector[String],
       nameConstraints: Vector[String],
-      withInputOutputSpec: Boolean
+      withInputOutputSpec: Boolean,
+      idConstraints: Vector[String],
+      extraFields: Vector[String]
   ): JsObject = {
     var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
+    fields ++= extraFields.map(field => Field.withName(field)).toSet // TODO: This is case sensitive, is this ok?
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
     }
     val reqFields = Map("visibility" -> JsString("either"),
-                        "project" -> JsString(dxProject.getId),
-                        "describe" -> DxObject.requestFields(fields),
-                        "scope" -> scope)
+                        "describe" -> DxObject.requestFields(fields))
+    val projField = dxProject match {
+      case None => Map.empty
+      case Some(p) => Map("project" -> JsString(p.getId))
+    }
+    val scopeField = scope match {
+      case None => Map.empty
+      case Some(s) => Map("scope" -> s)
+    }
     val limitField = limit match {
       case None      => Map.empty
       case Some(lim) => Map("limit" -> JsNumber(lim))
@@ -201,10 +210,17 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
       }
 
+    val idField =
+      if (idConstraints.isEmpty) {
+        Map.empty
+      } else {
+        Map("id" -> JsArray(idConstraints.map { x: String => JsString(x)}))
+      }
+
     JsObject(
-        reqFields ++ cursorField ++ limitField
+        reqFields ++ projField ++ scopeField ++ cursorField ++ limitField
           ++ classField ++ propertiesField
-          ++ namePcreField
+          ++ namePcreField ++ idField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
@@ -255,13 +271,29 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
             withProperties: Vector[String], // object must have these properties
             nameConstraints: Vector[String], // the object name has to be one of these strings
             withInputOutputSpec: Boolean // should the IO spec be described?
+           ): Map[DxDataObject, DxObjectDescribe] = {
+    apply(Some(dxProject), folder, recurse, klassRestriction, withProperties, nameConstraints, withInputOutputSpec, Vector.empty, extrafields = Vector.empty)
+  }
+
+  def apply(dxProject: Option[DxProject],
+            folder: Option[String],
+            recurse: Boolean,
+            klassRestriction: Option[String],
+            withProperties: Vector[String], // object must have these properties
+            nameConstraints: Vector[String], // the object name has to be one of these strings
+            withInputOutputSpec: Boolean, // should the IO spec be described?
+            idConstraints: Vector[String],
+            extrafields: Vector[String]
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
-    val scope = buildScope(dxProject, folder, recurse)
 
+    val scope: Option[JsValue] = dxProject match {
+      case None => None
+      case Some(p) => Some(buildScope(p, folder, recurse))
+    }
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
@@ -271,7 +303,9 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
                                   klassRestriction,
                                   withProperties,
                                   nameConstraints,
-                                  withInputOutputSpec)
+                                  withInputOutputSpec,
+                                  idConstraints,
+                                  extrafields)
       val (results, next) = sendRequest(request)
       allResults = allResults ++ results
       cursor = next

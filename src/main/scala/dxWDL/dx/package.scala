@@ -117,6 +117,7 @@ object Field extends Enumeration {
       DeveloperNotes, Folder, Id, IgnoreReuse, Inputs, InputSpec, Modified, Name, Outputs,
       OutputSpec, ParentJob, Parts, Project, Properties, RunSpec, Size, Stages, Summary, Tags,
       Title, Types, Version = Value
+  def withNameOpt(s: String): Option[Value] = values.find(_.toString == s)
 }
 
 trait DxObjectDescribe {

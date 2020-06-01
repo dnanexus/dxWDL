@@ -163,46 +163,23 @@ object DxFile {
 
   // Describe a large number of platform objects in bulk.
   private def submitRequest(objs: Vector[DxFile],
-                            extraFields: Vector[String]): Map[DxFile, DxFileDescribe] = {
-    val requestFields = Map(
-      "id" ->
-        JsArray(objs.map { x: DxFile =>
-          JsString(x.id)
-        })
-    )
-
-    // extra describe options, if specified
-    val extraDescribeFields: Map[String, JsValue] =
-      if (extraFields.isEmpty) {
-        Map.empty
-      } else {
-        val m = extraFields.map { fieldName =>
-          fieldName -> JsBoolean(true)
-        }.toMap
-        Map(
-            "classDescribeOptions" -> JsObject(
-               "*" -> JsObject(m)
-            )
-        )
-      }
-
-    val isSameProject = objs.head.project.isDefined && objs.forall(_.project == objs.head.project)
-    val projectScope: Map[String, JsValue] =
-      if (!isSameProject) {
-        Map.empty
-      } else {
-        Map("scope" -> JsObject({
-          "project" -> JsString(objs.head.project.get.id)
-        }))
-      }
-
+                            extraFields: Vector[String],
+                            project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
+    val ids = objs.map(file => file.getId)
     val dxFindDataObjects =
       DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
 
-    val request: JsObject = JsObject(
-        requestFields ++ extraDescribeFields ++ projectScope + ("describe" -> JsTrue)
-    )
-    dxFindDataObjects.applyRequestDirectly(request).asInstanceOf[Map[DxFile, DxFileDescribe]]
+    dxFindDataObjects.apply(
+      dxProject = project,
+      folder = None,
+      recurse = true,
+      klassRestriction = Some("file"),
+      withProperties = Vector.empty,
+      nameConstraints = Vector.empty,
+      withInputOutputSpec = true,
+      idConstraints = ids,
+      extrafields = extraFields
+    ).asInstanceOf[Map[DxFile, DxFileDescribe]]
   }
 
   // Describe the names of all the files in one batch. This is much more efficient
@@ -214,22 +191,27 @@ object DxFile {
       // that do not have a network connection.
       return Map.empty
     }
+    var descriptions: Map[DxFile, DxFileDescribe] = Map.empty
+    val objsByProj = objs.groupBy(file => file.project)
+    for ((proj, files) <- objsByProj) {
 
-    // Limit on number of objects in one API request
-    val slices = objs.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+      // Limit on number of objects in one API request
+      val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
-    val extraFieldsStr = extraFields
-      .map {
-        case Field.Details => "details"
-        case Field.Parts   => "parts"
+      val extraFieldsStr = extraFields
+        .map {
+          case Field.Details => "details"
+          case Field.Parts   => "parts"
+        }
+        .toSet
+        .toVector
+
+      // iterate on the ranges
+      descriptions ++= slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
+        case (accu, objRange) =>
+          accu ++ submitRequest(objRange.toVector, extraFieldsStr, proj)
       }
-      .toSet
-      .toVector
-
-    // iterate on the ranges
-    slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
-      case (accu, objRange) =>
-        accu ++ submitRequest(objRange.toVector, extraFieldsStr)
     }
+    descriptions
   }
 }
