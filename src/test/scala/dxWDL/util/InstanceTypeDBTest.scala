@@ -417,11 +417,11 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
   }
 
   it should "Query returns correct pricing models for org and user" in {
-    val userBilltoProject = DxProject("project-Fq78Pz80jfVXvy7fJV2jzJfB") // project name: public user billto
+    val userBilltoProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // project name: public user billto
     val orgBilltoProject = DxProject("project-Fq78JVj09vZZK3x3J66QXpf6") // project name: public org billto
 
-    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on=false, quiet=true, null))
-    val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on=false, quiet=true, null))
+    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
+    val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on = false, quiet = true, null))
 
     userResult.pricingAvailable shouldBe true
     orgResult.pricingAvailable shouldBe true
