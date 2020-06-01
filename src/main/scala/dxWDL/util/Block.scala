@@ -168,16 +168,16 @@ object Block {
 
   // figure out all the outputs from a block of statements
   //
-  def allOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, WdlTypes.T] = ???
+  def allOutputs(elements : Vector[TAT.WorkflowElement]) : Map[String, WdlTypes.T] = ???
 
   // split a part of a workflow
-  def split(
-      statements: Vector[TAT.WorkflowElement]
-  ): (Vector[BlockInput], Vector[BlockOutput], Vector[Block]) = ???
+  def split(statements : Vector[TAT.WorkflowElement]): (Vector[BlockInput],
+                                                        Vector[BlockOutput],
+                                                        Vector[Block]) = ???
 
   // Split an entire workflow into blocks.
   //
-  def splitWorkflow(wf: TAT.Workflow): Vector[Block] = ???
+  def splitWorkflow(wf : TAT.Workflow): Vector[Block] = ???
 
   // We are building an applet for the output section of a workflow.
   // The outputs have expressions, and we need to figure out which
@@ -359,7 +359,7 @@ object Block {
     }
   }
 
-  def getSubBlock(path: Vector[Int], wf: TAT.Workflow): Block = {
+  def getSubBlock(path: Vector[Int], wf : TAT.Workflow): Block = {
     assert(path.size >= 1)
 
     val blocks = splitWorkflow(wf)
