@@ -495,22 +495,31 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   private def buildSimpleWorkflowOutput(output: Block.OutputDefinition, env: CallEnv): (CVar, SArg) = {
     output.expr match {
-      case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
-        // the output is a constant
-        val womConst = WomValueAnalysis.evalConst(output.wdlType, output.expr)
-        val cVar = CVar(output.name, output.wdlType, Some(womConst))
-        val sArg = IR.SArgConst(womConst)
-        (cVar, sArg)
-      case TAT.ExprIdentifier(id, _, _) =>
+      case Left(TAT.ExprIdentifier(id, _, _)) =>
         // The output is a reference to a previously defined variable
         val cVar = CVar(output.name, output.wdlType, None)
         val sArg = getSArgFromEnv(id, env)
         (cVar, sArg)
-      case _ =>
+      case Left(expr) if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+        // the output is a constant
+        val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
+        val cVar = CVar(output.name, output.wdlType, Some(womConst))
+        val sArg = IR.SArgConst(womConst)
+        (cVar, sArg)
+      case Left(_) =>
         // An expression that requires evaluation
         throw new Exception(
             s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
         )
+      case Right(call) =>
+        val id = call.actualName
+        env.get(id) match {
+          case None => throw new Exception(s"Internal error, call ${id} cannot be found in the environment")
+          case Some(x) =>
+            val cVar = CVar(output.name, output.wdlType, None)
+            val sArg = getSArgFromEnv(id, env)
+            (cVar, sArg)
+        }
     }
   }
 
@@ -567,21 +576,29 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
-    val outputVars: Vector[CVar] = outputNodes.map { output =>
-      output.expr match {
-        case _ if WomValueAnalysis.isExpressionConst(output.wdlType, output.expr) =>
-          // the output is a constant
-          val womConst = WomValueAnalysis.evalConst(output.wdlType, output.expr)
-          CVar(output.name, output.wdlType, Some(womConst))
-      case TAT.ExprIdentifier(id, _, _) =>
-          // The output is a reference to a previously defined variable
-          CVar(output.name, output.wdlType, None)
-      case _ =>
-        // An expression that requires evaluation
-        throw new Exception(
-            s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
-        )
-      }
+    val outputVars: Vector[CVar] = outputNodes.foldLeft(Vector.empty[CVar]) {
+      case (accu, output) =>
+        output.expr match {
+          case Left(expr) if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+            // the output is a constant
+            val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
+            accu :+ CVar(output.name, output.wdlType, Some(womConst))
+          case Left(TAT.ExprIdentifier(id, _, _)) =>
+            // The output is a reference to a previously defined variable
+            accu :+ CVar(output.name, output.wdlType, None)
+          case Left(_) =>
+            // An expression that requires evaluation
+            throw new Exception(
+              s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
+            )
+          case Right(call) =>
+            // this is call that may have several outputs
+            val callOutputs = call.callee.output.map{
+              case (name, t) =>
+                CVar(call.actualName + "." + name, t, None)
+            }
+            accu ++ callOutputs
+        }
     }.toVector
 
     val updatedOutputVars: Vector[CVar] = reorg match {

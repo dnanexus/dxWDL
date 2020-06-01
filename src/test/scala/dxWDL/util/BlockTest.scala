@@ -72,7 +72,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
     val blocks = Block.splitWorkflow(wf)
 
-    mapFromOutputs(blocks(0).allOutputs) should be(
+    mapFromOutputs(blocks(0).outputs) should be(
       Map("rain" -> WdlTypes.T_Int,
           "inc.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
     )
@@ -252,7 +252,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val blocks = Block.splitWorkflow(wf)
 
-    mapFromOutputs(blocks(0).allOutputs) should be(
+    mapFromOutputs(blocks(0).outputs) should be(
       Map("i1" -> WdlTypes.T_Optional(WdlTypes.T_Int),
           "i2" -> WdlTypes.T_Optional(WdlTypes.T_Int),
           "i3" -> WdlTypes.T_Optional(WdlTypes.T_Int),

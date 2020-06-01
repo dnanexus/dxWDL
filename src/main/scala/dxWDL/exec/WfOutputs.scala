@@ -75,10 +75,12 @@ case class WfOutputs(wf: TAT.Workflow,
     // lines.
     var envFull = envInitialFilled
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
-      case Block.OutputDefinition(name, wdlType, expr) =>
+      case Block.OutputDefinition(name, wdlType, Left(expr)) =>
         val value = evaluateWomExpression(expr, wdlType, envFull)
         envFull += (name -> value)
         name -> (wdlType, value)
+      case Block.OutputDefinition(name, wdlType, Right(call)) =>
+        throw new Exception("an output definition for a call is not currently supported")
     }.toMap
 
     // convert the WDL values to JSON
