@@ -170,14 +170,25 @@ object Block {
   //
   def allOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, WdlTypes.T] = ???
 
+  def splitToBlocks(elements: Vector[TAT.WorkflowElement]): Vector[Block] = ???
+
   // split a part of a workflow
   def split(
       statements: Vector[TAT.WorkflowElement]
-  ): (Vector[BlockInput], Vector[BlockOutput], Vector[Block]) = ???
+  ): (Vector[TAT.InputDefinition], // inputs
+      Vector[TAT.InputDefinition], // implicit inputs
+      Vector[Block], // blocks
+      Vector[TAT.OutputDefinition]) // outputs
+  = ???
 
   // Split an entire workflow into blocks.
   //
-  def splitWorkflow(wf: TAT.Workflow): Vector[Block] = ???
+  // An easy to use method that takes the workflow source
+  def splitWorkflow(wf: TAT.Workflow): (Vector[TAT.InputDefinition], // inputs
+                                        Vector[TAT.InputDefinition], // implicit inputs
+                                        Vector[Block], // blocks
+                                        Vector[TAT.OutputDefinition]) // outputs
+  = ???
 
   // We are building an applet for the output section of a workflow.
   // The outputs have expressions, and we need to figure out which
@@ -226,7 +237,7 @@ object Block {
     assert(nodes.size > 0)
     if (nodes.size >= 2)
       return false
-    // there is exactly a single node
+    // there is example a single node
     val node = nodes.head
     node match {
       case call: TAT.Call if trivialExpressionsOnly =>
@@ -359,15 +370,15 @@ object Block {
     }
   }
 
-  def getSubBlock(path: Vector[Int], wf: TAT.Workflow): Block = {
+  def getSubBlock(path: Vector[Int], nodes: Vector[TAT.WorkflowElement]): Block = {
     assert(path.size >= 1)
 
-    val blocks = splitWorkflow(wf)
+    val blocks = splitToBlocks(nodes)
     var subBlock = blocks(path.head)
     for (i <- path.tail) {
       val catg = categorize(subBlock)
-      val innerNodes = Category.getInnerGraph(catg)
-      val blocks2 = split(subBlock, innerNodes)
+      val innerGraph = Category.getInnerGraph(catg)
+      val blocks2 = splitToBlocks(innerGraph)
       subBlock = blocks2(i)
     }
     return subBlock
