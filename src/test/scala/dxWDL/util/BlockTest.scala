@@ -23,7 +23,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     }.toMap
   }
 
-  it should "calculate closure correctly" in {
+  it should "calculate closure correctly" taggedAs (EdgeTest) in {
     val path = pathFromBasename("util", "block_closure.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -148,7 +148,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "categorize correctly calls to subworkflows" taggedAs (EdgeTest) in {
+  it should "categorize correctly calls to subworkflows" in {
     val path = pathFromBasename("subworkflows", "trains.wdl")
     val (_, womBundle, _, _) = parseWomSourceFile.apply(path, List.empty)
     val wf = womBundle.primaryCallable match {

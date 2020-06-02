@@ -159,7 +159,7 @@ object Block {
 
   // an input that may be omitted by the caller. In that case the value will
   // be null (or None).
-  case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T_Optional)
+  case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T)
       extends InputDefinition
 
   case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr : Either[TAT.Expr, TAT.Call])
@@ -225,19 +225,185 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  private def exprInputs(expr : TAT.Expr) : Vector[InputDefinition] = ???
+  private def exprInputs(expr : TAT.Expr) : Vector[InputDefinition] = {
+    expr match {
+      case _ : TAT.ValueNull => Vector.empty
+      case _ : TAT.ValueNone => Vector.empty
+      case _ : TAT.ValueBoolean => Vector.empty
+      case _ : TAT.ValueInt => Vector.empty
+      case _ : TAT.ValueFloat => Vector.empty
+      case _ : TAT.ValueString =>  Vector.empty
+      case _ : TAT.ValueFile => Vector.empty
+      case _ : TAT.ValueDirectory => Vector.empty
+      case TAT.ExprIdentifier(id, wdlType, _) =>
+        val outputDef = wdlType match {
+          case optType : WdlTypes.T_Optional =>
+            OptionalInputDefinition(id, optType)
+          case _ =>
+            RequiredInputDefinition(id, wdlType)
+        }
+        Vector(outputDef)
 
-  private def callInputs(call : TAT.Call) : Vector[InputDefinition] = ???
+      case TAT.ExprCompoundString(valArr, _, _) =>
+        valArr.map(elem => exprInputs(elem)).flatten
+      case TAT.ExprPair(l, r, _, _) =>
+        exprInputs(l) ++ exprInputs(r)
+      case TAT.ExprArray(arrVal, _, _) =>
+        arrVal.map(elem => exprInputs(elem)).flatten
+      case TAT.ExprMap(valMap, _, _) =>
+        valMap
+          .map{ case (k,v) => exprInputs(k) ++ exprInputs(v) }
+          .toVector
+          .flatten
+      case TAT.ExprObject(fields, _, _) =>
+        fields
+          .map{ case (_,v) => exprInputs(v) }
+          .toVector
+          .flatten
 
-  // create a block from a group of statements
-  //
+      case TAT.ExprPlaceholderEqual(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(t) ++ exprInputs(f) ++ exprInputs(value)
+      case TAT.ExprPlaceholderDefault(default: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(default) ++ exprInputs(value)
+      case TAT.ExprPlaceholderSep(sep: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(sep) ++ exprInputs(value)
+
+      // operators on one argument
+      case TAT.ExprUniraryPlus(value: TAT.Expr, _, _) =>
+        exprInputs(value)
+      case TAT.ExprUniraryMinus(value: TAT.Expr, _, _) =>
+        exprInputs(value)
+      case TAT.ExprNegate(value: TAT.Expr, _, _) =>
+        exprInputs(value)
+
+      // operators on two arguments
+      case TAT.ExprLor(a, b, _, _) => exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprLand(a, b, _, _) => exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprEqeq(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprLt(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprGte(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprNeq(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprLte(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprGt(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprAdd(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprSub(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprMod(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprMul(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+      case TAT.ExprDivide(a, b, _, _) =>  exprInputs(a) ++ exprInputs(b)
+
+        // Access an array element at [index]
+      case TAT.ExprAt(value, _, _, _) =>
+        exprInputs(value)
+
+        // conditional:
+      case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
+        exprInputs(cond) ++ exprInputs(tBranch) ++ exprInputs(fBranch)
+
+        // Apply a standard library function to arguments.
+        //
+        // TODO: some arguments may be _optional_ we need to take that
+        // into account. We need to look into the function type
+        // and figure out which arguments are optional.
+      case TAT.ExprApply(_, _, elements, _, _) =>
+        elements.map(exprInputs).flatten
+
+        // Access a field in a struct or an object. For example:
+        //   Int z = x.a
+      case TAT.ExprGetName(expr, _, _, _)  =>
+        exprInputs(expr)
+    }
+  }
+
+  private def callInputs(call : TAT.Call) : Vector[InputDefinition] = {
+    // What the callee expects
+    call.callee.input.map{
+      case (name : String, (t : WdlTypes.T, optional : Boolean)) =>
+        // provided by the caller
+        val actualInput = call.inputs.get(name)
+
+        (actualInput, optional) match {
+          case (None, false) =>
+            // A required input that will have to be provided at runtime
+            Vector.empty[InputDefinition]
+          case (Some(expr), false) =>
+            // required input that is provided
+            exprInputs(expr)
+          case (None, true) =>
+            // a missing optional input, doesn't have to be provided
+            Vector.empty[InputDefinition]
+          case (Some(expr), true) =>
+            // an optional input
+            exprInputs(expr).map{
+              case inpDef : InputDefinition =>
+                OptionalInputDefinition(inpDef.name, inpDef.wdlType)
+            }.toVector
+        }
+    }.flatten.toVector
+  }
+
+  private def callOutputs(call : TAT.Call) : Set[String] = {
+    call.callee.output.map{
+      case (name, _) => call.actualName + "." + name
+    }.toSet
+  }
+
+  private def makeOptional(t : WdlTypes.T) : WdlTypes.T = {
+    t match {
+      case _ : WdlTypes.T_Optional => t
+      case _ => WdlTypes.T_Optional(t)
+    }
+  }
+
+  // keep track of the inputs, outputs, and local definitions when
+  // traversing a block of workflow elements (declarations, calls, scatters, and conditionals)
+  private case class BlockContext(inputs : Map[String, InputDefinition],
+                                  localDefs : Set[String],
+                                  outputs : Map[String, OutputDefinition]) {
+
+    // remove from a list of potential inputs those that are locally defined.
+    def addInputs(newIdentifiedInputs : Vector[InputDefinition]) : BlockContext = {
+      val reallyNew = newIdentifiedInputs.filter{
+        case x : InputDefinition =>
+          !((inputs.keys.toSet contains x.name) ||
+              (localDefs contains x.name) ||
+              (outputs.keys.toSet contains x.name))
+      }
+      this.copy(inputs = inputs ++ reallyNew.map{x => x.name -> x}.toMap)
+    }
+
+    def addLocalDefs(names : Set[String]) : BlockContext = {
+      this.copy(localDefs = localDefs ++ names)
+    }
+    def addLocalDef(name : String) : BlockContext = {
+      this.copy(localDefs = localDefs + name)
+    }
+
+    def addOutputs(newOutputs : Vector[OutputDefinition]) : BlockContext = {
+      this.copy(outputs = outputs ++ newOutputs.map{x => x.name -> x}.toMap)
+    }
+    def addOutput(outDef : OutputDefinition) : BlockContext = {
+      this.copy(outputs = outputs + (outDef.name -> outDef))
+    }
+  }
+
+  private object BlockContext {
+    val empty = BlockContext(Map.empty,
+                             Set.empty,
+                             Map.empty)
+  }
+
+  // create a block from a group of statements.
   // requires calculating all the inputs and outputs
+  //
   private def makeBlock(elements : Vector[TAT.WorkflowElement]) : Block = {
-    // accumulate the inputs and outputs.
-    // start with an empty list of inputs and outputs.
-    val (inputs, outputs) = elements.foldLeft((Vector.empty[InputDefinition],
-                                               Vector.empty[OutputDefinition])) {
-      case ((inputs, outputs), elem) =>
+    // accumulate the inputs, outputs, and local definitions.
+    //
+    // start with:
+    //  an empty list of inputs
+    //  empty list of local definitions
+    //  empty list of outputs
+    val ctx = elements.foldLeft(BlockContext.empty) {
+      case (ctx, elem) =>
         elem match {
           case decl : TAT.Declaration =>
             val declInputs = decl.expr match {
@@ -249,34 +415,36 @@ object Block {
                 case None => Vector.empty
                 case Some(expr) => Vector(OutputDefinition(decl.name, decl.wdlType, Left(expr)))
               }
-            (inputs ++ declInputs,
-             outputs ++ declOutputs)
+            ctx
+              .addInputs(declInputs)
+              .addLocalDef(decl.name)
+              .addOutputs(declOutputs)
 
           case call : TAT.Call =>
-            (inputs ++ callInputs(call),
-             outputs :+ OutputDefinition(call.actualName, call.wdlType, Right(call)))
+            ctx
+              .addInputs(callInputs(call))
+              .addLocalDefs(callOutputs(call))
+              .addOutput(OutputDefinition(call.actualName, call.wdlType, Right(call)))
 
           case cond : TAT.Conditional =>
             // recurse into body of conditional
             val subBlock = makeBlock(cond.body)
-            val subBlockInputs = subBlock.inputs
 
             // make outputs optional
             val subBlockOutputs = subBlock.outputs.map{
               case OutputDefinition(name, wdlType, expr) =>
-                val tOpt = wdlType match {
-                  case _ : WdlTypes.T_Optional => wdlType
-                  case _ => WdlTypes.T_Optional(wdlType)
-                }
-                OutputDefinition(name, tOpt, expr)
+                OutputDefinition(name, makeOptional(wdlType), expr)
             }
-            (inputs ++ subBlockInputs ++ exprInputs(cond.expr),
-             outputs ++ subBlockOutputs)
+            ctx
+              .addInputs(subBlock.inputs)
+              .addInputs(exprInputs(cond.expr))
+              .addLocalDefs(subBlockOutputs.map(_.name).toSet)
+              .addOutputs(subBlockOutputs)
 
           case sct : TAT.Scatter =>
             // recurse into body of the scatter
             val subBlock = makeBlock(sct.body)
-            val subBlockInputs = subBlock.inputs
+
             // make outputs arrays
             val subBlockOutputs = subBlock.outputs.map{
               case OutputDefinition(name, wdlType, expr) =>
@@ -284,11 +452,16 @@ object Block {
                                  WdlTypes.T_Array(wdlType, false),
                                  expr)
             }
-            (inputs ++ subBlockInputs ++ exprInputs(sct.expr),
-             outputs ++ subBlockOutputs)
+            ctx
+              .addInputs(subBlock.inputs)
+              .addInputs(exprInputs(sct.expr))
+              .addLocalDefs(subBlockOutputs.map(_.name).toSet)
+              .addOutputs(subBlockOutputs)
         }
     }
-    Block(inputs, outputs, elements)
+    Block(ctx.inputs.values.toVector,
+          ctx.outputs.values.toVector,
+          elements)
   }
 
   // split a sequence of statements into blocks
@@ -341,7 +514,24 @@ object Block {
   // The outputs have expressions, and we need to figure out which
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
-  def outputClosure(outputs : Vector[OutputDefinition]) : Map[String, WdlTypes.T] = ???
+  def outputClosure(outputs : Vector[OutputDefinition]) : Map[String, WdlTypes.T] = {
+    // collect all the expressions that go into the output definitions
+    val inputExpressions = outputs.map{
+      case OutputDefinition(_, _, Left(expr)) =>
+        Vector(expr)
+      case OutputDefinition(_, _, Right(call)) =>
+        call.inputs.map{
+          case (_, expr) => expr
+        }
+    }.flatten
+
+    val allInputDefs = inputExpressions.map(exprInputs).flatten
+
+    allInputDefs.foldLeft(Map.empty[String, WdlTypes.T]) {
+      case (accu, inpDef) =>
+        accu + (inpDef.name -> inpDef.wdlType)
+    }
+  }
 
   // figure out all the outputs from a block of statements
   //
