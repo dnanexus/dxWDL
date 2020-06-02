@@ -416,8 +416,9 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     }
   }
 
-  it should "Query returns correct pricing models for org and user" in {
-    val userBilltoProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // project name: public user billto
+  // FIXME: un-ignore after we move to GHA, also change projects accordingly
+  ignore should "Query returns correct pricing models for org and user" in {
+    val userBilltoProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // project name: dxWDL playground
     val orgBilltoProject = DxProject("project-Fq78JVj09vZZK3x3J66QXpf6") // project name: public org billto
 
     val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
