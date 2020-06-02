@@ -286,7 +286,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "evaluate call inputs properly" taggedAs (EdgeTest) in {
+  it should "evaluate call inputs properly" in {
     val path = pathFromBasename("draft2", "various_calls.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
@@ -362,16 +362,18 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "fill in missing optionals" in {
+  it should "fill in missing optionals" taggedAs (EdgeTest) in {
     val path = pathFromBasename("frag_runner", "missing_args.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val env = Map(
+      "x" -> (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null),
+      "y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))
+    )
     val results: Map[String, JsValue] =
-      fragRunner.apply(Vector(0),
-                       Map("y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))),
-                       RunnerWfFragmentMode.Launch)
+      fragRunner.apply(Vector(0), env, RunnerWfFragmentMode.Launch)
     results shouldBe (Map("retval" -> JsNumber(5)))
   }
 
