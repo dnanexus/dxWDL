@@ -58,7 +58,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
       } else {
         val absPath: String = Paths.get(pathOrUrl).toAbsolutePath.toString
         val sources = Map(absPath -> doc.sourceCode)
-        val adjunctFiles = Adjuncts.findAdjunctFiles(Paths.get(absPath))
+        //val adjunctFiles = Adjuncts.findAdjunctFiles(Paths.get(absPath))
+        val adjunctFiles = Map.empty[String, Vector[Adjuncts.AdjunctFile]]
         (sources, adjunctFiles)
       }
 

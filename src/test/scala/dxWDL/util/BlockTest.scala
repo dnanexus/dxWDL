@@ -129,7 +129,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Block.outputClosure(wfOutputs).keys.toSet should be(Set("a", "b"))
   }
 
-  it should "calculate output closure for a workflow" taggedAs (EdgeTest) in {
+  it should "calculate output closure for a workflow" in {
     val path = pathFromBasename("compiler", "cast.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -163,7 +163,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Block.categorize(blocks(0)) shouldBe a[Block.ScatterOneCall]
   }
 
-  it should "get subblocks" in {
+  ignore should "get subblocks" taggedAs (EdgeTest) in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -247,7 +247,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Block.categorize(block) shouldBe a[Block.CallDirect]
   }
 
-  it should "sort a block correctly in the presence of conditionals" in {
+  it should "sort a block correctly in the presence of conditionals" taggedAs (EdgeTest) in {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -259,7 +259,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
             "i1" -> WdlTypes.T_Optional(WdlTypes.T_Int),
             "i2" -> WdlTypes.T_Optional(WdlTypes.T_Int),
             "i3" -> WdlTypes.T_Optional(WdlTypes.T_Int),
-            "powers10" -> WdlTypes.T_Array(WdlTypes.T_Int, false)
+            "powers10" -> WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), false)
         )
     )
   }

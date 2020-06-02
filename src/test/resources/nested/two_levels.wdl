@@ -11,7 +11,7 @@ workflow two_levels {
         Int b = inc2.result
         call zinc as inc3 { input: a = b }
 
-        call zinc as inc4 { input: a = i+5 }
+      call zinc as inc4 { input: a = i+5 }
     }
 
     if (true) {
@@ -23,7 +23,7 @@ workflow two_levels {
     output {
         Array[Int] a = inc3.result
         Array[Int] a4 = inc4.result
-        Int? b = inc5.result
+        Int? d = inc5.result
         Int c = inc6.result
     }
 }
