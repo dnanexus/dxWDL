@@ -583,9 +583,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
               accu :+ CVar(output.name, output.wdlType, None)
             case _ =>
               // An expression that requires evaluation
-              throw new Exception(
-                  s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
-              )
+              accu :+ CVar(output.name, output.wdlType, None)
           }
       }
       .toVector

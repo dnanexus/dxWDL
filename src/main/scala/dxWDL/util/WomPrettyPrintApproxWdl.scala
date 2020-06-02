@@ -11,7 +11,7 @@ object WomPrettyPrintApproxWdl {
       case TAT.Scatter(varName, expr, body, _) =>
         val collection = TUtil.exprToString(expr)
         val innerBlock = body
-          .flatMap { node =>
+          .map { node =>
             applyWorkflowElement(node, indent + "  ")
           }
           .mkString("\n")
@@ -23,11 +23,11 @@ object WomPrettyPrintApproxWdl {
       case TAT.Conditional(expr, body, _) =>
         val innerBlock =
           body
-            .flatMap { node =>
+            .map { node =>
               applyWorkflowElement(node, indent + "  ")
             }
             .mkString("\n")
-        s"""|${indent}if ${TUtil.exprToString(expr)}
+        s"""|${indent}if (${TUtil.exprToString(expr)}) {
             |${innerBlock}
             |${indent}}
             |""".stripMargin
@@ -90,5 +90,9 @@ object WomPrettyPrintApproxWdl {
     block.nodes
       .map { applyWorkflowElement(_, "    ") }
       .mkString("\n")
+  }
+
+  def apply(elements : Vector[TAT.WorkflowElement]) : String = {
+    elements.map(x => applyWorkflowElement(x, "  ")).mkString("\n")
   }
 }

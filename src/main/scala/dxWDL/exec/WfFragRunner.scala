@@ -180,7 +180,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             val resultTypes = Block.allOutputs(body)
             resultTypes.map {
               case (key, womType) =>
-                key -> (womType, WdlValues.V_Null)
+                key -> (WdlTypes.T_Optional(womType), WdlValues.V_Null)
             }
           } else {
             // condition is true, evaluate the internal block.

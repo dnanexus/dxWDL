@@ -182,6 +182,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val subBlocks = Block.splitWorkflow(wf)
 
     val block = subBlocks.head
+
     val results =
       fragRunner.evalExpressions(block.nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results should be(
