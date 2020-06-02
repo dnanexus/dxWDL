@@ -235,7 +235,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     Utils.ignore(subBlocks)
   }
 
-  it should "evaluate expressions that define variables" taggedAs (EdgeTest) in {
+  it should "evaluate expressions that define variables" in {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
@@ -286,7 +286,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "evaluate call inputs properly" in {
+  it should "evaluate call inputs properly" taggedAs (EdgeTest) in {
     val path = pathFromBasename("draft2", "various_calls.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
@@ -296,10 +296,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
       fragRunner.evalCallInputs(call1, Map("i" -> (WdlTypes.T_Int, WdlValues.V_Int(1))))
     callInputs1 should be(
-        Map(
-            "a" -> (WdlTypes.T_Int,
-            WdlValues.V_Optional(WdlValues.V_Int(1)))
-        )
+      Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(1)))
     )
 
     val call2 = findCallByName("ManyArgs", wf.body)
@@ -322,7 +319,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "evaluate call constant inputs" in {
+  ignore should "evaluate call constant inputs" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()

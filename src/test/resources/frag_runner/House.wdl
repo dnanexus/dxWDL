@@ -13,17 +13,17 @@ workflow foo {
     input {
     }
 
-    House a = {
-        "height": 20,
-        "num_floors" : 3,
-        "street" : "Alda",
-        "city" : "Sunnyvale"
+    House a = object {
+      height: 20,
+      num_floors : 3,
+      street : "Alda",
+      city : "Sunnyvale"
     }
-    House b = {
-        "height": 12,
-        "num_floors" : 1,
-        "street" : "Mary",
-        "city" : "Santa Clara"
+    House b = object {
+      height: 12,
+      num_floors : 1,
+      street : "Mary",
+      city : "Santa Clara"
     }
 
     Int tot_height = a.height + b.height
@@ -31,11 +31,11 @@ workflow foo {
     String streets = a.street + "_" + b.street
     String cities = a.city + "_" + b.city
 
-    House tot = {
-        "height": tot_height,
-        "num_floors" : tot_num_floors,
-        "street" : streets,
-        "city" : cities
+    House tot = object {
+      height: tot_height,
+      num_floors : tot_num_floors,
+      street : streets,
+      city : cities
     }
 
     output {
