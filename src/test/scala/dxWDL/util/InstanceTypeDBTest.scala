@@ -3,9 +3,9 @@ package dxWDL.util
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.values._
-
 import dxWDL.base._
 import dxWDL.base.Utils
+import dxWDL.dx.DxProject
 
 class InstanceTypeDBTest extends FlatSpec with Matchers {
 
@@ -414,5 +414,17 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
       // No non-GPU instance has 8 cpus
       db.chooseAttrs(None, None, Some(8), Some(false))
     }
+  }
+
+  // FIXME: un-ignore after we move to GHA, also change projects accordingly
+  ignore should "Query returns correct pricing models for org and user" in {
+    val userBilltoProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // project name: dxWDL playground
+    val orgBilltoProject = DxProject("project-Fq78JVj09vZZK3x3J66QXpf6") // project name: public org billto
+
+    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
+    val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on = false, quiet = true, null))
+
+    userResult.pricingAvailable shouldBe true
+    orgResult.pricingAvailable shouldBe true
   }
 }
