@@ -112,21 +112,21 @@ case class WfFragRunner(wf: TAT.Workflow,
       nodes: Seq[TAT.WorkflowElement],
       env: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, (WdlTypes.T, WdlValues.V)] = {
-    nodes.foldLeft(env) {
-      case (env, TAT.Declaration(name, wdlType, exprOpt, _)) =>
+    nodes.foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
+      case (accu, TAT.Declaration(name, wdlType, exprOpt, _)) =>
         val value = exprOpt match {
           case None => WdlValues.V_Null
           case Some(expr) =>
-            evaluateWomExpression(expr, wdlType, env)
+            evaluateWomExpression(expr, wdlType, accu ++ env)
         }
-        env + (name -> (wdlType, value))
+        accu + (name -> (wdlType, value))
 
       // scatter
       // scatter (K in collection) {
       // }
-      case (env, TAT.Scatter(id, expr, body, _)) =>
+      case (accu, TAT.Scatter(id, expr, body, _)) =>
         val collectionRaw: WdlValues.V =
-          evaluateWomExpression(expr, expr.wdlType, env)
+          evaluateWomExpression(expr, expr.wdlType, accu ++ env)
         val collection: Vector[WdlValues.V] = collectionRaw match {
           case x: WdlValues.V_Array => x.value
           case other =>
@@ -136,7 +136,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         // iterate on the collection, evaluate the body N times
         val vm: Vector[Map[String, (WdlTypes.T, WdlValues.V)]] =
           collection.map { v =>
-            val envInner = env + (id -> (expr.wdlType, v))
+            val envInner = accu ++ env + (id -> (expr.wdlType, v))
             evalExpressions(body, envInner)
           }.toVector
 
@@ -164,11 +164,11 @@ case class WfFragRunner(wf: TAT.Workflow,
           case (key, (t, vv)) =>
             key -> (WdlTypes.T_Array(t, false), WdlValues.V_Array(vv))
         }
-        env ++ resultsFull
+        accu ++ resultsFull
 
-      case (env, TAT.Conditional(expr, body, _)) =>
+      case (accu, TAT.Conditional(expr, body, _)) =>
         // evaluate the condition
-        val condValue: Boolean = evaluateWomExpression(expr, expr.wdlType, env) match {
+        val condValue: Boolean = evaluateWomExpression(expr, expr.wdlType, accu ++ env) match {
           case b: WdlValues.V_Boolean => b.value
           case other =>
             throw new AppInternalException(s"Unexpected condition expression value ${other}")
@@ -184,15 +184,15 @@ case class WfFragRunner(wf: TAT.Workflow,
             }
           } else {
             // condition is true, evaluate the internal block.
-            val results = evalExpressions(body, env)
+            val results = evalExpressions(body, accu ++ env)
             results.map {
               case (key, (t, value)) =>
                 key -> (WdlTypes.T_Optional(t), WdlValues.V_Optional(value))
             }
           }
-        env ++ resultsFull
+        accu ++ resultsFull
 
-      case (env, other) =>
+      case (_, other) =>
         throw new Exception(s"type ${other.getClass} while evaluating expressions")
     }
   }

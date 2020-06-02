@@ -99,8 +99,11 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val block = subBlocks(1)
 
-    val env: Map[String, WdlValues.V] =
-      Map("x" -> WdlValues.V_Int(3), "y" -> WdlValues.V_Int(5), "add.result" -> WdlValues.V_Int(8))
+    val env: Map[String, WdlValues.V] = Map(
+      "x" -> WdlValues.V_Int(3),
+      "y" -> WdlValues.V_Int(5),
+      "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
+    )
 
     val decls: Vector[TAT.Declaration] = block.nodes.collect {
       case eNode: TAT.Declaration => eNode
@@ -163,14 +166,14 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     results should be(
         Map(
             "flag" -> (WdlTypes.T_Boolean,
-            WdlValues.V_Boolean(true)),
+                       WdlValues.V_Boolean(true)),
             "cats" -> (WdlTypes.T_Optional(WdlTypes.T_String),
-            WdlValues.V_Optional(WdlValues.V_String("Mr. Baggins")))
+                       WdlValues.V_Optional(WdlValues.V_String("Mr. Baggins")))
         )
     )
   }
 
-  it should "evaluate a nested conditional/scatter without a call" in {
+  it should "evaluate a nested conditional/scatter without a call" taggedAs (EdgeTest) in {
     val path = pathFromBasename("frag_runner", "nested_no_call.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
@@ -182,11 +185,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val results =
       fragRunner.evalExpressions(block.nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results should be(
-        Map(
-            "z" -> (WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, false)),
+      Map("z" -> (
+            WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, false)),
             WdlValues.V_Null)
-        )
-    )
+      ))
   }
 
   it should "create proper names for scatter results" in {
@@ -372,7 +374,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     results shouldBe (Map("retval" -> JsNumber(5)))
   }
 
-  it should "evaluate expressions in correct order" taggedAs (EdgeTest) in {
+  it should "evaluate expressions in correct order" in {
     val path = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
