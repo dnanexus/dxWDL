@@ -173,7 +173,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "evaluate a nested conditional/scatter without a call" taggedAs (EdgeTest) in {
+  it should "evaluate a nested conditional/scatter without a call" in {
     val path = pathFromBasename("frag_runner", "nested_no_call.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
@@ -235,7 +235,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     Utils.ignore(subBlocks)
   }
 
-  it should "evaluate expressions that define variables" in {
+  it should "evaluate expressions that define variables" taggedAs (EdgeTest) in {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
@@ -246,9 +246,12 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val results =
       fragRunner.evalExpressions(subBlocks(0).nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results.keys should be(Set("powers10", "i1", "i2", "i3"))
-    results("i1") should be((WdlTypes.T_Int, WdlValues.V_Optional(WdlValues.V_Int(1))))
-    results("i2") should be((WdlTypes.T_Int, WdlValues.V_Null))
-    results("i3") should be((WdlTypes.T_Int, WdlValues.V_Optional(WdlValues.V_Int(100))))
+    results("i1") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
+                             WdlValues.V_Optional(WdlValues.V_Int(1))))
+    results("i2") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
+                             WdlValues.V_Null))
+    results("i3") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
+                             WdlValues.V_Optional(WdlValues.V_Int(100))))
     results("powers10") should be(
         (WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), false),
          WdlValues.V_Array(
