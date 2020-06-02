@@ -307,10 +307,13 @@ object Block {
       case TAT.ExprApply(_, _, elements, _, _) =>
         elements.map(exprInputs).flatten
 
-        // Access a field in a struct or an object. For example:
-        //   Int z = x.a
-      case TAT.ExprGetName(expr, _, _, _)  =>
-        exprInputs(expr)
+        // Access a field in a call
+        //   Int z = eliminateDuplicate.fields
+      case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _)  =>
+        Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
+
+      case TAT.ExprGetName(expr, _, _, _) =>
+        throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
     }
   }
 
@@ -341,12 +344,6 @@ object Block {
     }.flatten.toVector
   }
 
-  private def callOutputs(call : TAT.Call) : Set[String] = {
-    call.callee.output.map{
-      case (name, _) => call.actualName + "." + name
-    }.toSet
-  }
-
   private def makeOptional(t : WdlTypes.T) : WdlTypes.T = {
     t match {
       case _ : WdlTypes.T_Optional => t
@@ -357,7 +354,6 @@ object Block {
   // keep track of the inputs, outputs, and local definitions when
   // traversing a block of workflow elements (declarations, calls, scatters, and conditionals)
   private case class BlockContext(inputs : Map[String, InputDefinition],
-                                  localDefs : Set[String],
                                   outputs : Map[String, OutputDefinition]) {
 
     // remove from a list of potential inputs those that are locally defined.
@@ -365,31 +361,18 @@ object Block {
       val reallyNew = newIdentifiedInputs.filter{
         case x : InputDefinition =>
           !((inputs.keys.toSet contains x.name) ||
-              (localDefs contains x.name) ||
               (outputs.keys.toSet contains x.name))
       }
       this.copy(inputs = inputs ++ reallyNew.map{x => x.name -> x}.toMap)
     }
 
-    def addLocalDefs(names : Set[String]) : BlockContext = {
-      this.copy(localDefs = localDefs ++ names)
-    }
-    def addLocalDef(name : String) : BlockContext = {
-      this.copy(localDefs = localDefs + name)
-    }
-
     def addOutputs(newOutputs : Vector[OutputDefinition]) : BlockContext = {
       this.copy(outputs = outputs ++ newOutputs.map{x => x.name -> x}.toMap)
-    }
-    def addOutput(outDef : OutputDefinition) : BlockContext = {
-      this.copy(outputs = outputs + (outDef.name -> outDef))
     }
   }
 
   private object BlockContext {
-    val empty = BlockContext(Map.empty,
-                             Set.empty,
-                             Map.empty)
+    val empty = BlockContext(Map.empty, Map.empty)
   }
 
   // create a block from a group of statements.
@@ -417,14 +400,18 @@ object Block {
               }
             ctx
               .addInputs(declInputs)
-              .addLocalDef(decl.name)
               .addOutputs(declOutputs)
 
           case call : TAT.Call =>
+            val callOutputs = call.callee.output.map{
+              case (name, wdlType) =>
+                OutputDefinition(call.actualName + "." + name,
+                                 wdlType,
+                                 Right(call))
+            }.toVector
             ctx
               .addInputs(callInputs(call))
-              .addLocalDefs(callOutputs(call))
-              .addOutput(OutputDefinition(call.actualName, call.wdlType, Right(call)))
+              .addOutputs(callOutputs)
 
           case cond : TAT.Conditional =>
             // recurse into body of conditional
@@ -438,7 +425,6 @@ object Block {
             ctx
               .addInputs(subBlock.inputs)
               .addInputs(exprInputs(cond.expr))
-              .addLocalDefs(subBlockOutputs.map(_.name).toSet)
               .addOutputs(subBlockOutputs)
 
           case sct : TAT.Scatter =>
@@ -455,7 +441,6 @@ object Block {
             ctx
               .addInputs(subBlock.inputs)
               .addInputs(exprInputs(sct.expr))
-              .addLocalDefs(subBlockOutputs.map(_.name).toSet)
               .addOutputs(subBlockOutputs)
         }
     }
