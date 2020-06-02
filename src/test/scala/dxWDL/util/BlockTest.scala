@@ -17,13 +17,13 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  def mapFromOutputs(outputs : Vector[Block.OutputDefinition]) : Map[String, WdlTypes.T] = {
+  def mapFromOutputs(outputs: Vector[Block.OutputDefinition]): Map[String, WdlTypes.T] = {
     outputs.map {
       case Block.OutputDefinition(name, wdlType, _) => name -> wdlType
     }.toMap
   }
 
-  it should "calculate closure correctly" taggedAs (EdgeTest) in {
+  it should "calculate closure correctly" in {
     val path = pathFromBasename("util", "block_closure.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -45,9 +45,15 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
     val blocks = Block.splitWorkflow(wf)
 
-    mapFromOutputs(blocks(1).outputs) should be(Map("inc2.result" -> WdlTypes.T_Optional(WdlTypes.T_Int)))
-    mapFromOutputs(blocks(2).outputs) should be(Map("inc3.result" -> WdlTypes.T_Optional(WdlTypes.T_Int)))
-    mapFromOutputs(blocks(3).outputs) should be(Map("inc4.result" -> WdlTypes.T_Array(WdlTypes.T_Int)))
+    mapFromOutputs(blocks(1).outputs) should be(
+        Map("inc2.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
+    )
+    mapFromOutputs(blocks(2).outputs) should be(
+        Map("inc3.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
+    )
+    mapFromOutputs(blocks(3).outputs) should be(
+        Map("inc4.result" -> WdlTypes.T_Array(WdlTypes.T_Int))
+    )
     mapFromOutputs(blocks(4).outputs) should be(
         Map("x" -> WdlTypes.T_Array(WdlTypes.T_Int, false),
             "inc5.result" -> WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), false))
@@ -73,11 +79,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val blocks = Block.splitWorkflow(wf)
 
     mapFromOutputs(blocks(0).outputs) should be(
-      Map("rain" -> WdlTypes.T_Int,
-          "inc.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
-    )
-    mapFromOutputs(blocks(0).outputs) should be(
-      Map("inc.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
+        Map("rain" -> WdlTypes.T_Int, "inc.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
     )
   }
 
@@ -127,13 +129,13 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Block.outputClosure(wfOutputs).keys.toSet should be(Set("a", "b"))
   }
 
-  it should "calculate output closure for a workflow" in {
+  it should "calculate output closure for a workflow" taggedAs (EdgeTest) in {
     val path = pathFromBasename("compiler", "cast.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
     val wfOutputs = wf.outputs.map(Block.translate)
     Block.outputClosure(wfOutputs).keys.toSet should be(
-      Set("Add.result", "SumArray.result", "SumArray2.result", "JoinMisc.result")
+        Set("Add.result", "SumArray.result", "SumArray2.result", "JoinMisc.result")
     )
   }
 
@@ -153,7 +155,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val (_, womBundle, _, _) = parseWomSourceFile.apply(path, List.empty)
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("Could not find the workflow in the source")
+      case _                      => throw new Exception("Could not find the workflow in the source")
     }
 
     val blocks = Block.splitWorkflow(wf)
@@ -192,7 +194,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("sanity")
+      case _                      => throw new Exception("sanity")
     }
     val blocks = Block.splitWorkflow(wf)
     Block.categorize(blocks(0)) shouldBe a[Block.CondOneCall]
@@ -205,7 +207,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("sanity")
+      case _                      => throw new Exception("sanity")
     }
     val blocks = Block.splitWorkflow(wf)
 
@@ -227,7 +229,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("sanity")
+      case _                      => throw new Exception("sanity")
     }
 
     // Find the fragment block to execute
@@ -253,10 +255,12 @@ class BlockTest extends AnyFlatSpec with Matchers {
     val blocks = Block.splitWorkflow(wf)
 
     mapFromOutputs(blocks(0).outputs) should be(
-      Map("i1" -> WdlTypes.T_Optional(WdlTypes.T_Int),
-          "i2" -> WdlTypes.T_Optional(WdlTypes.T_Int),
-          "i3" -> WdlTypes.T_Optional(WdlTypes.T_Int),
-          "powers10" -> WdlTypes.T_Array(WdlTypes.T_Int, false))
+        Map(
+            "i1" -> WdlTypes.T_Optional(WdlTypes.T_Int),
+            "i2" -> WdlTypes.T_Optional(WdlTypes.T_Int),
+            "i3" -> WdlTypes.T_Optional(WdlTypes.T_Int),
+            "powers10" -> WdlTypes.T_Array(WdlTypes.T_Int, false)
+        )
     )
   }
 
@@ -266,7 +270,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("sanity")
+      case _                      => throw new Exception("sanity")
     }
 
     val scatters: Seq[TAT.Scatter] = wf.body.collect {
@@ -281,7 +285,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = womBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                            => throw new Exception("sanity")
+      case _                      => throw new Exception("sanity")
     }
 
     // Find the fragment block to execute
@@ -318,7 +322,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     names shouldBe (Set.empty[String])
   }
 
-/*  it should "account for arguments that have a default, but are not optional" in {
+  /*  it should "account for arguments that have a default, but are not optional" in {
     val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)

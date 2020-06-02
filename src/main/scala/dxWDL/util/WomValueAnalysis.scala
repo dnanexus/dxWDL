@@ -43,13 +43,13 @@ object WomValueAnalysis {
   def evalConst(expr: TAT.Expr): WdlValues.V = {
     expr match {
       // Base case: primitive types.
-      case _ : TAT.ValueNull => WdlValues.V_Null
-      case _ : TAT.ValueNone => WdlValues.V_Null
-      case b : TAT.ValueBoolean =>  WdlValues.V_Boolean(b.value)
-      case i : TAT.ValueInt => WdlValues.V_Int(i.value)
-      case x : TAT.ValueFloat => WdlValues.V_Float(x.value)
-      case s : TAT.ValueString => WdlValues.V_String(s.value)
-      case fl : TAT.ValueFile =>
+      case _: TAT.ValueNull    => WdlValues.V_Null
+      case _: TAT.ValueNone    => WdlValues.V_Null
+      case b: TAT.ValueBoolean => WdlValues.V_Boolean(b.value)
+      case i: TAT.ValueInt     => WdlValues.V_Int(i.value)
+      case x: TAT.ValueFloat   => WdlValues.V_Float(x.value)
+      case s: TAT.ValueString  => WdlValues.V_String(s.value)
+      case fl: TAT.ValueFile =>
         if (isMutableFile(fl.value))
           throw new ExprNotConst(s"file ${fl.value} is mutable")
         WdlValues.V_File(fl.value)
@@ -60,16 +60,16 @@ object WomValueAnalysis {
       case TAT.ExprArray(elems, _, _) =>
         WdlValues.V_Array(elems.map(evalConst(_)).toVector)
       case TAT.ExprMap(m, _, _) =>
-        WdlValues.V_Map(m.map{
-                          case (k, v) => evalConst(k) -> evalConst(v)
-                        })
+        WdlValues.V_Map(m.map {
+          case (k, v) => evalConst(k) -> evalConst(v)
+        })
       case TAT.ExprObject(m, wdlType, _) =>
-        val m2 = m.map{
+        val m2 = m.map {
           case (k, v) => k -> evalConst(v)
         }
         wdlType match {
           case WdlTypes.T_Struct(name, _) => WdlValues.V_Struct(name, m2)
-          case _  =>  WdlValues.V_Object(m2)
+          case _                          => WdlValues.V_Object(m2)
         }
       case expr =>
         // anything else require evaluation
@@ -77,13 +77,13 @@ object WomValueAnalysis {
     }
   }
 
-  def checkForLocalFiles(v : WdlValues.V) : Unit = {
+  def checkForLocalFiles(v: WdlValues.V): Unit = {
     v match {
-      case WdlValues.V_Null => ()
+      case WdlValues.V_Null       => ()
       case WdlValues.V_Boolean(_) => ()
-      case WdlValues.V_Int(_) => ()
-      case WdlValues.V_Float(_) => ()
-      case WdlValues.V_String(_) => ()
+      case WdlValues.V_Int(_)     => ()
+      case WdlValues.V_Float(_)   => ()
+      case WdlValues.V_String(_)  => ()
       case WdlValues.V_File(value) =>
         if (isMutableFile(value))
           throw new ExprNotConst(s"file ${value} is mutable")
@@ -95,9 +95,10 @@ object WomValueAnalysis {
       case WdlValues.V_Array(value) =>
         value.foreach(checkForLocalFiles(_))
       case WdlValues.V_Map(value) =>
-        value.foreach{ case (k,v) =>
-          checkForLocalFiles(k)
-          checkForLocalFiles(v)
+        value.foreach {
+          case (k, v) =>
+            checkForLocalFiles(k)
+            checkForLocalFiles(v)
         }
       case WdlValues.V_Optional(value) =>
         checkForLocalFiles(value)
@@ -115,16 +116,16 @@ object WomValueAnalysis {
   // is not.
   def isTrivialExpression(expr: TAT.Expr): Boolean = {
     expr match {
-      case _ : TAT.ValueNull => true
-      case _ : TAT.ValueNone => true
-      case _ : TAT.ValueBoolean => true
-      case _ : TAT.ValueInt => true
-      case _ : TAT.ValueFloat => true
-      case _ : TAT.ValueString => true
-      case _ : TAT.ValueFile => true
-      case _ : TAT.ValueDirectory => true
-      case _ : TAT.ExprIdentifier => true
-      case _  => false
+      case _: TAT.ValueNull      => true
+      case _: TAT.ValueNone      => true
+      case _: TAT.ValueBoolean   => true
+      case _: TAT.ValueInt       => true
+      case _: TAT.ValueFloat     => true
+      case _: TAT.ValueString    => true
+      case _: TAT.ValueFile      => true
+      case _: TAT.ValueDirectory => true
+      case _: TAT.ExprIdentifier => true
+      case _                     => false
     }
   }
 
@@ -139,7 +140,7 @@ object WomValueAnalysis {
       checkForLocalFiles(valueWithCorrectType)
       Some(valueWithCorrectType)
     } catch {
-      case _ : ExprNotConst =>
+      case _: ExprNotConst =>
         None
     }
   }

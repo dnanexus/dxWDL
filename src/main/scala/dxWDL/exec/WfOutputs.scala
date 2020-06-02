@@ -11,7 +11,7 @@ import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
 case class WfOutputs(wf: TAT.Workflow,
-                     document : TAT.Document,
+                     document: TAT.Document,
                      typeAliases: Map[String, WdlTypes.T],
                      dxPathConfig: DxPathConfig,
                      dxIoFunctions: DxIoFunctions,
@@ -22,7 +22,7 @@ case class WfOutputs(wf: TAT.Workflow,
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
-  private val evaluator : wdlTools.eval.Eval = {
+  private val evaluator: wdlTools.eval.Eval = {
     val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
@@ -41,8 +41,7 @@ case class WfOutputs(wf: TAT.Workflow,
   }
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
-            addStatus: Boolean = false)
-      : Map[String, JsValue] = {
+            addStatus: Boolean = false): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
     Utils.appletLog(
@@ -65,7 +64,7 @@ case class WfOutputs(wf: TAT.Workflow,
             // input is missing, and there is no default at the callee,
             Utils.warning(utlVerbose, s"value is missing for ${name}")
             None
-          case (Some((t,v)), _) =>
+          case (Some((t, v)), _) =>
             Some(name -> v)
         }
     }.toMap
@@ -75,12 +74,10 @@ case class WfOutputs(wf: TAT.Workflow,
     // lines.
     var envFull = envInitialFilled
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
-      case Block.OutputDefinition(name, wdlType, Left(expr)) =>
+      case Block.OutputDefinition(name, wdlType, expr) =>
         val value = evaluateWomExpression(expr, wdlType, envFull)
         envFull += (name -> value)
         name -> (wdlType, value)
-      case Block.OutputDefinition(name, wdlType, Right(call)) =>
-        throw new Exception("an output definition for a call is not currently supported")
     }.toMap
 
     // convert the WDL values to JSON

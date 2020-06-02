@@ -9,19 +9,20 @@ import wdlTools.util.{
   SourceCode => WdlSourceCode,
   Util => WdlUtil,
   Verbosity => WdlVerbosity,
-  TypeCheckingRegime => WdlTypeCheckingRegime}
+  TypeCheckingRegime => WdlTypeCheckingRegime
+}
 import wdlTools.types.{TypeInfer, TypeOptions, TypedAbstractSyntax => TAT, WdlTypes}
 import dxWDL.base.{Language, Utils}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
 
-  private case class BInfo(callables : Map[String, TAT.Callable],
-                           sources : Map[String, WorkflowSource],
-                           adjunctFiles : Map[String, Vector[Adjuncts.AdjunctFile]])
+  private case class BInfo(callables: Map[String, TAT.Callable],
+                           sources: Map[String, WorkflowSource],
+                           adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
-  private def mergeCallables(aCallables : Map[String, TAT.Callable],
-                             bCallables : Map[String, TAT.Callable]) : Map[String, TAT.Callable] = {
+  private def mergeCallables(aCallables: Map[String, TAT.Callable],
+                             bCallables: Map[String, TAT.Callable]): Map[String, TAT.Callable] = {
     var allCallables = Map.empty[String, TAT.Callable]
     aCallables.foreach {
       case (key, callable) =>
@@ -34,12 +35,12 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // unequal.
           case Some(existing) if (existing != callable) =>
             Utils.error(s"""|${key} appears with two different callable definitions
-                                |1)
-                                |${callable}
-                                |
-                                |2)
-                                |${existing}
-                                |""".stripMargin)
+                            |1)
+                            |${callable}
+                            |
+                            |2)
+                            |${existing}
+                            |""".stripMargin)
             throw new Exception(s"${key} appears twice, with two different definitions")
           case _ => ()
         }
@@ -47,7 +48,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     allCallables
   }
 
-  private def bInfoFromDoc(doc : TAT.Document) : BInfo = {
+  private def bInfoFromDoc(doc: TAT.Document): BInfo = {
     // Add source and adjuncts for main file
     val pathOrUrl = doc.sourceCode.toString
     val (sources, adjunctFiles) =
@@ -61,32 +62,33 @@ case class ParseWomSourceFile(verbose: Boolean) {
         (sources, adjunctFiles)
       }
 
-    val tasks : Vector[TAT.Task] = doc.elements.collect {
-      case x : TAT.Task => x
+    val tasks: Vector[TAT.Task] = doc.elements.collect {
+      case x: TAT.Task => x
     }
-    val allCallables = (tasks ++ doc.workflow.toVector).map{
-      callable => callable.name -> callable
+    val allCallables = (tasks ++ doc.workflow.toVector).map { callable =>
+      callable.name -> callable
     }.toMap
 
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(imports: Seq[Path]) : TypeOptions = {
+  private def makeOptions(imports: Seq[Path]): TypeOptions = {
     TypeOptions(
-      antlr4Trace = false,
-      localDirectories = imports.toVector,
-      verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
-      followImports = true,
-      typeChecking = WdlTypeCheckingRegime.Strict)
+        antlr4Trace = false,
+        localDirectories = imports.toVector,
+        verbosity = if (verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
+        followImports = true,
+        typeChecking = WdlTypeCheckingRegime.Strict
+    )
   }
 
   // recurse into the imported packages
   //
   // Check the uniqueness of tasks, Workflows, and Types
   // merge everything into one bundle.
-  private def dfsFlatten(tDoc : TAT.Document) : BInfo = {
-    val imports : Vector[TAT.ImportDoc] = tDoc.elements.collect {
-      case x : TAT.ImportDoc => x
+  private def dfsFlatten(tDoc: TAT.Document): BInfo = {
+    val imports: Vector[TAT.ImportDoc] = tDoc.elements.collect {
+      case x: TAT.ImportDoc => x
     }
 
     val topLevelBInfo = bInfoFromDoc(tDoc)
@@ -94,12 +96,13 @@ case class ParseWomSourceFile(verbose: Boolean) {
     // dive into the imported documents and fold them into the top-level
     // document
     imports.foldLeft(topLevelBInfo) {
-      case (accu : BInfo, imp) =>
+      case (accu: BInfo, imp) =>
         val flatImpBInfo = dfsFlatten(imp.doc)
         BInfo(
-          callables = mergeCallables(accu.callables, flatImpBInfo.callables),
-          sources = accu.sources ++ flatImpBInfo.sources,
-          adjunctFiles = accu.adjunctFiles ++ flatImpBInfo.adjunctFiles)
+            callables = mergeCallables(accu.callables, flatImpBInfo.callables),
+            sources = accu.sources ++ flatImpBInfo.sources,
+            adjunctFiles = accu.adjunctFiles ++ flatImpBInfo.adjunctFiles
+        )
     }
   }
 
@@ -126,22 +129,22 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val primaryCallable =
       tMainDoc.workflow match {
         case None =>
-          val tasks : Vector[TAT.Task] = tMainDoc.elements.collect {
-            case x : TAT.Task => x
+          val tasks: Vector[TAT.Task] = tMainDoc.elements.collect {
+            case x: TAT.Task => x
           }
           if (tasks.size == 1)
             Some(tasks.head)
           else
             None
         case Some(wf) => Some(wf)
-        case _ => None
+        case _        => None
       }
 
     // recurse into the imported packages
     //
     // Check the uniqueness of tasks, Workflows, and Types
     // merge everything into one bundle.
-    val flatInfo : BInfo = dfsFlatten(tMainDoc)
+    val flatInfo: BInfo = dfsFlatten(tMainDoc)
 
     (Language.fromWdlVersion(tMainDoc.version.value),
      WomBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
@@ -150,7 +153,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   }
 
   // throw an exception if this WDL program is invalid
-  def validateWdlCode(wdlWfSource: String, language : Option[Language.Value] = None) : Unit = {
+  def validateWdlCode(wdlWfSource: String, language: Option[Language.Value] = None): Unit = {
     val opts = makeOptions(Vector.empty)
     val lines = wdlWfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
@@ -169,13 +172,13 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
   }
 
-
   // Parse a Workflow source file. Return the:
   //  * workflow definition
   //  * directory of tasks
   //  * directory of type aliases
-  def parseWdlWorkflow(wfSource: String):
-      (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
+  def parseWdlWorkflow(
+      wfSource: String
+  ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
     val opts = makeOptions(Vector.empty)
     val lines = wfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
@@ -183,15 +186,15 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val doc = parser.parseDocument(sourceCode)
     val (tDoc, _) = new TypeInfer(opts).apply(doc)
 
-    val tasks = tDoc.elements.collect{
-      case task : TAT.Task => task.name -> task
+    val tasks = tDoc.elements.collect {
+      case task: TAT.Task => task.name -> task
     }.toMap
-    val aliases = tDoc.elements.collect{
-      case struct : TAT.StructDefinition =>
+    val aliases = tDoc.elements.collect {
+      case struct: TAT.StructDefinition =>
         struct.name -> WdlTypes.T_Struct(struct.name, struct.members)
     }.toMap
     val wf = tDoc.workflow match {
-      case None => throw new RuntimeException("Sanity, this document should have a workflow")
+      case None    => throw new RuntimeException("Sanity, this document should have a workflow")
       case Some(x) => x
     }
     (wf, tasks, aliases, tDoc)
@@ -207,8 +210,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     if (tDoc.workflow.isDefined)
       throw new Exception("a workflow that shouldn't be a member of this document")
-    val tasks = tDoc.elements.collect{
-      case task : TAT.Task => task
+    val tasks = tDoc.elements.collect {
+      case task: TAT.Task => task
     }
     if (tasks.isEmpty)
       throw new Exception("no tasks in this WDL program")
@@ -220,9 +223,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // Extract the only task from a namespace
   def getMainTask(bundle: WomBundle): TAT.Task = {
     bundle.primaryCallable match {
-      case None => throw new Exception("found no callable")
-      case Some(task : TAT.Task) => task
-      case Some(wf) => throw new Exception("found a workflow ${wf.name} and not a task")
+      case None                 => throw new Exception("found no callable")
+      case Some(task: TAT.Task) => task
+      case Some(wf)             => throw new Exception("found a workflow ${wf.name} and not a task")
     }
   }
 

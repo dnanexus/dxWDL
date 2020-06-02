@@ -12,8 +12,8 @@ object WomPrettyPrintApproxWdl {
         val collection = TUtil.exprToString(expr)
         val innerBlock = body
           .flatMap { node =>
-          applyWorkflowElement(node, indent + "  ")
-        }
+            applyWorkflowElement(node, indent + "  ")
+          }
           .mkString("\n")
         s"""|${indent}scatter (${varName} in ${collection}) {
             |${innerBlock}
@@ -33,10 +33,12 @@ object WomPrettyPrintApproxWdl {
             |""".stripMargin
 
       case call: TAT.Call =>
-        val inputNames = call.inputs.map{
-          case (key, expr) =>
-            s"${key} = ${TUtil.exprToString(expr)}"
-        }.mkString(",")
+        val inputNames = call.inputs
+          .map {
+            case (key, expr) =>
+              s"${key} = ${TUtil.exprToString(expr)}"
+          }
+          .mkString(",")
         val inputs =
           if (inputNames.isEmpty) ""
           else s"{ input: ${inputNames} }"
@@ -76,15 +78,17 @@ object WomPrettyPrintApproxWdl {
   }
 
   def graphOutputs(outputs: Seq[TAT.OutputDefinition]): String = {
-    outputs.map{
-      case TAT.OutputDefinition(name, wdlType, expr, _) =>
-        s"${TUtil.typeToString(wdlType)} ${name} = ${TUtil.exprToString(expr)}"
-    }.mkString("\n")
+    outputs
+      .map {
+        case TAT.OutputDefinition(name, wdlType, expr, _) =>
+          s"${TUtil.typeToString(wdlType)} ${name} = ${TUtil.exprToString(expr)}"
+      }
+      .mkString("\n")
   }
 
   def block(block: Block): String = {
     block.nodes
-      .map{ applyWorkflowElement(_, "    ") }
+      .map { applyWorkflowElement(_, "    ") }
       .mkString("\n")
   }
 }

@@ -35,7 +35,7 @@ object Adjuncts {
     lazy val readmeRegexp = s"(?i)readme\\.${wdlName}\\.(.+)\\.md".r
     lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.${wdlName}\\.(.+)\\.md".r
 
-    val v : Array[(String, AdjunctFile)] = parentDir.listFiles
+    val v: Array[(String, AdjunctFile)] = parentDir.listFiles
       .flatMap { file =>
         {
           file.getName match {
@@ -46,13 +46,14 @@ object Adjuncts {
             case _ => None
           }
         }
-    }
+      }
     // handle list that might have duplicates
-    val m : Map[String, Array[(String, AdjunctFile)]]= v.groupBy(_._1).toMap
+    val m: Map[String, Array[(String, AdjunctFile)]] = v.groupBy(_._1).toMap
 
     // get rid of the extra copy of the filename
-    m.map{ case (name, fileTuples) =>
-      name -> fileTuples.map(_._2).toVector
+    m.map {
+      case (name, fileTuples) =>
+        name -> fileTuples.map(_._2).toVector
     }
   }
 }

@@ -12,7 +12,7 @@ workflow expression_after_call {
 }
 
 task gen_str_array {
-    Int a
+  String a
 
     command {}
     output {

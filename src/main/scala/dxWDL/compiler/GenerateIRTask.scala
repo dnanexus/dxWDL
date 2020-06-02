@@ -23,7 +23,7 @@ case class GenerateIRTask(verbose: Verbose,
 
   def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
     WomValueAnalysis.ifConstEval(WdlTypes.T_String, expr) match {
-      case None => throw new DynamicInstanceTypesException()
+      case None    => throw new DynamicInstanceTypesException()
       case Some(x) => x
     }
   }
@@ -37,8 +37,8 @@ case class GenerateIRTask(verbose: Verbose,
   // only be evaluated at runtime.
   private def calcInstanceType(task: TAT.Task): IR.InstanceType = {
     def evalAttr(attrName: String): Option[WdlValues.V] = {
-      val attributes : Map[String, TAT.Expr] = task.runtime match {
-        case None => Map.empty
+      val attributes: Map[String, TAT.Expr] = task.runtime match {
+        case None                             => Map.empty
         case Some(TAT.RuntimeSection(kvs, _)) => kvs
       }
       attributes.get(attrName) match {
@@ -68,7 +68,7 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  def triageDockerImageFromValue(dockerValue: WdlValues.V): IR.DockerImage =  {
+  def triageDockerImageFromValue(dockerValue: WdlValues.V): IR.DockerImage = {
     dockerValue match {
       case WdlValues.V_String(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
         // A constant image specified with a DX URL
@@ -104,7 +104,7 @@ case class GenerateIRTask(verbose: Verbose,
       case (IR.META_SUMMARY, TAT.MetaValueString(text, _))     => Some(IR.TaskAttrSummary(text))
       case (IR.META_DEVELOPER_NOTES, TAT.MetaValueString(text, _)) =>
         Some(IR.TaskAttrDeveloperNotes(text))
-      case (IR.META_VERSION, TAT.MetaValueString(text, _))   => Some(IR.TaskAttrVersion(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text, _)) => Some(IR.TaskAttrVersion(text))
       case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
         Some(IR.TaskAttrDetails(ParameterMeta.translateMetaKVs(fields)))
       case (IR.META_OPEN_SOURCE, TAT.MetaValueBoolean(b, _)) => Some(IR.TaskAttrOpenSource(b))
@@ -127,7 +127,7 @@ case class GenerateIRTask(verbose: Verbose,
         Some(IR.TaskAttrProperties(fields.view.mapValues {
           case TAT.MetaValueString(text, _) => text
           case other                        => throw new Exception(s"Invalid property value: ${other}")
-                                   }.toMap))
+        }.toMap))
       case _ => None
     }.toVector
 
@@ -148,7 +148,7 @@ case class GenerateIRTask(verbose: Verbose,
   private def unwrapWomString(value: WdlValues.V): String = {
     value match {
       case WdlValues.V_String(s) => s
-      case _            => throw new Exception("Expected WdlValues.V_String")
+      case _                     => throw new Exception("Expected WdlValues.V_String")
     }
   }
 
@@ -163,14 +163,14 @@ case class GenerateIRTask(verbose: Verbose,
   private def unwrapWomBoolean(value: WdlValues.V): Boolean = {
     value match {
       case WdlValues.V_Boolean(b) => b
-      case _             => throw new Exception("Expected WdlValues.V_Boolean")
+      case _                      => throw new Exception("Expected WdlValues.V_Boolean")
     }
   }
 
   private def unwrapWomInteger(value: WdlValues.V): Int = {
     value match {
       case WdlValues.V_Int(i) => i
-      case _             => throw new Exception("Expected WdlValues.V_Int")
+      case _                  => throw new Exception("Expected WdlValues.V_Int")
     }
   }
 
@@ -194,9 +194,12 @@ case class GenerateIRTask(verbose: Verbose,
   private def unwrapRuntimeHints(hints: Map[String, TAT.Expr]): Vector[IR.RuntimeHint] = {
     val hintKeys = Set(IR.HINT_ACCESS, IR.HINT_IGNORE_REUSE, IR.HINT_RESTART, IR.HINT_TIMEOUT)
 
-    hints
-      .view.filterKeys(hintKeys).toMap
-      .view.mapValues(evalWomExpression).toMap
+    hints.view
+      .filterKeys(hintKeys)
+      .toMap
+      .view
+      .mapValues(evalWomExpression)
+      .toMap
       .flatMap {
         case (IR.HINT_ACCESS, WdlValues.V_Object(values)) =>
           Some(
@@ -209,7 +212,7 @@ case class GenerateIRTask(verbose: Verbose,
               )
           )
         case (IR.HINT_IGNORE_REUSE, WdlValues.V_Boolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
-        case (IR.HINT_RESTART, WdlValues.V_Int(i))      => Some(IR.RuntimeHintRestart(default = Some(i)))
+        case (IR.HINT_RESTART, WdlValues.V_Int(i))          => Some(IR.RuntimeHintRestart(default = Some(i)))
         case (IR.HINT_RESTART, WdlValues.V_Object(values)) =>
           Some(
               IR.RuntimeHintRestart(
@@ -219,7 +222,7 @@ case class GenerateIRTask(verbose: Verbose,
                     case WdlValues.V_Map(fields) =>
                       fields.map {
                         case (WdlValues.V_String(s), WdlValues.V_Int(i)) => (s -> i)
-                        case other                         => throw new Exception(s"Invalid restart map entry ${other}")
+                        case other                                       => throw new Exception(s"Invalid restart map entry ${other}")
                       }
                     case _ => throw new Exception("Invalid restart map")
                   }
@@ -237,22 +240,20 @@ case class GenerateIRTask(verbose: Verbose,
       .toVector
   }
 
-  private def lookupInputParam(iName : String,
-                               task : TAT.Task) : Option[TAT.MetaValue] = {
+  private def lookupInputParam(iName: String, task: TAT.Task): Option[TAT.MetaValue] = {
     task.parameterMeta match {
       case None => None
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         kvs.get(iName)
-      }
+    }
   }
 
-  private def lookupMetaParam(iName : String,
-                              task : TAT.Task) : Option[TAT.MetaValue] = {
+  private def lookupMetaParam(iName: String, task: TAT.Task): Option[TAT.MetaValue] = {
     task.meta match {
       case None => None
       case Some(TAT.MetaSection(kvs, _)) =>
         kvs.get(iName)
-      }
+    }
   }
 
   // Compile a WDL task into an applet.
@@ -327,15 +328,15 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Handle any dx-specific runtime hints, other than "type" and "id" which are handled above
-    val runtimeAttrs : Map[String, TAT.Expr] = task.runtime match {
-      case None => Map.empty
+    val runtimeAttrs: Map[String, TAT.Expr] = task.runtime match {
+      case None                             => Map.empty
       case Some(TAT.RuntimeSection(kvs, _)) => kvs
     }
     val runtimeHints = unwrapRuntimeHints(runtimeAttrs)
 
     // Handle any task metadata
     val meta = task.meta match {
-      case None => Map.empty[String, TAT.MetaValue]
+      case None                          => Map.empty[String, TAT.MetaValue]
       case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val taskAttr = unwrapTaskMeta(meta, adjunctFiles)

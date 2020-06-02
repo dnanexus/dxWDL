@@ -38,14 +38,14 @@ case class WdlVarLinksConverter(verbose: Verbose,
                                 typeAliases: Map[String, WdlTypes.T]) {
   val wdlTypeSerializer = WomTypeSerialization(typeAliases)
 
-  private def isDoubleOptional(t: WdlTypes.T, v : WdlValues.V): Boolean = {
+  private def isDoubleOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
     t match {
       case WdlTypes.T_Optional(WdlTypes.T_Optional(_)) => return true
-      case _                                   => ()
+      case _                                           => ()
     }
     v match {
       case WdlValues.V_Optional(WdlValues.V_Optional(_)) => return true
-      case _                                   => ()
+      case _                                             => ()
     }
     return false
   }
@@ -72,9 +72,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
     (wdlType, wdlValue) match {
       // Base case: primitive types
-      case (WdlTypes.T_File, WdlValues.V_String(path))     => handleFile(path)
-      case (WdlTypes.T_File, WdlValues.V_File(path)) => handleFile(path)
-      case (WdlTypes.T_String, WdlValues.V_File(path))     => JsString(path)
+      case (WdlTypes.T_File, WdlValues.V_String(path)) => handleFile(path)
+      case (WdlTypes.T_File, WdlValues.V_File(path))   => handleFile(path)
+      case (WdlTypes.T_String, WdlValues.V_File(path)) => JsString(path)
       case (WdlTypes.T_String, WdlValues.V_String(buf)) =>
         if (buf.length > Utils.MAX_STRING_LEN)
           throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
@@ -84,14 +84,14 @@ case class WdlVarLinksConverter(verbose: Verbose,
       case (WdlTypes.T_Boolean, WdlValues.V_String("false")) => JsBoolean(false)
 
       // Integer conversions
-      case (WdlTypes.T_Int, WdlValues.V_Int(n)) => JsNumber(n)
-      case (WdlTypes.T_Int, WdlValues.V_String(s))  => JsNumber(s.toInt)
-      case (WdlTypes.T_Int, WdlValues.V_Float(x))   => JsNumber(x.toInt)
+      case (WdlTypes.T_Int, WdlValues.V_Int(n))    => JsNumber(n)
+      case (WdlTypes.T_Int, WdlValues.V_String(s)) => JsNumber(s.toInt)
+      case (WdlTypes.T_Int, WdlValues.V_Float(x))  => JsNumber(x.toInt)
 
       // Float conversions
-      case (WdlTypes.T_Float, WdlValues.V_Float(x))   => JsNumber(x)
-      case (WdlTypes.T_Float, WdlValues.V_Int(n)) => JsNumber(n.toFloat)
-      case (WdlTypes.T_Float, WdlValues.V_String(s))  => JsNumber(s.toFloat)
+      case (WdlTypes.T_Float, WdlValues.V_Float(x))  => JsNumber(x)
+      case (WdlTypes.T_Float, WdlValues.V_Int(n))    => JsNumber(n.toFloat)
+      case (WdlTypes.T_Float, WdlValues.V_String(s)) => JsNumber(s.toFloat)
 
       case (WdlTypes.T_Pair(lType, rType), WdlValues.V_Pair(l, r)) =>
         val lJs = jsFromWdlValue(lType, l)
@@ -182,15 +182,17 @@ case class WdlVarLinksConverter(verbose: Verbose,
   // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def jobInputToWomValue(name: String, wdlType: WdlTypes.T, jsValue: JsValue): WdlValues.V = {
+  private def jobInputToWomValue(name: String,
+                                 wdlType: WdlTypes.T,
+                                 jsValue: JsValue): WdlValues.V = {
     (wdlType, jsValue) match {
       // base case: primitive types
-      case (WdlTypes.T_Boolean, JsBoolean(b))   => WdlValues.V_Boolean(b.booleanValue)
-      case (WdlTypes.T_Int, JsNumber(bnm))  => WdlValues.V_Int(bnm.intValue)
-      case (WdlTypes.T_Float, JsNumber(bnm))    => WdlValues.V_Float(bnm.doubleValue)
-      case (WdlTypes.T_String, JsString(s))     => WdlValues.V_String(s)
-      case (WdlTypes.T_File, JsString(s)) => WdlValues.V_File(s)
-      case (WdlTypes.T_File, JsObject(_)) =>
+      case (WdlTypes.T_Boolean, JsBoolean(b)) => WdlValues.V_Boolean(b.booleanValue)
+      case (WdlTypes.T_Int, JsNumber(bnm))    => WdlValues.V_Int(bnm.intValue)
+      case (WdlTypes.T_Float, JsNumber(bnm))  => WdlValues.V_Float(bnm.doubleValue)
+      case (WdlTypes.T_String, JsString(s))   => WdlValues.V_String(s)
+      case (WdlTypes.T_File, JsString(s))     => WdlValues.V_File(s)
+      case (WdlTypes.T_File, JsObject(_))     =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxUtils.dxFileFromJsValue(jsValue)
@@ -272,7 +274,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
   }
 
-  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): (WdlValues.V, Vector[DxFile]) = {
+  def unpackJobInput(name: String,
+                     wdlType: WdlTypes.T,
+                     jsv: JsValue): (WdlValues.V, Vector[DxFile]) = {
     val jsv1 =
       jsv match {
         case JsObject(fields) if fields contains "___" =>

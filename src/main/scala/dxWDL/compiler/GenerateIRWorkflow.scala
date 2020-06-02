@@ -60,11 +60,11 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   def buildWorkflowInput(input: Block.InputDefinition): CVar = {
     // figure out the meta attribute for this input, if it is
     // specified in the parameter meta section.
-    val metaValue : Option[TAT.MetaValue] = wf.parameterMeta match {
+    val metaValue: Option[TAT.MetaValue] = wf.parameterMeta match {
       case None => None
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         kvs.get(input.name)
-      }
+    }
     val attr = ParameterMeta.unwrap(metaValue, input.wdlType)
 
     input match {
@@ -73,8 +73,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case Block.OverridableInputDefinitionWithDefault(id, womType, defaultExpr) =>
         val defaultValue: WdlValues.V = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
-                                                      | ${defaultExpr}
-                                                      |""".stripMargin)
+                                               | ${defaultExpr}
+                                               |""".stripMargin)
           case Some(value) => value
         }
         CVar(id, womType, Some(defaultValue), attr)
@@ -218,7 +218,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   // that are required for the calculation.
   private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
     block.inputs.flatMap {
-      case i : Block.InputDefinition =>
+      case i: Block.InputDefinition =>
         lookupInEnv(i.name, i.wdlType, env, Block.isOptional(i))
     }.toMap
   }
@@ -228,10 +228,12 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   private def graphClosure(inputNodes: Vector[Block.InputDefinition],
                            subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
     val allInputs: Vector[Block.InputDefinition] = subBlocks
-      .map { block => block.inputs }
+      .map { block =>
+        block.inputs
+      }
       .flatten
       .toVector
-    val allInputs2 : Map[String, (WdlTypes.T, Boolean)] = allInputs.map{ bInput =>
+    val allInputs2: Map[String, (WdlTypes.T, Boolean)] = allInputs.map { bInput =>
       bInput.name -> (bInput.wdlType, Block.isOptional(bInput))
     }.toMap
 
@@ -347,7 +349,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }.toMap
 
     // Figure out the block outputs
-    val outputs: Map[String, WdlTypes.T] = block.outputs.map{ bOut =>
+    val outputs: Map[String, WdlTypes.T] = block.outputs.map { bOut =>
       bOut.name -> bOut.wdlType
     }.toMap
 
@@ -395,7 +397,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         // add the iteration variable to the inner environment
         val iterWdlType = sctNode.expr.wdlType match {
           case WdlTypes.T_Array(t, _) => t
-          case other => throw new Exception("scatter doesn't have an array expression")
+          case other                  => throw new Exception("scatter doesn't have an array expression")
         }
         val cVar = CVar(sctNode.identifier, iterWdlType, None)
         val innerEnv = env + (sctNode.identifier -> LinkedVar(cVar, IR.SArgEmpty))
@@ -493,33 +495,25 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (allStageInfo, env)
   }
 
-  private def buildSimpleWorkflowOutput(output: Block.OutputDefinition, env: CallEnv): (CVar, SArg) = {
+  private def buildSimpleWorkflowOutput(output: Block.OutputDefinition,
+                                        env: CallEnv): (CVar, SArg) = {
     output.expr match {
-      case Left(TAT.ExprIdentifier(id, _, _)) =>
+      case TAT.ExprIdentifier(id, _, _) =>
         // The output is a reference to a previously defined variable
         val cVar = CVar(output.name, output.wdlType, None)
         val sArg = getSArgFromEnv(id, env)
         (cVar, sArg)
-      case Left(expr) if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+      case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
         // the output is a constant
         val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
         val cVar = CVar(output.name, output.wdlType, Some(womConst))
         val sArg = IR.SArgConst(womConst)
         (cVar, sArg)
-      case Left(_) =>
+      case _ =>
         // An expression that requires evaluation
         throw new Exception(
             s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
         )
-      case Right(call) =>
-        val id = call.actualName
-        env.get(id) match {
-          case None => throw new Exception(s"Internal error, call ${id} cannot be found in the environment")
-          case Some(x) =>
-            val cVar = CVar(output.name, output.wdlType, None)
-            val sArg = getSArgFromEnv(id, env)
-            (cVar, sArg)
-        }
     }
   }
 
@@ -576,30 +570,25 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
-    val outputVars: Vector[CVar] = outputNodes.foldLeft(Vector.empty[CVar]) {
-      case (accu, output) =>
-        output.expr match {
-          case Left(expr) if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
-            // the output is a constant
-            val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
-            accu :+ CVar(output.name, output.wdlType, Some(womConst))
-          case Left(TAT.ExprIdentifier(id, _, _)) =>
-            // The output is a reference to a previously defined variable
-            accu :+ CVar(output.name, output.wdlType, None)
-          case Left(_) =>
-            // An expression that requires evaluation
-            throw new Exception(
-              s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
-            )
-          case Right(call) =>
-            // this is call that may have several outputs
-            val callOutputs = call.callee.output.map{
-              case (name, t) =>
-                CVar(call.actualName + "." + name, t, None)
-            }
-            accu ++ callOutputs
-        }
-    }.toVector
+    val outputVars: Vector[CVar] = outputNodes
+      .foldLeft(Vector.empty[CVar]) {
+        case (accu, output) =>
+          output.expr match {
+            case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+              // the output is a constant
+              val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
+              accu :+ CVar(output.name, output.wdlType, Some(womConst))
+            case TAT.ExprIdentifier(id, _, _) =>
+              // The output is a reference to a previously defined variable
+              accu :+ CVar(output.name, output.wdlType, None)
+            case _ =>
+              // An expression that requires evaluation
+              throw new Exception(
+                  s"Internal error: non trivial expressions are handled elsewhere ${output.expr}"
+              )
+          }
+      }
+      .toVector
 
     val updatedOutputVars: Vector[CVar] = reorg match {
       case Left(_)             => outputVars
@@ -703,16 +692,16 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   }
 
   private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
-    val kvs : Map[String, TAT.MetaValue] = wf.meta match {
-      case None => Map.empty
+    val kvs: Map[String, TAT.MetaValue] = wf.meta match {
+      case None                          => Map.empty
       case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val wfAttrs = kvs.flatMap {
       case (IR.META_TITLE, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrTitle(text))
       case (IR.META_DESCRIPTION, TAT.MetaValueString(text, _)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrSummary(text))
-      case (IR.META_VERSION, TAT.MetaValueString(text, _))   => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_SUMMARY, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrVersion(text))
       case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
         Some(IR.WorkflowAttrDetails(ParameterMeta.translateMetaKVs(fields)))
       case (IR.META_TYPES, TAT.MetaValueArray(array, _)) =>

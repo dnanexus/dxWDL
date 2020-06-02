@@ -13,7 +13,6 @@ import dxWDL.base.Utils
 import dxWDL.dx._
 import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateMetaKVs}
 
-
 // These tests involve compilation -without- access to the platform.
 //
 class GenerateIRTest extends AnyFlatSpec with Matchers {
@@ -50,8 +49,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                       "--project",
                       dxProject.id)
 
-  private def getParamMeta(task : TAT.Task,
-                           iDef : TAT.InputDefinition) : Option[TAT.MetaValue] = {
+  private def getParamMeta(task: TAT.Task, iDef: TAT.InputDefinition): Option[TAT.MetaValue] = {
     task.parameterMeta match {
       case None => None
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
@@ -425,45 +423,45 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
     val sansText = Map(
         "in_file" -> IR.MetaValueObject(
-                Map(
-                    "help" -> IR.MetaValueString("The input file to be searched"),
-                    "patterns" -> IR.MetaValueArray(
-                        Vector(
-                            IR.MetaValueString("*.txt"),
-                            IR.MetaValueString("*.tsv")
-                        )
-                    ),
-                    "group" ->
-                      IR.MetaValueString("Common"),
-                    "label" ->
-                      IR.MetaValueString("Input file")
-                )
-            ),
-            "pattern" -> IR.MetaValueObject(
-                Map(
-                    "help" ->
-                      IR.MetaValueString("The pattern to use to search in_file"),
-                    "group" ->
-                      IR.MetaValueString("Common"),
-                    "label" ->
-                      IR.MetaValueString("Search pattern")
-                )
-            ),
-            "out_file" -> IR.MetaValueObject(
-                Map(
-                    "patterns" -> IR.MetaValueArray(
-                        Vector(
-                            IR.MetaValueString("*.txt"),
-                            IR.MetaValueString("*.tsv")
-                        )
-                    ),
-                    "group" -> IR.MetaValueString("Common"),
-                    "label" -> IR.MetaValueString("Output file")
-                )
+            Map(
+                "help" -> IR.MetaValueString("The input file to be searched"),
+                "patterns" -> IR.MetaValueArray(
+                    Vector(
+                        IR.MetaValueString("*.txt"),
+                        IR.MetaValueString("*.tsv")
+                    )
+                ),
+                "group" ->
+                  IR.MetaValueString("Common"),
+                "label" ->
+                  IR.MetaValueString("Input file")
             )
+        ),
+        "pattern" -> IR.MetaValueObject(
+            Map(
+                "help" ->
+                  IR.MetaValueString("The pattern to use to search in_file"),
+                "group" ->
+                  IR.MetaValueString("Common"),
+                "label" ->
+                  IR.MetaValueString("Search pattern")
+            )
+        ),
+        "out_file" -> IR.MetaValueObject(
+            Map(
+                "patterns" -> IR.MetaValueArray(
+                    Vector(
+                        IR.MetaValueString("*.txt"),
+                        IR.MetaValueString("*.tsv")
+                    )
+                ),
+                "group" -> IR.MetaValueString("Common"),
+                "label" -> IR.MetaValueString("Output file")
+            )
+        )
     )
 
-    inside (cgrepTask.parameterMeta) {
+    inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
@@ -471,23 +469,23 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     val sansText2 =
       IR.MetaValueObject(
-            Map(
-                "group" ->
-                  IR.MetaValueString("Common"),
-                "help" ->
-                  IR.MetaValueString("The input file to be searched"),
-                "patterns" -> IR.MetaValueArray(
-                    Vector(
-                        IR.MetaValueString("*.txt"),
-                        IR.MetaValueString("*.tsv")
-                    )
-                ),
-                "label" ->
-                  IR.MetaValueString("Input file")
-            )
-        )
+          Map(
+              "group" ->
+                IR.MetaValueString("Common"),
+              "help" ->
+                IR.MetaValueString("The input file to be searched"),
+              "patterns" -> IR.MetaValueArray(
+                  Vector(
+                      IR.MetaValueString("*.txt"),
+                      IR.MetaValueString("*.tsv")
+                  )
+              ),
+              "label" ->
+                IR.MetaValueString("Input file")
+          )
+      )
 
-    inside (getParamMeta(cgrepTask, iDef)) {
+    inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
         translate(metaValue) shouldBe sansText2
     }
@@ -507,84 +505,80 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
     val sansText =
-        Map(
+      Map(
           "in_file" -> IR.MetaValueObject(
-                Map(
-                    "help" ->
-                      IR.MetaValueString("The input file to be searched"),
-                    "patterns" -> IR.MetaValueObject(
-                        Map(
-                            "class" -> IR.MetaValueString("file"),
-                            "tag" -> IR.MetaValueArray(
-                                Vector(IR.MetaValueString("foo"),
-                                       IR.MetaValueString("bar"))
-                            ),
-                            "name" -> IR.MetaValueArray(
-                                Vector(IR.MetaValueString("*.txt"),
-                                       IR.MetaValueString("*.tsv"))
-                            )
-                        )
-                    ),
-                    "group" ->
-                      IR.MetaValueString("Common"),
-                    "label" ->
-                      IR.MetaValueString("Input file")
-                )
-            ),
-            "pattern" -> IR.MetaValueObject(
-                Map(
-                    "help" ->
-                      IR.MetaValueString("The pattern to use to search in_file"),
-                    "group" ->
-                      IR.MetaValueString("Common"),
-                    "label" ->
-                      IR.MetaValueString("Search pattern")
-                )
-            ),
-            "out_file" -> IR.MetaValueObject(
-                Map(
-                    "patterns" -> IR.MetaValueArray(
-                        Vector(
-                            IR.MetaValueString("*.txt"),
-                            IR.MetaValueString("*.tsv")
-                        )
-                    ),
-                    "group" -> IR.MetaValueString("Common"),
-                    "label" -> IR.MetaValueString("Output file")
-                )
-            )
-        )
-    inside (cgrepTask.parameterMeta) {
+              Map(
+                  "help" ->
+                    IR.MetaValueString("The input file to be searched"),
+                  "patterns" -> IR.MetaValueObject(
+                      Map(
+                          "class" -> IR.MetaValueString("file"),
+                          "tag" -> IR.MetaValueArray(
+                              Vector(IR.MetaValueString("foo"), IR.MetaValueString("bar"))
+                          ),
+                          "name" -> IR.MetaValueArray(
+                              Vector(IR.MetaValueString("*.txt"), IR.MetaValueString("*.tsv"))
+                          )
+                      )
+                  ),
+                  "group" ->
+                    IR.MetaValueString("Common"),
+                  "label" ->
+                    IR.MetaValueString("Input file")
+              )
+          ),
+          "pattern" -> IR.MetaValueObject(
+              Map(
+                  "help" ->
+                    IR.MetaValueString("The pattern to use to search in_file"),
+                  "group" ->
+                    IR.MetaValueString("Common"),
+                  "label" ->
+                    IR.MetaValueString("Search pattern")
+              )
+          ),
+          "out_file" -> IR.MetaValueObject(
+              Map(
+                  "patterns" -> IR.MetaValueArray(
+                      Vector(
+                          IR.MetaValueString("*.txt"),
+                          IR.MetaValueString("*.tsv")
+                      )
+                  ),
+                  "group" -> IR.MetaValueString("Common"),
+                  "label" -> IR.MetaValueString("Output file")
+              )
+          )
+      )
+    inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
 
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     val sansText2 =
-        IR.MetaValueObject(
-            Map(
-                "group" ->
-                  IR.MetaValueString("Common"),
-                "help" ->
-                  IR.MetaValueString("The input file to be searched"),
-                "patterns" -> IR.MetaValueObject(
-                    Map(
-                        "class" -> IR.MetaValueString("file"),
-                        "tag" -> IR.MetaValueArray(
-                            Vector(IR.MetaValueString("foo"),
-                                   IR.MetaValueString("bar"))
-                        ),
-                        "name" -> IR.MetaValueArray(
-                            Vector(IR.MetaValueString("*.txt"),
-                                   IR.MetaValueString("*.tsv"))
-                        )
-                    )
-                ),
-                "label" ->
-                  IR.MetaValueString("Input file")
-            )
-        )
-    inside (getParamMeta(cgrepTask, iDef)) {
+      IR.MetaValueObject(
+          Map(
+              "group" ->
+                IR.MetaValueString("Common"),
+              "help" ->
+                IR.MetaValueString("The input file to be searched"),
+              "patterns" -> IR.MetaValueObject(
+                  Map(
+                      "class" -> IR.MetaValueString("file"),
+                      "tag" -> IR.MetaValueArray(
+                          Vector(IR.MetaValueString("foo"), IR.MetaValueString("bar"))
+                      ),
+                      "name" -> IR.MetaValueArray(
+                          Vector(IR.MetaValueString("*.txt"), IR.MetaValueString("*.tsv"))
+                      )
+                  )
+              ),
+              "label" ->
+                IR.MetaValueString("Input file")
+          )
+      )
+    inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
         translate(metaValue) shouldBe sansText2
     }
@@ -954,65 +948,65 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
     val sansText =
       Map(
-            "in_file" -> IR.MetaValueObject(
-                Map(
-                    "help" ->
-                      IR.MetaValueString("The input file to be searched"),
-                    "group" -> IR.MetaValueString("Common"),
-                    "label" -> IR.MetaValueString("Input file")
-                )
-            ),
-            "pattern" -> IR.MetaValueObject(
-                Map(
-                    "description" ->
-                      IR.MetaValueString("The pattern to use to search in_file"),
-                    "group" -> IR.MetaValueString("Common"),
-                    "label" -> IR.MetaValueString("Search pattern")
-                )
-            ),
-            "s" -> IR.MetaValueString("This is help for s")
+          "in_file" -> IR.MetaValueObject(
+              Map(
+                  "help" ->
+                    IR.MetaValueString("The input file to be searched"),
+                  "group" -> IR.MetaValueString("Common"),
+                  "label" -> IR.MetaValueString("Input file")
+              )
+          ),
+          "pattern" -> IR.MetaValueObject(
+              Map(
+                  "description" ->
+                    IR.MetaValueString("The pattern to use to search in_file"),
+                  "group" -> IR.MetaValueString("Common"),
+                  "label" -> IR.MetaValueString("Search pattern")
+              )
+          ),
+          "s" -> IR.MetaValueString("This is help for s")
       )
-    inside (cgrepTask.parameterMeta) {
+    inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
 
     val sansText2 =
       IR.MetaValueObject(
-        Map(
-          "help" ->
-            IR.MetaValueString("The input file to be searched"),
-          "group" -> IR.MetaValueString("Common"),
-          "label" -> IR.MetaValueString("Input file")
-        )
+          Map(
+              "help" ->
+                IR.MetaValueString("The input file to be searched"),
+              "group" -> IR.MetaValueString("Common"),
+              "label" -> IR.MetaValueString("Input file")
+          )
       )
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    inside (getParamMeta(cgrepTask, iDef)) {
+    inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
         translate(metaValue) shouldBe sansText2
     }
 
     val diffTask = getTaskByName("help_input_params_diff", bundle)
 
-    inside (diffTask.parameterMeta) {
+    inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe (
-          Map(
-            "a" -> IR.MetaValueObject(
-              Map(
-                "help" -> IR.MetaValueString("lefthand file"),
-                "group" -> IR.MetaValueString("Files"),
-                "label" -> IR.MetaValueString("File A")
-              )
-            ),
-            "b" -> IR.MetaValueObject(
-              Map(
-                "help" -> IR.MetaValueString("righthand file"),
-                "group" -> IR.MetaValueString("Files"),
-                "label" -> IR.MetaValueString("File B")
-              )
+            Map(
+                "a" -> IR.MetaValueObject(
+                    Map(
+                        "help" -> IR.MetaValueString("lefthand file"),
+                        "group" -> IR.MetaValueString("Files"),
+                        "label" -> IR.MetaValueString("File A")
+                    )
+                ),
+                "b" -> IR.MetaValueObject(
+                    Map(
+                        "help" -> IR.MetaValueString("righthand file"),
+                        "group" -> IR.MetaValueString("Files"),
+                        "label" -> IR.MetaValueString("File B")
+                    )
+                )
             )
-          )
         )
     }
   }
@@ -1117,34 +1111,34 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             IR.TaskAttrCategories(Vector("Assembly")),
             IR.TaskAttrDetails(
                 Map(
-                  "contactEmail" -> IR.MetaValueString("joe@dev.com"),
+                    "contactEmail" -> IR.MetaValueString("joe@dev.com"),
                     "upstreamVersion" -> IR.MetaValueString("1.0"),
                     "upstreamAuthor" -> IR.MetaValueString("Joe Developer"),
                     "upstreamUrl" -> IR.MetaValueString("https://dev.com/joe"),
                     "upstreamLicenses" -> IR.MetaValueArray(
                         Vector(
-                          IR.MetaValueString("MIT")
+                            IR.MetaValueString("MIT")
                         )
                     ),
                     "whatsNew" -> IR.MetaValueArray(
                         Vector(
-                          IR.MetaValueObject(
+                            IR.MetaValueObject(
                                 Map(
                                     "version" -> IR.MetaValueString("1.1"),
                                     "changes" -> IR.MetaValueArray(
                                         Vector(
-                                          IR.MetaValueString("Added parameter --foo"),
-                                          IR.MetaValueString("Added cowsay easter-egg")
+                                            IR.MetaValueString("Added parameter --foo"),
+                                            IR.MetaValueString("Added cowsay easter-egg")
                                         )
                                     )
                                 )
                             ),
-                          IR.MetaValueObject(
+                            IR.MetaValueObject(
                                 Map(
                                     "version" -> IR.MetaValueString("1.0"),
                                     "changes" -> IR.MetaValueArray(
                                         Vector(
-                                          IR.MetaValueString("Initial version")
+                                            IR.MetaValueString("Initial version")
                                         )
                                     )
                                 )
@@ -1209,24 +1203,24 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
-    inside (cgrepTask.parameterMeta) {
+    inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map("in_file" -> IR.MetaValueString("stream"))
     }
 
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
 
-    inside (getParamMeta(cgrepTask, iDef)) {
+    inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
         translate(metaValue) shouldBe IR.MetaValueString("stream")
     }
 
     val diffTask = getTaskByName("diff", bundle)
-    inside (diffTask.parameterMeta) {
+    inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-          "a" -> IR.MetaValueString("stream"),
-          "b" -> IR.MetaValueString("stream")
+            "a" -> IR.MetaValueString("stream"),
+            "b" -> IR.MetaValueString("stream")
         )
     }
   }
@@ -1243,23 +1237,24 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
-    inside (cgrepTask.parameterMeta) {
+    inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-          "in_file" -> IR.MetaValueObject(
-            Map("stream" -> IR.MetaValueBoolean(true))
-          ))
+            "in_file" -> IR.MetaValueObject(
+                Map("stream" -> IR.MetaValueBoolean(true))
+            )
+        )
     }
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    inside (getParamMeta(cgrepTask, iDef)) {
+    inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
         translate(metaValue) shouldBe IR.MetaValueObject(
-          Map("stream" -> IR.MetaValueBoolean(true))
+            Map("stream" -> IR.MetaValueBoolean(true))
         )
     }
 
     val diffTask = getTaskByName("diff", bundle)
-    inside (diffTask.parameterMeta) {
+    inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
             "a" -> IR.MetaValueObject(
@@ -1283,11 +1278,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _                                => throw new Exception("sanity")
     }
     val diffTask = getTaskByName("diff", bundle)
-    inside (diffTask.parameterMeta) {
+    inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map(
-          "a" -> IR.MetaValueString("stream"),
-          "b" -> IR.MetaValueString("stream"))
+        translateMetaKVs(kvs) shouldBe Map("a" -> IR.MetaValueString("stream"),
+                                           "b" -> IR.MetaValueString("stream"))
     }
   }
 
@@ -1504,7 +1498,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             IR.WorkflowAttrVersion("1.0"),
             IR.WorkflowAttrProperties(Map("foo" -> "bar")),
             IR.WorkflowAttrDetails(
-              Map("whatsNew" -> IR.MetaValueString("v1.0: First release"))
+                Map("whatsNew" -> IR.MetaValueString("v1.0: First release"))
             ),
             IR.WorkflowAttrTitle("Workflow with metadata"),
             IR.WorkflowAttrTypes(Vector("calculator")),

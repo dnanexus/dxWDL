@@ -13,15 +13,12 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
       WdlTypes.T_Float,
       WdlTypes.T_String,
       WdlTypes.T_File,
-
-    // arrays
+      // arrays
       WdlTypes.T_Array(WdlTypes.T_String, false),
       WdlTypes.T_Array(WdlTypes.T_File, true),
-
       // maps
       WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_File),
       WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Map(WdlTypes.T_Float, WdlTypes.T_Int)),
-
       // optionals
       WdlTypes.T_Optional(WdlTypes.T_Int),
       WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Boolean, false)),
@@ -37,11 +34,10 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
   }
 
   val personType =
-    WdlTypes.T_Struct("Person",
-                      Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
+    WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
   val houseType = WdlTypes.T_Struct(
-    "House",
-    Map("street" -> WdlTypes.T_String, "zip code" -> WdlTypes.T_Int, "owner" -> personType)
+      "House",
+      Map("street" -> WdlTypes.T_String, "zip code" -> WdlTypes.T_Int, "owner" -> personType)
   )
 
   val structTestCases: List[WdlTypes.T] = List(

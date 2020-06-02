@@ -280,26 +280,26 @@ case class Native(dxWDLrtId: Option[String],
     def handleType(wdlType: WdlTypes.T, optional: Boolean): Vector[JsValue] = {
       wdlType match {
         // primitive types
-        case WdlTypes.T_Boolean    => mkPrimitive("boolean", optional)
-        case WdlTypes.T_Int    => mkPrimitive("int", optional)
-        case WdlTypes.T_Float      => mkPrimitive("float", optional)
-        case WdlTypes.T_String     => mkPrimitive("string", optional)
-        case WdlTypes.T_File => mkPrimitive("file", optional)
+        case WdlTypes.T_Boolean => mkPrimitive("boolean", optional)
+        case WdlTypes.T_Int     => mkPrimitive("int", optional)
+        case WdlTypes.T_Float   => mkPrimitive("float", optional)
+        case WdlTypes.T_String  => mkPrimitive("string", optional)
+        case WdlTypes.T_File    => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
         // non-empty array
-        case WdlTypes.T_Array(WdlTypes.T_Boolean, true)    => mkPrimitiveArray("boolean", optional)
-        case WdlTypes.T_Array(WdlTypes.T_Int, true)      => mkPrimitiveArray("int", optional)
-        case WdlTypes.T_Array(WdlTypes.T_Float, true)        => mkPrimitiveArray("float", optional)
-        case WdlTypes.T_Array(WdlTypes.T_String, true)       => mkPrimitiveArray("string", optional)
-        case WdlTypes.T_Array(WdlTypes.T_File, true)   => mkPrimitiveArray("file", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, true) => mkPrimitiveArray("boolean", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Int, true)     => mkPrimitiveArray("int", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Float, true)   => mkPrimitiveArray("float", optional)
+        case WdlTypes.T_Array(WdlTypes.T_String, true)  => mkPrimitiveArray("string", optional)
+        case WdlTypes.T_Array(WdlTypes.T_File, true)    => mkPrimitiveArray("file", optional)
 
         // array that may be empty
-        case WdlTypes.T_Array(WdlTypes.T_Boolean, false)    => mkPrimitiveArray("boolean", true)
-        case WdlTypes.T_Array(WdlTypes.T_Int, false)    => mkPrimitiveArray("int", true)
-        case WdlTypes.T_Array(WdlTypes.T_Float, false)      => mkPrimitiveArray("float", true)
-        case WdlTypes.T_Array(WdlTypes.T_String, false)     => mkPrimitiveArray("string", true)
-        case WdlTypes.T_Array(WdlTypes.T_File, false) => mkPrimitiveArray("file", true)
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, false) => mkPrimitiveArray("boolean", true)
+        case WdlTypes.T_Array(WdlTypes.T_Int, false)     => mkPrimitiveArray("int", true)
+        case WdlTypes.T_Array(WdlTypes.T_Float, false)   => mkPrimitiveArray("float", true)
+        case WdlTypes.T_Array(WdlTypes.T_String, false)  => mkPrimitiveArray("string", true)
+        case WdlTypes.T_Array(WdlTypes.T_File, false)    => mkPrimitiveArray("file", true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
@@ -307,7 +307,7 @@ case class Native(dxWDLrtId: Option[String],
     }
     cVar.womType match {
       case WdlTypes.T_Optional(t) => handleType(t, true)
-      case t                  => handleType(t, false)
+      case t                      => handleType(t, false)
     }
   }
 
@@ -745,7 +745,7 @@ case class Native(dxWDLrtId: Option[String],
     value match {
       case IR.MetaValueNull           => JsNull
       case IR.MetaValueBoolean(b)     => JsBoolean(b)
-      case IR.MetaValueInt(i)     => JsNumber(i)
+      case IR.MetaValueInt(i)         => JsNumber(i)
       case IR.MetaValueFloat(f)       => JsNumber(f)
       case IR.MetaValueString(text)   => JsString(text)
       case IR.MetaValueObject(fields) => JsObject(fields.view.mapValues(metaValueToJs).toMap)
@@ -793,7 +793,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.TaskAttrProperties(props) =>
               Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
             case IR.TaskAttrDetails(details) =>
-            Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
+              Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
             // These are currently ignored because they only apply to apps
             //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
             //case IR.TaskAttrOpenSource(isOpenSource) =>

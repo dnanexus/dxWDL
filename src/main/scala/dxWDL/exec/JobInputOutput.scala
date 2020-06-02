@@ -13,7 +13,7 @@ import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           structDefs: Map[String, WdlTypes.T],
-                          wdlVersion : WdlVersion,
+                          wdlVersion: WdlVersion,
                           runtimeDebugLevel: Int) {
   private val verbose = (runtimeDebugLevel >= 1)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
@@ -32,8 +32,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     dxFiles
   }
 
-
-  val evaluator : WdlExprEval = {
+  val evaluator: WdlExprEval = {
     val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
@@ -54,8 +53,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Read the job-inputs JSON file, and convert the variables
   // from JSON to WOM values. No files are downloaded here.
-  def loadInputs(inputs: JsValue,
-                 callable: TAT.Callable): Map[TAT.InputDefinition, WdlValues.V] = {
+  def loadInputs(inputs: JsValue, callable: TAT.Callable): Map[TAT.InputDefinition, WdlValues.V] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
@@ -183,14 +181,13 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
   // Recursively go into a womValue, and replace file string with
   // an equivalent. Use the [translation] map to translate.
-  private def translateFiles(womValue: WdlValues.V, translation: Map[String, String]): WdlValues.V = {
+  private def translateFiles(womValue: WdlValues.V,
+                             translation: Map[String, String]): WdlValues.V = {
     womValue match {
       // primitive types, pass through
-      case WdlValues.V_Null |
-          WdlValues.V_Boolean(_) |
-          WdlValues.V_Int(_) |
-          WdlValues.V_Float(_) |
-          WdlValues.V_String(_) => womValue
+      case WdlValues.V_Null | WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) |
+          WdlValues.V_String(_) =>
+        womValue
 
       // single file
       case WdlValues.V_File(s) =>
@@ -298,8 +295,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                 //   stream : true
                 // }
                 // We also support two aliases, dx_stream and localizationOptional
-                value
-                  .view
+                value.view
                   .filterKeys(
                       Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
                   )
@@ -413,7 +409,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     }.toSet
 
     val localOutputFilesAll: Vector[Path] = outputs.values
-      .map{ case (t,v) => findFiles(v) }
+      .map { case (t, v) => findFiles(v) }
       .flatten
       .toVector
       .map {

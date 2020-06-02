@@ -10,9 +10,9 @@ import dxWDL.base.ParseWomSourceFile
 class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
-    val (wf: TAT.Workflow, _ , _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
-    wf.body.collect{
-      case d : TAT.Declaration => d
+    val (wf: TAT.Workflow, _, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
+    wf.body.collect {
+      case d: TAT.Declaration => d
     }.toVector
   }
 
@@ -23,15 +23,15 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
         "x" -> Some(WdlValues.V_Float(2.718)),
         "s" -> Some(WdlValues.V_String("hello world")),
         "ar1" -> Some(
-          WdlValues.V_Array(Vector(
-                              WdlValues.V_String("A"),
-                              WdlValues.V_String("B"),
-                              WdlValues.V_String("C")))
+            WdlValues.V_Array(
+                Vector(WdlValues.V_String("A"), WdlValues.V_String("B"), WdlValues.V_String("C"))
+            )
         ),
         "m1" -> Some(
-          WdlValues.V_Map(Map(
-                            WdlValues.V_String("X") -> WdlValues.V_Int(1),
-                            WdlValues.V_String("Y") -> WdlValues.V_Int(10)))
+            WdlValues.V_Map(
+                Map(WdlValues.V_String("X") -> WdlValues.V_Int(1),
+                    WdlValues.V_String("Y") -> WdlValues.V_Int(10))
+            )
         ),
         "p" -> Some(WdlValues.V_Pair(WdlValues.V_Int(1), WdlValues.V_Int(12))),
         "j" -> None,
@@ -74,8 +74,8 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
     for (decl <- declarations) {
       val id: String = decl.name
       val expected: Option[WdlValues.V] = allExpectedResults(id)
-      val expr : TAT.Expr = decl.expr.get
-      val womType : WdlTypes.T = decl.wdlType
+      val expr: TAT.Expr = decl.expr.get
+      val womType: WdlTypes.T = decl.wdlType
 
       val retval = WomValueAnalysis.ifConstEval(womType, expr)
       retval shouldBe (expected)

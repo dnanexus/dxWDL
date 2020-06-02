@@ -11,13 +11,13 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
     (t, w) match {
       // Base case: primitive types.
       // Files are encoded as their full path.
-      case (WdlTypes.T_Boolean, WdlValues.V_Boolean(b))          => JsBoolean(b)
-      case (WdlTypes.T_Int, WdlValues.V_Int(n))          => JsNumber(n)
-      case (WdlTypes.T_Float, WdlValues.V_Float(x))              => JsNumber(x)
-      case (WdlTypes.T_String, WdlValues.V_String(s))            => JsString(s)
-      case (WdlTypes.T_String, WdlValues.V_File(path))     => JsString(path)
-      case (WdlTypes.T_File, WdlValues.V_File(path)) => JsString(path)
-      case (WdlTypes.T_File, WdlValues.V_String(path))     => JsString(path)
+      case (WdlTypes.T_Boolean, WdlValues.V_Boolean(b)) => JsBoolean(b)
+      case (WdlTypes.T_Int, WdlValues.V_Int(n))         => JsNumber(n)
+      case (WdlTypes.T_Float, WdlValues.V_Float(x))     => JsNumber(x)
+      case (WdlTypes.T_String, WdlValues.V_String(s))   => JsString(s)
+      case (WdlTypes.T_String, WdlValues.V_File(path))  => JsString(path)
+      case (WdlTypes.T_File, WdlValues.V_File(path))    => JsString(path)
+      case (WdlTypes.T_File, WdlValues.V_String(path))  => JsString(path)
 
       // arrays
       // Base case: empty array
@@ -35,18 +35,17 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
       // keys are strings, we can use JSON objects
       case (WdlTypes.T_Map(WdlTypes.T_String, valueType), WdlValues.V_Map(m)) =>
         JsObject(m.map {
-                   case (WdlValues.V_String(k), v) =>
-                     k -> womToJSON(valueType, v)
-                   case (k, _) =>
-                     throw new Exception(s"key ${k} should be a WdlTypes.T_String")
-                 }.toMap)
+          case (WdlValues.V_String(k), v) =>
+            k -> womToJSON(valueType, v)
+          case (k, _) =>
+            throw new Exception(s"key ${k} should be a WdlTypes.T_String")
+        }.toMap)
 
       // general case, the keys are not strings.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(m)) =>
         val keys: Vector[JsValue] = m.keys.map(womToJSON(keyType, _)).toVector
         val values: Vector[JsValue] = m.values.map(womToJSON(valueType, _)).toVector
-        JsObject("keys" -> JsArray(keys),
-                 "values" -> JsArray(values))
+        JsObject("keys" -> JsArray(keys), "values" -> JsArray(values))
 
       case (WdlTypes.T_Pair(lType, rType), WdlValues.V_Pair(l, r)) =>
         val lJs = womToJSON(lType, l)
@@ -92,17 +91,17 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
   private def womFromJSON(t: WdlTypes.T, jsv: JsValue): WdlValues.V = {
     (t, jsv) match {
       // base case: primitive types
-      case (WdlTypes.T_Boolean, JsBoolean(b))      => WdlValues.V_Boolean(b.booleanValue)
-      case (WdlTypes.T_Int, JsNumber(bnm))     => WdlValues.V_Int(bnm.intValue)
-      case (WdlTypes.T_Float, JsNumber(bnm))       => WdlValues.V_Float(bnm.doubleValue)
-      case (WdlTypes.T_String, JsString(s))        => WdlValues.V_String(s)
-      case (WdlTypes.T_File, JsString(path)) => WdlValues.V_File(path)
+      case (WdlTypes.T_Boolean, JsBoolean(b)) => WdlValues.V_Boolean(b.booleanValue)
+      case (WdlTypes.T_Int, JsNumber(bnm))    => WdlValues.V_Int(bnm.intValue)
+      case (WdlTypes.T_Float, JsNumber(bnm))  => WdlValues.V_Float(bnm.doubleValue)
+      case (WdlTypes.T_String, JsString(s))   => WdlValues.V_String(s)
+      case (WdlTypes.T_File, JsString(path))  => WdlValues.V_File(path)
 
       // arrays
       case (WdlTypes.T_Array(t, nonEmptyFlag), JsArray(vec)) =>
         WdlValues.V_Array(vec.map { elem =>
-                            womFromJSON(t, elem)
-                          })
+          womFromJSON(t, elem)
+        })
 
       // maps with string keys
       case (WdlTypes.T_Map(WdlTypes.T_String, valueType), JsObject(fields)) =>
@@ -157,7 +156,7 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
   }
 
   // serialization routines
-  def toJSON(t : WdlTypes.T, w: WdlValues.V): JsValue = {
+  def toJSON(t: WdlTypes.T, w: WdlValues.V): JsValue = {
     JsObject("womType" -> JsString(WomTypeSerialization(typeAliases).toString(t)),
              "womValue" -> womToJSON(t, w))
   }

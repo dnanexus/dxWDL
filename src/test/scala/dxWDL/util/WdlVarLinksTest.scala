@@ -12,9 +12,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
   private val verbose = Verbose(false, false, Set.empty)
 
-  case class Element(name: String,
-                     womType: WdlTypes.T,
-                     womValue: WdlValues.V)
+  case class Element(name: String, womType: WdlTypes.T, womValue: WdlValues.V)
 
   def makeElement(t: WdlTypes.T, v: WdlValues.V): Element =
     Element("A", t, v)
@@ -60,34 +58,34 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
     val testCases = List(
         // pairs
-      makeElement(
-        WdlTypes.T_Pair(WdlTypes.T_Float, WdlTypes.T_String),
-        makePair(24.1, "Fiji is an island in the pacific ocean")),
-      makeElement(
-        WdlTypes.T_Array(WdlTypes.T_Boolean, false),
-        WdlValues.V_Array(Vector(WdlValues.V_Boolean(true),
-                                 WdlValues.V_Boolean(false)))
-      ),
-      makeElement(
-        WdlTypes.T_Optional(WdlTypes.T_File),
-        WdlValues.V_Optional(WdlValues.V_File("ddd"))),
-
-      // maps
-      makeElement(
-        WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Boolean),
-        WdlValues.V_Map(
-                Map(WdlValues.V_String("A") -> WdlValues.V_Boolean(true),
+        makeElement(WdlTypes.T_Pair(WdlTypes.T_Float, WdlTypes.T_String),
+                    makePair(24.1, "Fiji is an island in the pacific ocean")),
+        makeElement(
+            WdlTypes.T_Array(WdlTypes.T_Boolean, false),
+            WdlValues.V_Array(Vector(WdlValues.V_Boolean(true), WdlValues.V_Boolean(false)))
+        ),
+        makeElement(WdlTypes.T_Optional(WdlTypes.T_File),
+                    WdlValues.V_Optional(WdlValues.V_File("ddd"))),
+        // maps
+        makeElement(
+            WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Boolean),
+            WdlValues.V_Map(
+                Map(
+                    WdlValues.V_String("A") -> WdlValues.V_Boolean(true),
                     WdlValues.V_String("C") -> WdlValues.V_Boolean(false),
                     WdlValues.V_String("G") -> WdlValues.V_Boolean(true),
-                    WdlValues.V_String("H") -> WdlValues.V_Boolean(false)))),
-      makeElement(
-        WdlTypes.T_Map(WdlTypes.T_Int,
-                       WdlTypes.T_Pair(WdlTypes.T_Float,WdlTypes.T_String)),
-        WdlValues.V_Map(
-          Map(WdlValues.V_Int(1) -> makePair(1.3, "triangle"),
-              WdlValues.V_Int(11) -> makePair(3.14, "pi"))
+                    WdlValues.V_String("H") -> WdlValues.V_Boolean(false)
+                )
+            )
+        ),
+        makeElement(
+            WdlTypes.T_Map(WdlTypes.T_Int, WdlTypes.T_Pair(WdlTypes.T_Float, WdlTypes.T_String)),
+            WdlValues.V_Map(
+                Map(WdlValues.V_Int(1) -> makePair(1.3, "triangle"),
+                    WdlValues.V_Int(11) -> makePair(3.14, "pi"))
+            )
         )
-      ))
+    )
 
     testCases.foreach { elem =>
       check(elem, wvlConverter)
@@ -96,18 +94,17 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
   it should "handle structs" in {
     val personType =
-      WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String,
-                                      "age" -> WdlTypes.T_Int))
+      WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
 
-    val jeff = WdlValues.V_Struct("Person",
-                                  Map("name" -> WdlValues.V_String("Jeoffrey"),
-                                      "age" -> WdlValues.V_Int(16)))
-    val janice = WdlValues.V_Struct("Person",
-                                    Map("name" -> WdlValues.V_String("Janice"),
-                                        "age" -> WdlValues.V_Int(25)))
+    val jeff = WdlValues.V_Struct(
+        "Person",
+        Map("name" -> WdlValues.V_String("Jeoffrey"), "age" -> WdlValues.V_Int(16))
+    )
+    val janice =
+      WdlValues.V_Struct("Person",
+                         Map("name" -> WdlValues.V_String("Janice"), "age" -> WdlValues.V_Int(25)))
 
-    val testCases = List(makeElement(personType, jeff),
-                         makeElement(personType, janice))
+    val testCases = List(makeElement(personType, jeff), makeElement(personType, janice))
 
     // no definitions for struct Person, should fail
     // val wvlConverterEmpty = new WdlVarLinksConverter(verbose, Map.empty, Map.empty)
@@ -126,21 +123,21 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
   it should "handle nested structs" taggedAs (EdgeTest) in {
     // People
-    val personType = WdlTypes.T_Struct("Person",
-                                       Map("name" -> WdlTypes.T_String,
-                                           "age" -> WdlTypes.T_Int))
-    val houseType = WdlTypes.T_Struct("House",
-                                      Map("person" -> personType,
-                                          "zipcode" -> WdlTypes.T_Int,
-                                          "type" -> WdlTypes.T_String))
+    val personType =
+      WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
+    val houseType = WdlTypes.T_Struct(
+        "House",
+        Map("person" -> personType, "zipcode" -> WdlTypes.T_Int, "type" -> WdlTypes.T_String)
+    )
 
     // people
-    val lucy = WdlValues.V_Struct("Person",
-                                  Map("name" -> WdlValues.V_String("Lucy"),
-                                      "age" -> WdlValues.V_Int(37)))
-    val lear = WdlValues.V_Struct("Person",
-                                  Map("name" -> WdlValues.V_String("King Lear"),
-                                      "age" -> WdlValues.V_Int(41)))
+    val lucy =
+      WdlValues.V_Struct("Person",
+                         Map("name" -> WdlValues.V_String("Lucy"), "age" -> WdlValues.V_Int(37)))
+    val lear = WdlValues.V_Struct(
+        "Person",
+        Map("name" -> WdlValues.V_String("King Lear"), "age" -> WdlValues.V_Int(41))
+    )
 
     // Houses
     val learCastle =
@@ -155,8 +152,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
                              "zipcode" -> WdlValues.V_Int(94043),
                              "type" -> WdlValues.V_String("town house")))
 
-    val testCases = List(makeElement(houseType, learCastle),
-                         makeElement(houseType, lucyHouse))
+    val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
     val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)

@@ -16,7 +16,7 @@ case class WfFragInput(blockPath: Vector[Int],
 case class WfFragInputOutput(dxIoFunctions: DxIoFunctions,
                              dxProject: DxProject,
                              typeAliases: Map[String, WdlTypes.T],
-                             wdlVersion : WdlVersion,
+                             wdlVersion: WdlVersion,
                              runtimeDebugLevel: Int) {
   val verbose = runtimeDebugLevel >= 1
   val jobInputOutput = JobInputOutput(dxIoFunctions, typeAliases, wdlVersion, runtimeDebugLevel)
