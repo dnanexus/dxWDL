@@ -381,8 +381,10 @@ case class TaskRunner(task: TAT.Task,
       .mkString("\n")
   }
 
-  private def stripTypesFromEnv(env: Map[String, (WdlTypes.T, WdlValues.V)]) : Map[String, WdlValues.V] = {
-    env.map{ case (name, (t, v)) => name -> v}
+  private def stripTypesFromEnv(
+      env: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, WdlValues.V] = {
+    env.map { case (name, (t, v)) => name -> v }
   }
 
   // Calculate the input variables for the task, download the input files,
@@ -431,12 +433,11 @@ case class TaskRunner(task: TAT.Task,
     val docker = dockerImage(stripTypesFromEnv(inputsWithTypes))
 
     // evaluate the declarations using the inputs
-    val env : Map[String, (WdlTypes.T, WdlValues.V)] =
+    val env: Map[String, (WdlTypes.T, WdlValues.V)] =
       task.declarations.foldLeft(inputsWithTypes) {
         case (env, TAT.Declaration(name, wdlType, Some(expr), _)) =>
-          val wdlValue = evaluator.applyExprAndCoerce(expr,
-                                                      wdlType,
-                                                      EvalContext(stripTypesFromEnv(env)))
+          val wdlValue =
+            evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(stripTypesFromEnv(env)))
           env + (name -> (wdlType, wdlValue))
         case (env, TAT.Declaration(name, wdlType, None, _)) =>
           throw new Exception(s"sanity: declaration ${name} has no expression")

@@ -100,9 +100,9 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val block = subBlocks(1)
 
     val env: Map[String, WdlValues.V] = Map(
-      "x" -> WdlValues.V_Int(3),
-      "y" -> WdlValues.V_Int(5),
-      "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
+        "x" -> WdlValues.V_Int(3),
+        "y" -> WdlValues.V_Int(5),
+        "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
     )
 
     val decls: Vector[TAT.Declaration] = block.nodes.collect {
@@ -166,9 +166,9 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     results should be(
         Map(
             "flag" -> (WdlTypes.T_Boolean,
-                       WdlValues.V_Boolean(true)),
+            WdlValues.V_Boolean(true)),
             "cats" -> (WdlTypes.T_Optional(WdlTypes.T_String),
-                       WdlValues.V_Optional(WdlValues.V_String("Mr. Baggins")))
+            WdlValues.V_Optional(WdlValues.V_String("Mr. Baggins")))
         )
     )
   }
@@ -186,10 +186,11 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val results =
       fragRunner.evalExpressions(block.nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results should be(
-      Map("z" -> (
-            WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, false)),
+        Map(
+            "z" -> (WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, false)),
             WdlValues.V_Null)
-      ))
+        )
+    )
   }
 
   it should "create proper names for scatter results" in {
@@ -246,12 +247,13 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val results =
       fragRunner.evalExpressions(subBlocks(0).nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results.keys should be(Set("powers10", "i1", "i2", "i3"))
-    results("i1") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
-                             WdlValues.V_Optional(WdlValues.V_Int(1))))
-    results("i2") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
-                             WdlValues.V_Null))
-    results("i3") should be((WdlTypes.T_Optional(WdlTypes.T_Int),
-                             WdlValues.V_Optional(WdlValues.V_Int(100))))
+    results("i1") should be(
+        (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Optional(WdlValues.V_Int(1)))
+    )
+    results("i2") should be((WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null))
+    results("i3") should be(
+        (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Optional(WdlValues.V_Int(100)))
+    )
     results("powers10") should be(
         (WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), false),
          WdlValues.V_Array(
@@ -296,7 +298,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
       fragRunner.evalCallInputs(call1, Map("i" -> (WdlTypes.T_Int, WdlValues.V_Int(1))))
     callInputs1 should be(
-      Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(1)))
+        Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(1)))
     )
 
     val call2 = findCallByName("ManyArgs", wf.body)
@@ -369,8 +371,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val env = Map(
-      "x" -> (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null),
-      "y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))
+        "x" -> (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null),
+        "y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))
     )
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), env, RunnerWfFragmentMode.Launch)

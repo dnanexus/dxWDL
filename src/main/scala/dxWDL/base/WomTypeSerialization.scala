@@ -134,7 +134,7 @@ object WomTypeSerialization {
       // Base case: primitive types.
       case T_Any       => "Any"
       case T_Boolean   => "Boolean"
-      case T_Int       => "Integer"
+      case T_Int       => "Int"
       case T_Float     => "Float"
       case T_String    => "String"
       case T_File      => "File"

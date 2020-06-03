@@ -92,7 +92,7 @@ object WomPrettyPrintApproxWdl {
       .mkString("\n")
   }
 
-  def apply(elements : Vector[TAT.WorkflowElement]) : String = {
+  def apply(elements: Vector[TAT.WorkflowElement]): String = {
     elements.map(x => applyWorkflowElement(x, "  ")).mkString("\n")
   }
 }

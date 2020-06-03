@@ -19,7 +19,7 @@ case class WdlCodeGen(verbose: Verbose,
     language match {
       case Language.WDLvDraft2 => ""
       case Language.WDLv1_0    => "version 1.0"
-      case Language.WDLv2_0    => "version development"
+      case Language.WDLv2_0    => "version 2.0"
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
     }
@@ -349,7 +349,7 @@ task Add {
   }
 
   def standAloneTask(originalTaskSource: String): WdlCodeSnippet = {
-    val wdlWfSource =
+    val wdlWfSource: String =
       List(versionString() + "\n",
            "# struct definitions",
            typeAliasDefinitions,

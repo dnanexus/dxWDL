@@ -146,16 +146,12 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
                                             Language.toWdlVersion(language),
                                             runtimeDebugLevel)
 
-    System.out.println(s"aliases = ${womBundle.typeAliases}")
-
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
-    val WdlCodeSnippet(taskSourceAndVersion) =
-      WdlCodeGen(Verbose(verbose, true, Set.empty),
-                 Map.empty,
-                 language).standAloneTask(taskSourceCode)
+    val wdlCodeGen = WdlCodeGen(Verbose(verbose, true, Set.empty), womBundle.typeAliases, language)
+    val WdlCodeSnippet(taskSourceCodeFull) = wdlCodeGen.standAloneTask(taskSourceCode)
 
-    val (_, _, taskDocument) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceAndVersion)
+    val (_, _, taskDocument) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCodeFull)
     val taskRunner = TaskRunner(task,
                                 taskDocument,
                                 womBundle.typeAliases,

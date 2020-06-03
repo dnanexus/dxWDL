@@ -79,6 +79,7 @@ object Language extends Enumeration {
       case other      => throw new Exception(s"${other} is not a wdl version")
     }
   }
+
   def fromWdlVersion(version: WdlVersion): Value = {
     version match {
       case WdlVersion.Draft_2 => Language.WDLvDraft2
