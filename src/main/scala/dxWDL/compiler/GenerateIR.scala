@@ -161,14 +161,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     Utils.traceLevelInc()
 
     val taskDir = allSources.foldLeft(Map.empty[String, String]) {
-      case (accu, (filename, wdlSourceCode)) =>
+      case (accu, (_, wdlSourceCode)) =>
         val d = ParseWomSourceFile(verbose.on).scanForTasks(wdlSourceCode)
         accu ++ d
     }
     Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
     val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
-      case (accu, (filename, srcCode)) =>
+      case (accu, (_, srcCode)) =>
         ParseWomSourceFile(verbose.on).scanForWorkflow(srcCode) match {
           case None =>
             accu

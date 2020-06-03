@@ -1,18 +1,18 @@
 package dxWDL.base
 
-import java.nio.file.{Path, Paths}
-import scala.collection.mutable.HashMap
-import scala.util.matching.Regex
+import java.nio.file.Path
 
-import wdlTools.syntax.Parsers
+import wdlTools.formatter.WdlV1Formatter
+import wdlTools.syntax.{Parsers, AbstractSyntax => AST}
 import wdlTools.util.{
   SourceCode => WdlSourceCode,
+  TypeCheckingRegime => WdlTypeCheckingRegime,
   Util => WdlUtil,
-  Verbosity => WdlVerbosity,
-  TypeCheckingRegime => WdlTypeCheckingRegime
+  Verbosity => WdlVerbosity
 }
-import wdlTools.types.{TypeInfer, TypeOptions, TypedAbstractSyntax => TAT, WdlTypes}
-import dxWDL.base.{Language, Utils}
+import wdlTools.types.{Context, TypeInfer, TypeOptions, WdlTypes, TypedAbstractSyntax => TAT}
+
+import scala.io.Source
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
@@ -33,15 +33,15 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // The comparision is done with "toString", because otherwise two
           // identical definitions are somehow, through the magic of Scala,
           // unequal.
-          case Some(existing) if (existing != callable) =>
-            Utils.error(s"""|${key} appears with two different callable definitions
+          case Some(existing) if existing != callable =>
+            Utils.error(s"""|$key appears with two different callable definitions
                             |1)
-                            |${callable}
+                            |$callable
                             |
                             |2)
-                            |${existing}
+                            |$existing
                             |""".stripMargin)
-            throw new Exception(s"${key} appears twice, with two different definitions")
+            throw new Exception(s"$key appears twice, with two different definitions")
           case _ => ()
         }
     }
@@ -50,19 +50,17 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   private def bInfoFromDoc(doc: TAT.Document): BInfo = {
     // Add source and adjuncts for main file
-    val pathOrUrl = doc.sourceCode.toString
-    val (sources, adjunctFiles) =
-      if (pathOrUrl.contains("://")) {
-        val sources = Map(pathOrUrl -> doc.sourceCode)
-        (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
-      } else {
-        val absPath: String = Paths.get(pathOrUrl).toAbsolutePath.toString
-        val sources = Map(absPath -> doc.sourceCode)
-        //val adjunctFiles = Adjuncts.findAdjunctFiles(Paths.get(absPath))
-        val adjunctFiles = Map.empty[String, Vector[Adjuncts.AdjunctFile]]
+    val (sources, adjunctFiles) = doc.sourceUrl match {
+      case None => throw new RuntimeException("Document URL required")
+      case Some(url) if url.getProtocol == "file" =>
+        val absPath: Path = WdlUtil.getLocalPath(url)
+        val sources = Map(absPath.toString -> doc.sourceCode)
+        val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
         (sources, adjunctFiles)
-      }
-
+      case Some(url) =>
+        val sources = Map(url.toString -> doc.sourceCode)
+        (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
+    }
     val tasks: Vector[TAT.Task] = doc.elements.collect {
       case x: TAT.Task => x
     }
@@ -73,7 +71,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(imports: Seq[Path]): TypeOptions = {
+  private def makeOptions(imports: Seq[Path] = Vector.empty): TypeOptions = {
     TypeOptions(
         antlr4Trace = false,
         localDirectories = imports.toVector,
@@ -107,6 +105,14 @@ case class ParseWomSourceFile(verbose: Boolean) {
     }
   }
 
+  private def parseWdlFromPath(path: Path, importDirs: Vector[Path]): (TAT.Document, Context) = {
+    val srcDir = path.getParent
+    val opts = makeOptions(importDirs :+ srcDir)
+    val parsers = Parsers(opts)
+    val doc = parsers.parseDocument(WdlUtil.pathToUrl(path))
+    TypeInfer(opts).apply(doc)
+  }
+
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source code; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
@@ -120,12 +126,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
-    val srcDir = mainAbsPath.getParent()
-    val opts = makeOptions(imports :+ srcDir)
-    val parsers = new Parsers(opts)
-    val typeInfer = new TypeInfer(opts)
-    val mainDoc = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
-    val (tMainDoc, ctxTypes) = typeInfer.apply(mainDoc)
+    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, imports.toVector)
 
     val primaryCallable =
       tMainDoc.workflow match {
@@ -153,15 +154,21 @@ case class ParseWomSourceFile(verbose: Boolean) {
      flatInfo.adjunctFiles)
   }
 
+  private def parseWdlFromString(
+      src: String,
+      opts: TypeOptions = makeOptions(Vector.empty)
+  ): (AST.Document, TAT.Document, Context) = {
+    val lines = Source.fromString(src).getLines.toVector
+    val sourceCode = WdlSourceCode(None, lines)
+    val parser = Parsers(opts).getParser(sourceCode)
+    val doc = parser.parseDocument(sourceCode)
+    val (tDoc, ctx) = TypeInfer(opts).apply(doc)
+    (doc, tDoc, ctx)
+  }
+
   // throw an exception if this WDL program is invalid
   def validateWdlCode(wdlWfSource: String, language: Option[Language.Value] = None): Unit = {
-    val opts = makeOptions(Vector.empty)
-    val lines = wdlWfSource.split("\n").toVector
-    val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
-    val doc = parser.parseDocument(sourceCode)
-    val typeInfer = new TypeInfer(opts)
-    val (tDoc, _) = typeInfer.apply(doc)
+    val (_, tDoc, _) = parseWdlFromString(wdlWfSource)
 
     // Check that this is the correct language version
     language match {
@@ -169,7 +176,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
       case Some(requiredLang) =>
         val docLang = Language.fromWdlVersion(tDoc.version.value)
         if (docLang != requiredLang)
-          throw new Exception(s"document has wrong version ${docLang}, should be ${requiredLang}")
+          throw new Exception(s"document has wrong version $docLang, should be $requiredLang")
     }
   }
 
@@ -180,13 +187,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   def parseWdlWorkflow(
       wfSource: String
   ): (TAT.Workflow, Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
-    val opts = makeOptions(Vector.empty)
-    val lines = wfSource.split("\n").toVector
-    val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
-    val doc = parser.parseDocument(sourceCode)
-    val (tDoc, _) = new TypeInfer(opts).apply(doc)
-
+    val (_, tDoc, _) = parseWdlFromString(wfSource)
     val tasks = tDoc.elements.collect {
       case task: TAT.Task => task.name -> task
     }.toMap
@@ -201,14 +202,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
     (wf, tasks, aliases, tDoc)
   }
 
-  def parseWdlTask(wfSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {
-    val opts = makeOptions(Vector.empty)
-    val lines = wfSource.split("\n").toVector
-    val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
-    val doc = parser.parseDocument(sourceCode)
-    val (tDoc, typeCtx) = new TypeInfer(opts).apply(doc)
-
+  def parseWdlTask(taskSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {
+    val (_, tDoc, typeCtx) = parseWdlFromString(taskSource)
     if (tDoc.workflow.isDefined)
       throw new Exception("a workflow that shouldn't be a member of this document")
     val tasks = tDoc.elements.collect {
@@ -226,117 +221,30 @@ case class ParseWomSourceFile(verbose: Boolean) {
     bundle.primaryCallable match {
       case None                 => throw new Exception("found no callable")
       case Some(task: TAT.Task) => task
-      case Some(wf)             => throw new Exception("found a workflow ${wf.name} and not a task")
+      case Some(wf)             => throw new Exception(s"found a workflow ${wf.name} and not a task")
     }
-  }
-
-  // TODO: This code needs to be replaced
-
-  // Look for the first task in the sequence of lines. If not found, return None.
-  // If found, return the remaining lines, the name of the task, and the WDL source lines.
-  //
-  // Go through the lines, until you find a match for a start-line.
-  // Look for expression that looks like this:
-  //
-  // task NAME {
-  //  ...
-  // }
-  //
-  // A complication is that the inner string could include curly bracket symbols
-  // as well. There needs to be balanced number of left and right brackets. We ignore
-  // this situation, and assume the end task marker is a closed curly bracket at
-  // the beginning of the line. Note that this algorithm will make a mistake in this
-  // case:
-  //
-  // task  NAME {
-  //   Int a
-  // command {
-  //    ls -lR
-  // }
-  // }
-  private def findWdlElement(lines: List[String],
-                             elemStartLine: Regex,
-                             elemEndLine: Regex): Option[(List[String], String, String)] = {
-    var remaining: List[String] = lines
-    var taskLines: Vector[String] = Vector.empty[String]
-    var taskName: Option[String] = None
-
-    while (!remaining.isEmpty) {
-      // pop the first line
-      val line = remaining.head
-      remaining = remaining.tail
-
-      taskName match {
-        case None if (elemStartLine.pattern.matcher(line).matches) =>
-          // hit the beginning of a task
-          taskLines = Vector(line)
-
-          // extract the task name
-          val allMatches = elemStartLine.findAllMatchIn(line).toList
-          if (allMatches.size != 1)
-            throw new Exception(s"""|task definition appears twice in one line
-                                    |
-                                    |${line}
-                                    |""".stripMargin)
-          taskName = Some(allMatches(0).group(3))
-        case None =>
-          // lines before the task
-          ()
-        case Some(tn) if (elemEndLine.pattern.matcher(line).matches) =>
-          // hit the end of the task
-          taskLines :+= line
-          return Some((remaining, tn, taskLines.mkString("\n")))
-        case Some(_) =>
-          // in the middle of a task
-          taskLines :+= line
-      }
-    }
-    return None
-  }
-
-  private def findNextTask(lines: List[String]): Option[(List[String], String, String)] = {
-    val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s*)\\{".r
-    val taskEndLine: Regex = "^}(\\s)*$".r
-    findWdlElement(lines, taskStartLine, taskEndLine)
-  }
-
-  private def findNextWorkflow(lines: List[String]): Option[(List[String], String, String)] = {
-    val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s*)\\{".r
-    val workflowEndLine: Regex = "^}(\\s)*$".r
-    findWdlElement(lines, workflowStartLine, workflowEndLine)
   }
 
   // Go through one WDL source file, and return a map from task name
   // to its source code. Return an empty map if there are no tasks
   // in this file.
   def scanForTasks(sourceCode: String): Map[String, String] = {
-    var lines = sourceCode.split("\n").toList
-    val taskDir = HashMap.empty[String, String]
-
-    while (!lines.isEmpty) {
-      val retval = findNextTask(lines)
-
-      // TODO: add a WOM syntax check that this is indeed a task.
-      retval match {
-        case None => return taskDir.toMap
-        case Some((remainingLines, taskName, taskLines)) =>
-          taskDir(taskName) = taskLines
-          lines = remainingLines
-      }
-    }
-    return taskDir.toMap
+    val opts = makeOptions()
+    val (doc, _, _) = parseWdlFromString(sourceCode, opts)
+    val formatter = WdlV1Formatter(opts)
+    doc.elements.collect {
+      case t: AST.Task =>
+        println(t.name)
+        t.name -> formatter.formatElement(t, doc.comments).mkString("\n")
+    }.toMap
   }
 
-  // Go through one WDL source file, and return a map from task name
-  // to its source code. Return an empty map if there are no tasks
-  // in this file.
+  // Go through one WDL source file, and return a tuple of (wf name,
+  // source code). Return None if there is no workflow in this file.
   def scanForWorkflow(sourceCode: String): Option[(String, String)] = {
-    val lines = sourceCode.split("\n").toList
-    findNextWorkflow(lines) match {
-      case None =>
-        None
-      case Some((remainingLines, wfName, wfLines)) =>
-        Some((wfName, wfLines))
-    }
+    val opts = makeOptions()
+    val (doc, _, _) = parseWdlFromString(sourceCode, opts)
+    val formatter = WdlV1Formatter(opts)
+    doc.workflow.map(wf => (wf.name, formatter.formatElement(wf, doc.comments).mkString("\n")))
   }
 }
