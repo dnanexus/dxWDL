@@ -8,9 +8,9 @@ struct Person {
 task printPerson {
     input {
     }
-    Person a = {
-        "name": "John",
-        "age": 30
+    Person a = object {
+      name: "John",
+      age: 30
     }
 
     command {

@@ -381,6 +381,10 @@ case class TaskRunner(task: TAT.Task,
       .mkString("\n")
   }
 
+  private def stripTypesFromEnv(env: Map[String, (WdlTypes.T, WdlValues.V)]) : Map[String, WdlValues.V] = {
+    env.map{ case (name, (t, v)) => name -> v}
+  }
+
   // Calculate the input variables for the task, download the input files,
   // and build a shell script to run the command.
   def prolog(
@@ -424,15 +428,22 @@ case class TaskRunner(task: TAT.Task,
         case (inpDfn, value) =>
           inpDfn.name -> (inpDfn.wdlType, value)
       }.toMap
-    val inputs: Map[String, WdlValues.V] =
-      inputsWithTypes.map {
-        case (k, (t, v)) => k -> v
+    val docker = dockerImage(stripTypesFromEnv(inputsWithTypes))
+
+    // evaluate the declarations using the inputs
+    val env : Map[String, (WdlTypes.T, WdlValues.V)] =
+      task.declarations.foldLeft(inputsWithTypes) {
+        case (env, TAT.Declaration(name, wdlType, Some(expr), _)) =>
+          val wdlValue = evaluator.applyExprAndCoerce(expr,
+                                                      wdlType,
+                                                      EvalContext(stripTypesFromEnv(env)))
+          env + (name -> (wdlType, wdlValue))
+        case (env, TAT.Declaration(name, wdlType, None, _)) =>
+          throw new Exception(s"sanity: declaration ${name} has no expression")
       }
 
-    val docker = dockerImage(inputs)
-
     // instantiate the command
-    val command = evaluator.applyCommand(task.command, EvalContext(inputs))
+    val command = evaluator.applyCommand(task.command, EvalContext(stripTypesFromEnv(env)))
 
     // Write shell script to a file. It will be executed by the dx-applet shell code.
     writeBashScript(command)
@@ -444,7 +455,7 @@ case class TaskRunner(task: TAT.Task,
     }
 
     // Record the localized inputs, we need them in the epilog
-    (inputsWithTypes, dxUrl2path)
+    (env, dxUrl2path)
   }
 
   def epilog(localizedInputs: Map[String, WdlValues.V],

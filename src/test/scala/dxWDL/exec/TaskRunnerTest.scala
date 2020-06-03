@@ -7,7 +7,8 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-import dxWDL.base.{Language, ParseWomSourceFile, Utils, WdlRuntimeAttrs, WomBundle}
+import dxWDL.base.{Language, ParseWomSourceFile, Utils, Verbose, WdlRuntimeAttrs, WomBundle}
+import dxWDL.compiler.{WdlCodeGen, WdlCodeSnippet}
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 
 // This test module requires being logged in to the platform.
@@ -19,7 +20,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
   private val unicornInstance =
     DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
   private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
-  private val verbose = false
+  private val verbose = true
 
   // Note: if the file doesn't exist, this throws a null pointer exception
   private def pathFromBasename(basename: String): Path = {
@@ -144,7 +145,17 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
                                             womBundle.typeAliases,
                                             Language.toWdlVersion(language),
                                             runtimeDebugLevel)
-    val (_, _, taskDocument) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
+
+    System.out.println(s"aliases = ${womBundle.typeAliases}")
+
+    // Add the WDL version to the task source code, so the parser
+    // will pick up the correct language dielect.
+    val WdlCodeSnippet(taskSourceAndVersion) =
+      WdlCodeGen(Verbose(verbose, true, Set.empty),
+                 Map.empty,
+                 language).standAloneTask(taskSourceCode)
+
+    val (_, _, taskDocument) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceAndVersion)
     val taskRunner = TaskRunner(task,
                                 taskDocument,
                                 womBundle.typeAliases,
@@ -254,11 +265,11 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     repo should equal("ubuntu_18_04_minimal:latest")
   }
 
-  it should "handle structs" in {
+  it should "handle structs" taggedAs (EdgeTest) in {
     runTask("Person2")
   }
 
-  it should "handle missing optional files" taggedAs (EdgeTest) in {
+  it should "handle missing optional files" in {
     runTask("missing_optional_output_file")
   }
 }
