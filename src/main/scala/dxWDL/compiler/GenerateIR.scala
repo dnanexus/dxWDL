@@ -36,7 +36,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       val readyNames = ready.map(_.name).toSet
       val satisfiedCallables = callables.filter { c =>
         val deps = immediateDeps(c.name)
-        Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
+        Utils.trace(verbose2, s"immediateDeps(${c.name}) = $deps")
         deps.subsetOf(readyNames)
       }
       if (satisfiedCallables.isEmpty) {
@@ -46,10 +46,10 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }.toMap
         val explanationLines = stuckWaitingOn.mkString("\n")
         throw new Exception(s"""|Sanity: cannot find the next callable to compile.
-                                |ready = ${readyNames}
-                                |stuck = ${stuck}
+                                |ready = $readyNames
+                                |stuck = $stuck
                                 |stuckWaitingOn =
-                                |${explanationLines}
+                                |$explanationLines
                                 |""".stripMargin)
       }
       satisfiedCallables
@@ -57,7 +57,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
 
     var accu = Vector.empty[TAT.Callable]
     var crnt = allCallables
-    while (!crnt.isEmpty) {
+    while (crnt.nonEmpty) {
       Utils.trace(verbose2, s"accu=${accu.map(_.name)}")
       Utils.trace(verbose2, s"crnt=${crnt.map(_.name)}")
       val execsToCompile = next(crnt, accu)
@@ -88,21 +88,21 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         case cNode: TAT.Call =>
           val localname = Utils.getUnqualifiedName(cNode.callee.name)
           callables(localname)
-      }.toVector
+      }
 
     val WdlCodeSnippet(wfSourceStandAlone) =
       WdlCodeGen(verbose, typeAliases, language)
         .standAloneWorkflow(wfSource, callablesUsedInWorkflow)
 
-    val gir = new GenerateIRWorkflow(wf,
-                                     wfSource,
-                                     wfSourceStandAlone,
-                                     callables,
-                                     language,
-                                     verbose,
-                                     locked,
-                                     reorg,
-                                     adjunctFiles)
+    val gir = GenerateIRWorkflow(wf,
+                                 wfSource,
+                                 wfSourceStandAlone,
+                                 callables,
+                                 language,
+                                 verbose,
+                                 locked,
+                                 reorg,
+                                 adjunctFiles)
     gir.apply()
   }
 
@@ -145,7 +145,7 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
         }
       case x =>
         throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
-                                |${x}
+                                |$x
                                 |""".stripMargin.replaceAll("\n", " "))
     }
   }
@@ -211,9 +211,9 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
                                                  isLocked(callable),
                                                  reorg,
                                                  adjunctFiles.get(callable.name))
-      allCallables = allCallables ++ (auxCallables.map { apl =>
+      allCallables = allCallables ++ auxCallables.map { apl =>
         apl.name -> apl
-      }.toMap)
+      }.toMap
       allCallables = allCallables + (exec.name -> exec)
 
       // Add the auxiliary applets while preserving the dependency order
@@ -229,8 +229,8 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       allCallables(Utils.getUnqualifiedName(callable.name))
     }
     val allCallablesSortedNames = allCallablesSorted.map { _.name }
-    Utils.trace(verbose.on, s"allCallables=${allCallables.map(_._1)}")
-    Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSortedNames}")
+    Utils.trace(verbose.on, s"allCallables=${allCallables.keys}")
+    Utils.trace(verbose.on, s"allCallablesSorted=$allCallablesSortedNames")
     assert(allCallables.size == allCallablesSortedNames.size)
 
     Utils.traceLevelDec()

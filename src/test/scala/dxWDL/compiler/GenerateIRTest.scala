@@ -17,12 +17,12 @@ import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateM
 //
 class GenerateIRTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
-    val p = getClass.getResource(s"/${dir}/${basename}").getPath
+    val p = getClass.getResource(s"/$dir/$basename").getPath
     Paths.get(p)
   }
 
   private val dxProject = {
-    val p = DxUtils.dxEnv.getProjectContext()
+    val p = DxUtils.dxEnv.getProjectContext
     if (p == null)
       throw new Exception("Must be logged in to run this test")
     DxProject(p)
@@ -164,7 +164,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case Some(wf: IR.Workflow) => wf
       case _                     => throw new Exception("sanity")
     }
-    primaryWf.stages.size shouldBe (2)
+    primaryWf.stages.size shouldBe 2
   }
 
   it should "compile a sub-block with several calls" in {
@@ -202,7 +202,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
         Utils.error(other.toString)
-        throw new Exception(s"Failed to compile ${path}")
+        throw new Exception(s"Failed to compile $path")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) =>
@@ -210,7 +210,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("review")
+    stage.description shouldBe "review"
   }
 
   it should "compile a workflow calling a subworkflow as a direct call with development version" in {
@@ -219,7 +219,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
         Utils.error(other.toString)
-        throw new Exception(s"Failed to compile ${path}")
+        throw new Exception(s"Failed to compile $path")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) =>
@@ -227,7 +227,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("review")
+    stage.description shouldBe "review"
   }
 
   it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
@@ -236,7 +236,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
         Utils.error(other.toString)
-        throw new Exception(s"Failed to compile ${path}")
+        throw new Exception(s"Failed to compile $path")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) =>
@@ -244,7 +244,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("native_sum_wf")
+    stage.description shouldBe "native_sum_wf"
   }
 
   it should "three nesting levels" in {
@@ -262,12 +262,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case wf: IR.Workflow => wf
       case _               => throw new Exception("sanity")
     }
-    wf.stages.size shouldBe (1)
+    wf.stages.size shouldBe 1
 
     val level2 = bundle.allCallables(wf.name)
     level2 shouldBe a[IR.Workflow]
     val wfLevel2 = level2.asInstanceOf[IR.Workflow]
-    wfLevel2.stages.size shouldBe (1)
+    wfLevel2.stages.size shouldBe 1
   }
 
   it should "four nesting levels" in {
@@ -285,7 +285,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   private def getAppletByName(name: String, bundle: IR.Bundle): IR.Applet =
     bundle.allCallables(name) match {
       case a: IR.Applet => a
-      case _            => throw new Exception(s"${name} is not an applet")
+      case _            => throw new Exception(s"$name is not an applet")
     }
 
   private def getTaskByName(
@@ -295,7 +295,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val applet = getAppletByName(name, bundle)
     val task: TAT.Task = applet.kind match {
       case IR.AppletKindTask(x) => x
-      case _                    => throw new Exception(s"${name} is not a task")
+      case _                    => throw new Exception(s"$name is not a task")
     }
     task
   }
@@ -990,21 +990,19 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe (
-            Map(
-                "a" -> IR.MetaValueObject(
-                    Map(
-                        "help" -> IR.MetaValueString("lefthand file"),
-                        "group" -> IR.MetaValueString("Files"),
-                        "label" -> IR.MetaValueString("File A")
-                    )
-                ),
-                "b" -> IR.MetaValueObject(
-                    Map(
-                        "help" -> IR.MetaValueString("righthand file"),
-                        "group" -> IR.MetaValueString("Files"),
-                        "label" -> IR.MetaValueString("File B")
-                    )
+        translateMetaKVs(kvs) shouldBe Map(
+            "a" -> IR.MetaValueObject(
+                Map(
+                    "help" -> IR.MetaValueString("lefthand file"),
+                    "group" -> IR.MetaValueString("Files"),
+                    "label" -> IR.MetaValueString("File A")
+                )
+            ),
+            "b" -> IR.MetaValueObject(
+                Map(
+                    "help" -> IR.MetaValueString("righthand file"),
+                    "group" -> IR.MetaValueString("Files"),
+                    "label" -> IR.MetaValueString("File B")
                 )
             )
         )
@@ -1385,7 +1383,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(retval) {
       case Main.SuccessfulTerminationIR(bundle) =>
-        bundle.allCallables.size shouldBe (1)
+        bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
         val task = callable.asInstanceOf[IR.Applet]
@@ -1411,19 +1409,19 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(retval) {
       case Main.SuccessfulTerminationIR(bundle) =>
-        bundle.allCallables.size shouldBe (1)
+        bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
         val task = callable.asInstanceOf[IR.Applet]
-        task.instanceType shouldBe (IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
-                                                         None,
-                                                         None,
-                                                         None,
-                                                         None))
+        task.instanceType shouldBe IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
+                                                        None,
+                                                        None,
+                                                        None,
+                                                        None)
     }
   }
 
-  it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs (EdgeTest) in {
+  it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs EdgeTest in {
     val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
     val retval = Main.compile(
         path.toString
@@ -1438,24 +1436,21 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _                                    => throw new Exception("sanity")
     }
 
-    val wfs: Vector[IR.Workflow] = bundle.allCallables
-      .map {
-        case (name, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
-        case (_, _)                                                           => None
-      }
-      .flatten
-      .toVector
-    wfs.length shouldBe (1)
+    val wfs: Vector[IR.Workflow] = bundle.allCallables.flatMap {
+      case (_, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
+      case (_, _)                                                        => None
+    }.toVector
+    wfs.length shouldBe 1
     val subwf = wfs(0)
 
     val samtools = subwf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
     inside(samtools) {
       case Some((cVar, _)) =>
-        cVar.womType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))
+        cVar.womType shouldBe WdlTypes.T_Optional(WdlTypes.T_String)
     }
   }
 
-  it should "pass as subworkflows do not have expression statement in output block" taggedAs (EdgeTest) in {
+  it should "pass as subworkflows do not have expression statement in output block" taggedAs EdgeTest in {
     val path = pathFromBasename("subworkflows", basename = "trains.wdl")
 
     val retval = Main.compile(
@@ -1465,7 +1460,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   // this is currently failing.
-  it should "pass with subworkflows having expression" taggedAs (EdgeTest) in {
+  it should "pass with subworkflows having expression" taggedAs EdgeTest in {
     val path = pathFromBasename("subworkflows", basename = "ensure_trains.wdl")
 
     val retval = Main.compile(
@@ -1523,7 +1518,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
     val input_cvars: Vector[IR.CVar] = workflow.inputs.map {
       case (c: IR.CVar, _) => c
-      case other           => throw new Exception("Invalid workflow input ${other}")
+      case other           => throw new Exception(s"Invalid workflow input $other")
     }
     input_cvars.sortWith(_.name < _.name) shouldBe Vector(
         IR.CVar(
@@ -1571,9 +1566,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
         array.foreach({
           case IR.WorkflowAttrDescription(desc) =>
             desc shouldBe "This is the readme for the wf_linear workflow."
-          case other => throw new Exception(s"Unexpected workflow meta ${other}")
+          case other => throw new Exception(s"Unexpected workflow meta $other")
         })
-      case other => throw new Exception("Expected workflow meta")
+      case _ => throw new Exception("Expected workflow meta")
     }
 
     val addApp = getAppletByName("add", bundle)
@@ -1585,7 +1580,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             text shouldBe "This is the readme for the wf_linear add task."
           case IR.TaskAttrDeveloperNotes(text) =>
             text shouldBe "Developer notes defined in WDL"
-          case other => throw new Exception(s"Invalid TaskAttr for add task ${other}")
+          case other => throw new Exception(s"Invalid TaskAttr for add task $other")
         }
       case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for add task")
     }
@@ -1597,7 +1592,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
         v.foreach {
           case IR.TaskAttrDescription(text) =>
             text shouldBe "Description defined in WDL"
-          case other => throw new Exception(s"Invalid TaskAttr for mul task ${other}")
+          case other => throw new Exception(s"Invalid TaskAttr for mul task $other")
         }
       case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for mul task")
     }
@@ -1606,7 +1601,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     incApp.meta match {
       case Some(v: Vector[IR.TaskAttr]) => v.size shouldBe 0
       case None                         => None
-      case other                        => throw new Exception("meta is not None or empty for inc task")
+      case _                            => throw new Exception("meta is not None or empty for inc task")
     }
   }
 }

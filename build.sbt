@@ -1,12 +1,11 @@
 import Merging.customMergeStrategy
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
-import scoverage.ScoverageKeys._
 
 scalaVersion := "2.13.2"
 name := "dxWDL"
 organization := "com.dnanexus"
-val root = Project("root", file("."))
+val root = project.in(file("."))
 
 // reduce the maximum number of errors shown by the Scala compiler
 maxErrors := 7
@@ -52,25 +51,20 @@ assemblyMergeStrategy in assembly := customMergeStrategy.value
 //resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
 libraryDependencies ++= Seq(
-  "com.dnanexus" %% "wdltools" % "0.1.0-SNAPSHOT",
-
-  // antlr4 lexer + parser
-  "org.antlr" % "antlr4" % "4.8",
-
-  // JSON jackson parser
-  "com.fasterxml.jackson.core" % "jackson-databind" % "2.11.0",
-
-  "io.spray" %% "spray-json" % "1.3.5",
-  "com.typesafe" % "config" % "1.3.3",
-
-  // http support and libraries used in what remains of dxjava
-  "com.google.guava" % "guava" % "18.0",
-  "org.apache.httpcomponents" % "httpclient" % "4.5",
-  "org.slf4j" % "slf4j-api" % "1.7.30",
-
-  //---------- Test libraries -------------------//
-  "org.scalactic" % "scalactic_2.13" % "3.1.1",
-  "org.scalatest" % "scalatest_2.13" % "3.1.1" % "test"
+    "com.dnanexus" %% "wdltools" % "0.1.0-SNAPSHOT",
+    // antlr4 lexer + parser
+    "org.antlr" % "antlr4" % "4.8",
+    // JSON jackson parser
+    "com.fasterxml.jackson.core" % "jackson-databind" % "2.11.0",
+    "io.spray" %% "spray-json" % "1.3.5",
+    "com.typesafe" % "config" % "1.3.3",
+    // http support and libraries used in what remains of dxjava
+    "com.google.guava" % "guava" % "18.0",
+    "org.apache.httpcomponents" % "httpclient" % "4.5",
+    "org.slf4j" % "slf4j-api" % "1.7.30",
+    //---------- Test libraries -------------------//
+    "org.scalactic" % "scalactic_2.13" % "3.1.1",
+    "org.scalatest" % "scalatest_2.13" % "3.1.1" % "test"
 )
 
 // If an exception is thrown during tests, show the full

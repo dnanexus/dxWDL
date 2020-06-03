@@ -4,7 +4,6 @@
 package dxWDL.base
 
 import java.nio.file.Path
-import dxWDL.base.Utils
 
 object Adjuncts {
   sealed abstract class AdjunctFile
@@ -35,12 +34,9 @@ object Adjuncts {
     lazy val readmeRegexp = s"(?i)readme\\.$wdlName\\.(.+)\\.md".r
     lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.$wdlName\\.(.+)\\.md".r
 
-    println(parentDir)
-    println(parentDir.listFiles)
     val v: Array[(String, AdjunctFile)] = parentDir.listFiles
       .flatMap { file =>
         {
-          println(s"name ${file.getName}")
           file.getName match {
             case readmeRegexp(target) =>
               Some(target -> Readme(Utils.readFileContent2(file.toPath)))
@@ -51,7 +47,7 @@ object Adjuncts {
         }
       }
     // handle list that might have duplicates
-    val m: Map[String, Array[(String, AdjunctFile)]] = v.groupBy(_._1).toMap
+    val m: Map[String, Array[(String, AdjunctFile)]] = v.groupBy(_._1)
 
     // get rid of the extra copy of the filename
     m.map {

@@ -234,7 +234,6 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val formatter = WdlV1Formatter(opts)
     doc.elements.collect {
       case t: AST.Task =>
-        println(t.name)
         t.name -> formatter.formatElement(t, doc.comments).mkString("\n")
     }.toMap
   }
