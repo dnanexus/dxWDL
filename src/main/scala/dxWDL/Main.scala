@@ -535,7 +535,7 @@ object Main extends App {
       cOpt.compileMode match {
         case CompilerFlag.IR =>
           val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
-          return SuccessfulTerminationIR(ir)
+          SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)

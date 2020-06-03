@@ -310,7 +310,7 @@ case class GenerateIRTask(verbose: Verbose,
             Some(value)
         }
         CVar(id, womType, defaultValue)
-    }.toVector
+    }
 
     val instanceType = calcInstanceType(task)
 

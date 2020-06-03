@@ -190,7 +190,7 @@ case class Top(cOpt: CompilerOptions) {
 
     }
 
-    new GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
+    GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
       .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 

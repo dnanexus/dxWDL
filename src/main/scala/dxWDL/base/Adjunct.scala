@@ -21,7 +21,7 @@ object Adjuncts {
   // (file_name, callable_name) to ensure uniqueness.
   def findAdjunctFiles(path: Path): Map[String, Vector[AdjunctFile]] = {
     if (!path.isAbsolute) {
-      throw new Exception(s"path is not absolute: ${path}")
+      throw new Exception(s"path is not absolute: $path")
     }
 
     val file = path.toFile
@@ -32,12 +32,15 @@ object Adjuncts {
       wdlName = wdlName.dropRight(4)
     }
 
-    lazy val readmeRegexp = s"(?i)readme\\.${wdlName}\\.(.+)\\.md".r
-    lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.${wdlName}\\.(.+)\\.md".r
+    lazy val readmeRegexp = s"(?i)readme\\.$wdlName\\.(.+)\\.md".r
+    lazy val developerNotesRegexp = s"(?i)readme\\.developer\\.$wdlName\\.(.+)\\.md".r
 
+    println(parentDir)
+    println(parentDir.listFiles)
     val v: Array[(String, AdjunctFile)] = parentDir.listFiles
       .flatMap { file =>
         {
+          println(s"name ${file.getName}")
           file.getName match {
             case readmeRegexp(target) =>
               Some(target -> Readme(Utils.readFileContent2(file.toPath)))
