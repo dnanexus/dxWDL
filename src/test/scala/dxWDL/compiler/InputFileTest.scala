@@ -36,7 +36,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "deal with a locked workflow" in {
+  it should "deal with a locked workflow" taggedAs (EdgeTest) in {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
     val inputs = pathFromBasename("input_file", "math_inputs.json")
     Main.compile(
@@ -164,7 +164,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "WDL map input" taggedAs (EdgeTest) in {
+  it should "WDL map input" in {
     val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
     val inputs = pathFromBasename("input_file", "map_argument_input.json")
 

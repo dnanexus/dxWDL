@@ -267,9 +267,9 @@ object Block {
         exprInputs(sep) ++ exprInputs(value)
 
       // operators on one argument
-      case TAT.ExprUniraryPlus(value: TAT.Expr, _, _) =>
+      case TAT.ExprUnaryPlus(value: TAT.Expr, _, _) =>
         exprInputs(value)
-      case TAT.ExprUniraryMinus(value: TAT.Expr, _, _) =>
+      case TAT.ExprUnaryMinus(value: TAT.Expr, _, _) =>
         exprInputs(value)
       case TAT.ExprNegate(value: TAT.Expr, _, _) =>
         exprInputs(value)
