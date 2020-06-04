@@ -94,8 +94,14 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //
   private def compileCall(call: TAT.Call, env: CallEnv, locked: Boolean): IR.Stage = {
     // Find the callee
-    val calleeName = call.callee.name
-    val callee: IR.Callable = callables(calleeName)
+    val calleeName = Utils.getUnqualifiedName(call.callee.name)
+    val callee: IR.Callable = callables.get(calleeName) match {
+      case None =>
+        throw new Exception(s"""|sanity: callable ${calleeName} should exist
+                                |but is missing from the list of known tasks/workflows ${callables.keys}
+                                |""".stripMargin)
+      case Some(x) => x
+    }
 
     // Extract the input values/links from the environment
     val inputs: Vector[SArg] = callee.inputVars.map { cVar =>

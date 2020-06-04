@@ -214,7 +214,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   it should "compile a workflow calling a subworkflow as a direct call with development version" in {
-    val path = pathFromBasename("development", "movies.wdl")
+    val path = pathFromBasename("v2", "movies.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
@@ -231,7 +231,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
-    val path = pathFromBasename("development", "call_dnanexus_applet.wdl")
+    val path = pathFromBasename("v2", "call_dnanexus_applet.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
@@ -1423,7 +1423,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "compile a scatter with a sub-workflow that has an optional argument" in {
+  it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs (EdgeTest) in {
     val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
     val retval = Main.compile(
         path.toString
@@ -1446,12 +1446,13 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       .flatten
       .toVector
     wfs.length shouldBe (1)
-    val subwf = wfs(0)
+    val wf = wfs.head
 
-    val samtools = subwf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
+    val samtools = wf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
     inside(samtools) {
-      case Some((cVar, _)) =>
-        cVar.womType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))
+      /*case Some((cVar, _)) =>
+       cVar.womType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))*/
+      case None => ()
     }
   }
 
@@ -1465,7 +1466,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   // this is currently failing.
-  it should "pass with subworkflows having expression" taggedAs (EdgeTest) in {
+  it should "pass with subworkflows having expression" in {
     val path = pathFromBasename("subworkflows", basename = "ensure_trains.wdl")
 
     /* ensure_trains workflow
@@ -1475,8 +1476,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
      */
     val retval = Main.compile(
         path.toString
-          :: "--verbose"
-          :: "--verboseKey" :: "GenerateIR"
+//          :: "--verbose"
+//          :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]

@@ -1,5 +1,4 @@
-
-version development
+version 2.0
 
 import "dnanexus_applet.wdl" as lib
 

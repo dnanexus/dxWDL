@@ -1,5 +1,4 @@
-
-version development
+version 2.0
 
 import "library.wdl" as lib
 
