@@ -36,7 +36,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "deal with a locked workflow" taggedAs (EdgeTest) in {
+  it should "deal with a locked workflow" in {
     val wdlCode = pathFromBasename("input_file", "math.wdl")
     val inputs = pathFromBasename("input_file", "math_inputs.json")
     Main.compile(
@@ -69,10 +69,9 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
           ++ cFlags
     )
-
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("Could not map all default fields")
+        errMsg should include("Could not map all input fields")
     }
   }
 
@@ -91,7 +90,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
     Main.compile(
-        List(wdlCode.toString, "-inputs", inputs.toString)
+      List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
 
@@ -109,8 +108,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     )
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("input")
-        errMsg should include("to call <missing_args.Add> is unspecified")
+        errMsg should include("Could not map all input fields")
     }
 
     // Missing arguments are legal in an unlocked workflow
@@ -131,7 +129,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "support array of pairs" in {
+  ignore should "support array of pairs" in {
     val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
     val inputs = pathFromBasename("input_file", "echo_pairs.json")
 
@@ -142,7 +140,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "array of structs" in {
+  ignore should "array of structs" in {
     val wdlCode = pathFromBasename("struct", "array_of_structs.wdl")
     val inputs = pathFromBasename("struct", "array_of_structs_input.json")
 
@@ -164,7 +162,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "WDL map input" in {
+  it should "WDL map input" taggedAs (EdgeTest) in {
     val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
     val inputs = pathFromBasename("input_file", "map_argument_input.json")
 

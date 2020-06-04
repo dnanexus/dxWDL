@@ -104,11 +104,10 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // an array of values.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(m)) =>
         // general case
-        val keys: WdlValues.V = WdlValues.V_Array(m.keys.toVector)
-        val kJs = jsFromWdlValue(keyType, keys)
-        val values: WdlValues.V = WdlValues.V_Array(m.values.toVector)
-        val vJs = jsFromWdlValue(valueType, values)
-        JsObject("keys" -> kJs, "values" -> vJs)
+        val kJs = m.keys.map(jsFromWdlValue(keyType, _ ))
+        val vJs = m.values.map(jsFromWdlValue(valueType, _))
+        JsObject("keys" -> JsArray(kJs.toVector),
+                 "values" -> JsArray(vJs.toVector))
 
       // Arrays: these come after maps, because there is an automatic coercion from
       // a map to an array.
@@ -157,19 +156,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
         JsObject(mJs)
 
       case (_, _) =>
-        val wdlTypeStr =
-          if (wdlType == null)
-            "null"
-          else
-            WomTypeSerialization.typeName(wdlType)
-        val wdlValueStr =
-          if (wdlValue == null)
-            "null"
-          else
-            s"(${wdlValue})"
         throw new Exception(s"""|Unsupported combination:
-                                |    wdlType:  ${wdlTypeStr}
-                                |    wdlValue: ${wdlValueStr}""".stripMargin)
+                                |    wdlType:  ${wdlType}
+                                |    wdlValue: ${wdlValue}""".stripMargin)
     }
   }
 

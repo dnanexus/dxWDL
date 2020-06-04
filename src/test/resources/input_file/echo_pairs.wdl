@@ -6,10 +6,10 @@ task echo_this_pair {
     String second_word
   }
   command <<<
-  set -exo
+    set -exo
 
-  echo ~{first_word} >> output.txt
-  echo ~{second_word} >> output.txt
+    echo ~{first_word} >> output.txt
+    echo ~{second_word} >> output.txt
   >>>
   runtime {
     docker: "debian:stretch-slim"

@@ -128,6 +128,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           // right here, but leave it for runtime.
           IR.SArgEmpty
 
+        case Some(_ : TAT.ValueNone) =>
+          // same as above
+          IR.SArgEmpty
+
         case Some(expr) if WomValueAnalysis.isExpressionConst(cVar.womType, expr) =>
           IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, expr))
 

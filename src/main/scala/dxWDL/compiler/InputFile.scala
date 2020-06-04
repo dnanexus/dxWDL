@@ -57,7 +57,6 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
       // Maps. These are serialized as an object with a keys array and
       // a values array.
       case (WdlTypes.T_Map(keyType, valueType), _) =>
-        //System.out.println(s"wom map    kv-type=(${keyType}, ${valueType})")
         val keysJs = jsValue.asJsObject.fields.keys.map { k =>
           JsString(k)
         }.toVector
@@ -126,7 +125,6 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
           inputs.get(fqn) match {
             case None          => None
             case Some(jsValue) =>
-              //System.out.println(s"findDxFiles ${cVar.womType} ${jsValue.prettyPrint}")
               Some(findDxFiles(cVar.womType, jsValue))
           }
       }
@@ -436,7 +434,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
           // Do not assign the value to any later stages.
           // We found the variable declaration, the others
           // are variable uses.
-          Utils.trace(verbose.on, s"${fqn} -> ${dxName}")
+          Utils.trace(verbose.on, s"checkAndBind, found: ${fqn} -> ${dxName}")
           val wvl = translateValue(cVar, jsv)
           wdlVarLinksConverter
             .genFields(wvl, dxName, encodeDots = false)
@@ -449,7 +447,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     def checkAllUsed(): Unit = {
       if (inputFields.isEmpty)
         return
-      throw new Exception(s"""|Could not map all default fields.
+      throw new Exception(s"""|Could not map all input fields.
                               |These were left: ${inputFields}""".stripMargin)
     }
   }
@@ -522,17 +520,18 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         val middleStages = wf.stages.filter { stg =>
           !(auxStages contains stg.id.getId)
         }
+
         // Inputs for top level calls
-        middleStages.foreach { stg =>
+        middleStages.foreach { stage =>
           // Find the input definitions for the stage, by locating the callee
-          val callee: IR.Callable = bundle.allCallables.get(stg.calleeName) match {
+          val callee: IR.Callable = bundle.allCallables.get(stage.calleeName) match {
             case None =>
-              throw new Exception(s"callable ${stg.calleeName} is missing")
+              throw new Exception(s"callable ${stage.calleeName} is missing")
             case Some(x) => x
           }
           callee.inputVars.foreach { cVar =>
-            val fqn = s"${wf.name}.${stg.description}.${cVar.name}"
-            val dxName = s"${stg.description}.${cVar.name}"
+            val fqn = s"${wf.name}.${stage.description}.${cVar.name}"
+            val dxName = s"${stage.description}.${cVar.name}"
             cif.checkAndBind(fqn, dxName, cVar)
           }
         }
