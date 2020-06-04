@@ -12,7 +12,7 @@ import wdlTools.util.{
   TypeCheckingRegime => WdlTypeCheckingRegime
 }
 import wdlTools.types.{TypeInfer, TypeOptions, TypedAbstractSyntax => TAT, WdlTypes}
-import dxWDL.base.{Language, Utils}
+import dxWDL.base.{Language}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
@@ -23,29 +23,29 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   private def mergeCallables(aCallables: Map[String, TAT.Callable],
                              bCallables: Map[String, TAT.Callable]): Map[String, TAT.Callable] = {
-    var allCallables = Map.empty[String, TAT.Callable]
-    aCallables.foreach {
-      case (key, callable) =>
-        bCallables.get(key) match {
+    aCallables.foldLeft(bCallables) {
+      case (accu, (name, callable)) =>
+        accu.get(name) match {
           case None =>
-            allCallables = allCallables + (key -> callable)
+            accu + (name -> callable)
 
           // The comparision is done with "toString", because otherwise two
           // identical definitions are somehow, through the magic of Scala,
           // unequal.
           case Some(existing) if (existing != callable) =>
-            Utils.error(s"""|${key} appears with two different callable definitions
+            Utils.error(s"""|${name} appears with two different callable definitions
                             |1)
                             |${callable}
                             |
                             |2)
                             |${existing}
                             |""".stripMargin)
-            throw new Exception(s"${key} appears twice, with two different definitions")
-          case _ => ()
+            throw new Exception(s"callable ${name} appears twice, with two different definitions")
+          case _ =>
+            // The same task/workflow appears twice
+            accu
         }
     }
-    allCallables
   }
 
   private def bInfoFromDoc(doc: TAT.Document): BInfo = {
@@ -96,7 +96,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     // dive into the imported documents and fold them into the top-level
     // document
-    imports.foldLeft(topLevelBInfo) {
+    val retval = imports.foldLeft(topLevelBInfo) {
       case (accu: BInfo, imp) =>
         val flatImpBInfo = dfsFlatten(imp.doc)
         BInfo(
@@ -105,6 +105,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
             adjunctFiles = accu.adjunctFiles ++ flatImpBInfo.adjunctFiles
         )
     }
+    retval
   }
 
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.

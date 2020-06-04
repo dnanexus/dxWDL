@@ -123,7 +123,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         case (cVar, _) =>
           val fqn = s"${wf.name}.${cVar.name}"
           inputs.get(fqn) match {
-            case None          => None
+            case None => None
             case Some(jsValue) =>
               Some(findDxFiles(cVar.womType, jsValue))
           }

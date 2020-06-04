@@ -6,6 +6,7 @@ import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes
 
 import dxWDL.base._
+import dxWDL.util.Block
 
 case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
@@ -18,14 +19,17 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       val deps: Set[String] = callable match {
         case _: TAT.Task => Set.empty[String]
         case wf: TAT.Workflow =>
-          wf.body.collect {
-            case call: TAT.Call =>
-              // The name is fully qualified, for example, lib.add, lib.concat.
-              // We need the task/workflow itself ("add", "concat"). We are
-              // assuming that the namespace can be flattened; there are
-              // no lib.add and lib2.add.
-              Utils.getUnqualifiedName(call.callee.name)
-          }.toSet
+          Block
+            .deepFindCalls(wf.body)
+            .map {
+              case call: TAT.Call =>
+                // The name is fully qualified, for example, lib.add, lib.concat.
+                // We need the task/workflow itself ("add", "concat"). We are
+                // assuming that the namespace can be flattened; there are
+                // no lib.add and lib2.add.
+                Utils.getUnqualifiedName(call.callee.name)
+            }
+            .toSet
       }
       Utils.getUnqualifiedName(callable.name) -> deps
     }.toMap
@@ -84,11 +88,14 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
     // Make a list of all task/workflow calls made inside the block. We will need to link
     // to the equivalent dx:applets and dx:workflows.
     val callablesUsedInWorkflow: Vector[IR.Callable] =
-      wf.body.collect {
-        case cNode: TAT.Call =>
-          val localname = Utils.getUnqualifiedName(cNode.callee.name)
-          callables(localname)
-      }.toVector
+      Block
+        .deepFindCalls(wf.body)
+        .map {
+          case cNode: TAT.Call =>
+            val localname = Utils.getUnqualifiedName(cNode.callee.name)
+            callables(localname)
+        }
+        .toVector
 
     val WdlCodeSnippet(wfSourceStandAlone) =
       WdlCodeGen(verbose, typeAliases, language)

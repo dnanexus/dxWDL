@@ -128,7 +128,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           // right here, but leave it for runtime.
           IR.SArgEmpty
 
-        case Some(_ : TAT.ValueNone) =>
+        case Some(_: TAT.ValueNone) =>
           // same as above
           IR.SArgEmpty
 

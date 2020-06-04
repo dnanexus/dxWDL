@@ -1423,7 +1423,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs (EdgeTest) in {
+  it should "compile a scatter with a sub-workflow that has an optional argument" in {
     val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
     val retval = Main.compile(
         path.toString
@@ -1455,7 +1455,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "pass as subworkflows do not have expression statement in output block" taggedAs (EdgeTest) in {
+  it should "pass as subworkflows do not have expression statement in output block" in {
     val path = pathFromBasename("subworkflows", basename = "trains.wdl")
 
     val retval = Main.compile(
@@ -1468,16 +1468,21 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "pass with subworkflows having expression" taggedAs (EdgeTest) in {
     val path = pathFromBasename("subworkflows", basename = "ensure_trains.wdl")
 
+    /* ensure_trains workflow
+     * trains        workflow
+     * check_route   workflow
+     * concat        task
+     */
     val retval = Main.compile(
         path.toString
-//                :: "--verbose"
-//                :: "--verboseKey" :: "GenerateIR"
+          :: "--verbose"
+          :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "recognize workflow metadata" in {
+  ignore should "recognize workflow metadata" in {
     val path = pathFromBasename("compiler", "wf_meta.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1507,7 +1512,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "recognize workflow parameter metadata" in {
+  ignore should "recognize workflow parameter metadata" in {
     val path = pathFromBasename("compiler", "wf_param_meta.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1551,7 +1556,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "handle adjunct files in workflows and tasks" in {
+  ignore should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]

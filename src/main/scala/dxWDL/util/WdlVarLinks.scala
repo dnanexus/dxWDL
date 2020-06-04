@@ -104,10 +104,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // an array of values.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(m)) =>
         // general case
-        val kJs = m.keys.map(jsFromWdlValue(keyType, _ ))
+        val kJs = m.keys.map(jsFromWdlValue(keyType, _))
         val vJs = m.values.map(jsFromWdlValue(valueType, _))
-        JsObject("keys" -> JsArray(kJs.toVector),
-                 "values" -> JsArray(vJs.toVector))
+        JsObject("keys" -> JsArray(kJs.toVector), "values" -> JsArray(vJs.toVector))
 
       // Arrays: these come after maps, because there is an automatic coercion from
       // a map to an array.
