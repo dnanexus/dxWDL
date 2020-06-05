@@ -548,9 +548,25 @@ object Block {
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: OutputDefinition): Boolean = {
+  def isSimpleOutput(outputNode: OutputDefinition,
+                     definedVars : Set[String]): Boolean = {
     outputNode.expr match {
-      case expr => WomValueAnalysis.isTrivialExpression(expr)
+      // A constant or a reference to a variable
+      case expr if WomValueAnalysis.isTrivialExpression(expr) => true
+      case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
+
+      //for example, c1 is call, and the output section is:
+      //
+      // output {
+      //    Int? result1 = c1.result
+      //    Int? result2 = c2.result
+      // }
+      // We don't need a special output applet+stage.
+      case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
+        val fqn = s"$id2.$id"
+        definedVars contains fqn
+
+      case _ => false
     }
   }
 

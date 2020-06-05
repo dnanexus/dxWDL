@@ -15,7 +15,7 @@ import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateM
 
 // These tests involve compilation -without- access to the platform.
 //
-class GenerateIRTest extends AnyFlatSpec with Matchers {
+class GenerateIRTest extends AnyFlatSpec with Matchers { //with StopOnFirstFailure {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
@@ -136,12 +136,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "scatters over maps" in {
+/*  ignore should "scatters over maps" in {
     val path = pathFromBasename("compiler", "dict2.wdl")
     Main.compile(
         path.toString :: cFlags
     ) shouldBe a[Main.SuccessfulTerminationIR]
-  }
+  }*/
 
   it should "skip missing optional arguments" in {
     val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
@@ -213,7 +213,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     stage.description shouldBe ("review")
   }
 
-  it should "compile a workflow calling a subworkflow as a direct call with development version" in {
+  it should "compile a workflow calling a subworkflow as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "movies.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
@@ -230,7 +230,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     stage.description shouldBe ("review")
   }
 
-  it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
+  it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "call_dnanexus_applet.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
@@ -262,6 +262,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case wf: IR.Workflow => wf
       case _               => throw new Exception("sanity")
     }
+
     wf.stages.size shouldBe (1)
 
     val level2 = bundle.allCallables(wf.name)
@@ -1355,7 +1356,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "handle multiple struct definitions" in {
+  it should "handle multiple struct definitions" taggedAs (EdgeTest) in {
     val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order", "file3.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
@@ -1423,7 +1424,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "compile a scatter with a sub-workflow that has an optional argument" taggedAs (EdgeTest) in {
+  it should "compile a scatter with a sub-workflow that has an optional argument" in {
     val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
     val retval = Main.compile(
         path.toString

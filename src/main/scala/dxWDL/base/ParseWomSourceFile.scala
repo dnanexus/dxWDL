@@ -160,7 +160,15 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val lines = wdlWfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
     val parser = new Parsers(opts).getParser(sourceCode)
-    val doc = parser.parseDocument(sourceCode)
+    val doc =
+      try {
+        parser.parseDocument(sourceCode)
+      } catch {
+        case e : Throwable =>
+          System.out.println("invalid code generated ----- ")
+          System.out.println(wdlWfSource)
+          throw e
+      }
     val typeInfer = new TypeInfer(opts)
     val (tDoc, _) = typeInfer.apply(doc)
 
