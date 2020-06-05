@@ -46,12 +46,8 @@ case class GenerateIRTask(verbose: Verbose,
       attributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
-          println(s"using default value ${defaultRuntimeAttrs.m.get(attrName)} for ${attrName}")
           defaultRuntimeAttrs.m.get(attrName)
         case Some(expr) =>
-          println(
-              s"using value of expression ${expr} for ${attrName} which evaluates to ${evalWomExpression(expr)}"
-          )
           Some(evalWomExpression(expr))
       }
     }
