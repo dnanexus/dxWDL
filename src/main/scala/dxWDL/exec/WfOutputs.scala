@@ -5,7 +5,7 @@ package dxWDL.exec
 
 import spray.json._
 import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeCheckingRegime, TypeOptions, WdlTypes}
 
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
@@ -18,12 +18,12 @@ case class WfOutputs(wf: TAT.Workflow,
                      runtimeDebugLevel: Int) {
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
   private val evaluator: wdlTools.eval.Eval = {
-    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
@@ -31,7 +31,7 @@ case class WfOutputs(wf: TAT.Workflow,
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
                              dxIoFunctions.config.stderr)
-    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
+    WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,
@@ -58,16 +58,16 @@ case class WfOutputs(wf: TAT.Workflow,
     val envInitialFilled: Map[String, WdlValues.V] = allInputs.flatMap {
       case (name, wdlType) =>
         (envInitial.get(name), wdlType) match {
-          case (None, WdlTypes.T_Optional(t)) =>
+          case (None, WdlTypes.T_Optional(_)) =>
             Some(name -> WdlValues.V_Null)
           case (None, _) =>
             // input is missing, and there is no default at the callee,
             Utils.warning(utlVerbose, s"value is missing for ${name}")
             None
-          case (Some((t, v)), _) =>
+          case (Some((_, v)), _) =>
             Some(name -> v)
         }
-    }.toMap
+    }
 
     // Evaluate the output declarations. Add outputs evaluated to
     // the environment, so they can be referenced by expressions in the next

@@ -23,7 +23,7 @@ import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
 import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeCheckingRegime, TypeOptions, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -47,7 +47,7 @@ object TaskRunnerUtils {
   def readManifestGetDockerImageName(buf: String): String = {
     val jso = buf.parseJson
     val elem = jso match {
-      case JsArray(elements) if elements.size >= 1 => elements.head
+      case JsArray(elements) if elements.nonEmpty => elements.head
       case other =>
         throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
     }
@@ -82,15 +82,15 @@ case class TaskRunner(task: TAT.Task,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
                       runtimeDebugLevel: Int) {
-  private val verbose = (runtimeDebugLevel >= 1)
-  private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val verbose = runtimeDebugLevel >= 1
+  private val maxVerboseLevel = runtimeDebugLevel == 2
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
   val evaluator: WdlExprEval = {
-    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
@@ -98,7 +98,7 @@ case class TaskRunner(task: TAT.Task,
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
                              dxIoFunctions.config.stderr)
-    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
+    WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
   // serialize the task inputs to json, and then write to a file.
@@ -107,7 +107,7 @@ case class TaskRunner(task: TAT.Task,
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
         (name, WomValueSerialization(typeAliases).toJSON(t, v))
-    }.toMap
+    }
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
       case (FurlLocal(url), path) =>
         url -> JsString(path.toString)
@@ -136,17 +136,17 @@ case class TaskRunner(task: TAT.Task,
     val localizedInputs = locInputsM.map {
       case (key, jsVal) =>
         key -> WomValueSerialization(typeAliases).fromJSON(jsVal)
-    }.toMap
+    }
     val dxUrl2path = dxUrlM.map {
       case (key, JsString(path)) => Furl.parse(key) -> Paths.get(path)
       case (_, _)                => throw new Exception("Sanity")
-    }.toMap
+    }
     (localizedInputs, dxUrl2path)
   }
 
   private def printDirStruct(): Unit = {
     Utils.appletLog(maxVerboseLevel, "Directory structure:")
-    val (stdout, stderr) = Utils.execCommand("ls -lR", None)
+    val (stdout, _) = Utils.execCommand("ls -lR", None)
     Utils.appletLog(maxVerboseLevel, stdout + "\n", 10000)
   }
 
@@ -176,7 +176,7 @@ case class TaskRunner(task: TAT.Task,
 
   private def pullImage(dImg: String): Option[String] = {
 
-    var retry_count = 5;
+    var retry_count = 5
     while (retry_count > 0) {
       try {
         val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
@@ -191,7 +191,7 @@ case class TaskRunner(task: TAT.Task,
         return Some(dImg)
       } catch {
         // ideally should catch specific exception.
-        case e: Throwable =>
+        case _: Throwable =>
           retry_count = retry_count - 1
           Utils.appletLog(
               verbose,
@@ -235,7 +235,7 @@ case class TaskRunner(task: TAT.Task,
         val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
         Utils.appletLog(verbose, s"repository is ${repo}")
 
-        Utils.appletLog(true, s"load tarball ${localTar} to docker")
+        Utils.appletLog(verbose = true, s"load tarball ${localTar} to docker")
         val (outstr, errstr) = Utils.execCommand(s"docker load --input ${localTar}")
         Utils.appletLog(
             verbose,
@@ -260,10 +260,9 @@ case class TaskRunner(task: TAT.Task,
   //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
   //
   private def availableMemory(): Long = {
-    val mbean = ManagementFactory
-      .getOperatingSystemMXBean()
+    val mbean = ManagementFactory.getOperatingSystemMXBean
       .asInstanceOf[com.sun.management.OperatingSystemMXBean]
-    mbean.getTotalPhysicalMemorySize()
+    mbean.getTotalPhysicalMemorySize
   }
 
   // Write the core bash script into a file. In some cases, we
@@ -384,7 +383,7 @@ case class TaskRunner(task: TAT.Task,
   private def stripTypesFromEnv(
       env: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, WdlValues.V] = {
-    env.map { case (name, (t, v)) => name -> v }
+    env.map { case (name, (_, v)) => name -> v }
   }
 
   // Calculate the input variables for the task, download the input files,
@@ -415,7 +414,7 @@ case class TaskRunner(task: TAT.Task,
 
     // build a manifest for dxda, if there are files to download
     val DxdaManifest(manifestJs) = dxdaManifest
-    if (manifestJs.asJsObject.fields.size > 0) {
+    if (manifestJs.asJsObject.fields.nonEmpty) {
       Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
     }
 
@@ -429,7 +428,7 @@ case class TaskRunner(task: TAT.Task,
       localizedInputs.map {
         case (inpDfn, value) =>
           inpDfn.name -> (inpDfn.wdlType, value)
-      }.toMap
+      }
     val docker = dockerImage(stripTypesFromEnv(inputsWithTypes))
 
     // evaluate the declarations using the inputs
@@ -439,7 +438,7 @@ case class TaskRunner(task: TAT.Task,
           val wdlValue =
             evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(stripTypesFromEnv(env)))
           env + (name -> (wdlType, wdlValue))
-        case (env, TAT.Declaration(name, wdlType, None, _)) =>
+        case (_, TAT.Declaration(name, _, None, _)) =>
           throw new Exception(s"sanity: declaration ${name} has no expression")
       }
 
@@ -472,13 +471,12 @@ case class TaskRunner(task: TAT.Task,
       task.outputs
         .foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
           case (env, outDef: TAT.OutputDefinition) =>
-            val envNoTypes = env.map { case (k, (t, v)) => k -> v }
+            val envNoTypes = env.map { case (k, (_, v)) => k -> v }
             val value = evaluator.applyExprAndCoerce(outDef.expr,
                                                      outDef.wdlType,
                                                      EvalContext(envNoTypes ++ localizedInputs))
             env + (outDef.name -> (outDef.wdlType, value))
         }
-        .toMap
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
       // Upload output files to the platform.
@@ -508,7 +506,7 @@ case class TaskRunner(task: TAT.Task,
     val inputs = taskInputs.map {
       case (inpDfn, value) =>
         inpDfn.name -> value
-    }.toMap
+    }
 
     val runtimeAttrs: Map[String, TAT.Expr] = task.runtime match {
       case None                             => Map.empty
@@ -598,7 +596,7 @@ case class TaskRunner(task: TAT.Task,
     // is exactly the same as the parent, we can immediately exit the parent job.
     val outputs: Map[String, JsValue] = task.outputs
       .map {
-        case (outDef: TAT.OutputDefinition) =>
+        case outDef: TAT.OutputDefinition =>
           val wvl = WdlVarLinks(outDef.wdlType, DxlExec(dxSubJob, outDef.name))
           wdlVarLinksConverter.genFields(wvl, outDef.name)
       }

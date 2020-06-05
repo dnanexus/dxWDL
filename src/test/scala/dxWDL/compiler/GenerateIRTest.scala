@@ -1154,8 +1154,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  // TODO: re-enable this test after fixing how complex runtime values are type-checked
-  ignore should "recognize runtime hints" in {
+  it should "recognize runtime hints" in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val retval = Main.compile(
         path.toString :: cFlags

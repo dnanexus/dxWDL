@@ -7,6 +7,7 @@ import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
 
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.eval.WdlValues
 import dxWDL.dx._
 
@@ -227,6 +228,7 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
 //    docker
 //
 case class WdlRuntimeAttrs(m: Map[String, WdlValues.V])
+case class WdlHintAttrs(m: Map[String, TAT.MetaValue])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
