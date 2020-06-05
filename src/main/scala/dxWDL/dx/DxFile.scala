@@ -166,8 +166,7 @@ object DxFile {
                             extraFields: Vector[String],
                             project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
     val ids = objs.map(file => file.getId)
-    val dxFindDataObjects =
-      DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
+    val dxFindDataObjects = DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
 
     dxFindDataObjects.apply(
       dxProject = project,

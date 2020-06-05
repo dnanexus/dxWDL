@@ -145,7 +145,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
   }
 
   // Create a request for a limited number of objects
-  private def createRequest(
+  private def submitRequest(
       scope: Option[JsValue],
       dxProject: Option[DxProject],
       cursor: Option[JsValue],
@@ -155,7 +155,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       withInputOutputSpec: Boolean,
       idConstraints: Vector[String],
       extraFields: Vector[String]
-  ): JsObject = {
+  ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
     fields ++= extraFields.map(field => Field.withName(field)).toSet // TODO: This is case sensitive, is this ok?
     if (withInputOutputSpec) {
@@ -217,20 +217,17 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         Map("id" -> JsArray(idConstraints.map { x: String => JsString(x)}))
       }
 
-    JsObject(
+    val request = JsObject(
         reqFields ++ projField ++ scopeField ++ cursorField ++ limitField
           ++ classField ++ propertiesField
           ++ namePcreField ++ idField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
-  }
 
-  // sends request - use createRequest beforehand in order to create a request
-  private def sendRequest(request: JsObject): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
-                                               classOf[JsonNode],
-                                               DxUtils.dxEnv)
+      classOf[JsonNode],
+      DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {
@@ -247,17 +244,6 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       }
 
     (results.toMap, next)
-  }
-
-  def apply(dxProject: DxProject,
-            folder: Option[String],
-            recurse: Boolean,
-            klassRestriction: Option[String],
-            withProperties: Vector[String], // object must have these properties
-            nameConstraints: Vector[String], // the object name has to be one of these strings
-            withInputOutputSpec: Boolean // should the IO spec be described?
-           ): Map[DxDataObject, DxObjectDescribe] = {
-    apply(Some(dxProject), folder, recurse, klassRestriction, withProperties, nameConstraints, withInputOutputSpec, Vector.empty, extrafields = Vector.empty)
   }
 
   def apply(dxProject: Option[DxProject],
@@ -282,7 +268,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
-      val request = createRequest(scope,
+      val (results, next) = submitRequest(scope,
                                   dxProject,
                                   cursor,
                                   klassRestriction,
@@ -291,7 +277,6 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
                                   withInputOutputSpec,
                                   idConstraints,
                                   extrafields)
-      val (results, next) = sendRequest(request)
       allResults = allResults ++ results
       cursor = next
     } while (cursor != None);
