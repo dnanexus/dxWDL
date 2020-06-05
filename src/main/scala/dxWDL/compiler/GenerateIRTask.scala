@@ -13,7 +13,8 @@ import scala.util.matching.Regex
 case class GenerateIRTask(verbose: Verbose,
                           typeAliases: Map[String, WdlTypes.T],
                           language: Language.Value,
-                          defaultRuntimeAttrs: WdlRuntimeAttrs) {
+                          defaultRuntimeAttrs: WdlRuntimeAttrs,
+                          defaultHintAttrs: WdlHintAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
   private class DynamicInstanceTypesException(message: String) extends RuntimeException(message) {
@@ -37,12 +38,12 @@ case class GenerateIRTask(verbose: Verbose,
   // At compile time, constants expressions are handled. Some can
   // only be evaluated at runtime.
   private def calcInstanceType(task: TAT.Task): IR.InstanceType = {
-    def evalAttr(attrName: String): Option[WdlValues.V] = {
-      val attributes: Map[String, TAT.Expr] = task.runtime match {
+    def evalRuntimeAttr(attrName: String): Option[WdlValues.V] = {
+      val runtimeAttributes: Map[String, TAT.Expr] = task.runtime match {
         case None                             => Map.empty
         case Some(TAT.RuntimeSection(kvs, _)) => kvs
       }
-      attributes.get(attrName) match {
+      runtimeAttributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
           defaultRuntimeAttrs.m.get(attrName)
@@ -51,12 +52,28 @@ case class GenerateIRTask(verbose: Verbose,
       }
     }
 
+    def evalHintAttr(attrName: String): Option[TAT.MetaValue] = {
+      val hintAttributes: Map[String, TAT.MetaValue] = task.hints match {
+        case None                           => Map.empty
+        case Some(TAT.HintsSection(kvs, _)) => kvs
+      }
+      hintAttributes.get(attrName) match {
+        case None =>
+          // Check the overall defaults, there might be a setting over there
+          defaultHintAttrs.m.get(attrName)
+        case Some(value) => Some(value)
+      }
+    }
+
     try {
-      val dxInstanceType = evalAttr(IR.HINT_INSTANCE_TYPE)
-      val memory = evalAttr("memory")
-      val diskSpace = evalAttr("disks")
-      val cores = evalAttr("cpu")
-      val gpu = evalAttr("gpu")
+      val dxInstanceType =
+        evalRuntimeAttr(IR.HINT_INSTANCE_TYPE).orElse(evalHintAttr(IR.HINT_INSTANCE_TYPE).map {
+          case TAT.MetaValueString(s, _) => WdlValues.V_String(s)
+        })
+      val memory = evalRuntimeAttr("memory")
+      val diskSpace = evalRuntimeAttr("disks")
+      val cores = evalRuntimeAttr("cpu")
+      val gpu = evalRuntimeAttr("gpu")
       val iTypeDesc = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
       IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
                            iTypeDesc.memoryMB,
