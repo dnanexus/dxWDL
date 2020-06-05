@@ -95,7 +95,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                                              nameConstraints = Vector(basename),
                                                              withInputOutputSpec = false,
                                                              Vector.empty,
-                                                             Vector.empty)
+                                                             Set.empty)
     results.size shouldBe (1)
     val desc = results.values.head
     desc.id

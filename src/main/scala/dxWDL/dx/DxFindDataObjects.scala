@@ -154,10 +154,10 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean,
       idConstraints: Vector[String],
-      extraFields: Vector[String]
+      extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
-    fields ++= extraFields.map(field => Field.withName(field)).toSet // TODO: This is case sensitive, is this ok?
+    fields ++= extraFields
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
     }
@@ -254,7 +254,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
             nameConstraints: Vector[String], // the object name has to be one of these strings
             withInputOutputSpec: Boolean, // should the IO spec be described?
             idConstraints: Vector[String],
-            extrafields: Vector[String]
+            extrafields: Set[Field.Value]
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))

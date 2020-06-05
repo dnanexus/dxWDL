@@ -163,7 +163,7 @@ object DxFile {
 
   // Describe a large number of platform objects in bulk.
   private def submitRequest(objs: Vector[DxFile],
-                            extraFields: Vector[String],
+                            extraFields: Set[Field.Value],
                             project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
     val ids = objs.map(file => file.getId)
     val dxFindDataObjects = DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
@@ -197,18 +197,10 @@ object DxFile {
       // Limit on number of objects in one API request
       val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
-      val extraFieldsStr = extraFields
-        .map {
-          case Field.Details => "details"
-          case Field.Parts   => "parts"
-        }
-        .toSet
-        .toVector
-
       // iterate on the ranges
       descriptions ++= slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
         case (accu, objRange) =>
-          accu ++ submitRequest(objRange.toVector, extraFieldsStr, proj)
+          accu ++ submitRequest(objRange.toVector, extraFields, proj)
       }
     }
     descriptions

@@ -73,7 +73,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              allExecutableNames.toVector,
                                              false,
                                              Vector.empty,
-                                             Vector.empty)
+                                             Set.empty)
     val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
@@ -94,7 +94,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              allExecutableNames.toVector,
                                              false,
                                              Vector.empty,
-                                             Vector.empty)
+                                             Set.empty)
     val t3 = System.nanoTime()
     diffMSec = (t3 - t2) / (1000 * 1000)
     Utils.trace(
@@ -157,7 +157,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              allExecutableNames.toVector,
                                              false,
                                              Vector.empty,
-                                             Vector.empty)
+                                             Set.empty)
     val nrApplets = dxAppletsInProject.size
     val t1 = System.nanoTime()
     val diffMSec = (t1 - t0) / (1000 * 1000)
