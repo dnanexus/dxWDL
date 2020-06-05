@@ -4,4 +4,4 @@ import org.scalatest.Tag
 object EdgeTest extends Tag("edge")
 object NativeTestXX extends Tag("native")
 object ProdTest extends Tag("prod")
-object Hints extends Tag("hints")
+object ExecTree extends Tag("exectree")

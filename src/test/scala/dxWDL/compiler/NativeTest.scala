@@ -305,7 +305,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                        |└───App Outputs: outputs""".stripMargin
   }
 
-  it should "return a execTree in json when using describe with CLI" taggedAs (NativeTestXX) in {
+  it should "return a execTree in json when using describe with CLI" taggedAs (NativeTestXX, ExecTree) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     // remove -locked flag to create common stage
     val nonLocked = cFlags.filterNot(x => x == "-locked")
@@ -339,7 +339,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  it should "return a execTree in PrettyTree when using describe with CLI" taggedAs (NativeTestXX) in {
+  it should "return a execTree in PrettyTree when using describe with CLI" taggedAs (NativeTestXX, ExecTree) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     // remove -locked flag to create common stage
     val nonLocked = cFlags.filterNot(x => x == "-locked")
@@ -378,7 +378,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX) in {
+  it should "Display pretty print of tree with deep nesting" taggedAs (NativeTestXX, ExecTree) in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     // remove -locked flag to create common stage
     val nonLocked = cFlags.filterNot(x => x == "-locked")
@@ -421,7 +421,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX) in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
         List("--force",
@@ -452,7 +452,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ))
   }
 
-  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX) in {
     val outputPath = "/tmp/dx_extern_one.wdl"
     Main.dxni(
         List("--force",
@@ -476,7 +476,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     tasks.keys shouldBe (Set("native_sum"))
   }
 
-  it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
+  it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX) in {
     val dxObj = DxPath.resolveDxPath(
         s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
@@ -924,7 +924,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.types shouldBe Some(Vector("Adder"))
   }
 
-  it should "be able to include runtime hints" taggedAs (Hints) in {
+  it should "be able to include runtime hints" in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
 
     val appId = Main.compile(
@@ -981,7 +981,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.ignoreReuse shouldBe Some(true)
   }
 
-  it should "be able to include runtime hints and override extras global" taggedAs (Hints) in {
+  it should "be able to include runtime hints and override extras global" in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
 
@@ -1018,7 +1018,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  it should "be able to include runtime hints with extras per-task override" taggedAs (Hints) in {
+  it should "be able to include runtime hints with extras per-task override" in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "task_specific_short_timeout.json")
 
