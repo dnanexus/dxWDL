@@ -436,9 +436,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     val req = JsObject(
         "fields" -> JsObject(availableField -> JsTrue)
     )
-    val rep = DXAPI.projectDescribe(dxProject.id,
-                                    DxUtils.jsonNodeOfJsValue(req),
-                                    classOf[JsonNode])
+    val rep = DXAPI.projectDescribe(dxProject.id, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
     val availableInstanceTypes: JsValue =
       repJs.asJsObject.fields.get(availableField) match {
@@ -470,9 +468,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     )
     val rep =
       try {
-        DXAPI.userDescribe(billTo,
-                           DxUtils.jsonNodeOfJsValue(req),
-                           classOf[JsonNode])
+        DXAPI.userDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
       } catch {
         case _: Throwable =>
           throw new Exception("Insufficient permissions")

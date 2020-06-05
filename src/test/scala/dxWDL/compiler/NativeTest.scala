@@ -924,7 +924,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.types shouldBe Some(Vector("Adder"))
   }
 
-  ignore should "be able to include runtime hints" taggedAs(Hints) in {
+  it should "be able to include runtime hints" taggedAs (Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
 
     val appId = Main.compile(
@@ -981,7 +981,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.ignoreReuse shouldBe Some(true)
   }
 
-  ignore should "be able to include runtime hints and override extras global" taggedAs(Hints) in {
+  it should "be able to include runtime hints and override extras global" taggedAs (Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
 
@@ -1018,7 +1018,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  ignore should "be able to include runtime hints with extras per-task override" taggedAs(Hints) in {
+  it should "be able to include runtime hints with extras per-task override" taggedAs (Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "task_specific_short_timeout.json")
 
