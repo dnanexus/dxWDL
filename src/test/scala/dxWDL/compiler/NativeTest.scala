@@ -21,7 +21,7 @@ import spray.json._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
+class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StopOnFirstFailure {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)

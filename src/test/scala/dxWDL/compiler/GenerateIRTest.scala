@@ -15,7 +15,7 @@ import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateM
 
 // These tests involve compilation -without- access to the platform.
 //
-class GenerateIRTest extends AnyFlatSpec with Matchers { //with StopOnFirstFailure {
+class GenerateIRTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
