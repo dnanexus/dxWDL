@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.47.2 05-Jun-2020
+- Upgrade dx-download-agent (includes a fix to the early database close issue) 
+- Fix to describing billTo of a project
+
 ## 1.47.1 26-May-2020
 - Log dxda and dxfuse version in applet execution
 
