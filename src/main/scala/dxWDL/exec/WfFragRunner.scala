@@ -38,7 +38,7 @@ package dxWDL.exec
 import java.nio.file.Paths
 import spray.json._
 import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeCheckingRegime, TypeOptions, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -60,7 +60,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private val MAX_JOB_NAME = 50
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, fragInputOutput.typeAliases)
   private val jobInputOutput = fragInputOutput.jobInputOutput
@@ -79,7 +79,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
   // build an object capable of evaluating WDL expressions
   val evaluator: WdlExprEval = {
-    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
@@ -87,14 +87,14 @@ case class WfFragRunner(wf: TAT.Workflow,
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
                              dxIoFunctions.config.stderr)
-    new WdlExprEval(evalOpts, evalCfg, document.version.value, None)
+    WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,
                                     womType: WdlTypes.T,
                                     env: Map[String, (WdlTypes.T, WdlValues.V)]): WdlValues.V = {
     // strip the types
-    val envStripped = env.map { case (k, (t, v)) => k -> v }
+    val envStripped = env.map { case (k, (_, v)) => k -> v }
     evaluator.applyExprAndCoerce(expr, womType, EvalContext(envStripped))
   }
 
@@ -138,31 +138,30 @@ case class WfFragRunner(wf: TAT.Workflow,
           collection.map { v =>
             val envInner = accu ++ env + (id -> (expr.wdlType, v))
             evalExpressions(body, envInner)
-          }.toVector
+          }
 
         // build a mapping from from result-key to its type
         val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(body)
 
         val initResults: Map[String, (WdlTypes.T, Vector[WdlValues.V])] = resultTypes.map {
           case (key, t) => key -> (t, Vector.empty[WdlValues.V])
-        }.toMap
+        }
 
         // merge the vector of results, each of which is a map
         val results: Map[String, (WdlTypes.T, Vector[WdlValues.V])] =
           vm.foldLeft(initResults) {
-              case (accu, m) =>
-                accu.map {
-                  case (key, (t, arValues)) =>
-                    val (_, value: WdlValues.V) = m(key)
-                    key -> (t, (arValues :+ value))
-                }
-            }
-            .toMap
+            case (accu, m) =>
+              accu.map {
+                case (key, (t, arValues)) =>
+                  val (_, value: WdlValues.V) = m(key)
+                  key -> (t, arValues :+ value)
+              }
+          }
 
         // Add the wom array type to each vector
         val resultsFull = results.map {
           case (key, (t, vv)) =>
-            key -> (WdlTypes.T_Array(t, false), WdlValues.V_Array(vv))
+            key -> (WdlTypes.T_Array(t, nonEmpty = false), WdlValues.V_Array(vv))
         }
         accu ++ resultsFull
 
@@ -213,11 +212,11 @@ case class WfFragRunner(wf: TAT.Workflow,
     val envWvl = env.map {
       case (name, (wdlType, value)) =>
         name -> wdlVarLinksConverter.importFromWDL(wdlType, value)
-    }.toMap
+    }
 
     // filter anything that should not be exported.
     val exportedWvls = (envWvl ++ fragResults).filter {
-      case (name, wvl) => exportedVars contains name
+      case (name, _) => exportedVars contains name
     }
 
     // convert from WVL to JSON
@@ -229,7 +228,6 @@ case class WfFragRunner(wf: TAT.Workflow,
           val fields = wdlVarLinksConverter.genFields(wvl, varName)
           accu ++ fields.toMap
       }
-      .toMap
   }
 
   /**
@@ -251,7 +249,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     )
 
     val inputs: Map[String, WdlValues.V] = linkInfo.inputs.flatMap {
-      case (varName, wdlType) =>
+      case (varName, _) =>
         env.get(varName) match {
           case None =>
             // No binding for this input. It might be optional,
@@ -267,7 +265,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       case (name, womValue) =>
         val womType = linkInfo.inputs(name)
         name -> wdlVarLinksConverter.importFromWDL(womType, womValue)
-    }.toMap
+    }
 
     val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
@@ -299,16 +297,18 @@ case class WfFragRunner(wf: TAT.Workflow,
       return None
 
     // There is runtime evaluation for the instance type
-    val taskRunner = new TaskRunner(task,
-                                    document,
-                                    typeAliases,
-                                    instanceTypeDB,
-                                    dxPathConfig,
-                                    dxIoFunctions,
-                                    jobInputOutput,
-                                    defaultRuntimeAttributes,
-                                    delayWorkspaceDestruction,
-                                    runtimeDebugLevel)
+    val taskRunner = TaskRunner(
+        task,
+        document,
+        typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        dxIoFunctions,
+        jobInputOutput,
+        defaultRuntimeAttributes,
+        delayWorkspaceDestruction,
+        runtimeDebugLevel
+    )
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
       Utils.appletLog(verbose, s"Precalculated instance type for ${task.name}: ${iType}")
@@ -411,7 +411,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       case (varName, womType) =>
         val oName = s"${callName}.${varName}"
         oName -> WdlVarLinks(womType, DxlExec(dxExec, varName))
-    }.toMap
+    }
   }
 
   // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
@@ -428,7 +428,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       case (key, expr) =>
         val value = evaluateWomExpression(expr, expr.wdlType, env)
         key -> (expr.wdlType, value)
-    }.toMap
+    }
   }
 
   // Evaluate the condition
@@ -472,7 +472,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             case _                      => WdlTypes.T_Optional(womType)
           }
           key -> WdlVarLinks(optionalType, dxl)
-      }.toMap
+      }
     }
   }
 
@@ -513,7 +513,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             case _                      => WdlTypes.T_Optional(womType)
           }
           varName -> WdlVarLinks(optionalType, DxlExec(dxExec, varName))
-      }.toMap
+      }
     }
   }
 
@@ -526,7 +526,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       case WdlValues.V_String(s) =>
         Some(s)
       case WdlValues.V_File(path) =>
-        val p = Paths.get(path).getFileName()
+        val p = Paths.get(path).getFileName
         Some(p.toString)
       case WdlValues.V_Pair(l, r) =>
         val ls = readableNameForScatterItem(l)
@@ -541,7 +541,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         // Create a name by concatenating the initial elements of the array.
         // Limit the total size of the name.
         val arrBeginning = arrValues.slice(0, 3)
-        val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
+        val elements = arrBeginning.flatMap(readableNameForScatterItem)
         Some(Utils.buildLimitedSizeName(elements, MAX_JOB_NAME))
       case _ =>
         None
@@ -572,7 +572,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     val elemType = sct.expr.wdlType match {
       case WdlTypes.T_Array(t, _) => t
-      case other                  => throw new Exception("sanity, scatter collection is not an array")
+      case _                      => throw new Exception("sanity, scatter collection is not an array")
     }
     (sct.identifier, elemType, collection.toVector)
   }
@@ -584,7 +584,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(sct.body)
     val resultArrayTypes = resultTypes.map {
       case (k, t) =>
-        k -> WdlTypes.T_Array(t, false)
+        k -> WdlTypes.T_Array(t, nonEmpty = false)
     }
     val promises = collectSubJobs.launch(childJobs, resultArrayTypes)
     val promisesStr = promises.mkString("\n")
@@ -599,7 +599,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       call: TAT.Call,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, WdlVarLinks] = {
-    val (svNode, elemType, collection) = evalScatterCollection(sctNode, env)
+    val (_, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
     val childJobs: Vector[DxExecution] =
@@ -609,7 +609,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         val callHint = readableNameForScatterItem(item)
         val (_, dxJob) = execCall(call, callInputs, callHint)
         dxJob
-      }.toVector
+      }
 
     collectScatter(sctNode, childJobs)
   }
@@ -618,7 +618,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       sctNode: TAT.Scatter,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, WdlVarLinks] = {
-    val (svNode, elemType, collection) = evalScatterCollection(sctNode, env)
+    val (_, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // There must be exactly one sub-workflow
     assert(execLinkInfo.size == 1)
@@ -638,7 +638,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
         val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
         dxJob
-      }.toVector
+      }
 
     collectScatter(sctNode, childJobs)
   }
@@ -663,7 +663,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] = block.inputs.flatMap {
-      case inputDef: Block.InputDefinition =>
+      inputDef: Block.InputDefinition =>
         (envInitial.get(inputDef.name), Block.isOptional(inputDef)) match {
           case (None, true) =>
             None
@@ -732,11 +732,11 @@ case class WfFragRunner(wf: TAT.Workflow,
       case RunnerWfFragmentMode.Collect =>
         val childJobsComplete = collectSubJobs.executableFromSeqNum()
         catg match {
-          case Block.ScatterOneCall(_, sctNode, call) =>
+          case Block.ScatterOneCall(_, _, call) =>
             // scatter with a single call
             collectSubJobs.aggregateResults(call, childJobsComplete)
 
-          case Block.ScatterFullBlock(_, sctNode) =>
+          case Block.ScatterFullBlock(_, _) =>
             // A scatter with a complex sub-block, compiled as a sub-workflow
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)

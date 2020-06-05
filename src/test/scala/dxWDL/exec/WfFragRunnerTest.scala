@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import spray.json._
 
 import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeCheckingRegime, TypeOptions, WdlTypes}
 
 import dxWDL.base.{Language, ParseWomSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
@@ -19,15 +19,16 @@ import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceT
 class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
-    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
-  private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
+    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), gpu = false)
+  private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
 
   private def setup(): (DxPathConfig, DxIoFunctions) = {
     // Create a clean directory in "/tmp" for the task to use
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, runtimeDebugLevel >= 1)
+    val dxPathConfig =
+      DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = runtimeDebugLevel >= 1)
     dxPathConfig.createCleanDirs()
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     (dxPathConfig, dxIoFunctions)
@@ -39,24 +40,22 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val (wf, taskDir, typeAliases, document) =
       ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
     val fragInputOutput =
-      new WfFragInputOutput(dxIoFunctions,
-                            null,
-                            typeAliases,
-                            document.version.value,
-                            runtimeDebugLevel)
-    val fragRunner = new WfFragRunner(wf,
-                                      taskDir,
-                                      typeAliases,
-                                      document,
-                                      instanceTypeDB,
-                                      Map.empty[String, ExecLinkInfo],
-                                      dxPathConfig,
-                                      dxIoFunctions,
-                                      JsNull,
-                                      fragInputOutput,
-                                      Some(WdlRuntimeAttrs(Map.empty)),
-                                      Some(false),
-                                      runtimeDebugLevel)
+      WfFragInputOutput(dxIoFunctions, null, typeAliases, document.version.value, runtimeDebugLevel)
+    val fragRunner = WfFragRunner(
+        wf,
+        taskDir,
+        typeAliases,
+        document,
+        instanceTypeDB,
+        Map.empty[String, ExecLinkInfo],
+        dxPathConfig,
+        dxIoFunctions,
+        JsNull,
+        fragInputOutput,
+        Some(WdlRuntimeAttrs(Map.empty)),
+        Some(false),
+        runtimeDebugLevel
+    )
     (wf, fragRunner)
   }
 
@@ -71,7 +70,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                             dxIoFunctions: DxIoFunctions,
                             language: Language.Value): WdlValues.V = {
     // build an object capable of evaluating WDL expressions
-    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
@@ -79,14 +78,14 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                              dxIoFunctions.config.tmpDir,
                              dxIoFunctions.config.stdout,
                              dxIoFunctions.config.stderr)
-    val evaluator = new WdlExprEval(evalOpts, evalCfg, Language.toWdlVersion(language), None)
+    val evaluator = WdlExprEval(evalOpts, evalCfg, Language.toWdlVersion(language), None)
 
     evaluator.applyExpr(expr, EvalContext(env))
   }
 
   it should "second block in a linear workflow" in {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
-    val (dxPathConfig, dxIoFunctions) = setup()
+    val (_, dxIoFunctions) = setup()
 
     val (language, womBundle, _, _) =
       ParseWomSourceFile(false).apply(source, List.empty)
@@ -128,7 +127,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     results.keys should be(Set("names", "full_name"))
     results should be(
         Map(
-            "names" -> (WdlTypes.T_Array(WdlTypes.T_String, false),
+            "names" -> (WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false),
             WdlValues.V_Array(
                 Vector(WdlValues.V_String("Michael"),
                        WdlValues.V_String("Lukas"),
@@ -137,7 +136,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                        WdlValues.V_String("Amy"))
             )),
             "full_name" ->
-              (WdlTypes.T_Array(WdlTypes.T_String, false),
+              (WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false),
               WdlValues.V_Array(
                   Vector(
                       WdlValues.V_String("Michael_Manhaim"),
@@ -187,7 +186,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       fragRunner.evalExpressions(block.nodes, Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results should be(
         Map(
-            "z" -> (WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, false)),
+            "z" -> (WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false)),
             WdlValues.V_Null)
         )
     )
@@ -201,7 +200,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val scatters = wf.body.collect {
       case x: TAT.Scatter => x
     }
-    scatters.size shouldBe (1)
+    scatters.size shouldBe 1
     val scatterNode = scatters.head
 
     scatterNode.identifier should be("x")
@@ -227,7 +226,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (wf, _) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
     /*
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
@@ -255,7 +254,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Optional(WdlValues.V_Int(100)))
     )
     results("powers10") should be(
-        (WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), false),
+        (WdlTypes.T_Array(WdlTypes.T_Optional(WdlTypes.T_Int), nonEmpty = false),
          WdlValues.V_Array(
              Vector(WdlValues.V_Optional(WdlValues.V_Int(1)),
                     WdlValues.V_Null,
@@ -272,9 +271,9 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
           Some(call)
         case (None, call: TAT.Call) if call.fullyQualifiedName == callName =>
           Some(call)
-        case (None, call: TAT.Call) =>
+        case (None, _: TAT.Call) =>
           None
-        case (None, decl: TAT.Declaration) =>
+        case (None, _: TAT.Declaration) =>
           None
         case (None, cond: TAT.Conditional) =>
           f(cond.body)
@@ -306,7 +305,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       fragRunner.evalCallInputs(
           call2,
           Map(
-              "powers10" -> (WdlTypes.T_Array(WdlTypes.T_Int, false),
+              "powers10" -> (WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false),
               WdlValues.V_Array(Vector(WdlValues.V_Int(1), WdlValues.V_Int(10))))
           )
       )
@@ -330,7 +329,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val inc4Call = findCallByName("inc5", wf.body)
 
     val args = fragRunner.evalCallInputs(inc4Call, Map.empty)
-    args shouldBe (Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(3))))
+    args shouldBe Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(3)))
   }
 
   it should "expressions with structs" in {
@@ -364,19 +363,19 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "fill in missing optionals" taggedAs (EdgeTest) in {
+  it should "fill in missing optionals" taggedAs EdgeTest in {
     val path = pathFromBasename("frag_runner", "missing_args.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val env = Map(
         "x" -> (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null),
         "y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))
     )
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), env, RunnerWfFragmentMode.Launch)
-    results shouldBe (Map("retval" -> JsNumber(5)))
+    results shouldBe Map("retval" -> JsNumber(5))
   }
 
   it should "evaluate expressions in correct order" in {
@@ -384,10 +383,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val wfSourceCode = Utils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
     results.keys should contain("bam_lane1")
-    results("bam_lane1") shouldBe (JsObject("___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull)))
+    results("bam_lane1") shouldBe JsObject("___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull))
   }
 }

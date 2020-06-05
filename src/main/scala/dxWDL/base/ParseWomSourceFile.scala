@@ -1,18 +1,19 @@
 package dxWDL.base
 
 import java.nio.file.{Path, Paths}
-import scala.collection.mutable.HashMap
-import scala.util.matching.Regex
 
+import scala.util.matching.Regex
 import wdlTools.syntax.Parsers
-import wdlTools.util.{
-  SourceCode => WdlSourceCode,
-  Util => WdlUtil,
-  Verbosity => WdlVerbosity,
-  TypeCheckingRegime => WdlTypeCheckingRegime
+import wdlTools.util.{SourceCode => WdlSourceCode, Util => WdlUtil, Verbosity => WdlVerbosity}
+import wdlTools.types.{
+  TypeInfer,
+  TypeOptions,
+  WdlTypes,
+  TypeCheckingRegime => WdlTypeCheckingRegime,
+  TypedAbstractSyntax => TAT
 }
-import wdlTools.types.{TypeInfer, TypeOptions, TypedAbstractSyntax => TAT, WdlTypes}
-import dxWDL.base.{Language}
+
+import scala.collection.mutable
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseWomSourceFile(verbose: Boolean) {
@@ -32,7 +33,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
           // The comparision is done with "toString", because otherwise two
           // identical definitions are somehow, through the magic of Scala,
           // unequal.
-          case Some(existing) if (existing != callable) =>
+          case Some(existing) if existing != callable =>
             Utils.error(s"""|${name} appears with two different callable definitions
                             |1)
                             |${callable}
@@ -50,7 +51,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
   private def bInfoFromDoc(doc: TAT.Document): BInfo = {
     // Add source and adjuncts for main file
-    val pathOrUrl = doc.sourceCode.toString
+    val pathOrUrl = doc.sourceCode
     val (sources, adjunctFiles) =
       if (pathOrUrl.contains("://")) {
         val sources = Map(pathOrUrl -> doc.sourceCode)
@@ -121,10 +122,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
-    val srcDir = mainAbsPath.getParent()
+    val srcDir = mainAbsPath.getParent
     val opts = makeOptions(imports :+ srcDir)
-    val parsers = new Parsers(opts)
-    val typeInfer = new TypeInfer(opts)
+    val parsers = Parsers(opts)
+    val typeInfer = TypeInfer(opts)
     val mainDoc = parsers.parseDocument(WdlUtil.pathToUrl(mainAbsPath))
     val (tMainDoc, ctxTypes) = typeInfer.apply(mainDoc)
 
@@ -159,7 +160,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val opts = makeOptions(Vector.empty)
     val lines = wdlWfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
+    val parser = Parsers(opts).getParser(sourceCode)
     val doc =
       try {
         parser.parseDocument(sourceCode)
@@ -169,7 +170,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
           System.out.println(wdlWfSource)
           throw e
       }
-    val typeInfer = new TypeInfer(opts)
+    val typeInfer = TypeInfer(opts)
     val (tDoc, _) = typeInfer.apply(doc)
 
     // Check that this is the correct language version
@@ -192,9 +193,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val opts = makeOptions(Vector.empty)
     val lines = wfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
+    val parser = Parsers(opts).getParser(sourceCode)
     val doc = parser.parseDocument(sourceCode)
-    val (tDoc, _) = new TypeInfer(opts).apply(doc)
+    val (tDoc, _) = TypeInfer(opts).apply(doc)
 
     val tasks = tDoc.elements.collect {
       case task: TAT.Task => task.name -> task
@@ -214,9 +215,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val opts = makeOptions(Vector.empty)
     val lines = wfSource.split("\n").toVector
     val sourceCode = WdlSourceCode(None, lines)
-    val parser = new Parsers(opts).getParser(sourceCode)
+    val parser = Parsers(opts).getParser(sourceCode)
     val doc = parser.parseDocument(sourceCode)
-    val (tDoc, typeCtx) = new TypeInfer(opts).apply(doc)
+    val (tDoc, typeCtx) = TypeInfer(opts).apply(doc)
 
     if (tDoc.workflow.isDefined)
       throw new Exception("a workflow that shouldn't be a member of this document")
@@ -235,7 +236,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     bundle.primaryCallable match {
       case None                 => throw new Exception("found no callable")
       case Some(task: TAT.Task) => task
-      case Some(wf)             => throw new Exception("found a workflow ${wf.name} and not a task")
+      case Some(_)              => throw new Exception("found a workflow ${wf.name} and not a task")
     }
   }
 
@@ -270,13 +271,13 @@ case class ParseWomSourceFile(verbose: Boolean) {
     var taskLines: Vector[String] = Vector.empty[String]
     var taskName: Option[String] = None
 
-    while (!remaining.isEmpty) {
+    while (remaining.nonEmpty) {
       // pop the first line
       val line = remaining.head
       remaining = remaining.tail
 
       taskName match {
-        case None if (elemStartLine.pattern.matcher(line).matches) =>
+        case None if elemStartLine.pattern.matcher(line).matches =>
           // hit the beginning of a task
           taskLines = Vector(line)
 
@@ -287,11 +288,11 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                     |
                                     |${line}
                                     |""".stripMargin)
-          taskName = Some(allMatches(0).group(3))
+          taskName = Some(allMatches.head.group(3))
         case None =>
           // lines before the task
           ()
-        case Some(tn) if (elemEndLine.pattern.matcher(line).matches) =>
+        case Some(tn) if elemEndLine.pattern.matcher(line).matches =>
           // hit the end of the task
           taskLines :+= line
           return Some((remaining, tn, taskLines.mkString("\n")))
@@ -300,7 +301,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
           taskLines :+= line
       }
     }
-    return None
+    None
   }
 
   private def findNextTask(lines: List[String]): Option[(List[String], String, String)] = {
@@ -320,9 +321,9 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // in this file.
   def scanForTasks(sourceCode: String): Map[String, String] = {
     var lines = sourceCode.split("\n").toList
-    val taskDir = HashMap.empty[String, String]
+    val taskDir = mutable.HashMap.empty[String, String]
 
-    while (!lines.isEmpty) {
+    while (lines.nonEmpty) {
       val retval = findNextTask(lines)
 
       // TODO: add a WOM syntax check that this is indeed a task.
@@ -333,7 +334,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
           lines = remainingLines
       }
     }
-    return taskDir.toMap
+    taskDir.toMap
   }
 
   // Go through one WDL source file, and return a map from task name
@@ -344,7 +345,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     findNextWorkflow(lines) match {
       case None =>
         None
-      case Some((remainingLines, wfName, wfLines)) =>
+      case Some((_, wfName, wfLines)) =>
         Some((wfName, wfLines))
     }
   }

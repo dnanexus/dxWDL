@@ -1,13 +1,13 @@
 package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
-import spray.json._
-import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeOptions, WdlTypes}
 
+import spray.json._
+import wdlTools.eval.{EvalConfig, WdlValues, Context => EvalContext, Eval => WdlExprEval}
+import wdlTools.syntax.WdlVersion
+import wdlTools.types.{TypeCheckingRegime, TypeOptions, WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.base._
-import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
+import dxWDL.base.Utils.FLAT_FILES_SUFFIX
 import dxWDL.dx.{DxFile, DxUtils, DxdaManifest, DxfuseManifest}
 import dxWDL.util._
 
@@ -15,8 +15,8 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                           structDefs: Map[String, WdlTypes.T],
                           wdlVersion: WdlVersion,
                           runtimeDebugLevel: Int) {
-  private val verbose = (runtimeDebugLevel >= 1)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val verbose = runtimeDebugLevel >= 1
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, structDefs)
 
@@ -33,7 +33,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   }
 
   val evaluator: WdlExprEval = {
-    val evalOpts = TypeOptions(typeChecking = wdlTools.util.TypeCheckingRegime.Strict,
+    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
@@ -42,7 +42,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                              dxIoFunctions.config.stdout,
                              dxIoFunctions.config.stderr)
 
-    new WdlExprEval(evalOpts, evalCfg, wdlVersion, None)
+    WdlExprEval(evalOpts, evalCfg, wdlVersion, None)
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,
@@ -65,7 +65,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
         val accuValues = accu.map {
           case (inpDfn, value) =>
             inpDfn.name -> value
-        }.toMap
+        }
         val value: WdlValues.V = inpDfn match {
           // A required input, no default.
           case TAT.RequiredInputDefinition(iName, wdlType, _) =>
@@ -127,25 +127,21 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
 
       // empty array
       case WdlValues.V_Array(value) =>
-        value.map(findFiles).flatten.toVector
+        value.flatMap(findFiles)
 
       case WdlValues.V_Optional(value) =>
         findFiles(value)
 
       // structs
       case WdlValues.V_Object(m) =>
-        m.map {
-            case (k, v) => findFiles(v)
-          }
-          .flatten
-          .toVector
+        m.flatMap {
+          case (_, v) => findFiles(v)
+        }.toVector
 
       case WdlValues.V_Struct(_, m) =>
-        m.map {
-            case (k, v) => findFiles(v)
-          }
-          .flatten
-          .toVector
+        m.flatMap {
+          case (_, v) => findFiles(v)
+        }.toVector
 
       case _ => Vector.empty
     }
@@ -216,7 +212,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
       case WdlValues.V_Array(arr) =>
         val arr1 = arr.map { v =>
           translateFiles(v, translation)
-        }.toVector
+        }
         WdlValues.V_Array(arr1)
 
       // special case: an optional file. If it doesn't exist,
@@ -235,13 +231,13 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
       case WdlValues.V_Struct(sName, m) =>
         val m2 = m.map {
           case (k, v) => k -> translateFiles(v, translation)
-        }.toMap
+        }
         WdlValues.V_Struct(sName, m2)
 
       case WdlValues.V_Object(m) =>
         val m2 = m.map {
           case (k, v) => k -> translateFiles(v, translation)
-        }.toMap
+        }
         WdlValues.V_Object(m2)
 
       case _ =>
@@ -256,7 +252,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     val translation: Map[String, String] = localizationPlan.map {
       case (FurlDx(value, _, _), path) => value -> path.toString
       case (FurlLocal(p1), p2)         => p1 -> p2.toString
-    }.toMap
+    }
     translateFiles(womValue, translation)
   }
 
@@ -267,7 +263,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     val translation: Map[String, String] = path2furl.map {
       case (path, dxUrl: FurlDx)    => path.toString -> dxUrl.value
       case (path, local: FurlLocal) => path.toString -> local.path
-    }.toMap
+    }
     translateFiles(womValue, translation)
   }
 
@@ -278,39 +274,36 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, TAT.MetaValue],
                            inputs: Map[TAT.InputDefinition, WdlValues.V]): Set[Furl] = {
-    inputs
-      .map {
-        case (iDef, womValue) =>
-          if (dxIoFunctions.config.streamAllFiles) {
-            findFiles(womValue)
-          } else {
-            // This is better than "iDef.parameterMeta", but it does not
-            // work on draft2.
-            parameterMeta.get(iDef.name) match {
-              case Some(TAT.MetaValueString(PARAM_META_STREAM, _)) =>
-                findFiles(womValue)
-              case Some(TAT.MetaValueObject(value, _)) =>
-                // This enables the stream annotation in the object form of metadata value, e.g.
-                // bam_file : {
-                //   stream : true
-                // }
-                // We also support two aliases, dx_stream and localizationOptional
-                value.view
-                  .filterKeys(
-                      Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
-                  )
-                  .headOption match {
-                  case Some((_, TAT.MetaValueBoolean(b, _))) if b =>
-                    findFiles(womValue)
-                  case _ => Vector.empty
-                }
-              case _ =>
-                Vector.empty
-            }
+    inputs.flatMap {
+      case (iDef, womValue) =>
+        if (dxIoFunctions.config.streamAllFiles) {
+          findFiles(womValue)
+        } else {
+          // This is better than "iDef.parameterMeta", but it does not
+          // work on draft2.
+          parameterMeta.get(iDef.name) match {
+            case Some(TAT.MetaValueString(PARAM_META_STREAM, _)) =>
+              findFiles(womValue)
+            case Some(TAT.MetaValueObject(value, _)) =>
+              // This enables the stream annotation in the object form of metadata value, e.g.
+              // bam_file : {
+              //   stream : true
+              // }
+              // We also support two aliases, dx_stream and localizationOptional
+              value.view
+                .filterKeys(
+                    Set(PARAM_META_STREAM, PARAM_META_DX_STREAM, PARAM_META_LOCALIZATION_OPTIONAL)
+                )
+                .headOption match {
+                case Some((_, TAT.MetaValueBoolean(b, _))) if b =>
+                  findFiles(womValue)
+                case _ => Vector.empty
+              }
+            case _ =>
+              Vector.empty
           }
-      }
-      .flatten
-      .toSet
+        }
+    }.toSet
   }
 
   // After applying [loadInputs] above, we have the job inputs in the correct format,
@@ -329,7 +322,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
       inputs: Map[TAT.InputDefinition, WdlValues.V],
       inputsDir: Path
   ): (Map[TAT.InputDefinition, WdlValues.V], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
-    val fileURLs: Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
+    val fileURLs: Vector[Furl] = inputs.values.flatMap(findFiles).toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
     Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
 
@@ -371,7 +364,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     // Create a manifest for all the streaming files; we'll use dxfuse to handle them.
     val filesToMount: Map[DxFile, Path] =
       furl2path.collect {
-        case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
+        case (dxUrl: FurlDx, localPath) if streamingFiles contains dxUrl =>
           dxUrl.dxFile -> localPath
       }
     val dxfuseManifest = DxfuseManifest.apply(filesToMount, dxIoFunctions)
@@ -409,29 +402,25 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     }.toSet
 
     val localOutputFilesAll: Vector[Path] = outputs.values
-      .map { case (t, v) => findFiles(v) }
-      .flatten
+      .flatMap { case (_, v) => findFiles(v) }
       .toVector
       .map {
         case FurlLocal(p) => Paths.get(p)
         case dxUrl: FurlDx =>
           throw new Exception(s"Should not find cloud file on local machine (${dxUrl})")
       }
-      .toVector
 
     // Remove files that were local to begin with, and do not need to be uploaded to the cloud.
     val localOutputFiles: Vector[Path] = localOutputFilesAll.filter { path =>
       !(localInputFiles contains path)
-    }.toVector
+    }
 
     // 1) A path can appear multiple times, make paths unique
     //    so we don't upload the same file twice.
     // 2) Filter out files that are already on the cloud.
     val filesOnCloud: Set[Path] = furl2path.values.toSet
-    val pathsToUpload: Set[Path] = localOutputFiles.filter {
-      case path =>
-        !(filesOnCloud contains path)
-    }.toSet
+    val pathsToUpload: Set[Path] =
+      localOutputFiles.filter(path => !(filesOnCloud contains path)).toSet
 
     // upload the files; this could be in parallel in the future.
     val uploaded_path2furl: Map[Path, Furl] = pathsToUpload.flatMap { path =>
@@ -457,6 +446,6 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
       case (outputName, (wdlType, wdlValue)) =>
         val v1 = replaceLocalPathsWithURLs(wdlValue, path2furl)
         outputName -> (wdlType, v1)
-    }.toMap
+    }
   }
 }

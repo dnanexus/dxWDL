@@ -1,4 +1,4 @@
-version 1.0
+version development
 
 task add_runtime_hints {
   input {
@@ -15,20 +15,23 @@ task add_runtime_hints {
   }
 
   runtime {
-    docker: "ubuntu"
+    container: "ubuntu"
+  }
+
+  hints {
     dx_ignore_reuse: true
     dx_restart: {
-      "default": 1,
-      "max": 5,
-      "errors": {
-        "UnresponsiveWorker": 2,
-        "ExecutionError": 2
+      default: 1,
+      max: 5,
+      errors: {
+        UnresponsiveWorker: 2,
+        ExecutionError: 2
       }
     }
     dx_timeout: "12H30M"
     dx_access: {
-      "network": ["*"],
-      "developer": true
+      network: ["*"],
+      developer: true
     }
   }
 }

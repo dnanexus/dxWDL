@@ -3,7 +3,6 @@ package dxWDL.compiler
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes
-
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
@@ -65,7 +64,7 @@ case class GenerateIRTask(verbose: Verbose,
                            iTypeDesc.cpu,
                            iTypeDesc.gpu)
     } catch {
-      case e: DynamicInstanceTypesException =>
+      case _: DynamicInstanceTypesException =>
         // The generated code will need to calculate the instance type at runtime
         IR.InstanceTypeRuntime
     }
@@ -91,6 +90,7 @@ case class GenerateIRTask(verbose: Verbose,
       case Some(expr) if WomValueAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
         val wdlConst = WomValueAnalysis.evalConst(WdlTypes.T_String, expr)
         triageDockerImageFromValue(wdlConst)
+      // TODO: handle array case
       case _ =>
         // Image will be downloaded from the network
         IR.DockerImageNetwork
@@ -143,42 +143,42 @@ case class GenerateIRTask(verbose: Verbose,
           case Adjuncts.DeveloperNotes(text) if !meta.contains(IR.META_DEVELOPER_NOTES) =>
             Some(IR.TaskAttrDeveloperNotes(text))
           case _ => None
-        }.toVector
+        }
       case None => Vector.empty
     })
   }
 
-  private def unwrapWomString(value: WdlValues.V): String = {
+  private def unwrapMetaString(value: TAT.MetaValue): String = {
     value match {
-      case WdlValues.V_String(s) => s
-      case _                     => throw new Exception("Expected WdlValues.V_String")
+      case TAT.MetaValueString(s, _) => s
+      case _                         => throw new Exception("Expected MetaValueString")
     }
   }
 
-  private def unwrapWomStringArray(array: WdlValues.V): Vector[String] = {
+  private def unwrapMetaStringArray(array: TAT.MetaValue): Vector[String] = {
     array match {
-      case WdlValues.V_Array(strings) =>
-        strings.map(unwrapWomString).toVector
+      case TAT.MetaValueArray(strings, _) =>
+        strings.map(unwrapMetaString)
       case _ => throw new Exception("Expected WdlValues.V_Array")
     }
   }
 
-  private def unwrapWomBoolean(value: WdlValues.V): Boolean = {
+  private def unwrapMetaBoolean(value: TAT.MetaValue): Boolean = {
     value match {
-      case WdlValues.V_Boolean(b) => b
-      case _                      => throw new Exception("Expected WdlValues.V_Boolean")
+      case TAT.MetaValueBoolean(b, _) => b
+      case _                          => throw new Exception("Expected WdlValues.V_Boolean")
     }
   }
 
-  private def unwrapWomInteger(value: WdlValues.V): Int = {
+  private def unwrapMetaInteger(value: TAT.MetaValue): Int = {
     value match {
-      case WdlValues.V_Int(i) => i
-      case _                  => throw new Exception("Expected WdlValues.V_Int")
+      case TAT.MetaValueInt(i, _) => i
+      case _                      => throw new Exception("Expected WdlValues.V_Int")
     }
   }
 
-  val durationRegexp = s"^(?:(\\d+)D)?(?:(\\d+)H)?(?:(\\d+)M)?".r
-  val durationFields = Vector("days", "hours", "minutes")
+  private val durationRegexp = s"^(?:(\\d+)D)?(?:(\\d+)H)?(?:(\\d+)M)?".r
+  //val durationFields = Vector("days", "hours", "minutes")
 
   private def parseDuration(duration: String): IR.RuntimeHintTimeout = {
     durationRegexp.findFirstMatchIn(duration) match {
@@ -194,49 +194,48 @@ case class GenerateIRTask(verbose: Verbose,
     }
   }
 
-  private def unwrapRuntimeHints(hints: Map[String, TAT.Expr]): Vector[IR.RuntimeHint] = {
+  private def unwrapHints(hints: Map[String, TAT.MetaValue]): Vector[IR.RuntimeHint] = {
     val hintKeys = Set(IR.HINT_ACCESS, IR.HINT_IGNORE_REUSE, IR.HINT_RESTART, IR.HINT_TIMEOUT)
 
     hints.view
       .filterKeys(hintKeys)
-      .toMap
-      .view
-      .mapValues(evalWomExpression)
-      .toMap
       .flatMap {
-        case (IR.HINT_ACCESS, WdlValues.V_Object(values)) =>
+        case (IR.HINT_ACCESS, TAT.MetaValueObject(values, _)) =>
           Some(
               IR.RuntimeHintAccess(
-                  network = values.get("network").map(unwrapWomStringArray),
-                  project = values.get("project").map(unwrapWomString),
-                  allProjects = values.get("allProjects").map(unwrapWomString),
-                  developer = values.get("developer").map(unwrapWomBoolean),
-                  projectCreation = values.get("projectCreation").map(unwrapWomBoolean)
+                  network = values.get("network").map(unwrapMetaStringArray),
+                  project = values.get("project").map(unwrapMetaString),
+                  allProjects = values.get("allProjects").map(unwrapMetaString),
+                  developer = values.get("developer").map(unwrapMetaBoolean),
+                  projectCreation = values.get("projectCreation").map(unwrapMetaBoolean)
               )
           )
-        case (IR.HINT_IGNORE_REUSE, WdlValues.V_Boolean(b)) => Some(IR.RuntimeHintIgnoreReuse(b))
-        case (IR.HINT_RESTART, WdlValues.V_Int(i))          => Some(IR.RuntimeHintRestart(default = Some(i)))
-        case (IR.HINT_RESTART, WdlValues.V_Object(values)) =>
+        case (IR.HINT_IGNORE_REUSE, TAT.MetaValueBoolean(b, _)) =>
+          Some(IR.RuntimeHintIgnoreReuse(b))
+        case (IR.HINT_RESTART, TAT.MetaValueInt(i, _)) =>
+          Some(IR.RuntimeHintRestart(default = Some(i)))
+        case (IR.HINT_RESTART, TAT.MetaValueObject(values, _)) =>
           Some(
               IR.RuntimeHintRestart(
-                  values.get("max").map(unwrapWomInteger),
-                  values.get("default").map(unwrapWomInteger),
+                  values.get("max").map(unwrapMetaInteger),
+                  values.get("default").map(unwrapMetaInteger),
                   values.get("errors").map {
-                    case WdlValues.V_Map(fields) =>
+                    case TAT.MetaValueObject(fields, _) =>
                       fields.map {
-                        case (WdlValues.V_String(s), WdlValues.V_Int(i)) => (s -> i)
-                        case other                                       => throw new Exception(s"Invalid restart map entry ${other}")
+                        case (s, TAT.MetaValueInt(i, _)) => s -> i
+                        case other =>
+                          throw new Exception(s"Invalid restart map entry ${other}")
                       }
                     case _ => throw new Exception("Invalid restart map")
                   }
               )
           )
-        case (IR.HINT_TIMEOUT, WdlValues.V_String(s)) => Some(parseDuration(s))
-        case (IR.HINT_TIMEOUT, WdlValues.V_Object(values)) =>
+        case (IR.HINT_TIMEOUT, TAT.MetaValueString(s, _)) => Some(parseDuration(s))
+        case (IR.HINT_TIMEOUT, TAT.MetaValueObject(values, _)) =>
           Some(
-              IR.RuntimeHintTimeout(values.get("days").map(unwrapWomInteger),
-                                    values.get("hours").map(unwrapWomInteger),
-                                    values.get("minutes").map(unwrapWomInteger))
+              IR.RuntimeHintTimeout(values.get("days").map(unwrapMetaInteger),
+                                    values.get("hours").map(unwrapMetaInteger),
+                                    values.get("minutes").map(unwrapMetaInteger))
           )
         case _ => None
       }
@@ -299,7 +298,7 @@ case class GenerateIRTask(verbose: Verbose,
         val paramMeta = lookupInputParam(iName, task)
         val attr = ParameterMeta.unwrap(paramMeta, womType)
         Some(CVar(iName, WdlTypes.T_Optional(womType), None, attr))
-    }.toVector
+    }
 
     // create dx:applet outputs
     val outputs: Vector[CVar] = task.outputs.map {
@@ -313,7 +312,7 @@ case class GenerateIRTask(verbose: Verbose,
             Some(value)
         }
         CVar(id, womType, defaultValue)
-    }.toVector
+    }
 
     val instanceType = calcInstanceType(task)
 
@@ -331,11 +330,11 @@ case class GenerateIRTask(verbose: Verbose,
       }
 
     // Handle any dx-specific runtime hints, other than "type" and "id" which are handled above
-    val runtimeAttrs: Map[String, TAT.Expr] = task.runtime match {
-      case None                             => Map.empty
-      case Some(TAT.RuntimeSection(kvs, _)) => kvs
+    val hintAttr: Map[String, TAT.MetaValue] = task.hints match {
+      case None                           => Map.empty
+      case Some(TAT.HintsSection(kvs, _)) => kvs
     }
-    val runtimeHints = unwrapRuntimeHints(runtimeAttrs)
+    val runtimeHints = unwrapHints(hintAttr)
 
     // Handle any task metadata
     val meta = task.meta match {
@@ -345,7 +344,10 @@ case class GenerateIRTask(verbose: Verbose,
     val taskAttr = unwrapTaskMeta(meta, adjunctFiles)
 
     // Figure out if we need to use docker
-    val docker = triageDockerImage(runtimeAttrs.get("docker"))
+    val docker = task.runtime match {
+      case None                             => triageDockerImage(None)
+      case Some(TAT.RuntimeSection(kvs, _)) => triageDockerImage(kvs.get("docker"))
+    }
 
     val taskCleanedSourceCode = docker match {
       case IR.DockerImageDxFile(orgURL, dxFile) =>
