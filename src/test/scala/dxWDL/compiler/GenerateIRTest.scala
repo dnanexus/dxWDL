@@ -136,7 +136,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers { //with StopOnFirstFailu
     ) shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-/*  ignore should "scatters over maps" in {
+  /*  ignore should "scatters over maps" in {
     val path = pathFromBasename("compiler", "dict2.wdl")
     Main.compile(
         path.toString :: cFlags

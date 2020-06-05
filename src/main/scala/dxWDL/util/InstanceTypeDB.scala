@@ -76,7 +76,7 @@ case class DxInstanceType(name: String,
       case Some(flag) => if (flag != gpu) return false
       case None       => ()
     }
-    return true
+    true
   }
 
   def compareByPrice(that: DxInstanceType): Int = {
@@ -85,7 +85,7 @@ case class DxInstanceType(name: String,
       return -1
     if (this.price > that.price)
       return 1
-    return 0
+    0
   }
 
   // Compare based on resource sizes. This is a partial ordering.
@@ -133,7 +133,9 @@ case class DxInstanceType(name: String,
 
 // support automatic conversion to/from JsValue
 object DxInstanceType extends DefaultJsonProtocol {
-  implicit val dxInstanceTypeFormat = jsonFormat7(DxInstanceType.apply)
+  implicit val dxInstanceTypeFormat: RootJsonFormat[DxInstanceType] = jsonFormat7(
+      DxInstanceType.apply
+  )
 }
 
 case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanceType]) {
@@ -172,7 +174,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     // discard all instances that are too weak
     val sufficient: Vector[DxInstanceType] =
       instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu))
-    if (sufficient.length == 0)
+    if (sufficient.isEmpty)
       throw new Exception(
           s"""|No instances found that match the requirements
               |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu""".stripMargin
@@ -191,7 +193,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     // Short circut the calculation, and just choose this instance.
     // Make sure it is available.
     instances.find(x => x.name == iType) match {
-      case Some(x) =>
+      case Some(_) =>
         // instance exists, and can be used
         iType
       case None =>
@@ -236,9 +238,9 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
       case (Some(a), Some(b)) =>
         // All the resources for instance A should be less than or equal
         // to the resoruces for B.
-        (a.memoryMB <= b.memoryMB &&
+        a.memoryMB <= b.memoryMB &&
           a.diskGB <= b.diskGB &&
-          a.cpu <= b.cpu)
+          a.cpu <= b.cpu
       case (_, _) =>
         // At least one of the instances is not in the database.
         // We can't compare them.
@@ -260,7 +262,7 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
   def prettyPrint(): String = {
     var remain: Set[DxInstanceType] = instances.toSet
     var sortediTypes: Vector[DxInstanceType] = Vector()
-    while (!remain.isEmpty) {
+    while (remain.nonEmpty) {
       val smallest = calcMinimalInstanceType(remain)
       sortediTypes = sortediTypes :+ smallest
       remain = remain - smallest
@@ -271,7 +273,9 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
 
 object InstanceTypeDB extends DefaultJsonProtocol {
   // support automatic conversion to/from JsValue
-  implicit val instanceTypeDBFormat = jsonFormat2(InstanceTypeDB.apply)
+  implicit val instanceTypeDBFormat: RootJsonFormat[InstanceTypeDB] = jsonFormat2(
+      InstanceTypeDB.apply
+  )
 
   // Currently, we support only constants.
   def parse(dxInstanceType: Option[WdlValues.V],
@@ -301,12 +305,12 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val numbers = numRex.findAllIn(buf).toList
         if (numbers.length != 1)
           throw new Exception(s"Can not parse memory specification ${buf}")
-        val number: String = numbers(0)
+        val number: String = numbers.head
         val x: Double =
           try {
             number.toDouble
           } catch {
-            case e: Throwable =>
+            case _: Throwable =>
               throw new Exception(s"Unrecognized number ${number}")
           }
 
@@ -321,7 +325,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             x.toInt
           } else {
             // Units were specified
-            val memUnit: String = memUnits(0).toLowerCase
+            val memUnit: String = memUnits.head.toLowerCase
             val nBytes: Double = memUnit match {
               case "b"   => x
               case "kb"  => x * 1000d
@@ -355,7 +359,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           try {
             l(0).toInt
           } catch {
-            case e: Throwable =>
+            case _: Throwable =>
               throw new Exception(s"Parse error for diskSpace attribute ${buf}")
           }
         Some(i)
@@ -371,7 +375,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           try {
             buf.toInt
           } catch {
-            case e: Throwable =>
+            case _: Throwable =>
               throw new Exception(s"Parse error for cpu specification ${buf}")
           }
         Some(i)
@@ -380,13 +384,14 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case Some(x)                    => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
     }
 
+    // TODO: this fails because GenerateIRTask.evalWomExpression casts everything to string
     val gpu: Option[Boolean] = wdlGpu match {
       case None                            => None
       case Some(WdlValues.V_Boolean(flag)) => Some(flag)
       case Some(x)                         => throw new Exception(s"Gpu has to be a boolean ${x}")
     }
 
-    return InstanceTypeReq(None, memoryMB, diskGB, cpu, gpu)
+    InstanceTypeReq(None, memoryMB, diskGB, cpu, gpu)
   }
 
   // Extract an integer fields from a JsObject
@@ -426,13 +431,12 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val distribution = getJsStringField(elem, "distribution")
         val release = getJsStringField(elem, "release")
         distribution -> release
-      }.toVector
+      }
     }
 
     val availableField = "availableInstanceTypes"
     val req = JsObject(
-        "fields" ->
-          JsObject(availableField -> JsTrue)
+        "fields" -> JsObject(availableField -> JsTrue)
     )
     val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(rep)
@@ -452,7 +456,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val gpu = iName contains "_gpu"
         val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
         iName -> dxInstanceType
-    }.toMap
+    }
   }
 
   // Get the mapping from instance type to price, limited to the
@@ -468,7 +472,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       try {
         DXAPI.userDescribe(billTo, req, classOf[JsonNode])
       } catch {
-        case e: Throwable =>
+        case _: Throwable =>
           throw new Exception("Insufficient permissions")
       }
 
@@ -486,29 +490,27 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           case _           => throw new Exception(s"compute rate is not a number ${jsValue.prettyPrint}")
         }
         key -> hourlyRate
-    }.toMap
+    }
   }
 
   private def crossTables(availableIT: Map[String, DxInstanceType],
                           pm: Map[String, Float]): Vector[DxInstanceType] = {
-    pm.map {
-        case (iName, hourlyRate) =>
-          availableIT.get(iName) match {
-            case None => None
-            case Some(iType) =>
-              Some(
-                  DxInstanceType(iName,
-                                 iType.memoryMB,
-                                 iType.diskGB,
-                                 iType.cpu,
-                                 hourlyRate,
-                                 iType.os,
-                                 iType.gpu)
-              )
-          }
-      }
-      .flatten
-      .toVector
+    pm.flatMap {
+      case (iName, hourlyRate) =>
+        availableIT.get(iName) match {
+          case None => None
+          case Some(iType) =>
+            Some(
+                DxInstanceType(iName,
+                               iType.memoryMB,
+                               iType.diskGB,
+                               iType.cpu,
+                               hourlyRate,
+                               iType.os,
+                               iType.gpu)
+            )
+        }
+    }.toVector
   }
 
   // Check if an instance type passes some basic criteria:
@@ -518,7 +520,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
   //   means it is really old hardware.
   private def instanceCriteria(iType: DxInstanceType): Boolean = {
     val osSupported = iType.os.foldLeft(false) {
-      case (accu, (distribution, release)) =>
+      case (accu, (_, release)) =>
         if (release == "16.04")
           true
         else
@@ -530,7 +532,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       return false
     if (iType.name contains "hdd")
       return false
-    return true
+    true
   }
 
   private def queryNoPrices(dxProject: DxProject): InstanceTypeDB = {
@@ -539,10 +541,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // filter out instances that we cannot use
     val iTypes: Vector[DxInstanceType] = allAvailableIT
-      .filter { case (iName, traits) => instanceCriteria(traits) }
+      .filter { case (_, traits) => instanceCriteria(traits) }
       .map { case (_, traits) => traits }
       .toVector
-    InstanceTypeDB(false, iTypes)
+    InstanceTypeDB(pricingAvailable = false, iTypes)
   }
 
   private def queryWithPrices(dxProject: DxProject): InstanceTypeDB = {
@@ -560,7 +562,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // filter out instances that we cannot use
     val iTypes: Vector[DxInstanceType] = availableInstanceTypes.filter(instanceCriteria)
-    InstanceTypeDB(true, iTypes)
+    InstanceTypeDB(pricingAvailable = true, iTypes)
   }
 
   def query(dxProject: DxProject, verbose: Verbose): InstanceTypeDB = {
@@ -568,7 +570,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       queryWithPrices(dxProject)
     } catch {
       // Insufficient permissions to describe the user, we cannot get the price list.
-      case e: Throwable =>
+      case _: Throwable =>
         Utils.warning(
             verbose,
             """|Warning: insufficient permissions to retrieve the
@@ -608,6 +610,6 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val instanceOpq = instance.copy(price = crntPrice.toFloat)
         (crntPrice + 1, accu :+ instanceOpq)
     }
-    InstanceTypeDB(true, opaqueInstances)
+    InstanceTypeDB(pricingAvailable = true, opaqueInstances)
   }
 }

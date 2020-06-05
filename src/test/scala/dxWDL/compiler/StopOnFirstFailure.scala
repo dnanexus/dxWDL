@@ -7,7 +7,7 @@ import scala.collection.mutable.ListBuffer
 
 trait StopOnFirstFailure extends SuiteMixin { this: Suite =>
 
-  override def runTests(testName : Option[String], args: Args): Status = {
+  override def runTests(testName: Option[String], args: Args): Status = {
 
 //    import args._
 

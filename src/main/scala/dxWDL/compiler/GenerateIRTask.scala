@@ -18,6 +18,8 @@ case class GenerateIRTask(verbose: Verbose,
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
   private class DynamicInstanceTypesException(message: String) extends RuntimeException(message) {
+    // TODO: this never gets called - do you want this to be a default message? if so, make it the default
+    //  value of `message`.
     def this() = this("Runtime instance type calculation required")
   }
 
@@ -44,8 +46,13 @@ case class GenerateIRTask(verbose: Verbose,
       attributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
+          println(s"using default value ${defaultRuntimeAttrs.m.get(attrName)} for ${attrName}")
           defaultRuntimeAttrs.m.get(attrName)
-        case Some(expr) => Some(evalWomExpression(expr))
+        case Some(expr) =>
+          println(
+              s"using value of expression ${expr} for ${attrName} which evaluates to ${evalWomExpression(expr)}"
+          )
+          Some(evalWomExpression(expr))
       }
     }
 

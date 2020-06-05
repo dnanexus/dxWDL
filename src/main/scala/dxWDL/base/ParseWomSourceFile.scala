@@ -164,7 +164,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
       try {
         parser.parseDocument(sourceCode)
       } catch {
-        case e : Throwable =>
+        case e: Throwable =>
           System.out.println("invalid code generated ----- ")
           System.out.println(wdlWfSource)
           throw e

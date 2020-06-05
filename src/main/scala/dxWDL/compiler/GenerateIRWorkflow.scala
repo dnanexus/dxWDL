@@ -528,9 +528,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         (cVar, sArg)
       case _ =>
         // An expression that requires evaluation
-        throw new Exception(
-          s"""|Internal error: (${output.expr}) is a non trivial expression.
-              |It requires constructing an output applet and a stage""".stripMargin)
+        throw new Exception(s"""|Internal error: (${output.expr}) is a non trivial expression.
+                                |It requires constructing an output applet and a stage""".stripMargin)
     }
   }
 
@@ -812,7 +811,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // a workflow output. It is only allowed to access a stage input/output.
     val definedVars = env.keys.toSet
     if (outputNodes.forall(oNode => Block.isSimpleOutput(oNode, definedVars)) &&
-          Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
+        Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
       val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env))
       val irwf =
         IR.Workflow(wfName,

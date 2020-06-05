@@ -548,11 +548,10 @@ object Block {
 
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
-  def isSimpleOutput(outputNode: OutputDefinition,
-                     definedVars : Set[String]): Boolean = {
+  def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
     outputNode.expr match {
       // A constant or a reference to a variable
-      case expr if WomValueAnalysis.isTrivialExpression(expr) => true
+      case expr if WomValueAnalysis.isTrivialExpression(expr)      => true
       case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
 
       //for example, c1 is call, and the output section is:
