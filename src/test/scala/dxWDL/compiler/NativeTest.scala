@@ -21,7 +21,7 @@ import spray.json._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with StopOnFirstFailure {
+class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
@@ -289,9 +289,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
     }
 
     val prettyTree = Tree.generateTreeFromJson(treeJs.asJsObject)
-
     val results = prettyTree.replaceAll("\u001B\\[[;\\d]*m", "")
-
     results shouldBe """Workflow: four_levels
                        |├───App Inputs: common
                        |├───App Fragment: if ((username == "a"))
@@ -305,7 +303,6 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
                        |│           │   └───App Task: concat
                        |│           └───App Fragment: if ((j == "clease"))
                        |└───App Outputs: outputs""".stripMargin
-
   }
 
   it should "return a execTree in json when using describe with CLI" taggedAs (NativeTestXX) in {
@@ -509,7 +506,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
     tasks.keys shouldBe (Set("native_sum"))
   }
 
-  it should "be able to include pattern information in inputSpec" in {
+  ignore should "be able to include pattern information in inputSpec" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
 
     val appId = Main.compile(
@@ -927,7 +924,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
     desc.types shouldBe Some(Vector("Adder"))
   }
 
-  it should "be able to include runtime hints" in {
+  ignore should "be able to include runtime hints" taggedAs(Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
 
     val appId = Main.compile(
@@ -984,7 +981,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
     desc.ignoreReuse shouldBe Some(true)
   }
 
-  it should "be able to include runtime hints and override extras global" in {
+  ignore should "be able to include runtime hints and override extras global" taggedAs(Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
 
@@ -1021,7 +1018,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll with S
     }
   }
 
-  it should "be able to include runtime hints with extras per-task override" in {
+  ignore should "be able to include runtime hints with extras per-task override" taggedAs(Hints) in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "task_specific_short_timeout.json")
 
