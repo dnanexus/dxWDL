@@ -69,6 +69,7 @@ case class GenerateIRTask(verbose: Verbose,
       val dxInstanceType =
         evalRuntimeAttr(IR.HINT_INSTANCE_TYPE).orElse(evalHintAttr(IR.HINT_INSTANCE_TYPE).map {
           case TAT.MetaValueString(s, _) => WdlValues.V_String(s)
+          case _                         => throw new RuntimeException("Expected dx_instance_type to be a string")
         })
       val memory = evalRuntimeAttr("memory")
       val diskSpace = evalRuntimeAttr("disks")

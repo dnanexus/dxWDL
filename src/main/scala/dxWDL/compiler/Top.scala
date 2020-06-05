@@ -190,7 +190,9 @@ case class Top(cOpt: CompilerOptions) {
 
     }
 
-    new GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
+    // TODO: load default hints from attrs
+    val defaultHintAttrs = WdlHintAttrs(Map.empty)
+    GenerateIR(cOpt.verbose, defaultRuntimeAttrs, defaultHintAttrs)
       .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 
