@@ -384,7 +384,6 @@ object InstanceTypeDB extends DefaultJsonProtocol {
       case Some(x)                    => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
     }
 
-    // TODO: this fails because GenerateIRTask.evalWomExpression casts everything to string
     val gpu: Option[Boolean] = wdlGpu match {
       case None                            => None
       case Some(WdlValues.V_Boolean(flag)) => Some(flag)

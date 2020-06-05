@@ -24,7 +24,7 @@ case class GenerateIRTask(verbose: Verbose,
   }
 
   def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
-    WomValueAnalysis.ifConstEval(WdlTypes.T_String, expr) match {
+    WomValueAnalysis.ifConstEval(expr.wdlType, expr) match {
       case None    => throw new DynamicInstanceTypesException()
       case Some(x) => x
     }

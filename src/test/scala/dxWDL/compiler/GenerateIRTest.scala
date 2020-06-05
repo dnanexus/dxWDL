@@ -1181,7 +1181,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers { //with StopOnFirstFailu
     )
   }
 
-  it should "ignore dx_instance_type when evaluating runtime hints" in {
+  it should "ignore dx_instance_type when evaluating runtime hints" taggedAs (EdgeTest) in {
     val path = pathFromBasename("compiler", "instance_type_test.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1357,7 +1357,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers { //with StopOnFirstFailu
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "handle multiple struct definitions" taggedAs (EdgeTest) in {
+  it should "handle multiple struct definitions" in {
     val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order", "file3.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationIR]
