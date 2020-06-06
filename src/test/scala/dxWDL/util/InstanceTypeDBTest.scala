@@ -10,7 +10,7 @@ import dxWDL.dx.DxProject
 class InstanceTypeDBTest extends FlatSpec with Matchers {
 
   // The original list is at:
-  // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
+  // https://github.com/dnanexus/nucleus/blob/master/commons/instance_types/aws_instance_types.json
   //
   // The g2,i2,x1 instances have been removed, because they are not
   // enabled for customers by default.  In addition, the PV (Paravirtual)
