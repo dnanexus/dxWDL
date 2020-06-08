@@ -14,9 +14,10 @@ task SumWithDefaults {
     Int x = 2
     Int? y = 3
 
+  Int z = select_first([y])
     command {
     }
     output {
-        Int result = x + y
+        Int result = x + z
     }
 }
