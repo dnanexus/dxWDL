@@ -125,7 +125,14 @@ object WomValueAnalysis {
       case _: TAT.ValueFile      => true
       case _: TAT.ValueDirectory => true
       case _: TAT.ExprIdentifier => true
-      case _                     => false
+
+      // Access a field in a call
+      //   Int z = eliminateDuplicate.fields
+      case TAT.ExprGetName(TAT.ExprIdentifier(_, _ : WdlTypes.T_Call, _), _, _, _) =>
+        true
+
+      case _                     =>
+        false
     }
   }
 

@@ -163,7 +163,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     Block.categorize(blocks(0)) shouldBe a[Block.ScatterOneCall]
   }
 
-  ignore should "get subblocks" taggedAs (EdgeTest) in {
+  ignore should "get subblocks" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -322,20 +322,19 @@ class BlockTest extends AnyFlatSpec with Matchers {
     names shouldBe (Set.empty[String])
   }
 
-  /*  it should "account for arguments that have a default, but are not optional" in {
-    val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
+  it should "figure out when a block has no calls" taggedAs(EdgeTest) in {
+    val path = pathFromBasename("block", "b1.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = Block.splitWorkflow(wf)
 
-    blocks(0).inputs.map(_.name).toSet should be(Set("unpassed_arg_default"))
+    val b0 = Block.getSubBlock(Vector(0), wf.body)
+    Block.categorize(b0) shouldBe a[Block.ScatterFullBlock]
 
-    // collect only de-facto optional inputs
-    val optionalInputs = blocks(0).inputs.collect{
-      case b : BlockInput(name, _, true) =>  name
-    }
-    optionalInputs.toSet should be(Set("unpassed_arg_default"))
+    val b00 = Block.getSubBlock(Vector(0, 0), wf.body)
 
-    closureAll(blocks(1)).keys.toSet should be(Set.empty)
-  }*/
+//    val bl33 = WomPrettyPrintApproxWdl.apply(b00.nodes)
+//    System.out.println(bl33)
+
+    Block.categorize(b00) shouldBe a[Block.CondOneCall]
+  }
 }

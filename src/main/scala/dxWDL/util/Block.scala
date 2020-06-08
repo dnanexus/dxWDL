@@ -609,7 +609,8 @@ object Block {
     node match {
       case call: TAT.Call if trivialExpressionsOnly =>
         call.inputs.values.forall {
-          case expr => WomValueAnalysis.isTrivialExpression(expr)
+          case expr =>
+            WomValueAnalysis.isTrivialExpression(expr)
         }
       case call: TAT.Call =>
         // any input expression is allowed

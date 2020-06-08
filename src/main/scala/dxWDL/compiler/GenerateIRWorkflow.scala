@@ -83,6 +83,28 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
   }
 
+  def getFqnFromEnv(fqn : String, cVar : CVar, env: CallEnv, call : TAT.Call) : SArg = {
+    env.get(fqn) match {
+      case None =>
+        val envDbg = env
+          .map {
+          case (name, lVar) =>
+            s"  $name -> ${lVar.sArg}"
+        }
+          .mkString("\n")
+        Utils.trace(verbose.on, s"""|env =
+                                    |$envDbg""".stripMargin)
+        throw new Exception(
+          s"""|Internal compiler error.
+              |
+              |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+              |is missing from the environment.""".stripMargin
+            .replaceAll("\n", " ")
+        )
+      case Some(lVar) => lVar.sArg
+    }
+  }
+
   // compile a call into a stage in an IR.Workflow
   //
   // In a call like:
@@ -142,25 +164,11 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, expr))
 
         case Some(TAT.ExprIdentifier(id, _, _)) =>
-          env.get(id) match {
-            case None =>
-              val envDbg = env
-                .map {
-                  case (name, lVar) =>
-                    s"  $name -> ${lVar.sArg}"
-                }
-                .mkString("\n")
-              Utils.trace(verbose.on, s"""|env =
-                                          |$envDbg""".stripMargin)
-              throw new Exception(
-                  s"""|Internal compiler error.
-                      |
-                      |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                      |is missing from the environment.""".stripMargin
-                    .replaceAll("\n", " ")
-              )
-            case Some(lVar) => lVar.sArg
-          }
+          getFqnFromEnv(id, cVar, env, call)
+
+        case Some(TAT.ExprGetName(TAT.ExprIdentifier(callname, _ : WdlTypes.T_Call, _), id, _, _)) =>
+          getFqnFromEnv(s"$callname.$id", cVar, env, call)
+
         case Some(expr) =>
           throw new Exception(s"Expression $expr is not a constant nor an identifier")
       }
