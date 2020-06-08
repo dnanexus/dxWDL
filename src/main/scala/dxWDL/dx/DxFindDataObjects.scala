@@ -144,7 +144,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     JsObject(part1 ++ part2 ++ part3)
   }
 
-  // Create a request for a limited number of objects
+  // Submit a request for a limited number of objects
   private def submitRequest(
       scope: Option[JsValue],
       dxProject: Option[DxProject],
@@ -219,15 +219,14 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
     val request = JsObject(
         reqFields ++ projField ++ scopeField ++ cursorField ++ limitField
-          ++ classField ++ propertiesField
-          ++ namePcreField ++ idField
+          ++ classField ++ propertiesField ++ namePcreField ++ idField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
 
     val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
-      classOf[JsonNode],
-      DxUtils.dxEnv)
+                                               classOf[JsonNode],
+                                               DxUtils.dxEnv)
     val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
 
     val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {

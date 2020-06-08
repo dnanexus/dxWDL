@@ -41,7 +41,6 @@ class DxFileTest extends FlatSpec with Matchers {
     result.size shouldBe 2
     result(FILE1).name shouldBe "fileA"
     result(FILE2).name shouldBe "fileB"
-
   }
 
   it should "bulk describe a duplicate file in vector2" in {
@@ -71,5 +70,4 @@ class DxFileTest extends FlatSpec with Matchers {
     result(FILE7).name shouldBe "test4.test"
     result(FILE7).project shouldBe PUBLIC_PROJECT.getId
   }
-
 }
