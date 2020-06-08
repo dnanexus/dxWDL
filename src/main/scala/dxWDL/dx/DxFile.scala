@@ -191,6 +191,7 @@ object DxFile {
       return Map.empty
     }
     var descriptions: Map[DxFile, DxFileDescribe] = Map.empty
+    // group files by projects, in order to avoid searching in all projects (unless project is not specified)
     val objsByProj = objs.groupBy(file => file.project)
     for ((proj, files) <- objsByProj) {
 
