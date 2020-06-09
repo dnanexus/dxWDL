@@ -12,8 +12,7 @@ import dxWDL.util._
 import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
 
 case class GenerateIRWorkflow(wf: TAT.Workflow,
-                              wfSourceCode: String,
-                              wfSourceStandAlone: String,
+                              wfStandAlone: TAT.Document,
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose,
@@ -227,7 +226,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   // Find the closure of a block. All the variables defined earlier
   // that are required for the calculation.
-  private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
+  private def blockClosure(block: Block, env: CallEnv): CallEnv = {
     block.inputs.flatMap { i: Block.InputDefinition =>
       lookupInEnv(i.name, i.wdlType, env, Block.isOptional(i))
     }.toMap
@@ -340,7 +339,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
     // Figure out the closure required for this block, out of the
     // environment
-    val closure = blockClosure(block, env, stageName)
+    val closure = blockClosure(block, env)
     val inputVars: Vector[CVar] = closure.map {
       case (fqn, LinkedVar(cVar, _)) =>
         cVar.copy(name = fqn)
@@ -419,7 +418,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes),
-        wfSourceStandAlone
+        wfStandAlone
     )
 
     val sArgs: Vector[SArg] = closure.map {
@@ -528,8 +527,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         (cVar, sArg)
       case _ =>
         // An expression that requires evaluation
-        throw new Exception(s"""|Internal error: (${output.expr}) is a non trivial expression.
-                                |It requires constructing an output applet and a stage""".stripMargin)
+        throw new Exception(
+            s"""|Internal error: (${output.expr}) is a non trivial expression.
+                |It requires constructing an output applet and a stage""".stripMargin
+        )
     }
   }
 
@@ -879,7 +880,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                            wfInputs,
                            wfOutputs,
                            commonStg +: stages :+ outputStage,
-                           wfSourceCode,
+                           wf,
                            locked = false,
                            IR.Level.Top,
                            Some(wfAttr))

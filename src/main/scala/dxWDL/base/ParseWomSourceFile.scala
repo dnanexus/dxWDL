@@ -227,18 +227,4 @@ case class ParseWomSourceFile(verbose: Boolean) {
       case Some(wf)             => throw new Exception(s"found a workflow ${wf.name} and not a task")
     }
   }
-
-  // Parse a WDL file and return its tasks, or an emtpy Vector if there are none.
-  def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
-    tDoc.elements.collect {
-      case t: TAT.Task => t.name -> t
-    }.toMap
-  }
-
-  // Parse a WDL file and return its workflow, if any.
-  def scanForWorkflow(tDoc: TAT.Document): Map[String, TAT.Workflow] = {
-    tDoc.workflow
-      .map(wf => Map(wf.name -> wf))
-      .getOrElse(Map.empty)
-  }
 }

@@ -16,6 +16,8 @@ import dxWDL.dx._
 import dxWDL.base.ParseWomSourceFile
 import spray.json._
 
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
@@ -410,6 +412,12 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
+  private def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
+    tDoc.elements.collect {
+      case t: TAT.Task => t.name -> t
+    }.toMap
+  }
+
   it should "handle various conditionals" taggedAs (NativeTestXX) in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
     Main.compile(
@@ -440,7 +448,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
     val tasks: Map[String, String] =
-      ParseWomSourceFile(false).scanForTasks(content)
+      scanForTasks(content)
 
     tasks.keys shouldBe (Set(
         "native_sum",
@@ -471,7 +479,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
     val tasks: Map[String, String] =
-      ParseWomSourceFile(false).scanForTasks(content)
+      scanForTasks(content)
 
     tasks.keys shouldBe (Set("native_sum"))
   }
@@ -500,8 +508,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     // check that the generated file contains the correct tasks
     val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
-    val tasks: Map[String, String] =
-      ParseWomSourceFile(false).scanForTasks(content)
+    val tasks: Map[String, String] = scanForTasks(content)
 
     tasks.keys shouldBe (Set("native_sum"))
   }

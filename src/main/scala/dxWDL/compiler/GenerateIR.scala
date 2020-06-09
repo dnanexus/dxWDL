@@ -79,7 +79,6 @@ case class GenerateIR(verbose: Verbose,
   private def compileWorkflow(
       wf: TAT.Workflow,
       typeAliases: Map[String, WdlTypes.T],
-      wfSource: String,
       callables: Map[String, IR.Callable],
       language: Language.Value,
       locked: Boolean,
@@ -96,13 +95,12 @@ case class GenerateIR(verbose: Verbose,
           callables(localname)
         }
 
-    val wfSourceStandAlone =
+    val standAloneWorkflow =
       WdlCodeGen(verbose, typeAliases, language)
         .standAloneWorkflow(wf, callablesUsedInWorkflow)
 
     val gir = GenerateIRWorkflow(wf,
-                                 wfSource,
-                                 wfSourceStandAlone,
+                                 standAloneWorkflow,
                                  callables,
                                  language,
                                  verbose,
@@ -116,39 +114,21 @@ case class GenerateIR(verbose: Verbose,
   private def compileCallable(
       callable: TAT.Callable,
       typeAliases: Map[String, WdlTypes.T],
-      taskDir: Map[String, String],
-      workflowDir: Map[String, String],
       callables: Map[String, IR.Callable],
       language: Language.Value,
       locked: Boolean,
       reorg: Either[Boolean, ReorgAttrs],
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Callable, Vector[IR.Callable]) = {
-    def compileTask2(task: TAT.Task) = {
-      val taskSourceCode = taskDir.get(task.name) match {
-        case None    => throw new Exception(s"Did not find task ${task.name}")
-        case Some(x) => x
-      }
+    def compileTask2(task: TAT.Task): IR.Applet = {
       GenerateIRTask(verbose, typeAliases, language, defaultRuntimeAttrs, defaultHintAttrs)
-        .apply(task, taskSourceCode, adjunctFiles)
+        .apply(task, adjunctFiles)
     }
     callable match {
       case task: TAT.Task =>
         (compileTask2(task), Vector.empty)
       case wf: TAT.Workflow =>
-        workflowDir.get(wf.name) match {
-          case None =>
-            throw new Exception(s"Did not find sources for workflow ${wf.name}")
-          case Some(wfSource) =>
-            compileWorkflow(wf,
-                            typeAliases,
-                            wfSource,
-                            callables,
-                            language,
-                            locked,
-                            reorg,
-                            adjunctFiles)
-        }
+        compileWorkflow(wf, typeAliases, callables, language, locked, reorg, adjunctFiles)
       case x =>
         throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                 |${x}
@@ -166,32 +146,19 @@ case class GenerateIR(verbose: Verbose,
     Utils.trace(verbose.on, s"IR pass")
     Utils.traceLevelInc()
 
-    val parser = ParseWomSourceFile(verbose.on)
     val taskDir = allSources.foldLeft(Map.empty[String, TAT.Task]) {
       case (accu, (_, doc)) =>
-        accu ++ parser.scanForTasks(doc)
+        accu ++ doc.elements.collect {
+          case t: TAT.Task => t.name -> t
+        }.toMap
     }
     Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
-
-    val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
-      case (accu, (filename, srcCode)) =>
-        ParseWomSourceFile(verbose.on).scanForWorkflow(srcCode) match {
-          case None =>
-            accu
-          case Some((wfName, wfSource)) =>
-            accu + (wfName -> wfSource)
-        }
-    }
     Utils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
     Utils.traceLevelInc()
 
     val depOrder: Vector[TAT.Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
     Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
     Utils.traceLevelDec()
-
-    // compile the tasks/workflows from bottom to top.
-    var allCallables = Map.empty[String, IR.Callable]
-    var allCallablesSorted = Vector.empty[IR.Callable]
 
     // Only the toplevel workflow may be unlocked. This happens
     // only if the user specifically compiles it as "unlocked".
@@ -207,35 +174,32 @@ case class GenerateIR(verbose: Verbose,
       }
     }
 
-    for (callable <- depOrder) {
-      val (exec, auxCallables) = compileCallable(callable,
-                                                 womBundle.typeAliases,
-                                                 taskDir,
-                                                 workflowDir,
-                                                 allCallables,
-                                                 language,
-                                                 isLocked(callable),
-                                                 reorg,
-                                                 adjunctFiles.get(callable.name))
-      allCallables = allCallables ++ (auxCallables.map { apl =>
-        apl.name -> apl
-      }.toMap)
-      allCallables = allCallables + (exec.name -> exec)
-
-      // Add the auxiliary applets while preserving the dependency order
-      allCallablesSorted = allCallablesSorted ++ auxCallables :+ exec
-    }
-
-    // There could be duplicates, remove them here
-    allCallablesSorted = allCallablesSorted.distinct
+    val (allCallables, allCallablesSorted): (Map[String, IR.Callable], Vector[IR.Callable]) =
+      depOrder.foldLeft((Map.empty[String, IR.Callable], Vector.empty[IR.Callable])) {
+        case ((allCallables, allCallablesSorted), callable) =>
+          val (exec, auxCallables) = compileCallable(callable,
+                                                     womBundle.typeAliases,
+                                                     allCallables,
+                                                     language,
+                                                     isLocked(callable),
+                                                     reorg,
+                                                     adjunctFiles.get(callable.name))
+          // Add the auxiliary applets while preserving the dependency order
+          (
+              allCallables ++ auxCallables.map(apl => apl.name -> apl).toMap ++ Map(
+                  exec.name -> exec
+              ),
+              allCallablesSorted ++ auxCallables :+ exec
+          )
+      }
 
     // We already compiled all the individual wdl:tasks and
     // wdl:workflows, let's find the entrypoint.
     val primary = womBundle.primaryCallable.map { callable =>
       allCallables(Utils.getUnqualifiedName(callable.name))
     }
-    val allCallablesSortedNames = allCallablesSorted.map { _.name }
-    Utils.trace(verbose.on, s"allCallables=${allCallables.map(_._1)}")
+    val allCallablesSortedNames = allCallablesSorted.map(_.name).distinct
+    Utils.trace(verbose.on, s"allCallables=${allCallables.keys}")
     Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSortedNames}")
     assert(allCallables.size == allCallablesSortedNames.size)
 

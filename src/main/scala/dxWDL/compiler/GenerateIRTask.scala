@@ -392,7 +392,7 @@ case class GenerateIRTask(verbose: Verbose,
       case _ => task
     }
 
-    val WdlCodeSnippet(selfContainedSourceCode) =
+    val selfContainedSourceCode =
       WdlCodeGen(verbose, typeAliases, language).standAloneTask(cleanedTask)
 
     val dockerFinal = docker match {

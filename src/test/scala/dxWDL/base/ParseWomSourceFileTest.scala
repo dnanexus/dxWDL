@@ -14,6 +14,12 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
     s.replaceAll("(?s)\\s+", " ").trim
   }
 
+  private def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
+    tDoc.elements.collect {
+      case t: TAT.Task => t.name -> t
+    }.toMap
+  }
+
   it should "find task sources" in {
     val srcCode =
       """|task hello {
@@ -21,7 +27,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val taskDir = parseWomSourceFile.scanForTasks(srcCode)
+    val taskDir = scanForTasks(srcCode)
     taskDir.size should equal(1)
     val helloTask = taskDir.get("hello")
     inside(helloTask) {
@@ -41,7 +47,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val taskDir = parseWomSourceFile.scanForTasks(srcCode)
+    val taskDir = scanForTasks(srcCode)
     taskDir.size should equal(1)
     val subTask = taskDir.get("sub")
     inside(subTask) {
@@ -66,7 +72,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val taskDir = parseWomSourceFile.scanForTasks(srcCode)
+    val taskDir = scanForTasks(srcCode)
     taskDir.size should equal(2)
     inside(taskDir.get("sub")) {
       case Some(x) =>
@@ -97,7 +103,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val taskDir = parseWomSourceFile.scanForTasks(srcCode)
+    val taskDir = scanForTasks(srcCode)
     taskDir.size should equal(1)
     inside(taskDir.get("Add")) {
       case Some(x) =>
@@ -182,7 +188,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |  }
          |}""".stripMargin
 
-    val taskDir = parseWomSourceFile.scanForTasks(srcCode)
+    val taskDir = scanForTasks(srcCode)
     taskDir.size should equal(1)
     val taskSourceCode: String = taskDir.values.head
     taskSourceCode shouldBe (srcCode)

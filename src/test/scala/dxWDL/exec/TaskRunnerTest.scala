@@ -8,7 +8,7 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{Language, ParseWomSourceFile, Utils, Verbose, WdlRuntimeAttrs, WomBundle}
-import dxWDL.compiler.{WdlCodeGen, WdlCodeSnippet}
+import dxWDL.compiler.{WdlCodeGen}
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 
 // This test module requires being logged in to the platform.
@@ -96,6 +96,12 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  private def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
+    tDoc.elements.collect {
+      case t: TAT.Task => t.name -> t
+    }.toMap
+  }
+
   // Parse the WDL source code, and extract the single task that is supposed to be there.
   // Also return the source script itself, verbatim.
   private def runTask(wdlName: String): TaskRunner = {
@@ -134,7 +140,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       ParseWomSourceFile(false).apply(wdlCode, List.empty)
     val task: TAT.Task = ParseWomSourceFile(false).getMainTask(womBundle)
     assert(allSources.size == 1)
-    val sourceDict = ParseWomSourceFile(false).scanForTasks(allSources.values.head)
+    val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
     val taskSourceCode = sourceDict.values.head
 
