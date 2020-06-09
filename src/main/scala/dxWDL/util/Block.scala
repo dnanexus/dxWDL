@@ -124,10 +124,10 @@ case class Block(inputs: Vector[Block.InputDefinition],
   // If the entire block is made up of expressions, return None
   def makeName: Option[String] = {
     nodes.collectFirst {
-      case TAT.Scatter(id, expr, body, _) =>
+      case TAT.Scatter(id, expr, _, _) =>
         val collection = TUtil.exprToString(expr)
         s"scatter (${id} in ${collection})"
-      case TAT.Conditional(expr, body, _) =>
+      case TAT.Conditional(expr, _, _) =>
         val cond = TUtil.exprToString(expr)
         s"if (${cond})"
       case call: TAT.Call =>
@@ -198,7 +198,6 @@ object Block {
         case (accu, _) =>
           accu
       }
-      .toVector
   }
 
   def deepFindCalls(node: TAT.WorkflowElement): Vector[TAT.Call] = {
@@ -210,7 +209,7 @@ object Block {
     // The only calls allowed are in the last node
     val allButLast = b.nodes.dropRight(1)
     val allCalls = deepFindCalls(allButLast)
-    assert(allCalls.size == 0)
+    assert(allCalls.isEmpty)
   }
 
   // figure out the inputs from an expression
@@ -243,11 +242,11 @@ object Block {
         Vector(outputDef)
 
       case TAT.ExprCompoundString(valArr, _, _) =>
-        valArr.map(elem => exprInputs(elem)).flatten
+        valArr.flatMap(elem => exprInputs(elem))
       case TAT.ExprPair(l, r, _, _) =>
         exprInputs(l) ++ exprInputs(r)
       case TAT.ExprArray(arrVal, _, _) =>
-        arrVal.map(elem => exprInputs(elem)).flatten
+        arrVal.flatMap(elem => exprInputs(elem))
       case TAT.ExprMap(valMap, _, _) =>
         valMap
           .map { case (k, v) => exprInputs(k) ++ exprInputs(v) }
@@ -303,7 +302,7 @@ object Block {
       // into account. We need to look into the function type
       // and figure out which arguments are optional.
       case TAT.ExprApply(_, _, elements, _, _) =>
-        elements.map(exprInputs).flatten
+        elements.flatMap(exprInputs)
 
       // Access a field in a call
       //   Int z = eliminateDuplicate.fields
@@ -317,32 +316,28 @@ object Block {
 
   private def callInputs(call: TAT.Call): Vector[InputDefinition] = {
     // What the callee expects
-    call.callee.input
-      .map {
-        case (name: String, (t: WdlTypes.T, optional: Boolean)) =>
-          // provided by the caller
-          val actualInput = call.inputs.get(name)
+    call.callee.input.flatMap {
+      case (name: String, (_: WdlTypes.T, optional: Boolean)) =>
+        // provided by the caller
+        val actualInput = call.inputs.get(name)
 
-          (actualInput, optional) match {
-            case (None, false) =>
-              // A required input that will have to be provided at runtime
-              Vector.empty[InputDefinition]
-            case (Some(expr), false) =>
-              // required input that is provided
-              exprInputs(expr)
-            case (None, true) =>
-              // a missing optional input, doesn't have to be provided
-              Vector.empty[InputDefinition]
-            case (Some(expr), true) =>
-              // an optional input
-              exprInputs(expr).map {
-                case inpDef: InputDefinition =>
-                  OptionalInputDefinition(inpDef.name, inpDef.wdlType)
-              }.toVector
-          }
-      }
-      .flatten
-      .toVector
+        (actualInput, optional) match {
+          case (None, false) =>
+            // A required input that will have to be provided at runtime
+            Vector.empty[InputDefinition]
+          case (Some(expr), false) =>
+            // required input that is provided
+            exprInputs(expr)
+          case (None, true) =>
+            // a missing optional input, doesn't have to be provided
+            Vector.empty[InputDefinition]
+          case (Some(expr), true) =>
+            // an optional input
+            exprInputs(expr).map { inpDef: InputDefinition =>
+              OptionalInputDefinition(inpDef.name, inpDef.wdlType)
+            }
+        }
+    }.toVector
   }
 
   private def makeOptional(t: WdlTypes.T): WdlTypes.T = {
@@ -359,10 +354,9 @@ object Block {
 
     // remove from a list of potential inputs those that are locally defined.
     def addInputs(newIdentifiedInputs: Vector[InputDefinition]): BlockContext = {
-      val reallyNew = newIdentifiedInputs.filter {
-        case x: InputDefinition =>
-          !((inputs.keys.toSet contains x.name) ||
-            (outputs.keys.toSet contains x.name))
+      val reallyNew = newIdentifiedInputs.filter { x: InputDefinition =>
+        !((inputs.keys.toSet contains x.name) ||
+          (outputs.keys.toSet contains x.name))
       }
       this.copy(inputs = inputs ++ reallyNew.map { x =>
         x.name -> x
@@ -381,7 +375,7 @@ object Block {
   }
 
   private object BlockContext {
-    val empty = BlockContext(Map.empty, Map.empty)
+    val empty: BlockContext = BlockContext(Map.empty, Map.empty)
   }
 
   // create a block from a group of statements.
@@ -442,7 +436,7 @@ object Block {
             // make outputs arrays
             val subBlockOutputs = subBlock.outputs.map {
               case OutputDefinition(name, wdlType, expr) =>
-                OutputDefinition(name, WdlTypes.T_Array(wdlType, false), expr)
+                OutputDefinition(name, WdlTypes.T_Array(wdlType, nonEmpty = false), expr)
             }
             val ctx2 = ctx
               .addInputs(subBlock.inputs)
@@ -481,11 +475,11 @@ object Block {
         addToLastPart(parts, decl)
       case (parts, call: TAT.Call) =>
         startFresh(parts, call)
-      case (parts, cond: TAT.Conditional) if deepFindCalls(cond).size == 0 =>
+      case (parts, cond: TAT.Conditional) if deepFindCalls(cond).isEmpty =>
         addToLastPart(parts, cond)
       case (parts, cond: TAT.Conditional) =>
         startFresh(parts, cond)
-      case (parts, sct: TAT.Scatter) if deepFindCalls(sct).size == 0 =>
+      case (parts, sct: TAT.Scatter) if deepFindCalls(sct).isEmpty =>
         addToLastPart(parts, sct)
       case (parts, sct: TAT.Scatter) =>
         startFresh(parts, sct)
@@ -508,12 +502,12 @@ object Block {
   // inside a stand alone applet.
   def outputClosure(outputs: Vector[OutputDefinition]): Map[String, WdlTypes.T] = {
     // collect all the expressions that go into the output definitions
-    val inputExpressions = outputs.map {
+    val inputExpressions = outputs.flatMap {
       case OutputDefinition(_, _, expr) =>
         Vector(expr)
-    }.flatten
+    }
 
-    val allInputDefs = inputExpressions.map(exprInputs).flatten
+    val allInputDefs = inputExpressions.flatMap(exprInputs)
 
     allInputDefs.foldLeft(Map.empty[String, WdlTypes.T]) {
       case (accu, inpDef) =>
@@ -587,7 +581,7 @@ object Block {
   def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
                           outputNodes: Vector[OutputDefinition]): Set[String] = {
     // Figure out all the variables needed to calculate the outputs
-    val outputs: Set[String] = outputClosure(outputNodes).map(_._1).toSet
+    val outputs: Set[String] = outputClosure(outputNodes).keySet
     val inputs: Set[String] = inputNodes.map(_.name).toSet
     //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
     inputs.intersect(outputs)
@@ -601,17 +595,15 @@ object Block {
   //
   private def isSimpleCall(nodes: Vector[TAT.WorkflowElement],
                            trivialExpressionsOnly: Boolean): Boolean = {
-    assert(nodes.size > 0)
+    assert(nodes.nonEmpty)
     if (nodes.size >= 2)
       return false
     // there is example a single node
     val node = nodes.head
     node match {
       case call: TAT.Call if trivialExpressionsOnly =>
-        call.inputs.values.forall {
-          case expr => WomValueAnalysis.isTrivialExpression(expr)
-        }
-      case call: TAT.Call =>
+        call.inputs.values.forall(expr => WomValueAnalysis.isTrivialExpression(expr))
+      case _: TAT.Call =>
         // any input expression is allowed
         true
       case _ => false
@@ -688,7 +680,7 @@ object Block {
   }
 
   def categorize(block: Block): Category = {
-    assert(!block.nodes.isEmpty)
+    assert(block.nodes.nonEmpty)
     val allButLast: Vector[TAT.WorkflowElement] = block.nodes.dropRight(1)
     assert(deepFindCalls(allButLast).isEmpty)
     val lastNode = block.nodes.last
@@ -698,22 +690,22 @@ object Block {
         AllExpressions(allButLast :+ lastNode)
 
       case callNode: TAT.Call =>
-        if (isSimpleCall(block.nodes, true))
+        if (isSimpleCall(block.nodes, trivialExpressionsOnly = true))
           CallDirect(allButLast, callNode)
-        else if (isSimpleCall(block.nodes, false))
+        else if (isSimpleCall(block.nodes, trivialExpressionsOnly = false))
           CallWithSubexpressions(allButLast, callNode)
         else
           CallFragment(allButLast, callNode)
 
       case condNode: TAT.Conditional =>
-        if (isSimpleCall(condNode.body, false)) {
+        if (isSimpleCall(condNode.body, trivialExpressionsOnly = false)) {
           CondOneCall(allButLast, condNode, getOneCall(condNode.body))
         } else {
           CondFullBlock(allButLast, condNode)
         }
 
       case sctNode: TAT.Scatter =>
-        if (isSimpleCall(sctNode.body, false)) {
+        if (isSimpleCall(sctNode.body, trivialExpressionsOnly = false)) {
           ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.body))
         } else {
           ScatterFullBlock(allButLast, sctNode)
@@ -722,7 +714,7 @@ object Block {
   }
 
   def getSubBlock(path: Vector[Int], nodes: Vector[TAT.WorkflowElement]): Block = {
-    assert(path.size >= 1)
+    assert(path.nonEmpty)
 
     val blocks = splitToBlocks(nodes)
     var subBlock = blocks(path.head)
@@ -732,6 +724,6 @@ object Block {
       val blocks2 = splitToBlocks(innerGraph)
       subBlock = blocks2(i)
     }
-    return subBlock
+    subBlock
   }
 }

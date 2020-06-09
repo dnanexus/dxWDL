@@ -64,6 +64,8 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
     // find the central comma, it is in the one location where
     // the square brackets even out.
     val letters = s.toArray
+
+    @scala.annotation.tailrec
     def find(crntPos: Int, numOpenBrackets: Int): Int = {
       if (crntPos >= letters.length)
         throw new Exception("out of bounds")
@@ -72,13 +74,13 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
       letters(crntPos) match {
         case '[' => find(crntPos + 1, numOpenBrackets + 1)
         case ']' => find(crntPos + 1, numOpenBrackets - 1)
-        case ',' if (numOpenBrackets == 0) =>
+        case ',' if numOpenBrackets == 0 =>
           crntPos
         case _ => find(crntPos + 1, numOpenBrackets)
       }
     }
-    val centralCommaPos = find(0, 0)
 
+    val centralCommaPos = find(0, 0)
     val firstType = s.substring(0, centralCommaPos)
     val secondType = s.substring(centralCommaPos + 1)
     (firstType.trim, secondType.trim)
@@ -100,8 +102,8 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
         val outer = str.substring(0, openParen)
         val inner = str.substring(openParen + 1, closeParen)
         outer match {
-          case "MaybeEmptyArray" => T_Array(fromString(inner), false)
-          case "NonEmptyArray"   => T_Array(fromString(inner), true)
+          case "MaybeEmptyArray" => T_Array(fromString(inner), nonEmpty = false)
+          case "NonEmptyArray"   => T_Array(fromString(inner), nonEmpty = true)
           case "Map"             =>
             // split a string like "KK, VV" into (KK, VV)
             val (ks, vs) = splitInTwo(inner)

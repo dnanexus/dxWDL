@@ -376,7 +376,7 @@ object IR {
                     instanceType: InstanceType,
                     docker: DockerImage,
                     kind: AppletKind,
-                    task: TAT.Task,
+                    task: TAT.Document,
                     meta: Option[Vector[TaskAttr]] = None,
                     runtimeHints: Option[Vector[RuntimeHint]] = None)
       extends Callable {

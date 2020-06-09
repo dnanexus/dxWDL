@@ -18,11 +18,9 @@ case class GenerateIRTask(verbose: Verbose,
                           defaultHintAttrs: WdlHintAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
-  private class DynamicInstanceTypesException(message: String) extends RuntimeException(message) {
-    // TODO: this never gets called - do you want this to be a default message? if so, make it the default
-    //  value of `message`.
-    def this() = this("Runtime instance type calculation required")
-  }
+  private class DynamicInstanceTypesException(
+      message: String = "Runtime instance type calculation required"
+  ) extends RuntimeException(message)
 
   def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
     WomValueAnalysis.ifConstEval(expr.wdlType, expr) match {

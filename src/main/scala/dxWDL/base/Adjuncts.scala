@@ -4,7 +4,6 @@
 package dxWDL.base
 
 import java.nio.file.Path
-import dxWDL.base.Utils
 
 object Adjuncts {
   sealed abstract class AdjunctFile
@@ -48,7 +47,7 @@ object Adjuncts {
         }
       }
     // handle list that might have duplicates
-    val m: Map[String, Array[(String, AdjunctFile)]] = v.groupBy(_._1).toMap
+    val m: Map[String, Array[(String, AdjunctFile)]] = v.groupBy(_._1)
 
     // get rid of the extra copy of the filename
     m.map {

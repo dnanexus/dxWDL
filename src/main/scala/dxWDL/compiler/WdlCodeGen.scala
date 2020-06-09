@@ -364,9 +364,13 @@ case class WdlCodeGen(verbose: Verbose,
               accu
             } else {
               val stub: TAT.Task = callable match {
-                case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), task, _, _) =>
+                case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), doc, _, _) =>
                   // This is a task, include its source instead of a header.
-                  task
+                  val tasks = doc.elements.collect {
+                    case t: TAT.Task => t
+                  }
+                  assert(tasks.size == 1)
+                  tasks.head
                 case _ =>
                   // no existing stub, create it
                   genTaskHeader(callable)

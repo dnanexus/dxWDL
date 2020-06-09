@@ -2,7 +2,7 @@ package dxWDL.base
 
 import com.typesafe.config._
 import java.io.{ByteArrayOutputStream, ByteArrayInputStream}
-import java.nio.charset.{StandardCharsets}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import java.util.zip.{GZIPOutputStream, GZIPInputStream}
@@ -20,7 +20,7 @@ object Utils {
   val CHECKSUM_PROP = "dxWDL_checksum"
   val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
   val DEFAULT_APPLET_TIMEOUT_IN_DAYS = 2
-  val DXFUSE_MAX_MEMORY_CONSUMPTION = 300 * 1024 * 1024 // how much memory dxfuse takes
+  val DXFUSE_MAX_MEMORY_CONSUMPTION: Int = 300 * 1024 * 1024 // how much memory dxfuse takes
   val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
   val DX_WDL_ASSET = "dxWDLrt"
   val DX_URL_PREFIX = "dx://"
@@ -30,7 +30,7 @@ object Utils {
   val LAST_STAGE = "last"
   val LINK_INFO_FILENAME = "linking.json"
   val MAX_NUM_RENAME_TRIES = 100
-  val MAX_STRING_LEN = 32 * 1024 // Long strings cause problems with bash and the UI
+  val MAX_STRING_LEN: Int = 32 * 1024 // Long strings cause problems with bash and the UI
   val MAX_STAGE_NAME_LEN = 60 // maximal length of a workflow stage name
   val MAX_NUM_FILES_MOVE_LIMIT = 1000
   val SCATTER_LIMIT = 500
@@ -43,13 +43,13 @@ object Utils {
   var traceLevel = 0
 
   // The version lives in application.conf
-  def getVersion(): String = {
+  def getVersion: String = {
     val config = ConfigFactory.load("application.conf")
     config.getString("dxWDL.version")
   }
 
   // the regions live in dxWDL.conf
-  def getRegions(): Map[String, String] = {
+  def getRegions: Map[String, String] = {
     val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
     val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
     val region2project: Map[String, String] = l.map { pair =>
@@ -130,7 +130,7 @@ object Utils {
   //    http://stackoverflow.com/questions/25999255/delete-directory-recursively-in-scala
   def deleteRecursive(file: java.io.File): Unit = {
     if (file.isDirectory) {
-      Option(file.listFiles).map(_.toList).getOrElse(Nil).foreach(deleteRecursive(_))
+      Option(file.listFiles).map(_.toList).getOrElse(Nil).foreach(deleteRecursive)
     }
     file.delete
   }
@@ -148,7 +148,7 @@ object Utils {
   // Add a suffix to a filename, before the regular suffix. For example:
   //  xxx.wdl -> xxx.simplified.wdl
   def replaceFileSuffix(src: Path, suffix: String): String = {
-    val fName = src.toFile().getName()
+    val fName = src.toFile.getName
     val index = fName.lastIndexOf('.')
     if (index == -1) {
       fName + suffix
@@ -209,7 +209,7 @@ object Utils {
         (e: String) => { errStream.append(e ++ "\n") }
     )
 
-    val p: Process = Process(cmds).run(logger, false)
+    val p: Process = Process(cmds).run(logger, connectInput = false)
     timeout match {
       case None =>
         // blocks, and returns the exit code. Does NOT connect
@@ -239,12 +239,13 @@ object Utils {
   def isOptional(t: WdlTypes.T): Boolean = {
     t match {
       case WdlTypes.T_Optional(_) => true
-      case t                      => false
+      case _                      => false
     }
   }
 
   // We need to deal with types like:
   //     Int??, Array[File]??
+  @scala.annotation.tailrec
   def stripOptional(t: WdlTypes.T): WdlTypes.T = {
     t match {
       case WdlTypes.T_Optional(x) => stripOptional(x)
@@ -255,21 +256,22 @@ object Utils {
   // Replace all special json characters from with a white space.
   def sanitize(s: String): String = {
     def sanitizeChar(ch: Char): String = ch match {
-      case '}'                       => " "
-      case '{'                       => " "
-      case '$'                       => " "
-      case '/'                       => " "
-      case '\\'                      => " "
-      case '\"'                      => " "
-      case '\''                      => " "
-      case _ if (ch.isLetterOrDigit) => ch.toString
-      case _ if (ch.isControl)       => " "
-      case _                         => ch.toString
+      case '}'                     => " "
+      case '{'                     => " "
+      case '$'                     => " "
+      case '/'                     => " "
+      case '\\'                    => " "
+      case '\"'                    => " "
+      case '\''                    => " "
+      case _ if ch.isLetterOrDigit => ch.toString
+      case _ if ch.isControl       => " "
+      case _                       => ch.toString
     }
-    if (s != null)
+    if (s != null) {
       s.flatMap(sanitizeChar)
-    else
+    } else {
       ""
+    }
   }
 
   // Logging output for applets at runtime
@@ -342,18 +344,18 @@ object Utils {
   def buildLimitedSizeName(elements: Seq[String], maxLen: Int): String = {
     if (elements.isEmpty)
       return "[]"
-    val (_, concat) = elements.tail.foldLeft((false, elements(0))) {
+    val (_, concat) = elements.tail.foldLeft((false, elements.head)) {
       case ((true, accu), _) =>
         // stopping condition reached, we have reached the size limit
         (true, accu)
 
-      case ((false, accu), _) if accu.size >= maxLen =>
+      case ((false, accu), _) if accu.length >= maxLen =>
         // move into stopping condition
         (true, accu)
 
       case ((false, accu), elem) =>
         val tentative = accu + ", " + elem
-        if (tentative.size > maxLen) {
+        if (tentative.length > maxLen) {
           // not enough space
           (true, accu)
         } else {
