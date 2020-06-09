@@ -83,23 +83,23 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
   }
 
-  def getFqnFromEnv(fqn : String, cVar : CVar, env: CallEnv, call : TAT.Call) : SArg = {
+  def getFqnFromEnv(fqn: String, cVar: CVar, env: CallEnv, call: TAT.Call): SArg = {
     env.get(fqn) match {
       case None =>
         val envDbg = env
           .map {
-          case (name, lVar) =>
-            s"  $name -> ${lVar.sArg}"
-        }
+            case (name, lVar) =>
+              s"  $name -> ${lVar.sArg}"
+          }
           .mkString("\n")
         Utils.trace(verbose.on, s"""|env =
                                     |$envDbg""".stripMargin)
         throw new Exception(
-          s"""|Internal compiler error.
-              |
-              |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-              |is missing from the environment.""".stripMargin
-            .replaceAll("\n", " ")
+            s"""|Internal compiler error.
+                |
+                |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+                |is missing from the environment.""".stripMargin
+              .replaceAll("\n", " ")
         )
       case Some(lVar) => lVar.sArg
     }
@@ -166,7 +166,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         case Some(TAT.ExprIdentifier(id, _, _)) =>
           getFqnFromEnv(id, cVar, env, call)
 
-        case Some(TAT.ExprGetName(TAT.ExprIdentifier(callname, _ : WdlTypes.T_Call, _), id, _, _)) =>
+        case Some(TAT.ExprGetName(TAT.ExprIdentifier(callname, _: WdlTypes.T_Call, _), id, _, _)) =>
           getFqnFromEnv(s"$callname.$id", cVar, env, call)
 
         case Some(expr) =>
@@ -536,8 +536,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         (cVar, sArg)
       case _ =>
         // An expression that requires evaluation
-        throw new Exception(s"""|Internal error: (${output.expr}) is a non trivial expression.
-                                |It requires constructing an output applet and a stage""".stripMargin)
+        throw new Exception(
+            s"""|Internal error: (${output.expr}) is a non trivial expression.
+                |It requires constructing an output applet and a stage""".stripMargin
+        )
     }
   }
 

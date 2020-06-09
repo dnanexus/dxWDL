@@ -322,7 +322,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
     names shouldBe (Set.empty[String])
   }
 
-  it should "figure out when a block has no calls" taggedAs(EdgeTest) in {
+  it should "figure out when a block has no calls" taggedAs (EdgeTest) in {
     val path = pathFromBasename("block", "b1.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (wf, _, _, _) = parseWomSourceFile.parseWdlWorkflow(wfSourceCode)
