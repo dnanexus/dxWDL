@@ -16,7 +16,7 @@ import spray.json._
 // dnanexus applets and workflows that are not runnable.
 
 class ExecTreeTest extends AnyFlatSpec with Matchers {
-    private def pathFromBasename(dir: String, basename: String): Path = {
+  private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
   }
@@ -163,10 +163,10 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     // remove -locked flag to create common stage
     val nonLocked = cFlags.filterNot(x => x == "-locked")
     val retval = Main.compile(
-      path.toString
-        :: "--force" :: "--execTree" :: "json"
-        :: "--verbose" :: "--verboseKey" :: "GenerateIR"
-        :: nonLocked
+        path.toString
+          :: "--force" :: "--execTree" :: "json"
+          :: "--verbose" :: "--verboseKey" :: "GenerateIR"
+          :: nonLocked
     )
     retval shouldBe a[Main.SuccessfulTerminationTree]
     val treeJs: JsValue = retval match {
@@ -199,7 +199,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
                        |│           │   └───App Task: concat
                        |│           └───App Fragment: if ((j == "clease"))
                        |└───App Outputs: outputs""".stripMargin
- */
+     */
     System.out.println(prettyTree)
   }
 

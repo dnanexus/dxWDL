@@ -128,10 +128,10 @@ object WomValueAnalysis {
 
       // Access a field in a call
       //   Int z = eliminateDuplicate.fields
-      case TAT.ExprGetName(TAT.ExprIdentifier(_, _ : WdlTypes.T_Call, _), _, _, _) =>
+      case TAT.ExprGetName(TAT.ExprIdentifier(_, _: WdlTypes.T_Call, _), _, _, _) =>
         true
 
-      case _                     =>
+      case _ =>
         false
     }
   }
