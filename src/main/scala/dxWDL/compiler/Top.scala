@@ -12,7 +12,7 @@ import dxWDL.util._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 case class Top(cOpt: CompilerOptions) {
-  val verbose = cOpt.verbose
+  private val verbose = cOpt.verbose
 
   // The mapping from region to project name is list of (region, proj-name) pairs.
   // Get the project for this region.
@@ -55,7 +55,7 @@ case class Top(cOpt: CompilerOptions) {
                                       dxWDLrtId: String,
                                       dxProject: DxProject): Unit = {
     val region2project = Utils.getRegions()
-    val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
+    val (projNameRt, _) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)
   }
@@ -78,7 +78,7 @@ case class Top(cOpt: CompilerOptions) {
       case CompilerFlag.All =>
         // get billTo and region from the project, then find the runtime asset
         // in the current region.
-        val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
+        val (_, region) = DxUtils.projectDescribeExtraInfo(dxProject)
         val lrtId = getAssetId(region)
         cloneRtLibraryToProject(region, lrtId, dxProject)
         Some(lrtId)
@@ -120,18 +120,18 @@ case class Top(cOpt: CompilerOptions) {
   private def validate(callable: TAT.Callable): Unit = {
     callable match {
       case wf: TAT.Workflow =>
-        if (wf.parameterMeta.size > 0)
+        if (wf.parameterMeta.isDefined)
           Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
-        checkDeclarations(wf.inputs.map(_.name).toVector)
-        checkDeclarations(wf.outputs.map(_.name).toVector)
+        checkDeclarations(wf.inputs.map(_.name))
+        checkDeclarations(wf.outputs.map(_.name))
         val allDeclarations: Vector[TAT.Declaration] = wf.body.collect {
           case d: TAT.Declaration => d
         }
-        checkDeclarations(allDeclarations.map(_.name).toSeq)
+        checkDeclarations(allDeclarations.map(_.name))
 
       case task: TAT.Task =>
-        checkDeclarations(task.inputs.map(_.name).toSeq)
-        checkDeclarations(task.outputs.map(_.name).toSeq)
+        checkDeclarations(task.inputs.map(_.name))
+        checkDeclarations(task.outputs.map(_.name))
     }
   }
 
@@ -157,7 +157,7 @@ case class Top(cOpt: CompilerOptions) {
     val allFiles: Map[String, (DxFile, DxFileDescribe)] = allDescribe.map {
       case (f: DxFile, desc) => f.id -> (f, desc)
       case _                 => throw new Exception("has to be all files")
-    }.toMap
+    }
     (allResults.path2file, allFiles)
   }
 

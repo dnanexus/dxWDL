@@ -97,6 +97,6 @@ case class SortTypeAliases(verbose: Verbose) {
       case a @ WdlTypes.T_Struct(name, _) =>
         (name, a)
       case _ => throw new Exception("sanity")
-    }.toVector
+    }
   }
 }

@@ -310,7 +310,7 @@ object Utils {
   // color warnings yellow
   def warning(verbose: Verbose, msg: String): Unit = {
     if (verbose.quiet)
-      return;
+      return
     System.err.println(Console.YELLOW + msg + Console.RESET)
   }
 

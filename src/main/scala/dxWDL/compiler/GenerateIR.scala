@@ -23,13 +23,12 @@ case class GenerateIR(verbose: Verbose,
         case wf: TAT.Workflow =>
           Block
             .deepFindCalls(wf.body)
-            .map {
-              case call: TAT.Call =>
-                // The name is fully qualified, for example, lib.add, lib.concat.
-                // We need the task/workflow itself ("add", "concat"). We are
-                // assuming that the namespace can be flattened; there are
-                // no lib.add and lib2.add.
-                Utils.getUnqualifiedName(call.callee.name)
+            .map { call: TAT.Call =>
+              // The name is fully qualified, for example, lib.add, lib.concat.
+              // We need the task/workflow itself ("add", "concat"). We are
+              // assuming that the namespace can be flattened; there are
+              // no lib.add and lib2.add.
+              Utils.getUnqualifiedName(call.callee.name)
             }
             .toSet
       }
@@ -63,7 +62,7 @@ case class GenerateIR(verbose: Verbose,
 
     var accu = Vector.empty[TAT.Callable]
     var crnt = allCallables
-    while (!crnt.isEmpty) {
+    while (crnt.nonEmpty) {
       Utils.trace(verbose2, s"accu=${accu.map(_.name)}")
       Utils.trace(verbose2, s"crnt=${crnt.map(_.name)}")
       val execsToCompile = next(crnt, accu)
@@ -92,26 +91,24 @@ case class GenerateIR(verbose: Verbose,
     val callablesUsedInWorkflow: Vector[IR.Callable] =
       Block
         .deepFindCalls(wf.body)
-        .map {
-          case cNode: TAT.Call =>
-            val localname = Utils.getUnqualifiedName(cNode.callee.name)
-            callables(localname)
+        .map { cNode: TAT.Call =>
+          val localname = Utils.getUnqualifiedName(cNode.callee.name)
+          callables(localname)
         }
-        .toVector
 
-    val WdlCodeSnippet(wfSourceStandAlone) =
+    val wfSourceStandAlone =
       WdlCodeGen(verbose, typeAliases, language)
-        .standAloneWorkflow(wfSource, callablesUsedInWorkflow)
+        .standAloneWorkflow(wf, callablesUsedInWorkflow)
 
-    val gir = new GenerateIRWorkflow(wf,
-                                     wfSource,
-                                     wfSourceStandAlone,
-                                     callables,
-                                     language,
-                                     verbose,
-                                     locked,
-                                     reorg,
-                                     adjunctFiles)
+    val gir = GenerateIRWorkflow(wf,
+                                 wfSource,
+                                 wfSourceStandAlone,
+                                 callables,
+                                 language,
+                                 verbose,
+                                 locked,
+                                 reorg,
+                                 adjunctFiles)
     gir.apply()
   }
 
@@ -161,7 +158,7 @@ case class GenerateIR(verbose: Verbose,
 
   // Entrypoint
   def apply(womBundle: WomBundle,
-            allSources: Map[String, String],
+            allSources: Map[String, TAT.Document],
             language: Language.Value,
             locked: Boolean,
             reorg: Either[Boolean, ReorgAttrs],
@@ -169,10 +166,10 @@ case class GenerateIR(verbose: Verbose,
     Utils.trace(verbose.on, s"IR pass")
     Utils.traceLevelInc()
 
-    val taskDir = allSources.foldLeft(Map.empty[String, String]) {
-      case (accu, (filename, wdlSourceCode)) =>
-        val d = ParseWomSourceFile(verbose.on).scanForTasks(wdlSourceCode)
-        accu ++ d
+    val parser = ParseWomSourceFile(verbose.on)
+    val taskDir = allSources.foldLeft(Map.empty[String, TAT.Task]) {
+      case (accu, (_, doc)) =>
+        accu ++ parser.scanForTasks(doc)
     }
     Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 

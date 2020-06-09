@@ -66,11 +66,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.FLOAT             => WdlTypes.T_Optional(WdlTypes.T_Float)
         case DxIOClass.STRING            => WdlTypes.T_Optional(WdlTypes.T_String)
         case DxIOClass.FILE              => WdlTypes.T_Optional(WdlTypes.T_File)
-        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, false)
-        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, false)
-        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, false)
-        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, false)
-        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, false)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = false)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -82,11 +82,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         case DxIOClass.FLOAT             => WdlTypes.T_Float
         case DxIOClass.STRING            => WdlTypes.T_String
         case DxIOClass.FILE              => WdlTypes.T_File
-        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, true)
-        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, true)
-        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, true)
-        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, true)
-        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, true)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = true)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -124,7 +124,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       val allInputNames = inputSpec.keys.toSet
       val allOutputNames = outputSpec.keys.toSet
       val both = allInputNames.intersect(allOutputNames)
-      if (!both.isEmpty) {
+      if (both.nonEmpty) {
         val bothStr = "[" + both.mkString(", ") + "]"
         throw new Exception(
             s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
@@ -150,7 +150,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def search(dxProject: DxProject, folder: String, recursive: Boolean): Vector[String] = {
     val dxObjectsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose)
-        .apply(dxProject, Some(folder), recursive, None, Vector.empty, Vector.empty, true)
+        .apply(dxProject,
+               Some(folder),
+               recursive,
+               None,
+               Vector.empty,
+               Vector.empty,
+               withInputOutputSpec = true)
 
     // we just want the applets
     val dxAppletsInFolder: Map[DxApplet, DxAppletDescribe] = dxObjectsInFolder.collect {
@@ -169,12 +175,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
               case None    => Some(apl -> desc)
             }
         }
-    }.toMap
+    }
 
-    nativeApplets
-      .map { case (_, desc) => createAppletWdlHeader(desc) }
-      .flatten
-      .toVector
+    nativeApplets.flatMap { case (_, desc) => createAppletWdlHeader(desc) }.toVector
   }
 
   private def isWdl(properties: Option[Map[String, String]]): Boolean = {
@@ -236,7 +239,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def checkedGetJsArray(jsv: JsValue, fieldName: String): Vector[JsValue] = {
     val fields = jsv.asJsObject.fields
     fields.get(fieldName) match {
-      case Some(JsArray(x)) => x.toVector
+      case Some(JsArray(x)) => x
       case other            => throw new Exception(s"malformed field ${fieldName} (${other})")
     }
   }
@@ -258,9 +261,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private val taskNameRegex: Regex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
   private def normalizeAppName(name: String): String = {
     def sanitizeChar(ch: Char): String = ch match {
-      case '_'                       => "_"
-      case _ if (ch.isLetterOrDigit) => ch.toString
-      case _                         => "_"
+      case '_'                     => "_"
+      case _ if ch.isLetterOrDigit => ch.toString
+      case _                       => "_"
     }
     name match {
       case taskNameRegex(_*) =>
@@ -296,10 +299,10 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
     val inputSpec = inputSpecJs.map { x =>
       checkedGetIoSpec(name, x)
-    }.toVector
+    }
     val outputSpec = outputSpecJs.map { x =>
       checkedGetIoSpec(name, x)
-    }.toVector
+    }
     val normName = normalizeAppName(name)
     DxAppDescribe(id, normName, 0, 0, None, None, Some(inputSpec), Some(outputSpec))
   }
@@ -319,7 +322,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val allInputNames = inputSpec.keys.toSet
     val allOutputNames = outputSpec.keys.toSet
     val both = allInputNames.intersect(allOutputNames)
-    if (!both.isEmpty) {
+    if (both.nonEmpty) {
       val bothStr = "[" + both.mkString(", ") + "]"
       throw new Exception(
           s"""|Parameters ${bothStr} used as both input and
@@ -364,7 +367,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           None
       }
     }
-    taskHeaders.toVector
+    taskHeaders
   }
 }
 
@@ -381,7 +384,7 @@ object DxNI {
               .replaceAll("\n", " ")
         )
       }
-      outputPath.toFile().delete
+      outputPath.toFile.delete
     }
 
     // pretty print into a buffer
@@ -416,7 +419,7 @@ object DxNI {
     val projName = dxProject.describe().name
 
     // add comment describing how the file was created
-    val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
+    val languageHeader = WdlCodeGen(verbose, Map.empty, language).versionString()
     val header =
       s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
           |# project name = ${projName}
@@ -442,7 +445,7 @@ object DxNI {
     val uniqueTasks = dxAppsAsTasks.toSet.toVector
 
     // add comment describing how the file was created
-    val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
+    val languageHeader = WdlCodeGen(verbose, Map.empty, language).versionString()
     val header =
       s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
           |# These are interfaces to apps.
