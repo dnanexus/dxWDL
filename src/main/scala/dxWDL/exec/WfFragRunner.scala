@@ -680,7 +680,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     }.toMap
 
     val catg = Block.categorize(block)
-    val env = evalExpressions(catg.nodes, envInitialFilled)
+    val env = evalExpressions(catg.nodes, envInitialFilled) ++ envInitialFilled
 
     val fragResults: Map[String, WdlVarLinks] = runMode match {
       case RunnerWfFragmentMode.Launch =>
