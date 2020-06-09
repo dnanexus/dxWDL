@@ -1,4 +1,4 @@
-name: Scala Unit Tests (Staging)
+name: Master Workflow
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    name: Test
+    name: Scala Unit Tests (Staging)
     runs-on: ubuntu-18.04
     steps:
       - name: Git Checkout
