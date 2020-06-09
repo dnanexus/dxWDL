@@ -37,8 +37,8 @@ package dxWDL.exec
 
 import java.nio.file.Paths
 import spray.json._
-import wdlTools.eval.{Context => EvalContext, Eval => WdlExprEval, EvalConfig, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeCheckingRegime, TypeOptions, WdlTypes}
+import wdlTools.eval.{Context => EvalContext, WdlValues}
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
@@ -70,24 +70,13 @@ case class WfFragRunner(wf: TAT.Workflow,
                                               delayWorkspaceDestruction,
                                               runtimeDebugLevel,
                                               fragInputOutput.typeAliases)
+  // build an object capable of evaluating WDL expressions
+  private val evaluator = WdlEvaluator.make(dxIoFunctions, document.version.value)
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {
     gSeqNum += 1
     gSeqNum
-  }
-
-  // build an object capable of evaluating WDL expressions
-  val evaluator: WdlExprEval = {
-    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
-                               antlr4Trace = false,
-                               localDirectories = Vector.empty,
-                               verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
-    WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,

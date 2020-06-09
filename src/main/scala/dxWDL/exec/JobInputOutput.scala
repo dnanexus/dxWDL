@@ -3,9 +3,9 @@ package dxWDL.exec
 import java.nio.file.{Files, Path, Paths}
 
 import spray.json._
-import wdlTools.eval.{EvalConfig, WdlValues, Context => EvalContext, Eval => WdlExprEval}
+import wdlTools.eval.{WdlValues, Context => EvalContext}
 import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypeCheckingRegime, TypeOptions, WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.base._
 import dxWDL.base.Utils.FLAT_FILES_SUFFIX
 import dxWDL.dx.{DxFile, DxUtils, DxdaManifest, DxfuseManifest}
@@ -19,6 +19,7 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, structDefs)
+  private val evaluator = WdlEvaluator.make(dxIoFunctions, wdlVersion)
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
@@ -30,19 +31,6 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
     val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", wdlType, jsv)
     dxFiles
-  }
-
-  val evaluator: WdlExprEval = {
-    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
-                               antlr4Trace = false,
-                               localDirectories = Vector.empty,
-                               verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
-
-    WdlExprEval(evalOpts, evalCfg, wdlVersion, None)
   }
 
   private def evaluateWomExpression(expr: TAT.Expr,

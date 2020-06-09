@@ -111,9 +111,11 @@ object WomValueAnalysis {
     }
   }
 
-  // A trivial expression has no operators, it is either a constant WdlValues.V
-  // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
-  // is not.
+  // A trivial expression has no operators, it is either (1) a
+  // constant, (2) a single identifier, or (3) an accesss to a call
+  // field.
+  //
+  // For example, '5' and 'x' are trivial. 'x + y'  is not.
   def isTrivialExpression(expr: TAT.Expr): Boolean = {
     expr match {
       case _: TAT.ValueNull      => true
