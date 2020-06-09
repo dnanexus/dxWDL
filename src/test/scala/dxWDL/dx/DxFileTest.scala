@@ -1,11 +1,15 @@
 package dxWDL.dx
 
 import org.scalatest.{FlatSpec, Matchers}
-
+import spray.json._
+import com.dnanexus.DXAPI
+import com.fasterxml.jackson.databind.JsonNode
 class DxFileTest extends FlatSpec with Matchers {
 
   val TEST_PROJECT: DxProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // dxWDL_playground
-  val PUBLIC_PROJECT: DxProject = DxProject("project-FqP0vf00bxKykykX5pVXB1YQ") // dxWDL_public_test
+  val PUBLIC_PROJECT: DxProject = DxProject("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // dxWDL_CI
+  val FILE_IN_TWO_PROJS: DxFile = DxFile("file-FqPbPZ00ffPG5zf6FvGJyfVp", Some(TEST_PROJECT))
+  val FILE_IN_TWO_PROJS_WO_PROJ: DxFile = DxFile("file-FqPbPZ00ffPG5zf6FvGJyfVp", None)
   val FILE1: DxFile = DxFile("file-FGqFGBQ0ffPPkYP19gBvFkZy", Some(TEST_PROJECT))
   val FILE2: DxFile = DxFile("file-FGqFJ8Q0ffPGVz3zGy4FK02P", Some(TEST_PROJECT))
   val FILE3: DxFile = DxFile("file-FGzzpkQ0ffPJX74548Vp6670", Some(TEST_PROJECT))
@@ -69,5 +73,27 @@ class DxFileTest extends FlatSpec with Matchers {
     result(FILE6).project shouldBe PUBLIC_PROJECT.getId
     result(FILE7).name shouldBe "test4.test"
     result(FILE7).project shouldBe PUBLIC_PROJECT.getId
+  }
+
+  it should "describe files in bulk with extrafields" in {
+    val result = DxFile.bulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2), Set(Field.Details))
+    result(FILE_IN_TWO_PROJS).details shouldBe Some("{\"detail1\":\"value1\"}".parseJson)
+    result(FILE2).details shouldBe Some("{}".parseJson)
+  }
+
+  it should "Describe files in bulk without extrafield values - details value should be none" in {
+    val result = DxFile.bulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
+    result(FILE_IN_TWO_PROJS).details shouldBe None
+    result(FILE2).details shouldBe None
+  }
+
+  it should "bulk describe file which is in two projects, but projects where to search is given" in {
+    val result = DxFile.bulkDescribe(Vector(FILE_IN_TWO_PROJS))
+    result.size shouldBe 1
+  }
+
+  it should "bulk describe file which is in two projects, project where to search is not given" in {
+    val result = DxFile.bulkDescribe(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
+    result.size shouldBe 2
   }
 }
