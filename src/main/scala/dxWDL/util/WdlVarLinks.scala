@@ -179,7 +179,8 @@ case class WdlVarLinksConverter(verbose: Verbose,
       case (WdlTypes.T_Int, JsNumber(bnm))    => WdlValues.V_Int(bnm.intValue)
       case (WdlTypes.T_Float, JsNumber(bnm))  => WdlValues.V_Float(bnm.doubleValue)
       case (WdlTypes.T_String, JsString(s))   => WdlValues.V_String(s)
-      case (WdlTypes.T_File, JsString(s))     => WdlValues.V_File(s)
+      case (WdlTypes.T_File, JsString(s))     =>
+        WdlValues.V_File(s)
       case (WdlTypes.T_File, JsObject(_))     =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not

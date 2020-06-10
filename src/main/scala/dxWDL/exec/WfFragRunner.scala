@@ -261,6 +261,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         val fields = wdlVarLinksConverter.genFields(wvl, varName)
         accu ++ fields.toMap
     }
+    Utils.appletLog(verbose, s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}")
     JsObject(m)
   }
 

@@ -1180,7 +1180,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "ignore dx_instance_type when evaluating runtime hints" taggedAs (EdgeTest) in {
+  it should "ignore dx_instance_type when evaluating runtime hints" in {
     val path = pathFromBasename("compiler", "instance_type_test.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1615,5 +1615,18 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case None                         => None
       case other                        => throw new Exception("meta is not None or empty for inc task")
     }
+  }
+
+  it should "work correctly with pairs in a scatter" taggedAs (EdgeTest) in {
+    val path = pathFromBasename("subworkflows", basename = "scatter_subworkflow_with_optional.wdl")
+
+    val cFlagsNotQuiet = cFlags.filter( _ != "-quiet" )
+    val retval = Main.compile(
+        path.toString
+          :: "--verbose"
+          :: "--verboseKey" :: "GenerateIR"
+          :: cFlagsNotQuiet
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 }

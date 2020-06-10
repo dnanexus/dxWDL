@@ -20,7 +20,7 @@ package dxWDL.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import java.lang.management._
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wdlTools.eval.{Context => EvalContext, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
@@ -97,7 +97,9 @@ case class TaskRunner(task: TAT.Task,
                      dxUrl2path: Map[Furl, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
-        (name, WomValueSerialization(typeAliases).toJSON(t, v))
+        val wdlTypeRepr = WomTypeSerialization(typeAliases).toString(t)
+        val value = WomValueSerialization(typeAliases).toJSON(t, v)
+        (name, JsArray(JsString(wdlTypeRepr), value))
     }
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
       case (FurlLocal(url), path) =>
@@ -107,11 +109,13 @@ case class TaskRunner(task: TAT.Task,
     }
 
     // marshal into json, and then to a string
-    val json = JsObject("localizedInputs" -> JsObject(locInputsM), "dxUrl2path" -> JsObject(dxUrlM))
+    val json = JsObject("localizedInputs" -> JsObject(locInputsM),
+                        "dxUrl2path" -> JsObject(dxUrlM))
     Utils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
-  def readEnvFromDisk(): (Map[String, WdlValues.V], Map[Furl, Path]) = {
+  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)],
+                          Map[Furl, Path]) = {
     val buf = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
     val (locInputsM, dxUrlM) = json match {
@@ -125,8 +129,12 @@ case class TaskRunner(task: TAT.Task,
       case _ => throw new Exception("Malformed environment serialized to disk")
     }
     val localizedInputs = locInputsM.map {
-      case (key, jsVal) =>
-        key -> WomValueSerialization(typeAliases).fromJSON(jsVal)
+      case (key, JsArray(Vector(JsString(wdlTypeRepr), jsVal))) =>
+        val t = WomTypeSerialization(typeAliases).fromString(wdlTypeRepr)
+        val value = WomValueSerialization(typeAliases).fromJSON(jsVal)
+        key -> (t, value)
+      case (_, other) =>
+        throw new Exception(s"sanity: bad deserialization value ${other}")
     }
     val dxUrl2path = dxUrlM.map {
       case (key, JsString(path)) => Furl.parse(key) -> Paths.get(path)
@@ -377,14 +385,8 @@ case class TaskRunner(task: TAT.Task,
     env.map { case (name, (_, v)) => name -> v }
   }
 
-  private def evalInputsAndDeclarations(taskInputs: Map[TAT.InputDefinition, WdlValues.V])
+  private def evalInputsAndDeclarations(inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)])
       : Map[String, (WdlTypes.T, WdlValues.V)] = {
-    val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
-      taskInputs.map {
-        case (inpDfn, value) =>
-          inpDfn.name -> (inpDfn.wdlType, value)
-      }
-
     // evaluate the declarations using the inputs
     val env: Map[String, (WdlTypes.T, WdlValues.V)] =
       task.declarations.foldLeft(inputsWithTypes) {
@@ -436,6 +438,23 @@ case class TaskRunner(task: TAT.Task,
       Utils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
+    val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
+      taskInputs.map {
+        case (inpDfn, value) =>
+          inpDfn.name -> (inpDfn.wdlType, value)
+      }
+
+    Utils.appletLog(verbose, s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
+    (inputsWithTypes, dxUrl2path)
+  }
+
+  // HERE we download all the inputs, or mount them with dxfuse
+
+  // instantiate the bash command
+  def instantiateCommand(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)])
+      : Map[String, (WdlTypes.T, WdlValues.V)] = {
+    Utils.appletLog(verbose, s"InstantiateCommand, env = ${localizedInputs}")
+
     val env = evalInputsAndDeclarations(localizedInputs)
     val docker = dockerImage(stripTypesFromEnv(env))
 
@@ -447,15 +466,17 @@ case class TaskRunner(task: TAT.Task,
     docker match {
       case Some(img) =>
         // write a script that launches the actual command inside a docker image.
-        writeDockerSubmitBashScript(img, manifest2Js != JsNull)
+        writeDockerSubmitBashScript(img, Files.exists(dxPathConfig.dxfuseManifest))
       case None => ()
     }
 
     // Record the localized inputs, we need them in the epilog
-    (env, dxUrl2path)
+    env
   }
 
-  def epilog(localizedInputs: Map[String, WdlValues.V],
+  // HERE we run docker and/or the bash script
+
+  def epilog(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
              dxUrl2path: Map[Furl, Path]): Map[String, JsValue] = {
     Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
     if (maxVerboseLevel)
@@ -468,11 +489,12 @@ case class TaskRunner(task: TAT.Task,
       task.outputs
         .foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
           case (env, outDef: TAT.OutputDefinition) =>
-            val envNoTypes = env.map { case (k, (_, v)) => k -> v }
-            val value = evaluator.applyExprAndCoerce(outDef.expr,
-                                                     outDef.wdlType,
-                                                     EvalContext(envNoTypes ++ localizedInputs))
-            env + (outDef.name -> (outDef.wdlType, value))
+          val inputsNoTypes = stripTypesFromEnv(localizedInputs)
+          val envNoTypes = stripTypesFromEnv(env)
+          val value = evaluator.applyExprAndCoerce(outDef.expr,
+                                                   outDef.wdlType,
+                                                   EvalContext(envNoTypes ++ inputsNoTypes))
+          env + (outDef.name -> (outDef.wdlType, value))
         }
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -499,7 +521,12 @@ case class TaskRunner(task: TAT.Task,
   // calculating the instance type in the workflow runner, outside
   // the task.
   def calcInstanceType(taskInputs: Map[TAT.InputDefinition, WdlValues.V]): String = {
-    val env = evalInputsAndDeclarations(taskInputs)
+    val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
+      taskInputs.map {
+        case (inpDfn, value) =>
+          inpDfn.name -> (inpDfn.wdlType, value)
+      }
+    val env = evalInputsAndDeclarations(inputsWithTypes)
     val runtimeAttrs: Map[String, TAT.Expr] = task.runtime match {
       case None                             => Map.empty
       case Some(TAT.RuntimeSection(kvs, _)) => kvs

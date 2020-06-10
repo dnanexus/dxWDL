@@ -225,7 +225,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case None =>
         if (!optional) {
           // A missing compulsory argument
-          Utils.warning(verbose, s"Missing argument $fqn, it will have to be provided at runtime")
+          Utils.warning(verbose, s"""|Missing argument $fqn, it will have to be provided at runtime
+                                     |env =
+                                     |${env.mkString("\n")}
+                                     |""".stripMargin)
         }
         None
       case Some((name, lVar)) =>
