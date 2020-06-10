@@ -37,7 +37,7 @@ case class Top(cOpt: CompilerOptions) {
   // Find the runtime dxWDL asset with the correct version. Look inside the
   // project configured for this region.
   private def getAssetId(region: String): String = {
-    val region2project = Utils.getRegions()
+    val region2project = Utils.getRegions
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
@@ -54,7 +54,7 @@ case class Top(cOpt: CompilerOptions) {
   private def cloneRtLibraryToProject(region: String,
                                       dxWDLrtId: String,
                                       dxProject: DxProject): Unit = {
-    val region2project = Utils.getRegions()
+    val region2project = Utils.getRegions
     val (projNameRt, _) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)

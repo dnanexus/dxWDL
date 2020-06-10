@@ -74,10 +74,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
+    val evalCfg = EvalConfig.make(dxIoFunctions.config.homeDir,
+                                  dxIoFunctions.config.tmpDir,
+                                  dxIoFunctions.config.stdout,
+                                  dxIoFunctions.config.stderr)
     val evaluator = WdlExprEval(evalOpts, evalCfg, Language.toWdlVersion(language), None)
 
     evaluator.applyExpr(expr, EvalContext(env))

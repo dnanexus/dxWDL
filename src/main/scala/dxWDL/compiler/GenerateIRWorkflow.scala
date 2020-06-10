@@ -545,7 +545,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                            IR.InstanceTypeDefault,
                            IR.DockerImageNone,
                            IR.AppletKindWfInputs,
-                           wfSourceStandAlone)
+                           wfStandAlone)
     Utils.trace(verbose.on, s"Compiling common applet ${applet.name}")
 
     val sArgs: Vector[SArg] = inputVars.map { _ =>
@@ -623,7 +623,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                            IR.InstanceTypeDefault,
                            IR.DockerImageNone,
                            appletKind,
-                           wfSourceStandAlone)
+                           wfStandAlone)
 
     // define the extra stage we add to the workflow
     (IR.Stage(OUTPUT_SECTION,
@@ -648,7 +648,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         IR.AppletKindWorkflowOutputReorg,
-        wfSourceStandAlone
+        wfStandAlone
     )
     Utils.trace(verbose.on, s"Compiling output reorganization applet ${applet.name}")
 
@@ -685,7 +685,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         appletKind,
-        wfSourceStandAlone
+        wfStandAlone
     )
 
     Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAttributes.appId}")
@@ -813,7 +813,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                     allWfInputs,
                     simpleWfOutputs,
                     stages,
-                    wfSourceCode,
+                    wf,
                     locked = true,
                     level,
                     Some(wfAttr))
@@ -821,8 +821,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     } else {
       // Some of the outputs are expressions. We need an extra applet+stage
       // to evaluate them.
-      val (outputStage, outputApplet) =
-        buildOutputStage(wfName, wfSourceStandAlone, outputNodes, env)
+      val (outputStage, outputApplet) = buildOutputStage(wfName, outputNodes, env)
       val wfOutputs = outputStage.outputs.map { cVar =>
         (cVar, IR.SArgLink(outputStage.id, cVar))
       }
@@ -830,7 +829,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                              allWfInputs,
                              wfOutputs,
                              stages :+ outputStage,
-                             wfSourceCode,
+                             wf,
                              locked = true,
                              level,
                              Some(wfAttr))

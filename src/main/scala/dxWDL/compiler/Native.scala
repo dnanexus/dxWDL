@@ -1413,7 +1413,7 @@ case class Native(dxWDLrtId: Option[String],
     // There could be JSON-invalid characters in the source code, so we use base64 encoding.
     // It could be quite large, so we use compression.
     val generator = WdlV1Generator()
-    val sourceLines = generator.generateDocument(wf.document)
+    val sourceLines = generator.generateElement(wf.document)
     val sourceCode = Utils.gzipAndBase64Encode(sourceLines.mkString("\n"))
     // TODO: rename field, now that we're no longer using WOM
     val sourceCodeField: Map[String, JsValue] = Map("womSourceCode" -> JsString(sourceCode))

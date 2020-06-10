@@ -30,11 +30,12 @@ case class WdlCodeGen(verbose: Verbose,
     sortedTypeAliases.map {
       case (name, wdlType: WdlTypes.T_Struct) =>
         TAT.StructDefinition(name, wdlType, wdlType.members, null)
+      case other => throw new RuntimeException(s"Unexpected type alias ${other}")
     }
   }
 
   // create a wdl-value of a specific type.
-  private def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
+  private[compiler] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
     wdlType match {
       case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, null)
       case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, null)
@@ -78,7 +79,7 @@ case class WdlCodeGen(verbose: Verbose,
     }
   }
 
-  private def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
+  private[compiler] def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
     def seqToType(vec: Iterable[TAT.Expr]): WdlTypes.T = {
       vec.headOption.map(_.wdlType).getOrElse(WdlTypes.T_Any)
     }
@@ -112,9 +113,11 @@ case class WdlCodeGen(verbose: Verbose,
         val memberExprs: Map[TAT.Expr, TAT.Expr] = members.map {
           case (name, value) =>
             TAT.ValueString(name, WdlTypes.T_String, null) -> wdlValueToExpr(value)
+          case other => throw new RuntimeException(s"Unexpected member ${other}")
         }
         val memberTypes = memberExprs.map {
           case (name: TAT.ValueString, value) => name.value -> value.wdlType
+          case other                          => throw new RuntimeException(s"Unexpected member ${other}")
         }
         TAT.ExprMap(memberExprs, WdlTypes.T_Struct(name, memberTypes), null)
 
@@ -128,51 +131,6 @@ case class WdlCodeGen(verbose: Verbose,
         throw new Exception(s"Unhandled value ${other}")
     }
   }
-
-//  private def wdlString(value: WdlValues.V): String = {
-//    value match {
-//      case WdlValues.V_Null           => "null"
-//      case WdlValues.V_Boolean(value) => value.toString
-//      case WdlValues.V_Int(value)     => value.toString
-//      case WdlValues.V_Float(value)   => value.toString
-//      case WdlValues.V_String(value)  => s""""${value}""""
-//      case WdlValues.V_File(value)    => s""""${value}""""
-//
-//      // compound values
-//      case WdlValues.V_Pair(l, r) =>
-//        s"(${wdlString(l)} , ${wdlString(r)})"
-//      case WdlValues.V_Array(value) =>
-//        val elems = value.map(wdlString).mkString(",")
-//        s"[${elems}]"
-//      case WdlValues.V_Map(value) =>
-//        val m = value
-//          .map {
-//            case (k, v) =>
-//              s"${wdlString(k)} : ${wdlString(v)}"
-//          }
-//          .mkString(", ")
-//        s"""{${m}}"""
-//
-//      case WdlValues.V_Optional(value) =>
-//        wdlString(value)
-//      case WdlValues.V_Struct(_, members) =>
-//        val membersStr = members.map {
-//          case (k, v) =>
-//            s"${k} : ${wdlString(v)}"
-//        }.toVector
-//        s"""object { ${membersStr.mkString(", ")} }"""
-//
-//      case WdlValues.V_Object(members) =>
-//        val membersStr = members.map {
-//          case (k, v) =>
-//            s"${k} : ${wdlString(v)}"
-//        }.toVector
-//        s"""object { ${membersStr.mkString(", ")} }"""
-//
-//      case other =>
-//        throw new Exception(s"Unhandled value ${other}")
-//    }
-//  }
 
   /*
   Create a header for a task/workflow. This is an empty task

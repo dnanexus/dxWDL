@@ -11,12 +11,9 @@ import org.scalatest.Inside._
 import scala.io.Source
 import dxWDL.Main
 import dxWDL.Main.SuccessfulTermination
-import dxWDL.base.{Utils, Verbose}
+import dxWDL.base.{ParseWomSourceFile, Utils, Verbose}
 import dxWDL.dx._
-import dxWDL.base.ParseWomSourceFile
 import spray.json._
-
-import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -31,30 +28,30 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   val TEST_PROJECT = "dxWDL_playground"
 
-  lazy val dxTestProject =
+  private lazy val dxTestProject =
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
 
-  lazy val username = System.getProperty("user.name")
-  lazy val unitTestsPath = s"unit_tests/${username}"
-  lazy val cFlags = List("-compileMode",
-                         "NativeWithoutRuntimeAsset",
-                         "-project",
-                         dxTestProject.getId,
-                         "-folder",
-                         "/" + unitTestsPath,
-                         "-force",
-                         "-locked",
-                         "-quiet")
+  private lazy val username = System.getProperty("user.name")
+  private lazy val unitTestsPath = s"unit_tests/${username}"
+  private lazy val cFlags = List("-compileMode",
+                                 "NativeWithoutRuntimeAsset",
+                                 "-project",
+                                 dxTestProject.getId,
+                                 "-folder",
+                                 "/" + unitTestsPath,
+                                 "-force",
+                                 "-locked",
+                                 "-quiet")
 
-  lazy private val cFlagsReorg = List("-compileMode",
+  private lazy val cFlagsReorg = List("-compileMode",
                                       "NativeWithoutRuntimeAsset",
                                       "--project",
                                       dxTestProject.getId,
@@ -76,7 +73,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val topDir = Paths.get(System.getProperty("user.dir"))
     native_applets.foreach { app =>
       try {
-        val (stdout, stderr) = Utils.execCommand(
+        val (_, _) = Utils.execCommand(
             s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/${unitTestsPath}/applets/",
             quiet = true
         )
@@ -87,9 +84,9 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   private def getAppletId(path: String): String = {
-    val folder = Paths.get(path).getParent().toAbsolutePath().toString()
-    val basename = Paths.get(path).getFileName().toString()
-    val verbose = Verbose(false, true, Set.empty)
+    val folder = Paths.get(path).getParent.toAbsolutePath.toString
+    val basename = Paths.get(path).getFileName.toString
+    val verbose = Verbose(on = false, quiet = true, Set.empty)
     val results = DxFindDataObjects(Some(10), verbose).apply(dxTestProject,
                                                              Some(folder),
                                                              recurse = false,
@@ -97,7 +94,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                                                              withProperties = Vector.empty,
                                                              nameConstraints = Vector(basename),
                                                              withInputOutputSpec = false)
-    results.size shouldBe (1)
+    results.size shouldBe 1
     val desc = results.values.head
     desc.id
   }
@@ -114,7 +111,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     tmp_extras.toString
   }
 
-  it should "Native compile a single WDL task" taggedAs (NativeTestXX) in {
+  it should "Native compile a single WDL task" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "add.wdl")
     val retval = Main.compile(
         path.toString :: "--execTree" :: "json" :: cFlags
@@ -123,13 +120,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     inside(retval) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not be the pretty string version
+          case Left(_) => false // should not be the pretty string version
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind") match {
               case Seq(JsString(name), JsString(kind)) =>
-                name shouldBe ("add")
-                kind shouldBe ("Task")
-              case other =>
+                name shouldBe "add"
+                kind shouldBe "Task"
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -138,7 +135,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   // linear workflow
-  it should "Native compile a linear WDL workflow without expressions" taggedAs (NativeTestXX) in {
+  it should "Native compile a linear WDL workflow without expressions" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: "--execTree" :: "json" :: cFlags)
     retval shouldBe a[Main.SuccessfulTerminationTree]
@@ -146,14 +143,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     inside(retval) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not be the pretty string version
+          case Left(_) => false // should not be the pretty string version
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-                name shouldBe ("wf_linear_no_expr")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (3)
-              case other =>
+                name shouldBe "wf_linear_no_expr"
+                kind shouldBe "workflow"
+                stages.size shouldBe 3
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -162,7 +159,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   // linear workflow
-  it should "Native compile a linear WDL workflow wtih execTree in details" taggedAs (NativeTestXX) in {
+  it should "Native compile a linear WDL workflow wtih execTree in details" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTermination]
@@ -193,16 +190,16 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-        name shouldBe ("wf_linear_no_expr")
-        kind shouldBe ("workflow")
-        stages.size shouldBe (3)
-      case other =>
+        name shouldBe "wf_linear_no_expr"
+        kind shouldBe "workflow"
+        stages.size shouldBe 3
+      case _ =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
 
   //able to describe linear workflow using Tree
-  it should "Get execTree from a compiled workflow" taggedAs (NativeTestXX) in {
+  it should "Get execTree from a compiled workflow" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
     retval shouldBe a[Main.SuccessfulTermination]
@@ -215,16 +212,16 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val treeJs = Tree.formDXworkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
-        id shouldBe (wf.id)
-        name shouldBe ("wf_linear_no_expr")
-        kind shouldBe ("workflow")
-        stages.size shouldBe (3)
-      case other =>
+        id shouldBe wf.id
+        name shouldBe "wf_linear_no_expr"
+        kind shouldBe "workflow"
+        stages.size shouldBe 3
+      case _ =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
 
-  it should "Native compile a linear WDL workflow" taggedAs (NativeTestXX) in {
+  it should "Native compile a linear WDL workflow" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
     val retval = Main.compile(
         path.toString
@@ -233,21 +230,21 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with a scatter without a call" taggedAs (NativeTestXX) in {
+  it should "Native compile a workflow with a scatter without a call" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "scatter_no_call.wdl")
     Main.compile(
         path.toString :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a draft2 workflow" taggedAs (NativeTestXX) in {
+  it should "Native compile a draft2 workflow" taggedAs NativeTestXX in {
     val path = pathFromBasename("draft2", "shapes.wdl")
     Main.compile(
         path.toString :: "--force" :: cFlags
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "Native compile a workflow with one level nesting" taggedAs (NativeTestXX) in {
+  it should "Native compile a workflow with one level nesting" taggedAs NativeTestXX in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
@@ -257,14 +254,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     inside(retval) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not produce a pretty string
+          case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-                name shouldBe ("two_levels")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (3)
-              case other =>
+                name shouldBe "two_levels"
+                kind shouldBe "workflow"
+                stages.size shouldBe 3
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -272,7 +269,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
   }
 
-  it should "Convert JS Tree to Pretty" taggedAs (NativeTestXX) in {
+  it should "Convert JS Tree to Pretty" taggedAs NativeTestXX in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     // remove -locked flag to create common stage
     val nonLocked = cFlags.filterNot(x => x == "-locked")
@@ -287,7 +284,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
             throw new Exception(s"tree representation is wrong ${str}") // should not produce a pretty string
           case Right(treeJs) => treeJs
         }
-      case other => throw new Exception(s"tree representation is wrong")
+      case _ => throw new Exception(s"tree representation is wrong")
     }
 
     val prettyTree = Tree.generateTreeFromJson(treeJs.asJsObject)
@@ -325,15 +322,15 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     inside(describeRet) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not produce a pretty string
+          case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages", "id") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages), JsString(id)) =>
-                name shouldBe ("four_levels")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (4)
+                name shouldBe "four_levels"
+                kind shouldBe "workflow"
+                stages.size shouldBe 4
                 id shouldBe wfID
-              case other =>
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -407,18 +404,12 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                                                                |│           │   └───App Task: concat
                                                                |│           └───App Fragment: if ((j == "clease"))
                                                                |└───App Outputs: outputs""".stripMargin
-          case Right(treeJs) => false // should not go down this road
+          case Right(_) => false // should not go down this road
         }
     }
   }
 
-  private def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
-    tDoc.elements.collect {
-      case t: TAT.Task => t.name -> t
-    }.toMap
-  }
-
-  it should "handle various conditionals" taggedAs (NativeTestXX) in {
+  it should "handle various conditionals" taggedAs NativeTestXX in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
     Main.compile(
         path.toString
@@ -429,7 +420,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "be able to build interfaces to native applets" taggedAs (NativeTestXX) in {
+  it should "be able to build interfaces to native applets" taggedAs NativeTestXX in {
     val outputPath = "/tmp/dx_extern.wdl"
     Main.dxni(
         List("--force",
@@ -445,22 +436,27 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
 
     // check that the generated file contains the correct tasks
-    val content = Source.fromFile(outputPath).getLines.mkString("\n")
+    val src = Source.fromFile(outputPath)
+    val content =
+      try {
+        src.getLines.mkString("\n")
+      } finally {
+        src.close()
+      }
 
-    val tasks: Map[String, String] =
-      scanForTasks(content)
+    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
 
-    tasks.keys shouldBe (Set(
+    tasks.keySet shouldBe Set(
         "native_sum",
         "native_sum_012",
         "functional_reorg_test",
         "native_mk_list",
         "native_diff",
         "native_concat"
-    ))
+    )
   }
 
-  it should "be able to build an interface to a specific applet" taggedAs (NativeTestXX) in {
+  it should "be able to build an interface to a specific applet" taggedAs NativeTestXX in {
     val outputPath = "/tmp/dx_extern_one.wdl"
     Main.dxni(
         List("--force",
@@ -476,15 +472,20 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
 
     // check that the generated file contains the correct tasks
-    val content = Source.fromFile(outputPath).getLines.mkString("\n")
+    val src = Source.fromFile(outputPath)
+    val content =
+      try {
+        src.getLines.mkString("\n")
+      } finally {
+        src.close()
+      }
 
-    val tasks: Map[String, String] =
-      scanForTasks(content)
+    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
 
-    tasks.keys shouldBe (Set("native_sum"))
+    tasks.keySet shouldBe Set("native_sum")
   }
 
-  it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX) in {
+  it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
     val dxObj = DxPath.resolveDxPath(
         s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
@@ -506,11 +507,17 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
 
     // check that the generated file contains the correct tasks
-    val content = Source.fromFile(outputPath).getLines.mkString("\n")
+    val src = Source.fromFile(outputPath)
+    val content =
+      try {
+        src.getLines.mkString("\n")
+      } finally {
+        src.close()
+      }
 
-    val tasks: Map[String, String] = scanForTasks(content)
+    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
 
-    tasks.keys shouldBe (Set("native_sum"))
+    tasks.keySet shouldBe Set("native_sum")
   }
 
   ignore should "be able to include pattern information in inputSpec" in {
@@ -911,11 +918,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           case ("upstreamLicenses", JsArray(array)) => array shouldBe Vector(JsString("MIT"))
           case ("upstreamProjects", array: JsArray) =>
             array shouldBe expectedUpstreamProjects
-          case ("whatsNew", JsString(value))       => value shouldBe expectedWhatsNew
-          case ("instanceTypeDB", JsString(value)) => () // ignore
-          case ("runtimeAttrs", JsObject(fields))  => () // ignore
-          case ("womSourceCode", JsString(value))  => () // ignore
-          case other                               => throw new Exception(s"Unexpected result ${other}")
+          case ("whatsNew", JsString(value))   => value shouldBe expectedWhatsNew
+          case ("instanceTypeDB", JsString(_)) => () // ignore
+          case ("runtimeAttrs", JsObject(_))   => () // ignore
+          case ("womSourceCode", JsString(_))  => () // ignore
+          case other                           => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")
     }
@@ -1106,13 +1113,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.details match {
       case Some(JsObject(fields)) =>
         fields.foreach {
-          case ("whatsNew", JsString(value))                   => value shouldBe "v1.0: First release"
-          case ("womSourceCode", JsString(value))              => ()
-          case ("delayWorkspaceDestruction", JsBoolean(value)) => ()
-          case ("link_inc", JsObject(fields))                  => ()
-          case ("link_mul", JsObject(fields))                  => ()
-          case ("execTree", JsString(value))                   => ()
-          case other                                           => throw new Exception(s"Unexpected result ${other}")
+          case ("whatsNew", JsString(value))               => value shouldBe "v1.0: First release"
+          case ("womSourceCode", JsString(_))              => ()
+          case ("delayWorkspaceDestruction", JsBoolean(_)) => ()
+          case ("link_inc", JsObject(_))                   => ()
+          case ("link_mul", JsObject(_))                   => ()
+          case ("execTree", JsString(_))                   => ()
+          case other                                       => throw new Exception(s"Unexpected result ${other}")
         }
       case other => throw new Exception(s"Unexpected result ${other}")
     }
@@ -1149,7 +1156,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     y.default shouldBe Some(IOParameterDefaultNumber(5))
   }
 
-  it should "deep nesting" taggedAs (NativeTestXX) in {
+  it should "deep nesting" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(
         path.toString
@@ -1160,7 +1167,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Main.SuccessfulTermination]
   }
 
-  it should "make default task timeout 48 hours" taggedAs (NativeTestXX) in {
+  it should "make default task timeout 48 hours" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val appId = Main.compile(
         path.toString :: "--force" :: cFlags
@@ -1170,7 +1177,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -1185,7 +1192,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     )
   }
 
-  it should "timeout can be overriden from the extras file" taggedAs (NativeTestXX) in {
+  it should "timeout can be overriden from the extras file" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "add_timeout_override.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
     val appId = Main.compile(
@@ -1197,7 +1204,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -1211,7 +1218,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   }
 
-  it should "allow choosing GPU instances" taggedAs (NativeTestXX) in {
+  it should "allow choosing GPU instances" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "GPU2.wdl")
 
     val appId = Main.compile(path.toString :: cFlags) match {
@@ -1220,7 +1227,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -1265,8 +1272,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     wfStages.size shouldBe 4
     val reorgStage = wfStages.last
 
-    reorgStage.id shouldBe ("stage-reorg")
-    reorgStage.executable shouldBe (appletId)
+    reorgStage.id shouldBe "stage-reorg"
+    reorgStage.executable shouldBe appletId
 
     // There should be 3 inputs, the output from output stage and the custom reorg config file.
     val reorgInput: JsObject = reorgStage.input match {
@@ -1285,7 +1292,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
-    val (uploadOut, uploadErr) = Utils.execCommand(
+    val (uploadOut, _) = Utils.execCommand(
         s"dx upload ${path.toString} --destination /reorg_tests --brief"
     )
     val fileId = uploadOut.trim
@@ -1357,7 +1364,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     trainsOutputVector.outputVars.size shouldBe 1
   }
 
-  it should "Set job-reuse flag" taggedAs (NativeTestXX) in {
+  it should "Set job-reuse flag" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -1368,7 +1375,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // compile the task while
     val retval = Main.compile(
-        path.toString :: "--extras" :: extrasPath.toString :: cFlags
+        path.toString :: "--extras" :: extrasPath :: cFlags
     )
     retval shouldBe a[Main.SuccessfulTermination]
 
@@ -1378,13 +1385,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the job reuse flag is set
-    val (stdout, stderr) =
+    val (stdout, _) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
 
-  it should "set job-reuse flag on workflow" taggedAs (NativeTestXX) in {
+  it should "set job-reuse flag on workflow" taggedAs NativeTestXX in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{
@@ -1405,13 +1412,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the job reuse flag is set
-    val (stdout, stderr) =
+    val (stdout, _) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
 
-  it should "set delayWorkspaceDestruction on applet" taggedAs (NativeTestXX) in {
+  it should "set delayWorkspaceDestruction on applet" taggedAs NativeTestXX in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -1431,14 +1438,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the delayWorkspaceDestruction flag is set
-    val (stdout, stderr) =
+    val (stdout, _) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
-    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
   }
 
-  it should "set delayWorkspaceDestruction on workflow" taggedAs (NativeTestXX) in {
+  it should "set delayWorkspaceDestruction on workflow" taggedAs NativeTestXX in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{
@@ -1458,9 +1465,9 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the flag is set on the resulting workflow
-    val (stdout, stderr) =
+    val (stdout, _) =
       Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
-    val details = stdout.parseJson.asJsObject.fields.get("details").get
+    val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
   }

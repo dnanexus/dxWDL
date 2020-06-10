@@ -72,7 +72,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(imports: Vector[Path] = Vector.empty): TypeOptions = {
+  private def makeOptions(imports: Vector[Path]): TypeOptions = {
     TypeOptions(
         antlr4Trace = false,
         localDirectories = imports,

@@ -8,7 +8,7 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 import dxWDL.base.{Language, ParseWomSourceFile, Utils, Verbose, WdlRuntimeAttrs, WomBundle}
-import dxWDL.compiler.{WdlCodeGen}
+import dxWDL.compiler.WdlCodeGen
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 
 // This test module requires being logged in to the platform.
@@ -18,8 +18,8 @@ import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 class TaskRunnerTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
-    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
-  private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
+    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), gpu = false)
+  private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
   private val verbose = true
 
   // Note: if the file doesn't exist, this throws a null pointer exception
@@ -60,7 +60,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       case WdlValues.V_File(s) => WdlValues.V_File(pathFromBasename(s).toString)
 
       // Maps
-      case (WdlValues.V_Map(m: Map[WdlValues.V, WdlValues.V])) =>
+      case WdlValues.V_Map(m: Map[WdlValues.V, WdlValues.V]) =>
         val m1 = m.map {
           case (k, v) =>
             val k1 = addBaseDir(k)
@@ -69,7 +69,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         }
         WdlValues.V_Map(m1)
 
-      case (WdlValues.V_Pair(l, r)) =>
+      case WdlValues.V_Pair(l, r) =>
         val left = addBaseDir(l)
         val right = addBaseDir(r)
         WdlValues.V_Pair(left, right)
@@ -88,7 +88,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         val m2 = m.map {
           case (k, v) =>
             k -> addBaseDir(v)
-        }.toMap
+        }
         WdlValues.V_Object(m2)
 
       case other =>
@@ -133,7 +133,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, verbose)
+    val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = verbose)
     dxPathConfig.createCleanDirs()
 
     val (language, womBundle: WomBundle, allSources, _) =
@@ -147,17 +147,16 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
-    val jobInputOutput = new JobInputOutput(dxIoFunctions,
-                                            womBundle.typeAliases,
-                                            Language.toWdlVersion(language),
-                                            runtimeDebugLevel)
+    val jobInputOutput = JobInputOutput(dxIoFunctions,
+                                        womBundle.typeAliases,
+                                        Language.toWdlVersion(language),
+                                        runtimeDebugLevel)
 
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
-    val wdlCodeGen = WdlCodeGen(Verbose(verbose, true, Set.empty), womBundle.typeAliases, language)
-    val WdlCodeSnippet(taskSourceCodeFull) = wdlCodeGen.standAloneTask(taskSourceCode)
-
-    val (_, _, taskDocument) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCodeFull)
+    val wdlCodeGen =
+      WdlCodeGen(Verbose(verbose, quiet = true, Set.empty), womBundle.typeAliases, language)
+    val taskDocument = wdlCodeGen.standAloneTask(taskSourceCode)
     val taskRunner = TaskRunner(task,
                                 taskDocument,
                                 womBundle.typeAliases,
@@ -171,7 +170,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {
       case (inpDef, value) => (inpDef, addBaseDir(value))
-    }.toMap
+    }
 
     // run the entire task
 
@@ -181,11 +180,11 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // 2. execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      val (stdout, stderr) = Utils.execCommand(script.toString, None)
+      val (_, _) = Utils.execCommand(script.toString, None)
     }
 
     // 3. epilog
-    val envNoTypes = env.map { case (k, (t, v)) => k -> v }
+    val envNoTypes = env.map { case (k, (_, v)) => k -> v }
     val outputFields: Map[String, JsValue] = taskRunner.epilog(envNoTypes, dxUrl2path)
 
     outputFieldsExpected match {
@@ -267,7 +266,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     repo should equal("ubuntu_18_04_minimal:latest")
   }
 
-  it should "handle structs" taggedAs (EdgeTest) in {
+  it should "handle structs" taggedAs EdgeTest in {
     runTask("Person2")
   }
 

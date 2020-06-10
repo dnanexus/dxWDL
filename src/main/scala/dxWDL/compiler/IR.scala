@@ -420,7 +420,7 @@ object IR {
                       inputs: Vector[(CVar, SArg)],
                       outputs: Vector[(CVar, SArg)],
                       stages: Vector[Stage],
-                      document: TAT.Document,
+                      document: TAT.Workflow,
                       locked: Boolean,
                       level: Level.Value,
                       meta: Option[Vector[WorkflowAttr]] = None)

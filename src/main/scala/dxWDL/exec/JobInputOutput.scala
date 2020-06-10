@@ -37,10 +37,10 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
+    val evalCfg = EvalConfig.make(dxIoFunctions.config.homeDir,
+                                  dxIoFunctions.config.tmpDir,
+                                  dxIoFunctions.config.stdout,
+                                  dxIoFunctions.config.stderr)
 
     WdlExprEval(evalOpts, evalCfg, wdlVersion, None)
   }

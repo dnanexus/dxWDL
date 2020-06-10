@@ -1,17 +1,17 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
-
 import wdlTools.eval.WdlValues
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
-
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx._
-import dxWDL.compiler.ParameterMeta.{translateMetaValue => translate, translateMetaKVs}
+import dxWDL.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
+import wdlTools.generators.code.WdlV1Generator
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -22,7 +22,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   private val dxProject = {
-    val p = DxUtils.dxEnv.getProjectContext()
+    val p = DxUtils.dxEnv.getProjectContext
     if (p == null)
       throw new Exception("Must be logged in to run this test")
     DxProject(p)
@@ -164,7 +164,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case Some(wf: IR.Workflow) => wf
       case _                     => throw new Exception("sanity")
     }
-    primaryWf.stages.size shouldBe (2)
+    primaryWf.stages.size shouldBe 2
   }
 
   it should "compile a sub-block with several calls" in {
@@ -210,7 +210,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("review")
+    stage.description shouldBe "review"
   }
 
   it should "compile a workflow calling a subworkflow as a direct call with 2.0 version" in {
@@ -227,7 +227,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("review")
+    stage.description shouldBe "review"
   }
 
   it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with 2.0 version" in {
@@ -244,7 +244,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception("bad value in bundle")
     }
     val stage = wf.stages.head
-    stage.description shouldBe ("native_sum_wf")
+    stage.description shouldBe "native_sum_wf"
   }
 
   it should "three nesting levels" in {
@@ -263,12 +263,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _               => throw new Exception("sanity")
     }
 
-    wf.stages.size shouldBe (1)
+    wf.stages.size shouldBe 1
 
     val level2 = bundle.allCallables(wf.name)
     level2 shouldBe a[IR.Workflow]
     val wfLevel2 = level2.asInstanceOf[IR.Workflow]
-    wfLevel2.stages.size shouldBe (1)
+    wfLevel2.stages.size shouldBe 1
   }
 
   it should "four nesting levels" in {
@@ -991,21 +991,19 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe (
-            Map(
-                "a" -> IR.MetaValueObject(
-                    Map(
-                        "help" -> IR.MetaValueString("lefthand file"),
-                        "group" -> IR.MetaValueString("Files"),
-                        "label" -> IR.MetaValueString("File A")
-                    )
-                ),
-                "b" -> IR.MetaValueObject(
-                    Map(
-                        "help" -> IR.MetaValueString("righthand file"),
-                        "group" -> IR.MetaValueString("Files"),
-                        "label" -> IR.MetaValueString("File B")
-                    )
+        translateMetaKVs(kvs) shouldBe Map(
+            "a" -> IR.MetaValueObject(
+                Map(
+                    "help" -> IR.MetaValueString("lefthand file"),
+                    "group" -> IR.MetaValueString("Files"),
+                    "label" -> IR.MetaValueString("File A")
+                )
+            ),
+            "b" -> IR.MetaValueObject(
+                Map(
+                    "help" -> IR.MetaValueString("righthand file"),
+                    "group" -> IR.MetaValueString("Files"),
+                    "label" -> IR.MetaValueString("File B")
                 )
             )
         )
@@ -1099,59 +1097,58 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val cgrepApplet = getAppletByName("add", bundle)
-    cgrepApplet.meta.iterator sameElements Some(
-        Vector(
-            IR.TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
-            IR.TaskAttrDescription(
-                "Adds two int together. This app adds together two integers and returns the sum"
-            ),
-            IR.TaskAttrTags(Vector("add", "ints")),
-            IR.TaskAttrOpenSource(true),
-            IR.TaskAttrVersion("1.0"),
-            IR.TaskAttrProperties(Map("foo" -> "bar")),
-            IR.TaskAttrCategories(Vector("Assembly")),
-            IR.TaskAttrDetails(
-                Map(
-                    "contactEmail" -> IR.MetaValueString("joe@dev.com"),
-                    "upstreamVersion" -> IR.MetaValueString("1.0"),
-                    "upstreamAuthor" -> IR.MetaValueString("Joe Developer"),
-                    "upstreamUrl" -> IR.MetaValueString("https://dev.com/joe"),
-                    "upstreamLicenses" -> IR.MetaValueArray(
-                        Vector(
-                            IR.MetaValueString("MIT")
-                        )
-                    ),
-                    "whatsNew" -> IR.MetaValueArray(
-                        Vector(
-                            IR.MetaValueObject(
-                                Map(
-                                    "version" -> IR.MetaValueString("1.1"),
-                                    "changes" -> IR.MetaValueArray(
-                                        Vector(
-                                            IR.MetaValueString("Added parameter --foo"),
-                                            IR.MetaValueString("Added cowsay easter-egg")
-                                        )
-                                    )
-                                )
-                            ),
-                            IR.MetaValueObject(
-                                Map(
-                                    "version" -> IR.MetaValueString("1.0"),
-                                    "changes" -> IR.MetaValueArray(
-                                        Vector(
-                                            IR.MetaValueString("Initial version")
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            ),
-            IR.TaskAttrTitle("Add Ints"),
-            IR.TaskAttrTypes(Vector("Adder"))
-        )
-    )
+    cgrepApplet.meta.iterator sameElements
+      Vector(
+          IR.TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
+          IR.TaskAttrDescription(
+              "Adds two int together. This app adds together two integers and returns the sum"
+          ),
+          IR.TaskAttrTags(Vector("add", "ints")),
+          IR.TaskAttrOpenSource(true),
+          IR.TaskAttrVersion("1.0"),
+          IR.TaskAttrProperties(Map("foo" -> "bar")),
+          IR.TaskAttrCategories(Vector("Assembly")),
+          IR.TaskAttrDetails(
+              Map(
+                  "contactEmail" -> IR.MetaValueString("joe@dev.com"),
+                  "upstreamVersion" -> IR.MetaValueString("1.0"),
+                  "upstreamAuthor" -> IR.MetaValueString("Joe Developer"),
+                  "upstreamUrl" -> IR.MetaValueString("https://dev.com/joe"),
+                  "upstreamLicenses" -> IR.MetaValueArray(
+                      Vector(
+                          IR.MetaValueString("MIT")
+                      )
+                  ),
+                  "whatsNew" -> IR.MetaValueArray(
+                      Vector(
+                          IR.MetaValueObject(
+                              Map(
+                                  "version" -> IR.MetaValueString("1.1"),
+                                  "changes" -> IR.MetaValueArray(
+                                      Vector(
+                                          IR.MetaValueString("Added parameter --foo"),
+                                          IR.MetaValueString("Added cowsay easter-egg")
+                                      )
+                                  )
+                              )
+                          ),
+                          IR.MetaValueObject(
+                              Map(
+                                  "version" -> IR.MetaValueString("1.0"),
+                                  "changes" -> IR.MetaValueArray(
+                                      Vector(
+                                          IR.MetaValueString("Initial version")
+                                      )
+                                  )
+                              )
+                          )
+                      )
+                  )
+              )
+          ),
+          IR.TaskAttrTitle("Add Ints"),
+          IR.TaskAttrTypes(Vector("Adder"))
+      )
   }
 
   it should "recognize runtime hints" in {
@@ -1180,7 +1177,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "ignore dx_instance_type when evaluating runtime hints" taggedAs (EdgeTest) in {
+  it should "ignore dx_instance_type when evaluating runtime hints" taggedAs EdgeTest in {
     val path = pathFromBasename("compiler", "instance_type_test.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1386,11 +1383,13 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(retval) {
       case Main.SuccessfulTerminationIR(bundle) =>
-        bundle.allCallables.size shouldBe (1)
+        bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
         val task = callable.asInstanceOf[IR.Applet]
-        task.womSourceCode should include(commandSection)
+        val generator = WdlV1Generator()
+        val taskSource = generator.generateDocument(task.document).mkString("\n")
+        taskSource should include(commandSection)
     }
   }
 
@@ -1412,15 +1411,15 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     inside(retval) {
       case Main.SuccessfulTerminationIR(bundle) =>
-        bundle.allCallables.size shouldBe (1)
+        bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
         val task = callable.asInstanceOf[IR.Applet]
-        task.instanceType shouldBe (IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
-                                                         None,
-                                                         None,
-                                                         None,
-                                                         None))
+        task.instanceType shouldBe IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
+                                                        None,
+                                                        None,
+                                                        None,
+                                                        None)
     }
   }
 
@@ -1439,14 +1438,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _                                    => throw new Exception("sanity")
     }
 
-    val wfs: Vector[IR.Workflow] = bundle.allCallables
-      .map {
-        case (name, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
-        case (_, _)                                                           => None
-      }
-      .flatten
-      .toVector
-    wfs.length shouldBe (1)
+    val wfs: Vector[IR.Workflow] = bundle.allCallables.flatMap {
+      case (_, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
+      case (_, _)                                                        => None
+    }.toVector
+    wfs.length shouldBe 1
     val wf = wfs.head
 
     val samtools = wf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
@@ -1530,7 +1526,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
     val input_cvars: Vector[IR.CVar] = workflow.inputs.map {
       case (c: IR.CVar, _) => c
-      case other           => throw new Exception("Invalid workflow input ${other}")
+      case _               => throw new Exception("Invalid workflow input ${other}")
     }
     input_cvars.sortWith(_.name < _.name) shouldBe Vector(
         IR.CVar(
@@ -1580,7 +1576,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             desc shouldBe "This is the readme for the wf_linear workflow."
           case other => throw new Exception(s"Unexpected workflow meta ${other}")
         })
-      case other => throw new Exception("Expected workflow meta")
+      case _ => throw new Exception("Expected workflow meta")
     }
 
     val addApp = getAppletByName("add", bundle)
@@ -1613,7 +1609,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     incApp.meta match {
       case Some(v: Vector[IR.TaskAttr]) => v.size shouldBe 0
       case None                         => None
-      case other                        => throw new Exception("meta is not None or empty for inc task")
+      case _                            => throw new Exception("meta is not None or empty for inc task")
     }
   }
 }
