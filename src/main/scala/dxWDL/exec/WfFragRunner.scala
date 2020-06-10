@@ -83,10 +83,10 @@ case class WfFragRunner(wf: TAT.Workflow,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
+    val evalCfg = EvalConfig.make(dxIoFunctions.config.homeDir,
+                                  dxIoFunctions.config.tmpDir,
+                                  dxIoFunctions.config.stdout,
+                                  dxIoFunctions.config.stderr)
     WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
@@ -646,7 +646,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   def apply(blockPath: Vector[Int],
             envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             runMode: RunnerWfFragmentMode.Value): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"link info=${execLinkInfo}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
 

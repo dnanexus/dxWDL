@@ -13,7 +13,7 @@ case class WdlCodeGen(verbose: Verbose,
                       language: Language.Value) {
 
   // A self contained WDL workflow
-  private val wdlVersion: WdlVersion = {
+  val wdlVersion: WdlVersion = {
     language match {
       case Language.WDLvDraft2 =>
         Utils.warning(verbose, "Upgrading draft-2 input to verion 1.0")

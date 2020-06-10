@@ -27,10 +27,10 @@ case class WfOutputs(wf: TAT.Workflow,
                                antlr4Trace = false,
                                localDirectories = Vector.empty,
                                verbosity = wdlTools.util.Verbosity.Quiet)
-    val evalCfg = EvalConfig(dxIoFunctions.config.homeDir,
-                             dxIoFunctions.config.tmpDir,
-                             dxIoFunctions.config.stdout,
-                             dxIoFunctions.config.stderr)
+    val evalCfg = EvalConfig.make(dxIoFunctions.config.homeDir,
+                                  dxIoFunctions.config.tmpDir,
+                                  dxIoFunctions.config.stdout,
+                                  dxIoFunctions.config.stderr)
     WdlExprEval(evalOpts, evalCfg, document.version.value, None)
   }
 
@@ -42,7 +42,7 @@ case class WfOutputs(wf: TAT.Workflow,
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             addStatus: Boolean = false): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
     Utils.appletLog(
         verbose,

@@ -366,7 +366,7 @@ object IR {
     * @param instanceType  a platform instance name
     * @param docker        is docker used? if so, what image
     * @param kind          Kind of applet: task, scatter, ...
-    * @param task          Task definition
+    * @param document          Task definition
     * @param meta          Additional applet metadata
     * @param runtimeHints  Runtime hints
     */
@@ -376,7 +376,7 @@ object IR {
                     instanceType: InstanceType,
                     docker: DockerImage,
                     kind: AppletKind,
-                    task: TAT.Document,
+                    document: TAT.Document,
                     meta: Option[Vector[TaskAttr]] = None,
                     runtimeHints: Option[Vector[RuntimeHint]] = None)
       extends Callable {
@@ -420,7 +420,7 @@ object IR {
                       inputs: Vector[(CVar, SArg)],
                       outputs: Vector[(CVar, SArg)],
                       stages: Vector[Stage],
-                      workflow: TAT.Workflow,
+                      document: TAT.Document,
                       locked: Boolean,
                       level: Level.Value,
                       meta: Option[Vector[WorkflowAttr]] = None)
