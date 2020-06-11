@@ -20,16 +20,17 @@ This is the dx JSON input:
   */
 package dxWDL.compiler
 
-import scala.collection.mutable.HashMap
 import java.nio.file.Path
+
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
-import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
+import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg}
+
+import scala.collection.mutable
 
 // scan a Cromwell style JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
@@ -63,12 +64,12 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
         val valuesJs = jsValue.asJsObject.fields.values.toVector
         val kFiles = keysJs.flatMap(findDxFiles(keyType, _))
         val vFiles = valuesJs.flatMap(findDxFiles(valueType, _))
-        kFiles.toVector ++ vFiles.toVector
+        kFiles ++ vFiles
 
       // Two ways of writing pairs: an object with left/right fields, or an array
       // with two elements.
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if (List("left", "right").forall(fields contains _)) =>
+          if List("left", "right").forall(fields.contains) =>
         val lFiles = findDxFiles(lType, fields("left"))
         val rFiles = findDxFiles(rType, fields("right"))
         lFiles ++ rFiles
@@ -81,14 +82,14 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
       case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         vec.flatMap(findDxFiles(t, _))
 
-      case (WdlTypes.T_Optional(t), JsNull) =>
+      case (WdlTypes.T_Optional(_), JsNull) =>
         Vector.empty
 
       case (WdlTypes.T_Optional(t), jsv) =>
         findDxFiles(t, jsv)
 
       // structs
-      case (WdlTypes.T_Struct(structName, typeMap), JsObject(fields)) =>
+      case (WdlTypes.T_Struct(_, typeMap), JsObject(fields)) =>
         fields.flatMap {
           case (key, value) =>
             val t: WdlTypes.T = typeMap(key)
@@ -102,34 +103,27 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
 
   private def findFilesForApplet(inputs: Map[String, JsValue],
                                  applet: IR.Applet): Vector[JsValue] = {
-    applet.inputs
-      .flatMap {
-        case cVar =>
-          val fqn = s"${applet.name}.${cVar.name}"
-          inputs.get(fqn) match {
-            case None => None
-            case Some(jsValue) =>
-              Some(findDxFiles(cVar.womType, jsValue))
-          }
+    applet.inputs.flatMap { cVar =>
+      val fqn = s"${applet.name}.${cVar.name}"
+      inputs.get(fqn) match {
+        case None => None
+        case Some(jsValue) =>
+          Some(findDxFiles(cVar.womType, jsValue))
       }
-      .flatten
-      .toVector
+    }.flatten
   }
 
   private def findFilesForWorkflow(inputs: Map[String, JsValue],
                                    wf: IR.Workflow): Vector[JsValue] = {
-    wf.inputs
-      .flatMap {
-        case (cVar, _) =>
-          val fqn = s"${wf.name}.${cVar.name}"
-          inputs.get(fqn) match {
-            case None => None
-            case Some(jsValue) =>
-              Some(findDxFiles(cVar.womType, jsValue))
-          }
-      }
-      .flatten
-      .toVector
+    wf.inputs.flatMap {
+      case (cVar, _) =>
+        val fqn = s"${wf.name}.${cVar.name}"
+        inputs.get(fqn) match {
+          case None => None
+          case Some(jsValue) =>
+            Some(findDxFiles(cVar.womType, jsValue))
+        }
+    }.flatten
   }
 
   def apply(inputPath: Path): InputFileScanResults = {
@@ -138,41 +132,37 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, verbose: Verbo
     val inputs: Map[String, JsValue] = content.asJsObject.fields
 
     val allCallables: Vector[IR.Callable] =
-      bundle.primaryCallable.toVector ++ bundle.allCallables.map(_._2)
+      bundle.primaryCallable.toVector ++ bundle.allCallables.values
 
     // Match each field with its WOM type, this allows
     // accurately finding dx-files.
-    val jsFileDesc: Vector[JsValue] = allCallables
-      .map {
-        case applet: IR.Applet =>
-          findFilesForApplet(inputs, applet)
-        case wf: IR.Workflow =>
-          findFilesForWorkflow(inputs, wf)
-      }
-      .flatten
-      .toVector
+    val jsFileDesc: Vector[JsValue] = allCallables.flatMap {
+      case applet: IR.Applet =>
+        findFilesForApplet(inputs, applet)
+      case wf: IR.Workflow =>
+        findFilesForWorkflow(inputs, wf)
+    }
 
     // files that have already been resolved
     val dxFiles: Vector[DxFile] = jsFileDesc.collect {
       case jsv: JsObject => DxUtils.dxFileFromJsValue(jsv)
-    }.toVector
+    }
 
     // Paths that look like this: "dx://dxWDL_playground:/test_data/fileB".
     // These need to be resolved.
     val dxPaths: Vector[String] = jsFileDesc.collect {
       case JsString(x) => x
-    }.toVector
+    }
     val resolvedPaths = DxPath
       .resolveBulk(dxPaths, dxProject)
       .map {
         case (key, dxobj) if dxobj.isInstanceOf[DxFile] =>
           key -> dxobj.asInstanceOf[DxFile]
-        case (key, dxobj) =>
+        case (_, dxobj) =>
           throw new Exception(s"Scanning the input file produced ${dxobj} which is not a file")
       }
-      .toMap
 
-    InputFileScanResults(resolvedPaths, (dxFiles ++ resolvedPaths.values))
+    InputFileScanResults(resolvedPaths, dxFiles ++ resolvedPaths.values)
   }
 }
 
@@ -210,12 +200,12 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             val kWom = womValueFromCromwellJSON(keyType, JsString(k))
             val vWom = womValueFromCromwellJSON(valueType, v)
             kWom -> vWom
-        }.toMap
+        }
         WdlValues.V_Map(m)
 
       // a few ways of writing a pair: an object, or an array
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if (List("left", "right").forall(fields contains _)) =>
+          if List("left", "right").forall(fields.contains) =>
         val left = womValueFromCromwellJSON(lType, fields("left"))
         val right = womValueFromCromwellJSON(rType, fields("right"))
         WdlValues.V_Pair(left, right)
@@ -226,7 +216,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         WdlValues.V_Pair(left, right)
 
       // empty array
-      case (WdlTypes.T_Array(t, _), JsNull) =>
+      case (WdlTypes.T_Array(_, _), JsNull) =>
         WdlValues.V_Array(Vector.empty[WdlValues.V])
 
       // array
@@ -236,7 +226,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         }
         WdlValues.V_Array(wVec)
 
-      case (WdlTypes.T_Optional(t), JsNull) =>
+      case (WdlTypes.T_Optional(_), JsNull) =>
         WdlValues.V_Null
       case (WdlTypes.T_Optional(t), jsv) =>
         val value = womValueFromCromwellJSON(t, jsv)
@@ -250,7 +240,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             val t: WdlTypes.T = typeMap(key)
             val elem: WdlValues.V = womValueFromCromwellJSON(t, value)
             key -> elem
-        }.toMap
+        }
         WdlValues.V_Struct(structName, m)
 
       case _ =>
@@ -267,8 +257,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   }
 
   // skip comment lines, these start with ##.
-  private def preprocessInputs(obj: JsObject): HashMap[String, JsValue] = {
-    val inputFields = HashMap.empty[String, JsValue]
+  private def preprocessInputs(obj: JsObject): mutable.HashMap[String, JsValue] = {
+    val inputFields = mutable.HashMap.empty[String, JsValue]
     obj.fields.foreach {
       case (k, v) =>
         if (!k.startsWith("##"))
@@ -277,7 +267,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     inputFields
   }
 
-  private def getExactlyOnce(fields: HashMap[String, JsValue], fqn: String): Option[JsValue] = {
+  private def getExactlyOnce(fields: mutable.HashMap[String, JsValue],
+                             fqn: String): Option[JsValue] = {
     fields.get(fqn) match {
       case None =>
         Utils.trace(verbose2, s"getExactlyOnce ${fqn} => None")
@@ -294,8 +285,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   private def addDefaultsToStage(stg: IR.Stage,
                                  prefix: String,
                                  callee: IR.Callable,
-                                 defaultFields: HashMap[String, JsValue]): IR.Stage = {
-    Utils.trace(verbose2, s"addDefaultToStage ${stg.id.getId}, ${stg.description}")
+                                 defaultFields: mutable.HashMap[String, JsValue]): IR.Stage = {
+    Utils.trace(verbose2, s"addDefaultToStage ${stg.id.getId()}, ${stg.description}")
     val inputsFull: Vector[(SArg, CVar)] = stg.inputs.zipWithIndex.map {
       case (sArg, idx) =>
         val cVar = callee.inputVars(idx)
@@ -318,7 +309,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   private def addDefaultsToWorkflowInputs(
       inputs: Vector[(CVar, SArg)],
       wfName: String,
-      defaultFields: HashMap[String, JsValue]
+      defaultFields: mutable.HashMap[String, JsValue]
   ): Vector[(CVar, SArg)] = {
     inputs.map {
       case (cVar, sArg) =>
@@ -330,23 +321,22 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             IR.SArgConst(w)
         }
         (cVar, sArgDflt)
-    }.toVector
+    }
   }
 
   // set defaults for a task
   private def embedDefaultsIntoTask(applet: IR.Applet,
-                                    defaultFields: HashMap[String, JsValue]): IR.Applet = {
-    val inputsWithDefaults: Vector[CVar] = applet.inputs.map {
-      case cVar =>
-        val fqn = s"${applet.name}.${cVar.name}"
-        getExactlyOnce(defaultFields, fqn) match {
-          case None =>
-            cVar
-          case Some(dflt: JsValue) =>
-            val w: WdlValues.V = womValueFromCromwellJSON(cVar.womType, dflt)
-            cVar.copy(default = Some(w))
-        }
-    }.toVector
+                                    defaultFields: mutable.HashMap[String, JsValue]): IR.Applet = {
+    val inputsWithDefaults: Vector[CVar] = applet.inputs.map { cVar =>
+      val fqn = s"${applet.name}.${cVar.name}"
+      getExactlyOnce(defaultFields, fqn) match {
+        case None =>
+          cVar
+        case Some(dflt: JsValue) =>
+          val w: WdlValues.V = womValueFromCromwellJSON(cVar.womType, dflt)
+          cVar.copy(default = Some(w))
+      }
+    }
     applet.copy(inputs = inputsWithDefaults)
   }
 
@@ -355,9 +345,11 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   // Make a sequential pass on the IR, figure out the fully qualified names
   // of all CVar and SArgs. If they have a default value, add it as an attribute
   // (DeclAttrs).
-  private def embedDefaultsIntoWorkflow(wf: IR.Workflow,
-                                        callables: Map[String, IR.Callable],
-                                        defaultFields: HashMap[String, JsValue]): IR.Workflow = {
+  private def embedDefaultsIntoWorkflow(
+      wf: IR.Workflow,
+      callables: Map[String, IR.Callable],
+      defaultFields: mutable.HashMap[String, JsValue]
+  ): IR.Workflow = {
     val wfWithDefaults =
       if (wf.locked) {
         // Locked workflows, we have workflow level inputs
@@ -379,8 +371,12 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       }
 
     // check that the stage order hasn't changed
-    val allStageNames = wf.stages.map { _.id }.toVector
-    val embedAllStageNames = wfWithDefaults.stages.map { _.id }.toVector
+    val allStageNames = wf.stages.map {
+      _.id
+    }
+    val embedAllStageNames = wfWithDefaults.stages.map {
+      _.id
+    }
     assert(allStageNames == embedAllStageNames)
 
     wfWithDefaults
@@ -395,7 +391,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
     // read the default inputs file (xxxx.json)
     val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
-    val defaultFields: HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
+    val defaultFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
 
     val callablesWithDefaults = bundle.allCallables.map {
       case (name, callable) =>
@@ -406,7 +402,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
             embedDefaultsIntoWorkflow(subwf, bundle.allCallables, defaultFields)
         }
         name -> callableWithDefaults
-    }.toMap
+    }
     val primaryCallable = bundle.primaryCallable match {
       case None => None
       case Some(applet: IR.Applet) =>
@@ -414,7 +410,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       case Some(wf: IR.Workflow) =>
         Some(embedDefaultsIntoWorkflow(wf, bundle.allCallables, defaultFields))
     }
-    if (!defaultFields.isEmpty) {
+    if (defaultFields.nonEmpty) {
       throw new Exception(s"""|Could not map all default fields.
                               |These were left: ${defaultFields}""".stripMargin)
     }
@@ -423,8 +419,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
   // Converting a Cromwell style input JSON file, into a valid DNAx input file
   //
-  case class CromwellInputFileState(inputFields: HashMap[String, JsValue],
-                                    dxKeyValues: HashMap[String, JsValue]) {
+  case class CromwellInputFileState(inputFields: mutable.HashMap[String, JsValue],
+                                    dxKeyValues: mutable.HashMap[String, JsValue]) {
     // If WDL variable fully qualified name [fqn] was provided in the
     // input file, set [stage.cvar] to its JSON value
     def checkAndBind(fqn: String, dxName: String, cVar: IR.CVar): Unit = {
@@ -464,8 +460,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
     // read the input file xxxx.json
     val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
-    val inputFields: HashMap[String, JsValue] = preprocessInputs(wdlInputs)
-    val cif = CromwellInputFileState(inputFields, HashMap.empty)
+    val inputFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlInputs)
+    val cif = CromwellInputFileState(inputFields, mutable.HashMap.empty)
 
     def handleTask(applet: IR.Applet): Unit = {
       applet.inputs.foreach { cVar =>
@@ -482,7 +478,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
     bundle.primaryCallable match {
       // File with WDL tasks only, no workflows
-      case None if tasks.size == 0 =>
+      case None if tasks.isEmpty =>
         ()
       case None if tasks.size == 1 =>
         handleTask(tasks.head)
@@ -495,7 +491,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         // Locked workflow. A user can set workflow level
         // inputs; nothing else.
         wf.inputs.foreach {
-          case (cVar, sArg) =>
+          case (cVar, _) =>
             val fqn = s"${wf.name}.${cVar.name}"
             val dxName = s"${cVar.name}"
             cif.checkAndBind(fqn, dxName, cVar)
@@ -507,7 +503,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       case Some(wf: IR.Workflow) =>
         // unlocked workflow with at least one stage.
         // Workflow inputs go into the common stage
-        val commonStage = wf.stages.head.id.getId
+        val commonStage = wf.stages.head.id.getId()
         wf.inputs.foreach {
           case (cVar, _) =>
             val fqn = s"${wf.name}.${cVar.name}"

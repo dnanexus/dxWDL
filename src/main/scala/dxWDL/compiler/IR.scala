@@ -363,11 +363,10 @@ object IR {
   /** @param name          Name of applet
     * @param inputs        input arguments
     * @param outputs       output arguments
-    * @param instaceType   a platform instance name
+    * @param instanceType  a platform instance name
     * @param docker        is docker used? if so, what image
     * @param kind          Kind of applet: task, scatter, ...
-    * @param task          Task definition
-    * @param womSourceCode WDL/CWL source code for task.
+    * @param document          Task definition
     * @param meta          Additional applet metadata
     * @param runtimeHints  Runtime hints
     */
@@ -377,12 +376,12 @@ object IR {
                     instanceType: InstanceType,
                     docker: DockerImage,
                     kind: AppletKind,
-                    womSourceCode: String,
+                    document: TAT.Document,
                     meta: Option[Vector[TaskAttr]] = None,
                     runtimeHints: Option[Vector[RuntimeHint]] = None)
       extends Callable {
-    def inputVars = inputs
-    def outputVars = outputs
+    def inputVars: Vector[CVar] = inputs
+    def outputVars: Vector[CVar] = outputs
   }
 
   /** An input to a stage. Could be empty, a wdl constant,
@@ -421,13 +420,13 @@ object IR {
                       inputs: Vector[(CVar, SArg)],
                       outputs: Vector[(CVar, SArg)],
                       stages: Vector[Stage],
-                      womSourceCode: String,
+                      document: TAT.Workflow,
                       locked: Boolean,
                       level: Level.Value,
                       meta: Option[Vector[WorkflowAttr]] = None)
       extends Callable {
-    def inputVars = inputs.map { case (cVar, _)   => cVar }.toVector
-    def outputVars = outputs.map { case (cVar, _) => cVar }.toVector
+    def inputVars: Vector[CVar] = inputs.map { case (cVar, _)   => cVar }
+    def outputVars: Vector[CVar] = outputs.map { case (cVar, _) => cVar }
   }
 
   // dependencies: the order in which to compile the workflows and tasks.

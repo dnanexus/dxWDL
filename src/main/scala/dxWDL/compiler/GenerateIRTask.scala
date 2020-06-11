@@ -8,6 +8,7 @@ import dxWDL.dx._
 import dxWDL.util._
 import IR.CVar
 
+import scala.collection.Set
 import scala.util.matching.Regex
 
 case class GenerateIRTask(verbose: Verbose,
@@ -17,11 +18,9 @@ case class GenerateIRTask(verbose: Verbose,
                           defaultHintAttrs: WdlHintAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
-  private class DynamicInstanceTypesException(message: String) extends RuntimeException(message) {
-    // TODO: this never gets called - do you want this to be a default message? if so, make it the default
-    //  value of `message`.
-    def this() = this("Runtime instance type calculation required")
-  }
+  private class DynamicInstanceTypesException(
+      message: String = "Runtime instance type calculation required"
+  ) extends RuntimeException(message)
 
   def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
     WomValueAnalysis.ifConstEval(expr.wdlType, expr) match {
@@ -280,9 +279,7 @@ case class GenerateIRTask(verbose: Verbose,
   //
   // Note: check if a task is a real WDL task, or if it is a wrapper for a
   // native applet.
-  def apply(task: TAT.Task,
-            taskSourceCode: String,
-            adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
+  def apply(task: TAT.Task, adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]): IR.Applet = {
     Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
     // create dx:applet input definitions. Note, some "inputs" are
@@ -367,19 +364,34 @@ case class GenerateIRTask(verbose: Verbose,
       case Some(TAT.RuntimeSection(kvs, _)) => triageDockerImage(kvs.get("docker"))
     }
 
-    val taskCleanedSourceCode = docker match {
-      case IR.DockerImageDxFile(orgURL, dxFile) =>
+    def replaceContainer(runtime: TAT.RuntimeSection, newContainer: String): TAT.RuntimeSection = {
+      Set("docker", "container").foreach { key =>
+        if (runtime.kvs.contains(key)) {
+          return TAT.RuntimeSection(
+              runtime.kvs ++ Map(
+                  key -> TAT.ValueString(newContainer, WdlTypes.T_String, runtime.kvs(key).text)
+              ),
+              runtime.text
+          )
+        }
+      }
+      runtime
+    }
+
+    val cleanedTask: TAT.Task = docker match {
+      case IR.DockerImageDxFile(_, dxFile) =>
         // The docker container is on the platform, we need to remove
         // the dxURLs in the runtime section, to avoid a runtime
         // lookup. For example:
         //
         //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
         val dxURL = DxUtils.dxDataObjectToURL(dxFile)
-        taskSourceCode.replaceAll(orgURL, dxURL)
-      case _ => taskSourceCode
+        task.copy(runtime = task.runtime.map(rt => replaceContainer(rt, dxURL)))
+      case _ => task
     }
-    val WdlCodeSnippet(selfContainedSourceCode) =
-      WdlCodeGen(verbose, typeAliases, language).standAloneTask(taskCleanedSourceCode)
+
+    val selfContainedSourceCode =
+      WdlCodeGen(verbose, typeAliases, language).standAloneTask(cleanedTask)
 
     val dockerFinal = docker match {
       case IR.DockerImageNone =>

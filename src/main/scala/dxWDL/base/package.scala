@@ -29,7 +29,7 @@ object CompilerFlag extends Enumeration {
 //  keywords -- specific words to trace
 //  quiet:      if true, do not print warnings and informational messages
 case class Verbose(on: Boolean, quiet: Boolean, keywords: Set[String]) {
-  lazy val keywordsLo = keywords.map(_.toLowerCase).toSet
+  lazy val keywordsLo: Set[String] = keywords.map(_.toLowerCase).toSet
 
   // check in a case insensitive fashion
   def containsKey(word: String): Boolean = {

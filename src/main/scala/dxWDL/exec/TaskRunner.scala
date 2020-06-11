@@ -17,10 +17,11 @@ task Add {
   */
 package dxWDL.exec
 
+import java.nio.file.{Files, Path, Paths}
+
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import java.lang.management._
-import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wdlTools.eval.{Context => EvalContext, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
@@ -408,7 +409,7 @@ case class TaskRunner(task: TAT.Task,
       taskInputs: Map[TAT.InputDefinition, WdlValues.V]
   ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
     Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     if (maxVerboseLevel)
       printDirStruct()
 
@@ -582,7 +583,7 @@ case class TaskRunner(task: TAT.Task,
     Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
     // Figure out which instance we are on right now
-    val dxJob = DxJob(DxUtils.dxEnv.getJob())
+    val dxJob = DxJob(DxUtils.dxEnv.getJob)
 
     val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
     val retval: JsValue =
@@ -622,14 +623,10 @@ case class TaskRunner(task: TAT.Task,
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
-    val outputs: Map[String, JsValue] = task.outputs
-      .map {
-        case outDef: TAT.OutputDefinition =>
-          val wvl = WdlVarLinks(outDef.wdlType, DxlExec(dxSubJob, outDef.name))
-          wdlVarLinksConverter.genFields(wvl, outDef.name)
-      }
-      .flatten
-      .toMap
+    val outputs: Map[String, JsValue] = task.outputs.flatMap { outDef: TAT.OutputDefinition =>
+      val wvl = WdlVarLinks(outDef.wdlType, DxlExec(dxSubJob, outDef.name))
+      wdlVarLinksConverter.genFields(wvl, outDef.name)
+    }.toMap
     outputs
   }
 }

@@ -61,15 +61,15 @@ case class SortTypeAliases(verbose: Verbose) {
         deps.subsetOf(alreadySortedNames)
       case _ => true
     }
-    assert(!zeroDeps.isEmpty)
-    (zeroDeps.toVector, top.toVector)
+    assert(zeroDeps.nonEmpty)
+    (zeroDeps, top)
   }
 
   private def getNames(ta: Vector[WdlTypes.T]): Vector[String] = {
     ta.flatMap {
       case WdlTypes.T_Struct(name, _) => Some(name)
       case _                          => None
-    }.toVector
+    }
   }
 
   private def apply2(typeAliases: Vector[WdlTypes.T]): Vector[WdlTypes.T] = {
@@ -78,7 +78,7 @@ case class SortTypeAliases(verbose: Verbose) {
     var accu = Vector.empty[WdlTypes.T]
     var crnt = typeAliases
 
-    while (!crnt.isEmpty) {
+    while (crnt.nonEmpty) {
       Utils.trace(verbose2, s"accu=${getNames(accu)}")
       Utils.trace(verbose2, s"crnt=${getNames(crnt)}")
       val (zeroDeps, top) = next(crnt, accu)
@@ -97,6 +97,6 @@ case class SortTypeAliases(verbose: Verbose) {
       case a @ WdlTypes.T_Struct(name, _) =>
         (name, a)
       case _ => throw new Exception("sanity")
-    }.toVector
+    }
   }
 }

@@ -1,6 +1,6 @@
 package dxWDL.util
 
-import java.nio.file.{Path}
+import java.nio.file.Path
 
 import dxWDL.base.Utils
 

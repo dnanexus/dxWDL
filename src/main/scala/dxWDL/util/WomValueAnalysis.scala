@@ -58,7 +58,7 @@ object WomValueAnalysis {
       case TAT.ExprPair(l, r, _, _) =>
         WdlValues.V_Pair(evalConst(l), evalConst(r))
       case TAT.ExprArray(elems, _, _) =>
-        WdlValues.V_Array(elems.map(evalConst(_)).toVector)
+        WdlValues.V_Array(elems.map(evalConst))
       case TAT.ExprMap(m, _, _) =>
         WdlValues.V_Map(m.map {
           case (k, v) => evalConst(k) -> evalConst(v)
@@ -93,7 +93,7 @@ object WomValueAnalysis {
         checkForLocalFiles(r)
 
       case WdlValues.V_Array(value) =>
-        value.foreach(checkForLocalFiles(_))
+        value.foreach(checkForLocalFiles)
       case WdlValues.V_Map(value) =>
         value.foreach {
           case (k, v) =>
@@ -103,9 +103,9 @@ object WomValueAnalysis {
       case WdlValues.V_Optional(value) =>
         checkForLocalFiles(value)
       case WdlValues.V_Struct(_, members) =>
-        members.values.foreach(checkForLocalFiles(_))
+        members.values.foreach(checkForLocalFiles)
       case WdlValues.V_Object(members) =>
-        members.values.foreach(checkForLocalFiles(_))
+        members.values.foreach(checkForLocalFiles)
       case other =>
         throw new Exception(s"unhandled case ${other}")
     }
@@ -144,7 +144,7 @@ object WomValueAnalysis {
   def ifConstEval(wdlType: WdlTypes.T, expr: TAT.Expr): Option[WdlValues.V] = {
     try {
       val value = evalConst(expr)
-      val coercion = new Coercion(None)
+      val coercion = Coercion(None)
       val valueWithCorrectType = coercion.coerceTo(wdlType, value, expr.text)
       checkForLocalFiles(valueWithCorrectType)
       Some(valueWithCorrectType)

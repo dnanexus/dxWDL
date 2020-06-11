@@ -13,7 +13,7 @@ object ParameterMeta {
     array.flatMap {
       case TAT.MetaValueString(str, _) => Some(str)
       case _                           => None
-    }.toVector
+    }
   }
 
   // strip muli-layer array types and get the member
@@ -22,6 +22,7 @@ object ParameterMeta {
   // input             output
   // Array[T]          T
   // Array[Array[T]]   T
+  @scala.annotation.tailrec
   private def unwrapWomArrayType(womType: WdlTypes.T): WdlTypes.T = {
     womType match {
       case WdlTypes.T_Array(t, _) => unwrapWomArrayType(t)
@@ -306,15 +307,13 @@ object ParameterMeta {
           case (k, v) => k -> translateMetaValue(v)
         })
       case TAT.MetaValueArray(value, _) =>
-        IR.MetaValueArray(value.map {
-          case v => translateMetaValue(v)
-        }.toVector)
+        IR.MetaValueArray(value.map(v => translateMetaValue(v)))
     }
   }
 
   def translateMetaKVs(kvs: Map[String, TAT.MetaValue]): Map[String, IR.MetaValue] = {
     kvs.map {
       case (k, v) => k -> translateMetaValue(v)
-    }.toMap
+    }
   }
 }

@@ -222,9 +222,9 @@ case class WfFragRunner(wf: TAT.Workflow,
   // Access a field in a WDL pair/struct/object
   private def accessField(obj: WdlValues.V, fieldName: String): WdlValues.V = {
     obj match {
-      case WdlValues.V_Pair(lv, rv) if fieldName == "left" =>
+      case WdlValues.V_Pair(lv, _) if fieldName == "left" =>
         lv
-      case WdlValues.V_Pair(lv, rv) if fieldName == "right" =>
+      case WdlValues.V_Pair(_, rv) if fieldName == "right" =>
         rv
       case WdlValues.V_Struct(_, members) if members contains fieldName =>
         members(fieldName)
@@ -739,7 +739,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   def apply(blockPath: Vector[Int],
             envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             runMode: RunnerWfFragmentMode.Value): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"link info=${execLinkInfo}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
@@ -756,14 +756,13 @@ case class WfFragRunner(wf: TAT.Workflow,
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] =
-      block.inputs.flatMap {
-        case inputDef: Block.InputDefinition =>
-          envInitial.get(inputDef.name) match {
-            case None =>
-              None
-            case Some((t, v)) =>
-              Some(inputDef.name -> (t, v))
-          }
+      block.inputs.flatMap { inputDef: Block.InputDefinition =>
+        envInitial.get(inputDef.name) match {
+          case None =>
+            None
+          case Some((t, v)) =>
+            Some(inputDef.name -> (t, v))
+        }
       }.toMap
 
     val catg = Block.categorize(block)

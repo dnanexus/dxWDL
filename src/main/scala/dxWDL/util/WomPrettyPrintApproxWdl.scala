@@ -49,9 +49,9 @@ object WomPrettyPrintApproxWdl {
             s"${indent}call ${call.fullyQualifiedName} as ${al} ${inputs}"
         }
 
-      case TAT.Declaration(name, wdlType, None, _) =>
+      case TAT.Declaration(_, wdlType, None, _) =>
         s"${indent} ${TUtil.typeToString(wdlType)}"
-      case TAT.Declaration(name, wdlType, Some(expr), _) =>
+      case TAT.Declaration(_, wdlType, Some(expr), _) =>
         s"${indent} ${TUtil.typeToString(wdlType)} = ${TUtil.exprToString(expr)}"
     }
   }
@@ -70,11 +70,7 @@ object WomPrettyPrintApproxWdl {
   }
 
   def graphInputs(inputDefs: Seq[TAT.InputDefinition]): String = {
-    inputDefs
-      .map {
-        applyInput(_)
-      }
-      .mkString("\n")
+    inputDefs.map(applyInput).mkString("\n")
   }
 
   def graphOutputs(outputs: Seq[TAT.OutputDefinition]): String = {

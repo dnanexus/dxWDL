@@ -1,38 +1,48 @@
 package dxWDL.compiler
 
-import scala.util.matching.Regex
+import dxWDL.base.{Language, Utils, Verbose}
 import wdlTools.eval.WdlValues
-import wdlTools.types.WdlTypes
-
-import dxWDL.base._
-import dxWDL.base.WomTypeSerialization.typeName
-
-// A bunch of WDL source lines
-case class WdlCodeSnippet(value: String)
+import wdlTools.generators.code.WdlV1Generator
+import wdlTools.syntax.{CommentMap, TextSource, WdlVersion}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.types.WdlTypes.T_Task
 
 case class WdlCodeGen(verbose: Verbose,
                       typeAliases: Map[String, WdlTypes.T],
                       language: Language.Value) {
 
+  private val dummyTextSource: TextSource = TextSource.empty
+
   // A self contained WDL workflow
-  def versionString(): String = {
+  val wdlVersion: WdlVersion = {
     language match {
-      case Language.WDLvDraft2 => ""
-      case Language.WDLv1_0    => "version 1.0"
-      case Language.WDLv2_0    => "version 2.0"
+      case Language.WDLvDraft2 =>
+        Utils.warning(verbose, "Upgrading draft-2 input to verion 1.0")
+        WdlVersion.V1
+      case Language.WDLv1_0 => WdlVersion.V1
+      case Language.WDLv2_0 => WdlVersion.V2
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
     }
   }
 
+  private lazy val typeAliasDefinitions: Vector[TAT.StructDefinition] = {
+    val sortedTypeAliases = SortTypeAliases(verbose).apply(typeAliases.toVector)
+    sortedTypeAliases.map {
+      case (name, wdlType: WdlTypes.T_Struct) =>
+        TAT.StructDefinition(name, wdlType, wdlType.members, dummyTextSource)
+      case other => throw new RuntimeException(s"Unexpected type alias ${other}")
+    }
+  }
+
   // create a wdl-value of a specific type.
-  def genDefaultValueOfType(wdlType: WdlTypes.T): WdlValues.V = {
+  private[compiler] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
     wdlType match {
-      case WdlTypes.T_Boolean => WdlValues.V_Boolean(true)
-      case WdlTypes.T_Int     => WdlValues.V_Int(0)
-      case WdlTypes.T_Float   => WdlValues.V_Float(0.0)
-      case WdlTypes.T_String  => WdlValues.V_String("")
-      case WdlTypes.T_File    => WdlValues.V_File("dummy.txt")
+      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, dummyTextSource)
+      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, dummyTextSource)
+      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, dummyTextSource)
+      case WdlTypes.T_String  => TAT.ValueString("", wdlType, dummyTextSource)
+      case WdlTypes.T_File    => TAT.ValueString("dummy.txt", wdlType, dummyTextSource)
 
       // We could convert an optional to a null value, but that causes
       // problems for the pretty printer.
@@ -45,69 +55,81 @@ case class WdlCodeGen(verbose: Verbose,
       case WdlTypes.T_Map(keyType, valueType) =>
         val k = genDefaultValueOfType(keyType)
         val v = genDefaultValueOfType(valueType)
-        WdlValues.V_Map(Map(k -> v))
+        TAT.ExprMap(Map(k -> v), wdlType, dummyTextSource)
 
       // an empty array
-      case WdlTypes.T_Array(t, false) =>
-        WdlValues.V_Array(Vector.empty)
+      case WdlTypes.T_Array(_, false) =>
+        TAT.ExprArray(Vector.empty, wdlType, dummyTextSource)
 
       // Non empty array
       case WdlTypes.T_Array(t, true) =>
-        WdlValues.V_Array(Vector(genDefaultValueOfType(t)))
+        TAT.ExprArray(Vector(genDefaultValueOfType(t)), wdlType, dummyTextSource)
 
       case WdlTypes.T_Pair(lType, rType) =>
-        WdlValues.V_Pair(genDefaultValueOfType(lType), genDefaultValueOfType(rType))
+        TAT.ExprPair(genDefaultValueOfType(lType),
+                     genDefaultValueOfType(rType),
+                     wdlType,
+                     dummyTextSource)
 
-      case WdlTypes.T_Struct(structName, typeMap) =>
+      case WdlTypes.T_Struct(_, typeMap) =>
         val members = typeMap.map {
-          case (fieldName, t) =>
-            fieldName -> genDefaultValueOfType(t)
-        }.toMap
-        WdlValues.V_Struct(structName, members)
+          case (fieldName, t) => fieldName -> genDefaultValueOfType(t)
+        }
+        TAT.ExprObject(members, wdlType, dummyTextSource)
 
       case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
   }
 
-  def wdlString(value: WdlValues.V): String = {
+  private[compiler] def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
+    def seqToType(vec: Iterable[TAT.Expr]): WdlTypes.T = {
+      vec.headOption.map(_.wdlType).getOrElse(WdlTypes.T_Any)
+    }
+
     value match {
-      case WdlValues.V_Null           => "null"
-      case WdlValues.V_Boolean(value) => value.toString
-      case WdlValues.V_Int(value)     => value.toString
-      case WdlValues.V_Float(value)   => value.toString
-      case WdlValues.V_String(value)  => s""""${value}""""
-      case WdlValues.V_File(value)    => s""""${value}""""
+      case WdlValues.V_Null => TAT.ValueNull(WdlTypes.T_Any, dummyTextSource)
+      case WdlValues.V_Boolean(value) =>
+        TAT.ValueBoolean(value, WdlTypes.T_Boolean, dummyTextSource)
+      case WdlValues.V_Int(value)    => TAT.ValueInt(value, WdlTypes.T_Int, dummyTextSource)
+      case WdlValues.V_Float(value)  => TAT.ValueFloat(value, WdlTypes.T_Float, dummyTextSource)
+      case WdlValues.V_String(value) => TAT.ValueString(value, WdlTypes.T_String, dummyTextSource)
+      case WdlValues.V_File(value)   => TAT.ValueFile(value, WdlTypes.T_File, dummyTextSource)
+      case WdlValues.V_Directory(value) =>
+        TAT.ValueDirectory(value, WdlTypes.T_Directory, dummyTextSource)
 
       // compound values
       case WdlValues.V_Pair(l, r) =>
-        s"(${wdlString(l)} , ${wdlString(r)})"
+        val lExpr = wdlValueToExpr(l)
+        val rExpr = wdlValueToExpr(r)
+        TAT.ExprPair(lExpr, rExpr, WdlTypes.T_Pair(lExpr.wdlType, rExpr.wdlType), dummyTextSource)
       case WdlValues.V_Array(value) =>
-        val elems = value.map(wdlString).mkString(",")
-        s"[${elems}]"
+        val valueExprs = value.map(wdlValueToExpr)
+        TAT.ExprArray(valueExprs, seqToType(valueExprs), dummyTextSource)
       case WdlValues.V_Map(value) =>
-        val m = value
-          .map {
-            case (k, v) =>
-              s"${wdlString(k)} : ${wdlString(v)}"
-          }
-          .mkString(", ")
-        s"""{${m}}"""
+        val keyExprs = value.keys.map(wdlValueToExpr)
+        val valueExprs = value.values.map(wdlValueToExpr)
+        TAT.ExprMap(keyExprs.zip(valueExprs).toMap,
+                    WdlTypes.T_Map(seqToType(keyExprs), seqToType(valueExprs)),
+                    dummyTextSource)
 
-      case WdlValues.V_Optional(value) =>
-        wdlString(value)
+      case WdlValues.V_Optional(value) => wdlValueToExpr(value)
       case WdlValues.V_Struct(name, members) =>
-        val membersStr = members.map {
-          case (k, v) =>
-            s"${k} : ${wdlString(v)}"
-        }.toVector
-        s"""object { ${membersStr.mkString(", ")} }"""
+        val memberExprs: Map[TAT.Expr, TAT.Expr] = members.map {
+          case (name, value) =>
+            TAT.ValueString(name, WdlTypes.T_String, dummyTextSource) -> wdlValueToExpr(value)
+          case other => throw new RuntimeException(s"Unexpected member ${other}")
+        }
+        val memberTypes = memberExprs.map {
+          case (name: TAT.ValueString, value) => name.value -> value.wdlType
+          case other                          => throw new RuntimeException(s"Unexpected member ${other}")
+        }
+        TAT.ExprMap(memberExprs, WdlTypes.T_Struct(name, memberTypes), dummyTextSource)
 
       case WdlValues.V_Object(members) =>
-        val membersStr = members.map {
-          case (k, v) =>
-            s"${k} : ${wdlString(v)}"
-        }.toVector
-        s"""object { ${membersStr.mkString(", ")} }"""
+        val memberExprs = members.map {
+          case (name, value) => name -> wdlValueToExpr(value)
+        }
+        TAT.ExprObject(memberExprs, WdlTypes.T_Object, dummyTextSource)
 
       case other =>
         throw new Exception(s"Unhandled value ${other}")
@@ -115,40 +137,40 @@ case class WdlCodeGen(verbose: Verbose,
   }
 
   /*
-Create a header for a task/workflow. This is an empty task
-that includes the input and output definitions. It is used
-to
-(1) allow linking to native DNAx applets (and workflows in the future).
-(2) make a WDL file stand-alone, without imports
+  Create a header for a task/workflow. This is an empty task
+  that includes the input and output definitions. It is used
+  to
+  (1) allow linking to native DNAx applets (and workflows in the future).
+  (2) make a WDL file stand-alone, without imports
 
-For example, the stub for the Add task:
-task Add {
-    input {
-      Int a
-      Int b
-    }
-    command {
-    command <<<
-        python -c "print(${a} + ${b})"
-    >>>
-    output {
-        Int result = read_int(stdout())
-    }
-}
-
-is:
-task Add {
-   input {
-     Int a
-     Int b
-   }
-   command {}
-   output {
-       Int result
-   }
+  For example, the stub for the Add task:
+  task Add {
+      input {
+        Int a
+        Int b
+      }
+      command {
+      command <<<
+          python -c "print(${a} + ${b})"
+      >>>
+      output {
+          Int result = read_int(stdout())
+      }
   }
+
+  is:
+  task Add {
+     input {
+       Int a
+       Int b
+     }
+     command {}
+     output {
+         Int result
+     }
+    }
    */
-  private def genTaskHeader(callable: IR.Callable): WdlCodeSnippet = {
+  private def genTaskHeader(callable: IR.Callable): TAT.Task = {
     /*Utils.trace(verbose.on,
                     s"""|taskHeader  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -156,123 +178,106 @@ task Add {
                         .stripMargin)*/
 
     // Sort the inputs by name, so the result will be deterministic.
-    val inputs =
+    val inputs: Vector[TAT.InputDefinition] =
       callable.inputVars
         .sortWith(_.name < _.name)
-        .map {
-          case cVar =>
-            cVar.default match {
-              case None =>
-                s"    ${typeName(cVar.womType)} ${cVar.name}"
-              case Some(wValue) =>
-                s"    ${typeName(cVar.womType)} ${cVar.name} = ${wdlString(wValue)}"
-            }
+        .map { cVar =>
+          cVar.default match {
+            case None =>
+              TAT.RequiredInputDefinition(cVar.name, cVar.womType, dummyTextSource)
+            case Some(wValue) =>
+              TAT.OverridableInputDefinitionWithDefault(cVar.name,
+                                                        cVar.womType,
+                                                        wdlValueToExpr(wValue),
+                                                        dummyTextSource)
+          }
         }
-        .mkString("\n")
 
-    val outputs =
+    val outputs: Vector[TAT.OutputDefinition] =
       callable.outputVars
         .sortWith(_.name < _.name)
-        .map {
-          case cVar =>
-            val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${typeName(cVar.womType)} ${cVar.name} = ${wdlString(defaultVal)}"
+        .map { cVar =>
+          val defaultVal = genDefaultValueOfType(cVar.womType)
+          TAT.OutputDefinition(cVar.name, cVar.womType, defaultVal, dummyTextSource)
         }
-        .mkString("\n")
 
     language match {
-      case Language.WDLvDraft2 =>
-        // Draft-2 does not support the input block.
-        WdlCodeSnippet(
-            s"""|task ${callable.name} {
-                |${inputs}
-                |
-                |  command {}
-                |  output {
-                |${outputs}
-                |  }
-                |}""".stripMargin
-        )
-      case Language.WDLv1_0 | Language.WDLv2_0 =>
-        WdlCodeSnippet(
-            s"""|task ${callable.name} {
-                |  input {
-                |${inputs}
-                |  }
-                |  command {}
-                |  output {
-                |${outputs}
-                |  }
-                |}""".stripMargin
+      case Language.WDLvDraft2 | Language.WDLv1_0 | Language.WDLv2_0 =>
+        TAT.Task(
+            callable.name,
+            WdlTypes.T_Task(
+                callable.name,
+                inputs.map(d => d.name -> (d.wdlType, false)).toMap,
+                outputs.map(d => d.name -> d.wdlType).toMap
+            ),
+            inputs,
+            outputs,
+            TAT.CommandSection(Vector.empty, dummyTextSource),
+            Vector.empty,
+            None,
+            None,
+            None,
+            None,
+            dummyTextSource
         )
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
     }
   }
 
+  /**
+    * Generate a WDL stub fore a DNAnexus applet.
+    * @param id the applet ID
+    * @param appletName the applet name
+    * @param inputSpec the applet inputs
+    * @param outputSpec the applet outputs
+    * @return an AST.Task
+    */
   def genDnanexusAppletStub(id: String,
                             appletName: String,
                             inputSpec: Map[String, WdlTypes.T],
-                            outputSpec: Map[String, WdlTypes.T]): WdlCodeSnippet = {
-    val inputs = inputSpec
-      .map {
-        case (name, womType) =>
-          s"    ${typeName(womType)} ${name}"
-      }
-      .mkString("\n")
-    val outputs = outputSpec
-      .map {
-        case (name, womType) =>
-          val defaultVal = genDefaultValueOfType(womType)
-          s"    ${typeName(womType)} $name = ${wdlString(defaultVal)}"
-      }
-      .mkString("\n")
+                            outputSpec: Map[String, WdlTypes.T]): TAT.Task = {
 
-    val metaSection =
-      s"""|  meta {
-          |     type : "native"
-          |     id : "${id}"
-          |  }""".stripMargin
+    val meta = TAT.MetaSection(
+        Map(
+            "type" -> TAT.MetaValueString("native", dummyTextSource),
+            "id" -> TAT.MetaValueString(id, dummyTextSource)
+        ),
+        dummyTextSource
+    )
+    TAT.Task(
+        appletName,
+        T_Task(appletName, inputSpec.map {
+          case (name, wdlType) => name -> (wdlType, false)
+        }, outputSpec),
+        inputSpec.map {
+          case (name, wdlType) => TAT.RequiredInputDefinition(name, wdlType, dummyTextSource)
+        }.toVector,
+        outputSpec.map {
+          case (name, wdlType) =>
+            val expr = genDefaultValueOfType(wdlType)
+            TAT.OutputDefinition(name, wdlType, expr, dummyTextSource)
+        }.toVector,
+        TAT.CommandSection(Vector.empty, dummyTextSource),
+        Vector.empty,
+        Some(meta),
+        parameterMeta = None,
+        runtime = None,
+        hints = None,
+        text = dummyTextSource
+    )
+  }
 
-    val taskSourceCode = language match {
-      case Language.WDLvDraft2 =>
-        // Draft-2 does not support the input block.
-        s"""|task ${appletName} {
-            |${inputs}
-            |
-            |  command {}
-            |  output {
-            |${outputs}
-            |  }
-            |${metaSection}
-            |}""".stripMargin
-      case Language.WDLv1_0 | Language.WDLv2_0 =>
-        s"""|task ${appletName} {
-            |  input {
-            |${inputs}
-            |  }
-            |  command {}
-            |  output {
-            |${outputs}
-            |  }
-            |${metaSection}
-            |}""".stripMargin
-
-      case other =>
-        throw new Exception(s"Unsupported language version ${other}")
-    }
-
-    // Make sure this is actually valid WDL
-    //
-    // We need to add the version to this task, to
-    // make it valid WDL
-    val taskStandalone = s"""|${versionString()}
-                             |
-                             |${taskSourceCode}
-                             |""".stripMargin
-    ParseWomSourceFile(false).validateWdlCode(taskStandalone, Some(language))
-
-    WdlCodeSnippet(taskSourceCode)
+  def standAloneTask(task: TAT.Task): TAT.Document = {
+    TAT.Document(
+        None,
+        "",
+        TAT.Version(wdlVersion, dummyTextSource),
+        typeAliasDefinitions :+ task,
+        None,
+        dummyTextSource,
+        CommentMap.empty
+    )
   }
 
   // A workflow can import other libraries:
@@ -291,126 +296,70 @@ task Add {
   //   call Multiply as mul { ... }
   //   call Add { ... }
   //   call Nice as nice { ... }
-  //   call Nice as nice { ... }
   //   call Hello
   // }
-  //
-  private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
-  private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
-  private def flattenWorkflow(wdlWfSource: String): String = {
-    val originalLines = wdlWfSource.split("\n").toList
-    val cleanLines = originalLines.map { line =>
-      val allMatches = callLibrary.findAllMatchIn(line).toList
-      assert(allMatches.size <= 1)
-      val newLine =
-        if (allMatches.isEmpty) {
-          line
-        } else {
-          val m = allMatches(0)
-          val callee: String = m.group(4)
-          val rest = m.group(6)
-          s"call ${callee} ${rest}"
-        }
-
-      // call with no arguments
-      val allMatches2 = callLibraryNoArgs.findAllMatchIn(newLine).toList
-      assert(allMatches2.size <= 1)
-      if (allMatches2.isEmpty) {
-        newLine
-      } else {
-        val m = allMatches2(0)
-        val callee: String = m.group(4)
-        s"call ${callee}"
-      }
+  private def cleanCalls(body: Vector[TAT.WorkflowElement]): Vector[TAT.WorkflowElement] = {
+    body.map {
+      case call: TAT.Call =>
+        call.copy(fullyQualifiedName = call.actualName)
+      case scat: TAT.Scatter =>
+        scat.copy(body = cleanCalls(scat.body))
+      case cond: TAT.Conditional =>
+        cond.copy(body = cleanCalls(cond.body))
+      case other => other
     }
-    cleanLines.mkString("\n")
-  }
-
-  // Write valid WDL code that defines the type aliases we have.
-  private def typeAliasDefinitions: String = {
-    val sortedTypeAliases = SortTypeAliases(verbose).apply(typeAliases.toVector)
-    val snippetVec = sortedTypeAliases.map {
-      case (name, WdlTypes.T_Struct(_, typeMap)) =>
-        val fieldLines = typeMap
-          .map {
-            case (fieldName, womType) =>
-              s"    ${typeName(womType)} ${fieldName}"
-          }
-          .mkString("\n")
-
-        s"""|struct ${name} {
-            |${fieldLines}
-            |}""".stripMargin
-
-      case (name, other) =>
-        throw new Exception(s"Unknown type alias ${name} ${other}")
-    }
-    snippetVec.mkString("\n")
-  }
-
-  def standAloneTask(originalTaskSource: String): WdlCodeSnippet = {
-    val wdlWfSource: String =
-      List(versionString() + "\n",
-           "# struct definitions",
-           typeAliasDefinitions,
-           "# Task",
-           originalTaskSource).mkString("\n")
-
-    // Make sure this is actually valid WDL
-    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, Some(language))
-
-    WdlCodeSnippet(wdlWfSource)
   }
 
   // A workflow must have definitions for all the tasks it
-  // calls. However, a scatter calls tasks, that are missing from
+  // calls. However, a scatter calls tasks that are missing from
   // the WDL file we generate. To ameliorate this, we add stubs for
   // called tasks. The generated tasks are named by their
   // unqualified names, not their fully-qualified names. This works
   // because the WDL workflow must be "flattenable".
-  def standAloneWorkflow(originalWorkflowSource: String,
-                         allCalls: Vector[IR.Callable]): WdlCodeSnippet = {
-    val taskStubs: Map[String, WdlCodeSnippet] =
-      allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) {
-        case (accu, callable) =>
-          if (accu contains callable.name) {
-            // we have already created a stub for this call
-            accu
-          } else {
-            val sourceCode = callable match {
-              case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode, _, _) =>
-                // This is a task, include its source code, instead of a header.
-                val taskDir = ParseWomSourceFile(false).scanForTasks(taskSourceCode)
-                assert(taskDir.size == 1)
-                val taskBody = taskDir.values.head
-                WdlCodeSnippet(taskBody)
-
-              case _ =>
-                // no existing stub, create it
-                genTaskHeader(callable)
+  def standAloneWorkflow(wf: TAT.Workflow, allCalls: Vector[IR.Callable]): TAT.Document = {
+    val tasks: Vector[TAT.Task] =
+      allCalls
+        .foldLeft(Map.empty[String, TAT.Task]) {
+          case (accu, callable) =>
+            if (accu contains callable.name) {
+              // we have already created a stub for this call
+              accu
+            } else {
+              val stub: TAT.Task = callable match {
+                case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), doc, _, _) =>
+                  // This is a task, include its source instead of a header.
+                  val tasks = doc.elements.collect {
+                    case t: TAT.Task => t
+                  }
+                  assert(tasks.size == 1)
+                  tasks.head
+                case _ =>
+                  // no existing stub, create it
+                  genTaskHeader(callable)
+              }
+              accu + (callable.name -> stub)
             }
-            accu + (callable.name -> sourceCode)
-          }
-      }
+        }
+        // sort the task order by name, so the generated code will be deterministic
+        .toVector
+        .sortWith(_._1 < _._1)
+        .map { case (_, task) => task }
 
-    // sort the task order by name, so the generated code will be deterministic
-    val tasksStr = taskStubs.toVector
-      .sortWith(_._1 < _._1)
-      .map { case (name, wdlCode) => wdlCode.value }
-      .mkString("\n\n")
-    val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
-    val wdlWfSource =
-      List(versionString() + "\n",
-           "# struct definitions",
-           typeAliasDefinitions,
-           "# Task headers",
-           tasksStr,
-           "# Workflow with imports made local",
-           wfWithoutImportCalls).mkString("\n")
+    val wfWithoutImportCalls = wf.copy(body = cleanCalls(wf.body))
 
-    // Make sure this is actually valid WDL
-    ParseWomSourceFile(false).validateWdlCode(wdlWfSource, Some(language))
+    TAT.Document(
+        None,
+        "",
+        TAT.Version(wdlVersion, dummyTextSource),
+        typeAliasDefinitions ++ tasks,
+        Some(wfWithoutImportCalls),
+        dummyTextSource,
+        CommentMap.empty
+    )
+  }
 
-    WdlCodeSnippet(wdlWfSource)
+  def generateDocument(doc: TAT.Document): String = {
+    val generator = WdlV1Generator()
+    generator.generateDocument(doc).mkString("\n")
   }
 }
