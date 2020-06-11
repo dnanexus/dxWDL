@@ -15,6 +15,6 @@ task broad_genomics {
       disks: "local-disk 10 HDD"
   }
   output {
-    String version = read_string(stdout())
+    String bwa_version = read_string(stdout())
   }
 }

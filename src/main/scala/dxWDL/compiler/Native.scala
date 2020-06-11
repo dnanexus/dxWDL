@@ -441,6 +441,9 @@ case class Native(dxWDLrtId: Option[String],
         |       ls -Rl ${dxPathConfig.dxfuseMountpoint.toString}
         |    fi
         |
+        |    # construct the bash command and write it to a file
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
         |    echo "bash command encapsulation script:"
         |    cat ${dxPathConfig.script.toString}
         |
@@ -842,7 +845,6 @@ case class Native(dxWDLrtId: Option[String],
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
     }
-    //System.out.println(s"Native: instanceType chosen = ${instanceType}")
     val runSpec: Map[String, JsValue] = Map(
         "code" -> JsString(bashScript),
         "interpreter" -> JsString("bash"),

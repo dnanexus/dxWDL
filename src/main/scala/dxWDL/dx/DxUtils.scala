@@ -27,7 +27,14 @@ object DxUtils {
   }
 
   def dxDataObjectToURL(dxObj: DxDataObject): String = {
-    s"${Utils.DX_URL_PREFIX}${dxObj.id}"
+    dxObj match {
+      case DxFile(id, Some(container)) =>
+        s"${Utils.DX_URL_PREFIX}${container.id}:${dxObj.id}"
+      case DxRecord(id, Some(container)) =>
+        s"${Utils.DX_URL_PREFIX}${container.id}:${dxObj.id}"
+      case _ =>
+        s"${Utils.DX_URL_PREFIX}${dxObj.id}"
+    }
   }
 
   // Is this a WDL type that maps to a native DX type?

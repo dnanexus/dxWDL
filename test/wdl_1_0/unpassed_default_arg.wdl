@@ -7,13 +7,11 @@ workflow unpassed_default_arg {
 
     Array[String] non_input_decl = initial_arr
 
-    call initial_task {
-        input:
-    }
+    call initial_task {}
     call second_task {
         input:
           input_metrics=initial_task.metrics,
-          non_input_decl=non_input_decl,
+          non_input_decl=non_input_decl
     }
 
     output {

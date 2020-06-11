@@ -26,7 +26,7 @@ object Main extends App {
   }
   object InternalOp extends Enumeration {
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
-        TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
+        TaskCheckInstanceType, TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value
   }
 
   case class DxniBaseOptions(force: Boolean,
@@ -694,6 +694,13 @@ object Main extends App {
     val jobInputOutput =
       exec.JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
+    System.err.println(s"""|Main processing inputs in taskAction
+                           |originalInputs:
+                           |${originalInputs.prettyPrint}
+                           |
+                           |processed inputs:
+                           |${inputs.mkString("\n")}
+                           |""".stripMargin)
     val taskRunner = exec.TaskRunner(
         task,
         document,
@@ -719,9 +726,15 @@ object Main extends App {
         taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
         SuccessfulTermination(s"success ${op}")
 
-      case InternalOp.TaskEpilog =>
+      case InternalOp.TaskInstantiateCommand =>
         val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
-        val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
+        val env = taskRunner.instantiateCommand(localizedInputs)
+        taskRunner.writeEnvToDisk(env, dxUrl2path)
+        SuccessfulTermination(s"success ${op}")
+
+      case InternalOp.TaskEpilog =>
+        val (env, dxUrl2path) = taskRunner.readEnvFromDisk()
+        val outputFields: Map[String, JsValue] = taskRunner.epilog(env, dxUrl2path)
 
         // write outputs, ignore null values, these could occur for optional
         // values that were not specified.
@@ -966,7 +979,8 @@ object Main extends App {
                   delayWorkspaceDestruction,
                   rtDebugLvl
               )
-            case InternalOp.TaskCheckInstanceType | InternalOp.TaskEpilog | InternalOp.TaskProlog |
+            case InternalOp.TaskCheckInstanceType | InternalOp.TaskProlog |
+                InternalOp.TaskInstantiateCommand | InternalOp.TaskEpilog |
                 InternalOp.TaskRelaunch =>
               taskAction(op,
                          womSourceCode,

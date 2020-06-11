@@ -111,13 +111,11 @@ case class DxInstanceType(name: String,
       else
         // instances cannot be directly compared.
         0
-    //System.out.println(s"compareByResource ${this.name} ${that.name} retval=${retval}")
     retval
   }
 
   // v2 instances are always better than v1 instances
   def compareByType(that: DxInstanceType): Int = {
-    //System.out.println(s"compareByType ${this.name} ${that.name}")
     def typeVersion(name: String) =
       if (name contains "_v2") "v2"
       else "v1"

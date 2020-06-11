@@ -174,18 +174,20 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // run the entire task
 
-    // 1. prolog
-    val (env, dxUrl2path) = taskRunner.prolog(inputs)
+    // prolog
+    val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
 
-    // 2. execute the shell script in a child job
+    // instantiate the command
+    val env = taskRunner.instantiateCommand(localizedInputs)
+
+    // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
       val (_, _) = Utils.execCommand(script.toString, None)
     }
 
-    // 3. epilog
-    val envNoTypes = env.map { case (k, (_, v)) => k -> v }
-    val outputFields: Map[String, JsValue] = taskRunner.epilog(envNoTypes, dxUrl2path)
+    // epilog
+    val outputFields: Map[String, JsValue] = taskRunner.epilog(env, dxUrl2path)
 
     outputFieldsExpected match {
       case None      => ()

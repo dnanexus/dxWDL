@@ -35,7 +35,11 @@
 ## Getting the source code
 
 * Clone or fork the [dxWDL repository](https://github.com/dnanexus/dxWDL) (depending on whether you have commit permissions)
-* Checkout an existing branch or create a new branch (e.g. feat/42-my-feature)
+* If you are working in a branch that has a dependency on [wdlTools](https://github.com/dnanexus-rnd/wdlTools), then you'll also need to clone/fork that repository and publish a local assembly that will be visible to dxWDL:
+    ```
+    $ sbt publishLocal
+    ```
+* Checkout an existing dxWDL branch or create a new branch (e.g. feat/42-my-feature)
 * Add pre-commit hooks:
   * Create/edit a file .git/hooks/pre-commit
   * Add the following lines

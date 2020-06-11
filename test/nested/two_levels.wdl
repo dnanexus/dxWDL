@@ -8,9 +8,9 @@ workflow two_levels {
         call zinc as inc1 { input: a = i}
         call zinc as inc2 { input: a = inc1.result }
 
-        Int b = inc2.result
+        Int r2 = inc2.result
 
-        call zinc as inc3 { input: a = b }
+        call zinc as inc3 { input: a = r2 }
     }
 
     if (true) {
