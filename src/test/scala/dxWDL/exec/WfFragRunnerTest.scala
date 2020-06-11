@@ -287,8 +287,13 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val call1 = findCallByName("MaybeInt", wf.body)
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
       fragRunner.evalCallInputs(call1, Map("i" -> (WdlTypes.T_Int, WdlValues.V_Int(1))))
+
+    // We need to coerce the inputs into what the callee is expecting
     callInputs1 should be(
-        Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(1)))
+        Map(
+            "a" -> (WdlTypes.T_Optional(WdlTypes.T_Int),
+            WdlValues.V_Optional(WdlValues.V_Int(1)))
+        )
     )
 
     val call2 = findCallByName("ManyArgs", wf.body)

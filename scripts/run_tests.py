@@ -290,7 +290,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
             (type(expected_val) is list)):
             result.sort()
             expected_val.sort()
-        if result.strip() != expected_val.strip():
+        if str(result).strip() != str(expected_val).strip():
             cprint("Analysis {} gave unexpected results".format(tname),
                    "red")
             cprint("Field {} should be ({}), actual = ({})".format(field_name, expected_val, result),

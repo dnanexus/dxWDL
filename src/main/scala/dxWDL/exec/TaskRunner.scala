@@ -439,7 +439,7 @@ case class TaskRunner(task: TAT.Task,
     }
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
-      taskInputs.map {
+      localizedInputs.map {
         case (inpDfn, value) =>
           inpDfn.name -> (inpDfn.wdlType, value)
       }
