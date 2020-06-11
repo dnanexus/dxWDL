@@ -69,11 +69,9 @@ case class WdlCodeGen(verbose: Verbose,
 
       case WdlTypes.T_Struct(_, typeMap) =>
         val members = typeMap.map {
-          case (fieldName, t) =>
-            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, null)
-            key -> genDefaultValueOfType(t)
+          case (fieldName, t) => fieldName -> genDefaultValueOfType(t)
         }
-        TAT.ExprMap(members, wdlType, null)
+        TAT.ExprObject(members, wdlType, null)
 
       case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
