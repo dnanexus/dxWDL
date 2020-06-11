@@ -323,13 +323,16 @@ case class TaskRunner(task: TAT.Task,
 
     // Limit the docker container to leave some memory for the rest of the
     // ongoing system services, for example, dxfuse.
-
+    //
+    // This doesn't work with our current docker installation, unfortunately.
+    // I am leaving the code here, so we could fix this in the future.
     val totalAvailableMemoryBytes = availableMemory()
     val memCap =
       if (dxfuseRunning)
         totalAvailableMemoryBytes - Utils.DXFUSE_MAX_MEMORY_CONSUMPTION
       else
         totalAvailableMemoryBytes
+
     val dockerRunScript =
       s"""|#!/bin/bash -x
           |
@@ -521,6 +524,9 @@ case class TaskRunner(task: TAT.Task,
   // calculating the instance type in the workflow runner, outside
   // the task.
   def calcInstanceType(taskInputs: Map[TAT.InputDefinition, WdlValues.V]): String = {
+    Utils.appletLog(maxVerboseLevel, "calcInstanceType")
+    Utils.appletLog(maxVerboseLevel, s"inputs: ${inputsDbg(taskInputs)}")
+
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
       taskInputs.map {
         case (inpDfn, value) =>

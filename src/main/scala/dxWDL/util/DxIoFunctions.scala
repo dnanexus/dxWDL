@@ -15,7 +15,7 @@ case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
   // Get the size of the file in bytes
   def size(uri: URI): Long = {
-    val path = uri.getPath
+    val path = uri.toString
     Utils.appletLog(verbose, s"DxIoFunctions size(${path})")
 
     // First search in the fileInfoList. This
@@ -43,7 +43,7 @@ case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
   // Read the entire file into a string
   def readFile(uri: URI): String = {
-    val path = uri.getPath
+    val path = uri.toString
     Utils.appletLog(verbose, s"DxIoFunctions readFile(${path})")
 
     val dxFile =

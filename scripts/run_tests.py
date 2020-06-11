@@ -345,15 +345,16 @@ def wait_for_completion(test_exec_objs):
     noise = subprocess.Popen(["/bin/bash", "-c", "while true; do sleep 60; date; done"])
     try:
         for exec_obj in test_exec_objs:
+            tname = find_test_from_exec(exec_obj)
+            desc = test_files[tname]
             try:
                 exec_obj.wait_on_done()
+                print("Executable {} succeeded".format(desc.name))
             except DXJobFailureError:
-                tname = find_test_from_exec(exec_obj)
-                desc = test_files[tname]
                 if tname in test_failing:
                     print("Executable {} failed as expected".format(desc.name))
                 else:
-                    raise RuntimeError("Executable {} failed".format(desc.name))
+                    cprint("Error: executable {} failed".format(desc.name), "red")
     finally:
         noise.kill()
     print("done")
