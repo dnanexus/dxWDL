@@ -133,7 +133,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "Native compile a workflow with one level nesting" in {
+  ignore should "Native compile a workflow with one level nesting" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "json" :: cFlags

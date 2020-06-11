@@ -149,7 +149,6 @@ object DxFile {
   //}
   //
   def parseFileParts(jsv: JsValue): Map[Int, DxFilePart] = {
-    //System.out.println(jsv.prettyPrint)
     jsv.asJsObject.fields.map {
       case (partNumber, partDesc) =>
         val dxPart = partDesc.asJsObject.getFields("md5", "size", "state") match {

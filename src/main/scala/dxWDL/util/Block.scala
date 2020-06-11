@@ -589,7 +589,6 @@ object Block {
     // Figure out all the variables needed to calculate the outputs
     val outputs: Set[String] = outputClosure(outputNodes).map(_._1).toSet
     val inputs: Set[String] = inputNodes.map(_.name).toSet
-    //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
     inputs.intersect(outputs)
   }
 

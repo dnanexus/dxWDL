@@ -83,7 +83,6 @@ object DxPath {
       return DxProject.getInstance(projName)
     }
     if (projectDict contains projName) {
-      //System.err.println(s"Cached project ${projName}")
       return projectDict(projName)
     }
 

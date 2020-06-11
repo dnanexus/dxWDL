@@ -220,26 +220,20 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // Access a field in a WDL pair/struct/object
-  private def accessField(obj : WdlValues.V,
-                          fieldName : String) : Option[WdlValues.V] = {
+  private def accessField(obj : WdlValues.V, fieldName : String) : WdlValues.V = {
     obj match {
       case WdlValues.V_Pair(lv, rv) if fieldName == "left" =>
-        Some(lv)
+        lv
       case WdlValues.V_Pair(lv, rv) if fieldName == "right" =>
-        Some(rv)
+        rv
       case WdlValues.V_Struct(_, members) if members contains fieldName =>
-        Some(members(fieldName))
+        members(fieldName)
       case WdlValues.V_Call(_, members) if members contains fieldName =>
-        Some(members(fieldName))
+        members(fieldName)
       case WdlValues.V_Object(members) if members contains fieldName =>
-        Some(members(fieldName))
-
-        // A map has keys that may not be strings
-        //  case (WdlTypes.T_Map(kt, vt), WdlValues.V_Map(m)) if m contains fieldName =>
-        //     Some(vt, m(fieldName))
-
+        members(fieldName)
       case _ =>
-        None
+        throw new Exception(s"field ${fieldName} does not exist in ${obj}")
     }
   }
 
@@ -256,13 +250,12 @@ case class WfFragRunner(wf: TAT.Workflow,
         None
       } else {
         val lhs = fqn.substring(0, pos)  // A.B
-        val rhs = fqn.substring(pos)     // C
+        val rhs = fqn.substring(pos+1)     // C
 
         // Look for "A.B"
         lookupInEnv(lhs, env) match {
           case None => None
-          case Some(v) =>
-            accessField(v, rhs)
+          case Some(v) => Some(accessField(v, rhs))
         }
       }
     }
@@ -283,12 +276,16 @@ case class WfFragRunner(wf: TAT.Workflow,
         s"""|buildCallInputs (${callName})
             |env:
             |${env.mkString("\n")}
+            |
+            |linkInfo = ${linkInfo}
             |""".stripMargin
     )
 
     val inputs: Map[String, WdlValues.V] = linkInfo.inputs.flatMap {
       case (varName, _) =>
-        lookupInEnv(varName, env) match {
+        val retval = lookupInEnv(varName, env)
+        Utils.appletLog(verbose, s"lookupInEnv(${varName} = ${retval})")
+        retval match {
           case None =>
             // No binding for this input. It might be optional,
             // it could have a default value. It could also actually be missing,
@@ -304,6 +301,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         val womType = linkInfo.inputs(name)
         name -> wdlVarLinksConverter.importFromWDL(womType, womValue)
     }
+    Utils.appletLog(verbose, s"wvlInputs = ${wvlInputs}")
 
     val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
@@ -370,6 +368,8 @@ case class WfFragRunner(wf: TAT.Workflow,
                                  dbgName: String,
                                  callInputs: JsValue,
                                  instanceType: Option[String]): (Int, DxExecution) = {
+    Utils.appletLog(verbose, s"execDNAx ${callInputs.prettyPrint}")
+
     // We may need to run a collect subjob. Add the the sequence
     // number to each invocation, so the collect subjob will be
     // able to put the results back together in the correct order.
@@ -416,28 +416,38 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def execCall(call: TAT.Call,
                        callInputs: Map[String, (WdlTypes.T, WdlValues.V)],
                        callNameHint: Option[String]): (Int, DxExecution) = {
-    val linkInfo = getCallLinkInfo(call)
-    val callName = call.actualName
-    val calleeName = call.callee.name
-    val callInputsJSON: JsValue = buildCallInputs(callName, linkInfo, callInputs)
-    /*        Utils.appletLog(verbose, s"""|Call ${callName}
-                                     |calleeName= ${calleeName}
-                                     |inputs = ${callInputsJSON}""".stripMargin)*/
+    Utils.appletLog(verbose, s"""|call = ${call}
+                                 |callInputs = ${callInputs}
+                                 |""".stripMargin)
+    val wvlInputs = callInputs.map {
+      case (name, (wdlType, womValue)) =>
+        name -> wdlVarLinksConverter.importFromWDL(wdlType, womValue)
+    }
+
+    val callInputsJs = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
+      case (accu, (varName, wvl)) =>
+        val fields = wdlVarLinksConverter.genFields(wvl, varName)
+        accu ++ fields.toMap
+    }
+    val callInputsJSON = JsObject(callInputsJs)
+    Utils.appletLog(verbose, s"callInputs = ${callInputsJSON.prettyPrint}")
 
     // This is presented in the UI, to inform the user
     val dbgName = callNameHint match {
       case None       => call.actualName
-      case Some(hint) => s"${callName} ${hint}"
+      case Some(hint) => s"${call.actualName} ${hint}"
     }
 
     // If this is a call to a task that computes the required instance type at runtime,
     // do the calculation right now. This saves a job relaunch down the road.
+    val calleeName = call.callee.name
     val instanceType: Option[String] = taskDir.get(calleeName) match {
       case None => None
       case Some(task) =>
         val taskInputs = jobInputOutput.loadInputs(callInputsJSON, task)
         preCalcInstanceType(task, taskInputs)
     }
+    val linkInfo = getCallLinkInfo(call)
     execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)
   }
 

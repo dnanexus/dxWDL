@@ -849,7 +849,6 @@ case class Native(dxWDLrtId: Option[String],
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
     }
-    //System.out.println(s"Native: instanceType chosen = ${instanceType}")
     val runSpec: Map[String, JsValue] = Map(
         "code" -> JsString(bashScript),
         "interpreter" -> JsString("bash"),

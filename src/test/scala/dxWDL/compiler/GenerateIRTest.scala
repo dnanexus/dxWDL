@@ -1623,8 +1623,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cFlagsNotQuiet = cFlags.filter( _ != "-quiet" )
     val retval = Main.compile(
         path.toString
-          :: "--verbose"
-          :: "--verboseKey" :: "GenerateIR"
+//          :: "--verbose"
+//          :: "--verboseKey" :: "GenerateIR"
           :: cFlagsNotQuiet
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
