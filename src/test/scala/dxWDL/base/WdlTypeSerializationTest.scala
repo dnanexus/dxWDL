@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 
-class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
+class WdlTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   val testCases: List[WdlTypes.T] = List(
       // Primitive types
@@ -26,7 +26,7 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
   )
 
   it should "work for various WDL types" in {
-    val typeSerialize = WomTypeSerialization(Map.empty)
+    val typeSerialize = WdlTypeSerialization(Map.empty)
 
     for (t <- testCases) {
       typeSerialize.fromString(typeSerialize.toString(t)) should be(t)
@@ -48,7 +48,7 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "work for structs" in {
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize = WomTypeSerialization(typeAliases)
+    val typeSerialize = WdlTypeSerialization(typeAliases)
 
     for (t <- structTestCases) {
       typeSerialize.fromString(typeSerialize.toString(t)) should be(t)
@@ -64,7 +64,7 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "detect bad type descriptions" in {
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize = WomTypeSerialization(typeAliases)
+    val typeSerialize = WdlTypeSerialization(typeAliases)
 
     for (typeDesc <- badTypeNames) {
       assertThrows[Exception] {

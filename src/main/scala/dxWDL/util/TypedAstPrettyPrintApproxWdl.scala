@@ -1,11 +1,13 @@
-/** Pretty printing WOM as, approximately, the original WDL.
+/** Pretty printing typed AST as, approximately, the original WDL.
   */
 package dxWDL.util
 
 import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil}
 
-object WomPrettyPrintApproxWdl {
+object TypedAstPrettyPrintApproxWdl {
 
+  // TODO: this function should no longer be necessary - the wdlTools code formatter
+  //  can be used instead. This function is currently only used in logging statements.
   def applyWorkflowElement(node: TAT.WorkflowElement, indent: String): String = {
     node match {
       case TAT.Scatter(varName, expr, body, _) =>
@@ -58,14 +60,14 @@ object WomPrettyPrintApproxWdl {
 
   private def applyInput(iDef: TAT.InputDefinition): String = {
     iDef match {
-      case TAT.RequiredInputDefinition(iName, womType, _) =>
-        s"${TUtil.typeToString(womType)} ${iName}"
+      case TAT.RequiredInputDefinition(iName, wdlType, _) =>
+        s"${TUtil.typeToString(wdlType)} ${iName}"
 
-      case TAT.OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _) =>
-        s"${TUtil.typeToString(womType)} ${iName} = ${TUtil.exprToString(defaultExpr)}"
+      case TAT.OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _) =>
+        s"${TUtil.typeToString(wdlType)} ${iName} = ${TUtil.exprToString(defaultExpr)}"
 
-      case TAT.OptionalInputDefinition(iName, womType, _) =>
-        s"${TUtil.typeToString(womType)} ${iName}"
+      case TAT.OptionalInputDefinition(iName, wdlType, _) =>
+        s"${TUtil.typeToString(wdlType)} ${iName}"
     }
   }
 

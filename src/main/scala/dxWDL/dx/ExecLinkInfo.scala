@@ -17,14 +17,14 @@ object ExecLinkInfo {
   // Serialize applet input definitions, so they could be used
   // at runtime.
   def writeJson(ali: ExecLinkInfo, typeAliases: Map[String, WdlTypes.T]): JsValue = {
-    val womTypeConverter = WomTypeSerialization(typeAliases)
+    val wdlTypeConverter = WdlTypeSerialization(typeAliases)
 
     val appInputDefs: Map[String, JsString] = ali.inputs.map {
-      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-    }.toMap
+      case (name, wdlType) => name -> JsString(wdlTypeConverter.toString(wdlType))
+    }
     val appOutputDefs: Map[String, JsString] = ali.outputs.map {
-      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-    }.toMap
+      case (name, wdlType) => name -> JsString(wdlTypeConverter.toString(wdlType))
+    }
     JsObject(
         "name" -> JsString(ali.name),
         "inputs" -> JsObject(appInputDefs.to(TreeMap)),
@@ -34,7 +34,7 @@ object ExecLinkInfo {
   }
 
   def readJson(aplInfo: JsValue, typeAliases: Map[String, WdlTypes.T]): ExecLinkInfo = {
-    val womTypeConverter = WomTypeSerialization(typeAliases)
+    val wdlTypeConverter = WdlTypeSerialization(typeAliases)
 
     val name = aplInfo.asJsObject.fields("name") match {
       case JsString(x) => x
@@ -45,7 +45,7 @@ object ExecLinkInfo {
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case (key, JsString(wdlTypeStr)) => key -> wdlTypeConverter.fromString(wdlTypeStr)
         case _                           => throw new Exception("Bad JSON")
       }
       .toMap
@@ -54,7 +54,7 @@ object ExecLinkInfo {
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case (key, JsString(wdlTypeStr)) => key -> wdlTypeConverter.fromString(wdlTypeStr)
         case _                           => throw new Exception("Bad JSON")
       }
       .toMap

@@ -4,10 +4,10 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 
-case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
+case class WdlValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
 
-  // Serialization of a WOM value to JSON
-  private def womToJSON(t: WdlTypes.T, w: WdlValues.V): JsValue = {
+  // Serialization of a WdlValue to JSON
+  private def wdlToJSON(t: WdlTypes.T, w: WdlValues.V): JsValue = {
     (t, w) match {
       // Base case: primitive types.
       // Files are encoded as their full path.
@@ -26,7 +26,7 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
 
       // Non empty array
       case (WdlTypes.T_Array(t, _), WdlValues.V_Array(elems)) =>
-        val jsVals = elems.map(e => womToJSON(t, e))
+        val jsVals = elems.map(e => wdlToJSON(t, e))
         JsArray(jsVals)
 
       // Maps. These are projections from a key to value, where
@@ -36,25 +36,25 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
       case (WdlTypes.T_Map(WdlTypes.T_String, valueType), WdlValues.V_Map(m)) =>
         JsObject(m.map {
           case (WdlValues.V_String(k), v) =>
-            k -> womToJSON(valueType, v)
+            k -> wdlToJSON(valueType, v)
           case (k, _) =>
             throw new Exception(s"key ${k} should be a WdlTypes.T_String")
         })
 
       // general case, the keys are not strings.
       case (WdlTypes.T_Map(keyType, valueType), WdlValues.V_Map(m)) =>
-        val keys: Vector[JsValue] = m.keys.map(womToJSON(keyType, _)).toVector
-        val values: Vector[JsValue] = m.values.map(womToJSON(valueType, _)).toVector
+        val keys: Vector[JsValue] = m.keys.map(wdlToJSON(keyType, _)).toVector
+        val values: Vector[JsValue] = m.values.map(wdlToJSON(valueType, _)).toVector
         JsObject("keys" -> JsArray(keys), "values" -> JsArray(values))
 
       case (WdlTypes.T_Pair(lType, rType), WdlValues.V_Pair(l, r)) =>
-        val lJs = womToJSON(lType, l)
-        val rJs = womToJSON(rType, r)
+        val lJs = wdlToJSON(lType, l)
+        val rJs = wdlToJSON(rType, r)
         JsObject("left" -> lJs, "right" -> rJs)
 
       // Strip optional type
       case (WdlTypes.T_Optional(t), WdlValues.V_Optional(w)) =>
-        womToJSON(t, w)
+        wdlToJSON(t, w)
 
       // missing value
       case (_, WdlValues.V_Optional(_)) => JsNull
@@ -65,7 +65,7 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
         val mJs: Map[String, JsValue] = m.map {
           case (key, v) =>
             val t: WdlTypes.T = typeMap(key)
-            key -> womToJSON(t, v)
+            key -> wdlToJSON(t, v)
         }
         JsObject(mJs)
       case (WdlTypes.T_Struct(structName, typeMap), WdlValues.V_Struct(structName2, m)) =>
@@ -73,7 +73,7 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
         val mJs: Map[String, JsValue] = m.map {
           case (key, v) =>
             val t: WdlTypes.T = typeMap(key)
-            key -> womToJSON(t, v)
+            key -> wdlToJSON(t, v)
         }
         JsObject(mJs)
 
@@ -88,7 +88,7 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
     }
   }
 
-  private def womFromJSON(t: WdlTypes.T, jsv: JsValue): WdlValues.V = {
+  private def wdlFromJSON(t: WdlTypes.T, jsv: JsValue): WdlValues.V = {
     (t, jsv) match {
       // base case: primitive types
       case (WdlTypes.T_Boolean, JsBoolean(b)) => WdlValues.V_Boolean(b.booleanValue)
@@ -100,14 +100,14 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
       // arrays
       case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         WdlValues.V_Array(vec.map { elem =>
-          womFromJSON(t, elem)
+          wdlFromJSON(t, elem)
         })
 
       // maps with string keys
       case (WdlTypes.T_Map(WdlTypes.T_String, valueType), JsObject(fields)) =>
         val m: Map[WdlValues.V, WdlValues.V] = fields.map {
           case (k, v) =>
-            WdlValues.V_String(k) -> womFromJSON(valueType, v)
+            WdlValues.V_String(k) -> wdlFromJSON(valueType, v)
         }.toMap
         WdlValues.V_Map(m)
 
@@ -118,9 +118,9 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
           case Seq(JsArray(kJs), JsArray(vJs)) =>
             val m = (kJs zip vJs).map {
               case (k, v) =>
-                val kWom = womFromJSON(keyType, k)
-                val vWom = womFromJSON(valueType, v)
-                kWom -> vWom
+                val kWdl = wdlFromJSON(keyType, k)
+                val vWdl = wdlFromJSON(valueType, v)
+                kWdl -> vWdl
             }.toMap
             WdlValues.V_Map(m)
           case _ => throw new Exception(s"Malformed serialized map ${jsv}")
@@ -129,8 +129,8 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
       case (WdlTypes.T_Pair(lType, rType), JsObject(_)) =>
         jsv.asJsObject.getFields("left", "right") match {
           case Seq(lJs, rJs) =>
-            val left = womFromJSON(lType, lJs)
-            val right = womFromJSON(rType, rJs)
+            val left = wdlFromJSON(lType, lJs)
+            val right = wdlFromJSON(rType, rJs)
             WdlValues.V_Pair(left, right)
           case _ => throw new Exception(s"Malformed serialized par ${jsv}")
         }
@@ -138,14 +138,14 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
       case (WdlTypes.T_Optional(_), JsNull) =>
         WdlValues.V_Null
       case (WdlTypes.T_Optional(t), _) =>
-        WdlValues.V_Optional(womFromJSON(t, jsv))
+        WdlValues.V_Optional(wdlFromJSON(t, jsv))
 
       // structs
       case (WdlTypes.T_Struct(structName, typeMap), JsObject(fields)) =>
         val m: Map[String, WdlValues.V] = fields.map {
           case (key, elemValue) =>
             val t: WdlTypes.T = typeMap(key)
-            val elem: WdlValues.V = womFromJSON(t, elemValue)
+            val elem: WdlValues.V = wdlFromJSON(t, elemValue)
             key -> elem
         }
         WdlValues.V_Struct(structName, m)
@@ -157,15 +157,15 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
 
   // serialization routines
   def toJSON(t: WdlTypes.T, w: WdlValues.V): JsValue = {
-    JsObject("womType" -> JsString(WomTypeSerialization(typeAliases).toString(t)),
-             "womValue" -> womToJSON(t, w))
+    JsObject("womType" -> JsString(WdlTypeSerialization(typeAliases).toString(t)),
+             "womValue" -> wdlToJSON(t, w))
   }
 
   def fromJSON(jsv: JsValue): WdlValues.V = {
     jsv.asJsObject.getFields("womType", "womValue") match {
       case Seq(JsString(typeStr), wValue) =>
-        val womType = WomTypeSerialization(typeAliases).fromString(typeStr)
-        womFromJSON(womType, wValue)
+        val wdlType = WdlTypeSerialization(typeAliases).fromString(typeStr)
+        wdlFromJSON(wdlType, wValue)
       case other => throw DeserializationException(s"WdlValues.V unexpected ${other}")
     }
   }

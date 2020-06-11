@@ -5,15 +5,15 @@ import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
-import dxWDL.base.ParseWomSourceFile
+import dxWDL.base.ParseWdlSourceFile
 
-class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
+class WdlValueAnalysisTest extends AnyFlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
-    val (wf: TAT.Workflow, _, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wdlCode)
+    val (wf: TAT.Workflow, _, _, _) = ParseWdlSourceFile(false).parseWdlWorkflow(wdlCode)
     wf.body.collect {
       case d: TAT.Declaration => d
-    }.toVector
+    }
   }
 
   it should "evalConst" in {
@@ -41,7 +41,7 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
         "file2" -> None
     )
 
-    // The workflow is a convenient packaging around WOM
+    // The workflow is a convenient packaging around WDL
     // expressions. When we parse the workflow, the expressions lose
     // their relative ordering, and become a graph. That's why we need
     // to keep track of a map from identifier name to expected result.
@@ -75,21 +75,21 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
       val id: String = decl.name
       val expected: Option[WdlValues.V] = allExpectedResults(id)
       val expr: TAT.Expr = decl.expr.get
-      val womType: WdlTypes.T = decl.wdlType
+      val wdlType: WdlTypes.T = decl.wdlType
 
-      val retval = WomValueAnalysis.ifConstEval(womType, expr)
-      retval shouldBe (expected)
+      val retval = WdlValueAnalysis.ifConstEval(wdlType, expr)
+      retval shouldBe expected
 
       // Check that evalConst works
       expected match {
         case None =>
           assertThrows[Exception] {
-            WomValueAnalysis.evalConst(womType, expr)
+            WdlValueAnalysis.evalConst(wdlType, expr)
           }
-          WomValueAnalysis.isExpressionConst(womType, expr) shouldBe (false)
+          WdlValueAnalysis.isExpressionConst(wdlType, expr) shouldBe false
         case Some(x) =>
-          WomValueAnalysis.evalConst(womType, expr) shouldBe (x)
-          WomValueAnalysis.isExpressionConst(womType, expr) shouldBe (true)
+          WdlValueAnalysis.evalConst(wdlType, expr) shouldBe x
+          WdlValueAnalysis.isExpressionConst(wdlType, expr) shouldBe true
       }
     }
   }
@@ -106,7 +106,7 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
     val declarations = parseExpressions(wdlCode)
     val node = declarations.head
     assertThrows[Exception] {
-      WomValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
+      WdlValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
     }
   }
 
@@ -124,6 +124,6 @@ class WomValueAnalysisTest extends AnyFlatSpec with Matchers {
 
     val declarations = parseExpressions(wdlCode)
     for (node <- declarations)
-      WomValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
+      WdlValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
   }
 }

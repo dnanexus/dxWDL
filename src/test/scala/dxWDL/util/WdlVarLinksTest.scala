@@ -4,36 +4,36 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
-import wdlTools.types.{WdlTypes}
+import wdlTools.types.WdlTypes
 
 import dxWDL.base.{Utils, Verbose}
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
-  private val verbose = Verbose(false, false, Set.empty)
+  private val verbose = Verbose(on = false, quiet = false, Set.empty)
 
-  case class Element(name: String, womType: WdlTypes.T, womValue: WdlValues.V)
+  case class Element(name: String, wdlType: WdlTypes.T, wdlValue: WdlValues.V)
 
   def makeElement(t: WdlTypes.T, v: WdlValues.V): Element =
     Element("A", t, v)
 
   def check(elem: Element, wvlConverter: WdlVarLinksConverter): Unit = {
     val prefix = "XXX_"
-    val wvl: WdlVarLinks = wvlConverter.importFromWDL(elem.womType, elem.womValue)
+    val wvl: WdlVarLinks = wvlConverter.importFromWDL(elem.wdlType, elem.wdlValue)
     val allDxFields1: List[(String, JsValue)] = wvlConverter.genFields(wvl, prefix + elem.name)
     val allDxFields2 = allDxFields1.filter {
-      case (key, v) => !key.endsWith(Utils.FLAT_FILES_SUFFIX)
+      case (key, _) => !key.endsWith(Utils.FLAT_FILES_SUFFIX)
     }
     allDxFields2.size should be(1)
     val (name2, jsv) = allDxFields2.head
 
     name2 should be(prefix + elem.name)
-    val (womValue2, _) = wvlConverter.unpackJobInput(elem.name, elem.womType, jsv)
-    womValue2 should be(elem.womValue)
+    val (wdlValue2, _) = wvlConverter.unpackJobInput(elem.name, elem.wdlType, jsv)
+    wdlValue2 should be(elem.wdlValue)
   }
 
   it should "handle primitive WDL elements" in {
-    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(verbose, Map.empty, Map.empty)
 
     val testCases = List(
         // primitives
@@ -50,7 +50,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle compound WDL types" in {
-    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(verbose, Map.empty, Map.empty)
 
     def makePair(x: Double, s: String): WdlValues.V = {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))
@@ -61,7 +61,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
         makeElement(WdlTypes.T_Pair(WdlTypes.T_Float, WdlTypes.T_String),
                     makePair(24.1, "Fiji is an island in the pacific ocean")),
         makeElement(
-            WdlTypes.T_Array(WdlTypes.T_Boolean, false),
+            WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false),
             WdlValues.V_Array(Vector(WdlValues.V_Boolean(true), WdlValues.V_Boolean(false)))
         ),
         makeElement(WdlTypes.T_Optional(WdlTypes.T_File),
@@ -115,13 +115,13 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 //        }
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType)
-    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }
   }
 
-  it should "handle nested structs" taggedAs (EdgeTest) in {
+  it should "handle nested structs" taggedAs EdgeTest in {
     // People
     val personType =
       WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
@@ -155,7 +155,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
     val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val wvlConverter = new WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }

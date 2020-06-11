@@ -127,7 +127,7 @@ case class Native(dxWDLrtId: Option[String],
     val defaultVals: Map[String, JsValue] = cVar.default match {
       case None => Map.empty
       case Some(wdlValue) =>
-        val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wdlValue)
+        val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wdlValue)
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
@@ -304,7 +304,7 @@ case class Native(dxWDLrtId: Option[String],
         case _ => mkComplex(optional)
       }
     }
-    cVar.womType match {
+    cVar.wdlType match {
       case WdlTypes.T_Optional(t) => handleType(t, optional = true)
       case t                      => handleType(t, optional = false)
     }
@@ -1049,7 +1049,7 @@ case class Native(dxWDLrtId: Option[String],
               "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
               "fqnDictTypes" -> JsObject(fqnDictTypes.map {
                 case (k, t) =>
-                  val tStr = WomTypeSerialization(typeAliases).toString(t)
+                  val tStr = WdlTypeSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
               })
           )
@@ -1058,7 +1058,7 @@ case class Native(dxWDLrtId: Option[String],
             IR.AppletKindWorkflowOutputReorg =>
           // meta information used for running workflow fragments
           val fqnDictTypes = JsObject(applet.inputVars.map { cVar =>
-            val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
+            val tStr = WdlTypeSerialization(typeAliases).toString(cVar.wdlType)
             cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
@@ -1071,7 +1071,7 @@ case class Native(dxWDLrtId: Option[String],
       .sortWith(_.name < _.name)
       .flatMap(cVar => cVarToSpec(cVar))
 
-    // put the wom source code into the details field.
+    // put the WDL source code into the details field.
     // Add the pricing model, and make the prices opaque.
     val generator = WdlV1Generator()
     val sourceLines = generator.generateDocument(applet.document)
@@ -1087,7 +1087,6 @@ case class Native(dxWDLrtId: Option[String],
     val (taskMeta, taskDetails) = buildTaskMetadata(applet, defaultTags)
 
     // Compute all the bits that get merged together into 'details'
-    // TODO: rename field, now that we're no longer using WOM
     val auxInfo = Map("womSourceCode" -> JsString(sourceCode),
                       "instanceTypeDB" -> JsString(dbOpaqueInstance),
                       "runtimeAttrs" -> runtimeAttrs)
@@ -1229,15 +1228,15 @@ case class Native(dxWDLrtId: Option[String],
             // in a value at runtime.
             m
           case IR.SArgConst(wValue) =>
-            val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+            val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wValue)
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgLink(dxStage, argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgWorkflowInput(argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
         }
@@ -1290,10 +1289,10 @@ case class Native(dxWDLrtId: Option[String],
             s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
         )
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case other =>
         throw new Exception(s"Bad value for sArg ${other}")
@@ -1417,7 +1416,6 @@ case class Native(dxWDLrtId: Option[String],
     val generator = WdlV1Generator()
     val sourceLines = generator.generateElement(wf.document)
     val sourceCode = Utils.gzipAndBase64Encode(sourceLines.mkString("\n"))
-    // TODO: rename field, now that we're no longer using WOM
     val sourceCodeField: Map[String, JsValue] = Map("womSourceCode" -> JsString(sourceCode))
 
     // link to applets used by the fragments. This notifies the platform that they

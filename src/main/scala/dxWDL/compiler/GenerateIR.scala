@@ -137,7 +137,7 @@ case class GenerateIR(verbose: Verbose,
   }
 
   // Entrypoint
-  def apply(womBundle: WomBundle,
+  def apply(wdlBundle: WdlBundle,
             allSources: Map[String, TAT.Document],
             language: Language.Value,
             locked: Boolean,
@@ -153,17 +153,17 @@ case class GenerateIR(verbose: Verbose,
         }.toMap
     }
     Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
-    Utils.trace(verbose.on, s"sortByDependencies ${womBundle.allCallables.values.map { _.name }}")
+    Utils.trace(verbose.on, s"sortByDependencies ${wdlBundle.allCallables.values.map { _.name }}")
     Utils.traceLevelInc()
 
-    val depOrder: Vector[TAT.Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+    val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle.allCallables.values.toVector)
     Utils.trace(verbose.on, s"depOrder =${depOrder.map { _.name }}")
     Utils.traceLevelDec()
 
     // Only the toplevel workflow may be unlocked. This happens
     // only if the user specifically compiles it as "unlocked".
     def isLocked(callable: TAT.Callable): Boolean = {
-      (callable, womBundle.primaryCallable) match {
+      (callable, wdlBundle.primaryCallable) match {
         case (wf: TAT.Workflow, Some(wf2: TAT.Workflow)) =>
           if (wf.name == wf2.name)
             locked
@@ -178,7 +178,7 @@ case class GenerateIR(verbose: Verbose,
       depOrder.foldLeft((Map.empty[String, IR.Callable], Vector.empty[IR.Callable])) {
         case ((allCallables, allCallablesSorted), callable) =>
           val (exec, auxCallables) = compileCallable(callable,
-                                                     womBundle.typeAliases,
+                                                     wdlBundle.typeAliases,
                                                      allCallables,
                                                      language,
                                                      isLocked(callable),
@@ -195,7 +195,7 @@ case class GenerateIR(verbose: Verbose,
 
     // We already compiled all the individual wdl:tasks and
     // wdl:workflows, let's find the entrypoint.
-    val primary = womBundle.primaryCallable.map { callable =>
+    val primary = wdlBundle.primaryCallable.map { callable =>
       allCallables(Utils.getUnqualifiedName(callable.name))
     }
     val allCallablesSortedNames = allCallablesSorted.map(_.name).distinct
@@ -204,6 +204,6 @@ case class GenerateIR(verbose: Verbose,
     assert(allCallables.size == allCallablesSortedNames.size)
 
     Utils.traceLevelDec()
-    IR.Bundle(primary, allCallables, allCallablesSortedNames, womBundle.typeAliases)
+    IR.Bundle(primary, allCallables, allCallablesSortedNames, wdlBundle.typeAliases)
   }
 }

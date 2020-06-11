@@ -278,7 +278,7 @@ object IR {
   //
   case class CVar(
       name: String,
-      womType: WdlTypes.T,
+      wdlType: WdlTypes.T,
       default: Option[WdlValues.V],
       attrs: Option[Vector[IOAttr]] = None
   ) {

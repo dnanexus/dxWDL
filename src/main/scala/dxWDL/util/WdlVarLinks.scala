@@ -168,7 +168,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
   // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
   //
-  private def jobInputToWomValue(name: String,
+  private def jobInputToWdlValue(name: String,
                                  wdlType: WdlTypes.T,
                                  jsValue: JsValue): WdlValues.V = {
     (wdlType, jsValue) match {
@@ -204,16 +204,16 @@ case class WdlVarLinksConverter(verbose: Verbose,
           }
         val m: Map[WdlValues.V, WdlValues.V] = mJs.map {
           case (k: JsValue, v: JsValue) =>
-            val kWom = jobInputToWomValue(name, keyType, k)
-            val vWom = jobInputToWomValue(name, valueType, v)
-            kWom -> vWom
+            val kWdl = jobInputToWdlValue(name, keyType, k)
+            val vWdl = jobInputToWdlValue(name, valueType, v)
+            kWdl -> vWdl
         }
         WdlValues.V_Map(m)
 
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
           if List("left", "right").forall(fields.contains) =>
-        val left = jobInputToWomValue(name, lType, fields("left"))
-        val right = jobInputToWomValue(name, rType, fields("right"))
+        val left = jobInputToWdlValue(name, lType, fields("left"))
+        val right = jobInputToWdlValue(name, rType, fields("right"))
         WdlValues.V_Pair(left, right)
 
       // empty array
@@ -223,14 +223,14 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // array
       case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         val wVec: Vector[WdlValues.V] = vec.map { elem: JsValue =>
-          jobInputToWomValue(name, t, elem)
+          jobInputToWdlValue(name, t, elem)
         }
         WdlValues.V_Array(wVec)
 
       case (WdlTypes.T_Optional(_), JsNull) =>
         WdlValues.V_Null
       case (WdlTypes.T_Optional(t), jsv) =>
-        val value = jobInputToWomValue(name, t, jsv)
+        val value = jobInputToWdlValue(name, t, jsv)
         WdlValues.V_Optional(value)
 
       // structs
@@ -248,7 +248,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
                                         |""".stripMargin)
               case Some(t) => t
             }
-            key -> jobInputToWomValue(key, t, jsValue)
+            key -> jobInputToWdlValue(key, t, jsValue)
         }
         WdlValues.V_Struct(structName, m)
 
@@ -272,13 +272,12 @@ case class WdlVarLinksConverter(verbose: Verbose,
           fields("___")
         case _ => jsv
       }
-    val wdlValue = jobInputToWomValue(name, wdlType, jsv1)
+    val wdlValue = jobInputToWdlValue(name, wdlType, jsv1)
     val dxFiles = DxUtils.findDxFiles(jsv)
     (wdlValue, dxFiles)
   }
 
-  // create input/output fields that bind the variable name [bindName] to
-  // this WomVar
+  // create input/output fields that bind the variable name [bindName] to this WdlVar
   def genFields(wvl: WdlVarLinks,
                 bindName: String,
                 encodeDots: Boolean = true): List[(String, JsValue)] = {

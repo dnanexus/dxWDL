@@ -184,10 +184,10 @@ case class WdlCodeGen(verbose: Verbose,
         .map { cVar =>
           cVar.default match {
             case None =>
-              TAT.RequiredInputDefinition(cVar.name, cVar.womType, dummyTextSource)
+              TAT.RequiredInputDefinition(cVar.name, cVar.wdlType, dummyTextSource)
             case Some(wValue) =>
               TAT.OverridableInputDefinitionWithDefault(cVar.name,
-                                                        cVar.womType,
+                                                        cVar.wdlType,
                                                         wdlValueToExpr(wValue),
                                                         dummyTextSource)
           }
@@ -197,8 +197,8 @@ case class WdlCodeGen(verbose: Verbose,
       callable.outputVars
         .sortWith(_.name < _.name)
         .map { cVar =>
-          val defaultVal = genDefaultValueOfType(cVar.womType)
-          TAT.OutputDefinition(cVar.name, cVar.womType, defaultVal, dummyTextSource)
+          val defaultVal = genDefaultValueOfType(cVar.wdlType)
+          TAT.OutputDefinition(cVar.name, cVar.wdlType, defaultVal, dummyTextSource)
         }
 
     language match {

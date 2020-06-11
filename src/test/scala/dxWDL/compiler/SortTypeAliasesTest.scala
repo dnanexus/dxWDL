@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 
 import dxWDL.base.{Utils, Verbose}
-import dxWDL.base.ParseWomSourceFile
+import dxWDL.base.ParseWdlSourceFile
 
 class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
@@ -20,7 +20,7 @@ class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("struct", "many_structs.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (_, _, typeAliases: Map[String, WdlTypes.T], _) =
-      ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
+      ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
     val defs: Vector[(String, WdlTypes.T)] = SortTypeAliases(verbose).apply(typeAliases.toVector)
     val defNames = defs.map { case (name, _) => name }.toVector

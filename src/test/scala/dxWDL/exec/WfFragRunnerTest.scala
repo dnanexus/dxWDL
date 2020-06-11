@@ -8,7 +8,7 @@ import spray.json._
 import wdlTools.eval.{Context => EvalContext, WdlValues}
 import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
-import dxWDL.base.{Language, ParseWomSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
+import dxWDL.base.{Language, ParseWdlSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
 import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, WdlEvaluator}
 
@@ -38,7 +38,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                               dxIoFunctions: DxIoFunctions,
                               wfSourceCode: String): (TAT.Workflow, WfFragRunner) = {
     val (wf, taskDir, typeAliases, document) =
-      ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
+      ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
     val fragInputOutput =
       WfFragInputOutput(dxIoFunctions, null, typeAliases, document.version.value, runtimeDebugLevel)
     val fragRunner = WfFragRunner(
@@ -65,7 +65,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  def evaluateWomExpression(expr: TAT.Expr,
+  def evaluateWdlExpression(expr: TAT.Expr,
                             env: Map[String, WdlValues.V],
                             dxIoFunctions: DxIoFunctions,
                             language: Language.Value): WdlValues.V = {
@@ -78,10 +78,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (_, dxIoFunctions) = setup()
 
-    val (language, womBundle, _, _) =
-      ParseWomSourceFile(false).apply(source, List.empty)
+    val (language, wdlBundle, _, _) =
+      ParseWdlSourceFile(false).apply(source, List.empty)
 
-    val wf: TAT.Workflow = womBundle.primaryCallable match {
+    val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
       case _                      => throw new Exception("sanity")
     }
@@ -99,7 +99,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       case eNode: TAT.Declaration => eNode
     }
     val expr: TAT.Expr = decls.head.expr.get
-    val value: WdlValues.V = evaluateWomExpression(expr, env, dxIoFunctions, language)
+    val value: WdlValues.V = evaluateWdlExpression(expr, env, dxIoFunctions, language)
     value should be(WdlValues.V_Int(9))
   }
 
@@ -186,7 +186,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "create proper names for scatter results" in {
     val path = pathFromBasename("frag_runner", "strings.wdl")
     val wfSourceCode = Utils.readFileContent(path)
-    val (wf, _, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
+    val (wf, _, _, _) = ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
     val scatters = wf.body.collect {
       case x: TAT.Scatter => x
@@ -221,7 +221,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val subBlocks = Block.splitWorkflow(wf)
     /*
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
-                                                 Map.empty[String, WomValue])
+                                                 Map.empty[String, WdlValue])
  Utils.ignore(results)*/
     Utils.ignore(subBlocks)
   }

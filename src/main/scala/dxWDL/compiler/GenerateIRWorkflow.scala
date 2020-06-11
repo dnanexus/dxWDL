@@ -69,16 +69,16 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     input match {
       case Block.RequiredInputDefinition(id, wdlType) =>
         CVar(id, wdlType, None, attr)
-      case Block.OverridableInputDefinitionWithDefault(id, womType, defaultExpr) =>
-        val defaultValue: WdlValues.V = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+      case Block.OverridableInputDefinitionWithDefault(id, wdlType, defaultExpr) =>
+        val defaultValue: WdlValues.V = WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
                                                | $defaultExpr
                                                |""".stripMargin)
           case Some(value) => value
         }
-        CVar(id, womType, Some(defaultValue), attr)
-      case Block.OptionalInputDefinition(id, womType) =>
-        CVar(id, womType, None, attr)
+        CVar(id, wdlType, Some(defaultValue), attr)
+      case Block.OptionalInputDefinition(id, wdlType) =>
+        CVar(id, wdlType, None, attr)
     }
   }
 
@@ -96,7 +96,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         throw new Exception(
             s"""|Internal compiler error.
                 |
-                |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+                |Input <${cVar.name}, ${cVar.wdlType}> to call <${call.fullyQualifiedName}>
                 |is missing from the environment. We don't have ${fqn} in the environment.
                 |""".stripMargin
               .replaceAll("\n", " ")
@@ -128,7 +128,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // Extract the input values/links from the environment
     val inputs: Vector[SArg] = callee.inputVars.map { cVar =>
       call.inputs.get(cVar.name) match {
-        case None if Utils.isOptional(cVar.womType) =>
+        case None if Utils.isOptional(cVar.wdlType) =>
           // optional argument that is not provided
           IR.SArgEmpty
 
@@ -146,7 +146,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           Utils.trace(verbose.on, s"""|env =
                                       |$envDbg""".stripMargin)
           throw new Exception(
-              s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+              s"""|input <${cVar.name}, ${cVar.wdlType}> to call <${call.fullyQualifiedName}>
                   |is unspecified. This is illegal in a locked workflow.""".stripMargin
                 .replaceAll("\n", " ")
           )
@@ -160,8 +160,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           // same as above
           IR.SArgEmpty
 
-        case Some(expr) if WomValueAnalysis.isExpressionConst(cVar.womType, expr) =>
-          IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, expr))
+        case Some(expr) if WdlValueAnalysis.isExpressionConst(cVar.wdlType, expr) =>
+          IR.SArgConst(WdlValueAnalysis.evalConst(cVar.wdlType, expr))
 
         case Some(TAT.ExprIdentifier(id, _, _)) =>
           getFqnFromEnv(id, cVar, env, call)
@@ -333,7 +333,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
     Utils.trace(verbose.on, s"Compiling fragment <$stageName> as stage")
     Utils.trace(verbose2, s"""|block=
-                              |${WomPrettyPrintApproxWdl.block(block)}
+                              |${TypedAstPrettyPrintApproxWdl.block(block)}
                               |""".stripMargin)
 
     // Figure out the closure required for this block, out of the
@@ -350,7 +350,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // This is a simplifying assumption, that is hopefully sufficient. It disallows
     // users from using variables with the ___ character sequence.
     val fqnDictTypes = inputVars.map { cVar =>
-      cVar.dxVarName -> cVar.womType
+      cVar.dxVarName -> cVar.wdlType
     }.toMap
 
     // Figure out the block outputs
@@ -361,8 +361,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // create a cVar definition from each block output. The dx:stage
     // will output these cVars.
     val outputVars = outputs.map {
-      case (fqn, womType) =>
-        CVar(fqn, womType, None)
+      case (fqn, wdlType) =>
+        CVar(fqn, wdlType, None)
     }.toVector
 
     // The fragment runner can only handle a single call. If the
@@ -505,11 +505,11 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   private def buildSimpleWorkflowOutput(output: Block.OutputDefinition,
                                         env: CallEnv): (CVar, SArg) = {
     output.expr match {
-      case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+      case expr if WdlValueAnalysis.isExpressionConst(output.wdlType, expr) =>
         // the output is a constant
-        val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
-        val cVar = CVar(output.name, output.wdlType, Some(womConst))
-        val sArg = IR.SArgConst(womConst)
+        val wdlConst = WdlValueAnalysis.evalConst(output.wdlType, expr)
+        val cVar = CVar(output.name, output.wdlType, Some(wdlConst))
+        val sArg = IR.SArgConst(wdlConst)
         (cVar, sArg)
       case TAT.ExprIdentifier(id, _, _) =>
         // The output is a reference to a previously defined variable
@@ -588,10 +588,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       .foldLeft(Vector.empty[CVar]) {
         case (accu, output) =>
           output.expr match {
-            case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+            case expr if WdlValueAnalysis.isExpressionConst(output.wdlType, expr) =>
               // the output is a constant
-              val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
-              accu :+ CVar(output.name, output.wdlType, Some(womConst))
+              val wdlConst = WdlValueAnalysis.evalConst(output.wdlType, expr)
+              accu :+ CVar(output.name, output.wdlType, Some(wdlConst))
             case _: TAT.ExprIdentifier =>
               // The output is a reference to a previously defined variable
               accu :+ CVar(output.name, output.wdlType, None)
@@ -766,18 +766,18 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // inputs that are a result of accessing declarations in an encompassing
     // WDL workflow.
     val clsInputs: Vector[(CVar, SArg)] = closureInputs.map {
-      case (name, (womType, false)) =>
+      case (name, (wdlType, false)) =>
         // no default value
-        val cVar = CVar(name, womType, None)
+        val cVar = CVar(name, wdlType, None)
         (cVar, IR.SArgWorkflowInput(cVar))
-      case (name, (womType, true)) =>
+      case (name, (wdlType, true)) =>
         // there is a default value. This input is de facto optional.
         // We change the type of the CVar and make sure it is optional.
         val cVar =
-          if (Utils.isOptional(womType))
-            CVar(name, womType, None)
+          if (Utils.isOptional(wdlType))
+            CVar(name, wdlType, None)
           else
-            CVar(name, WdlTypes.T_Optional(womType), None)
+            CVar(name, WdlTypes.T_Optional(wdlType), None)
         (cVar, IR.SArgWorkflowInput(cVar))
     }.toVector
     val allWfInputs = wfInputs ++ clsInputs

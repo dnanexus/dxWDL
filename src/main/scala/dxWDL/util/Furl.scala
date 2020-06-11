@@ -1,6 +1,6 @@
 // FURL:  File Uniform Resource Locator
 //
-// In wom, a file is represented by a string. This encodes
+// In WDL, a file is represented by a string. This encodes
 // several different access protocols, filesystems, and clouds.
 //
 //  file name                              location

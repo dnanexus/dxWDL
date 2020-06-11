@@ -7,7 +7,7 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-import dxWDL.base.{Language, ParseWomSourceFile, Utils, Verbose, WdlRuntimeAttrs, WomBundle}
+import dxWDL.base.{Language, ParseWdlSourceFile, Utils, Verbose, WdlRuntimeAttrs, WdlBundle}
 import dxWDL.compiler.WdlCodeGen
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 
@@ -33,7 +33,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         Paths.get(p)
     }*/
 
-  // Recursively go into a womValue, and add a base path to the file.
+  // Recursively go into a wdlValue, and add a base path to the file.
   // For example:
   //   foo.txt ---> /home/joe_heller/foo.txt
   //
@@ -49,12 +49,12 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
   //    "in_file" : "/home/joe_heller/dxWDL/src/test/resources/runner_tasks/manuscript.txt"
   // }
   //
-  private def addBaseDir(womValue: WdlValues.V): WdlValues.V = {
-    womValue match {
+  private def addBaseDir(wdlValue: WdlValues.V): WdlValues.V = {
+    wdlValue match {
       // primitive types, pass through
       case WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) |
           WdlValues.V_String(_) | WdlValues.V_Null =>
-        womValue
+        wdlValue
 
       // single file
       case WdlValues.V_File(s) => WdlValues.V_File(pathFromBasename(s).toString)
@@ -136,30 +136,30 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = verbose)
     dxPathConfig.createCleanDirs()
 
-    val (language, womBundle: WomBundle, allSources, _) =
-      ParseWomSourceFile(false).apply(wdlCode, List.empty)
-    val task: TAT.Task = ParseWomSourceFile(false).getMainTask(womBundle)
+    val (language, wdlBundle: WdlBundle, allSources, _) =
+      ParseWdlSourceFile(false).apply(wdlCode, List.empty)
+    val task: TAT.Task = ParseWdlSourceFile(false).getMainTask(wdlBundle)
     assert(allSources.size == 1)
     val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
     val taskSourceCode = sourceDict.values.head
 
-    // Parse the inputs, convert to WOM values. Delay downloading files
+    // Parse the inputs, convert to WdlValues. Delay downloading files
     // from the platform, we may not need to access them.
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     val jobInputOutput = JobInputOutput(dxIoFunctions,
-                                        womBundle.typeAliases,
+                                        wdlBundle.typeAliases,
                                         Language.toWdlVersion(language),
                                         runtimeDebugLevel)
 
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
     val wdlCodeGen =
-      WdlCodeGen(Verbose(verbose, quiet = true, Set.empty), womBundle.typeAliases, language)
+      WdlCodeGen(Verbose(verbose, quiet = true, Set.empty), wdlBundle.typeAliases, language)
     val taskDocument = wdlCodeGen.standAloneTask(taskSourceCode)
     val taskRunner = TaskRunner(task,
                                 taskDocument,
-                                womBundle.typeAliases,
+                                wdlBundle.typeAliases,
                                 instanceTypeDB,
                                 dxPathConfig,
                                 dxIoFunctions,

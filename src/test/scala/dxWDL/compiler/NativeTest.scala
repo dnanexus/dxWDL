@@ -10,7 +10,7 @@ import org.scalatest.BeforeAndAfterAll
 import scala.io.Source
 import dxWDL.Main
 import dxWDL.Main.SuccessfulTermination
-import dxWDL.base.{ParseWomSourceFile, Utils, Verbose}
+import dxWDL.base.{ParseWdlSourceFile, Utils, Verbose}
 import dxWDL.dx._
 import spray.json._
 
@@ -168,7 +168,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set(
         "native_sum",
@@ -204,7 +204,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -239,7 +239,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -268,8 +268,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     in_file.help shouldBe Some("The input file to be searched")
     in_file.group shouldBe Some("Common")
     in_file.label shouldBe Some("Input file")
-    // out_file would be part of the outputSpec, but wom currently doesn't
-    // support parameter_meta for output vars
+    //TODO: add support for output files in parameterMeta
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
   }
 
@@ -301,8 +300,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     in_file.help shouldBe Some("The input file to be searched")
     in_file.group shouldBe Some("Common")
     in_file.label shouldBe Some("Input file")
-    // out_file would be part of the outputSpec, but wom currently doesn't
-    // support parameter_meta for output vars
+    //TODO: add support for output files in parameterMeta
     //out_file.pattern shouldBe Some(Vector("*.txt", "*.tsv"))
   }
 
