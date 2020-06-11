@@ -4,9 +4,8 @@
 package dxWDL.exec
 
 import spray.json._
-import wdlTools.eval.{Context => EvalContext, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
-
+import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
@@ -21,6 +20,7 @@ case class WfOutputs(wf: TAT.Workflow,
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
+
   private val evaluator = WdlEvaluator.make(dxIoFunctions, document.version.value)
 
   private def evaluateWomExpression(expr: TAT.Expr,
@@ -31,7 +31,7 @@ case class WfOutputs(wf: TAT.Workflow,
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             addStatus: Boolean = false): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
     Utils.appletLog(
         verbose,

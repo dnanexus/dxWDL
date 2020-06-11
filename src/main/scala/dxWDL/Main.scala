@@ -3,12 +3,13 @@ package dxWDL
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 
-import scala.collection.mutable.HashMap
 import spray.json._
 import dxWDL.base._
 import dxWDL.compiler.Tree
 import dxWDL.dx._
 import dxWDL.util._
+
+import scala.collection.mutable
 
 object Main extends App {
   sealed trait Termination
@@ -68,14 +69,14 @@ object Main extends App {
     def isKeyword(word: String): Boolean = word.startsWith("-")
 
     val keywordAndOptions: List[List[String]] = arglist.foldLeft(List.empty[List[String]]) {
-      case (head :: tail, word) if (isKeyword(word)) =>
+      case (head :: tail, word) if isKeyword(word) =>
         List(word) :: head :: tail
-      case ((head :: tail), word) =>
+      case (head :: tail, word) =>
         (word :: head) :: tail
-      case (head, word) if (isKeyword(word)) =>
+      case (head, word) if isKeyword(word) =>
         List(word) :: head
-      case (Nil, word) if (isKeyword(word)) => List(List(word))
-      case (Nil, word) if (!isKeyword(word)) =>
+      case (Nil, word) if isKeyword(word) => List(List(word))
+      case (Nil, word) if !isKeyword(word) =>
         throw new Exception("Keyword must precede options")
     }
     keywordAndOptions.map(_.reverse).reverse
@@ -101,7 +102,7 @@ object Main extends App {
     def keywordValueIsList = Set("inputs", "imports", "verboseKey")
 
     val cmdLineOpts = splitCmdLine(arglist)
-    val options = HashMap.empty[String, List[String]]
+    val options = mutable.HashMap.empty[String, List[String]]
     cmdLineOpts.foreach {
       case Nil => throw new Exception("sanity: empty command line option")
       case keyOrg :: subargs =>
@@ -134,16 +135,16 @@ object Main extends App {
           case "folder" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
-          case ("force" | "f" | "overwrite") =>
+          case "force" | "f" | "overwrite" =>
             checkNumberOfArguments(keyword, 0, subargs)
             ("force", "")
           case "help" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
-          case ("input" | "inputs") =>
+          case "input" | "inputs" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
-          case ("imports" | "p") =>
+          case "imports" | "p" =>
             checkNumberOfArguments(keyword, 1, subargs)
             ("imports", subargs.head)
           case "language" =>
@@ -155,7 +156,7 @@ object Main extends App {
           case "locked" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
-          case ("o" | "output" | "outputFile") =>
+          case "o" | "output" | "outputFile" =>
             checkNumberOfArguments(keyword, 1, subargs)
             ("outputFile", subargs.head)
           case "path" =>
@@ -167,10 +168,10 @@ object Main extends App {
           case "projectWideReuse" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
-          case ("q" | "quiet") =>
+          case "q" | "quiet" =>
             checkNumberOfArguments(keyword, 0, subargs)
             ("quiet", "")
-          case ("r" | "recursive") =>
+          case "r" | "recursive" =>
             checkNumberOfArguments(keyword, 0, subargs)
             ("recursive", "")
           case "reorg" =>
@@ -195,10 +196,10 @@ object Main extends App {
           case None =>
             // first time
             options(nKeyword) = List(value)
-          case Some(x) if (keywordValueIsList contains nKeyword) =>
+          case Some(x) if keywordValueIsList contains nKeyword =>
             // append to the already existing verbose flags
             options(nKeyword) = value :: x
-          case Some(x) =>
+          case Some(_) =>
             // overwrite the previous flag value
             options(nKeyword) = List(value)
         }
@@ -258,7 +259,7 @@ object Main extends App {
       case Some(d) if d contains ":" =>
         val vec = d.split(":")
         vec.length match {
-          case 1 if (d.endsWith(":")) =>
+          case 1 if d.endsWith(":") =>
             projectOpt = Some(vec(0))
           case 2 =>
             projectOpt = Some(vec(0))
@@ -304,7 +305,7 @@ object Main extends App {
       try {
         numberStr.toInt
       } catch {
-        case e: java.lang.NumberFormatException =>
+        case _: java.lang.NumberFormatException =>
           throw new Exception(
               s"""|the runtimeDebugLevel flag takes an integer input,
                   |${numberStr} is not of type int""".stripMargin
@@ -354,9 +355,9 @@ object Main extends App {
     val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
 
     val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-      case None                                                 => CompilerFlag.All
-      case Some(List(x)) if (x.toLowerCase == "IR".toLowerCase) => CompilerFlag.IR
-      case Some(List(x)) if (x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase) =>
+      case None                                               => CompilerFlag.All
+      case Some(List(x)) if x.toLowerCase == "IR".toLowerCase => CompilerFlag.IR
+      case Some(List(x)) if x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase =>
         CompilerFlag.NativeWithoutRuntimeAsset
       case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
     }
@@ -384,7 +385,7 @@ object Main extends App {
     val treePrinter: Option[TreePrinter] = options.get("execTree") match {
       case None => None
       case Some(treeType) =>
-        Some(parseExecTree(treeType(0))) // take first element and drop the rest?
+        Some(parseExecTree(treeType.head)) // take first element and drop the rest?
     }
     val runtimeDebugLevel: Option[Int] =
       options.get("runtimeDebugLevel") match {
@@ -393,7 +394,7 @@ object Main extends App {
         case _                     => throw new Exception("debug level specified twice")
       }
 
-    if (extras != None) {
+    if (extras.isDefined) {
       if (extras.contains("reorg") && (options contains "reorg")) {
         throw new InvalidInputException(
             "ERROR: cannot provide --reorg option when reorg is specified in extras."
@@ -451,8 +452,14 @@ object Main extends App {
         val suffix = bufNorm.substring("wdl".length)
         if (suffix contains "draft2")
           Language.WDLvDraft2
-        else if (suffix contains ("10"))
+        else if (suffix contains "draft3")
           Language.WDLv1_0
+        else if (suffix contains "10")
+          Language.WDLv1_0
+        else if (suffix contains "20")
+          Language.WDLv2_0
+        else if (suffix contains "development")
+          Language.WDLv2_0
         else
           throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
       case _ => throw new Exception("only one language can be specified")
@@ -535,7 +542,7 @@ object Main extends App {
       cOpt.compileMode match {
         case CompilerFlag.IR =>
           val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
-          return SuccessfulTerminationIR(ir)
+          SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
           val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
@@ -555,9 +562,8 @@ object Main extends App {
   }
 
   def parseDescribeOptions(argList: List[String]): OptionsMap = {
-
     val describeOpts = splitCmdLine(argList)
-    val options = HashMap.empty[String, List[String]]
+    val options = mutable.HashMap.empty[String, List[String]]
 
     describeOpts.foreach {
       case Nil => Nil
@@ -578,7 +584,7 @@ object Main extends App {
           case None =>
             // first time
             options(nKeyword) = List(value)
-          case Some(x) =>
+          case Some(_) =>
             // overwrite the previous flag value
             options(nKeyword) = List(value)
         }
@@ -587,9 +593,9 @@ object Main extends App {
   }
 
   def describe(args: Seq[String]): Termination = {
-
-    if (args.isEmpty)
+    if (args.isEmpty) {
       return BadUsageTermination("Workflow ID is not provided")
+    }
 
     // validate workflow
     val workflowId = args.head
@@ -606,7 +612,7 @@ object Main extends App {
         parseDescribeOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString((e)))
+          return BadUsageTermination(Utils.exceptionToString(e))
       }
 
     if (options contains "help")
@@ -634,7 +640,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        return UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(Utils.exceptionToString(e))
     }
   }
 
@@ -644,7 +650,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        return UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(Utils.exceptionToString(e))
     }
   }
 
@@ -666,7 +672,7 @@ object Main extends App {
       }
     } catch {
       case e: Throwable =>
-        return BadUsageTermination(Utils.exceptionToString(e))
+        BadUsageTermination(Utils.exceptionToString(e))
     }
   }
 
@@ -692,7 +698,7 @@ object Main extends App {
     dxPathConfig.createCleanDirs()
 
     val jobInputOutput =
-      new exec.JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
+      exec.JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     System.err.println(s"""|Main processing inputs in taskAction
                            |originalInputs:
@@ -785,57 +791,61 @@ object Main extends App {
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      new exec.WfFragInputOutput(dxIoFunctions,
-                                 dxProject,
-                                 typeAliases,
-                                 document.version.value,
-                                 rtDebugLvl)
+      exec.WfFragInputOutput(dxIoFunctions,
+                             dxProject,
+                             typeAliases,
+                             document.version.value,
+                             rtDebugLvl)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
     val outputFields: Map[String, JsValue] =
       op match {
         case InternalOp.WfFragment =>
-          val fragRunner = new exec.WfFragRunner(wf,
-                                                 taskDir,
-                                                 typeAliases,
-                                                 document,
-                                                 instanceTypeDB,
-                                                 fragInputs.execLinkInfo,
-                                                 dxPathConfig,
-                                                 dxIoFunctions,
-                                                 inputsRaw,
-                                                 fragInputOutput,
-                                                 defaultRuntimeAttributes,
-                                                 delayWorkspaceDestruction,
-                                                 rtDebugLvl)
+          val fragRunner = exec.WfFragRunner(
+              wf,
+              taskDir,
+              typeAliases,
+              document,
+              instanceTypeDB,
+              fragInputs.execLinkInfo,
+              dxPathConfig,
+              dxIoFunctions,
+              inputsRaw,
+              fragInputOutput,
+              defaultRuntimeAttributes,
+              delayWorkspaceDestruction,
+              rtDebugLvl
+          )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
         case InternalOp.Collect =>
-          val fragRunner = new exec.WfFragRunner(wf,
-                                                 taskDir,
-                                                 typeAliases,
-                                                 document,
-                                                 instanceTypeDB,
-                                                 fragInputs.execLinkInfo,
-                                                 dxPathConfig,
-                                                 dxIoFunctions,
-                                                 inputsRaw,
-                                                 fragInputOutput,
-                                                 defaultRuntimeAttributes,
-                                                 delayWorkspaceDestruction,
-                                                 rtDebugLvl)
+          val fragRunner = exec.WfFragRunner(
+              wf,
+              taskDir,
+              typeAliases,
+              document,
+              instanceTypeDB,
+              fragInputs.execLinkInfo,
+              dxPathConfig,
+              dxIoFunctions,
+              inputsRaw,
+              fragInputOutput,
+              defaultRuntimeAttributes,
+              delayWorkspaceDestruction,
+              rtDebugLvl
+          )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case InternalOp.WfInputs =>
           val wfInputs =
-            new exec.WfInputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
+            exec.WfInputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
           wfInputs.apply(fragInputs.env)
         case InternalOp.WfOutputs =>
           val wfOutputs =
-            new exec.WfOutputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
+            exec.WfOutputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
           wfOutputs.apply(fragInputs.env)
 
         case InternalOp.WfCustomReorgOutputs =>
-          val wfCustomReorgOutputs = new exec.WfOutputs(
+          val wfCustomReorgOutputs = exec.WfOutputs(
               wf,
               document,
               typeAliases,
@@ -847,12 +857,12 @@ object Main extends App {
           wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
         case InternalOp.WorkflowOutputReorg =>
-          val wfReorg = new exec.WorkflowOutputReorg(wf,
-                                                     document,
-                                                     typeAliases,
-                                                     dxPathConfig,
-                                                     dxIoFunctions,
-                                                     rtDebugLvl)
+          val wfReorg = exec.WorkflowOutputReorg(wf,
+                                                 document,
+                                                 typeAliases,
+                                                 dxPathConfig,
+                                                 dxIoFunctions,
+                                                 rtDebugLvl)
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
 
@@ -877,10 +887,13 @@ object Main extends App {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
-        Utils.trace(true, s"""|applet field not found locally, performing
-                              |an API call.
-                              |""".stripMargin)
-        val dxJob = DxJob(DxUtils.dxEnv.getJob())
+        Utils.trace(
+            verbose = true,
+            s"""|applet field not found locally, performing
+                |an API call.
+                |""".stripMargin
+        )
+        val dxJob = DxJob(DxUtils.dxEnv.getJob)
         dxJob.describe().applet
       case Some(JsString(x)) =>
         DxApplet(x, None)
@@ -927,7 +940,7 @@ object Main extends App {
         fid -> (DxFile(fid, proj), desc)
       case (other, _) =>
         throw new Exception(s"wrong object type ${other} (should be a file)")
-    }.toMap
+    }
   }
 
   def internalOp(args: Seq[String]): Termination = {
@@ -1013,7 +1026,7 @@ object Main extends App {
           case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
-          case Actions.Version  => SuccessfulTermination(Utils.getVersion())
+          case Actions.Version  => SuccessfulTermination(Utils.getVersion)
         }
     }
   }
@@ -1084,9 +1097,9 @@ object Main extends App {
         case Left(str) => println(str)
         case Right(js) => if (js != JsNull) println(js.prettyPrint)
       }
-    case SuccessfulTerminationIR(s) =>
+    case SuccessfulTerminationIR(_) =>
       println("Intermediate representation")
-    case BadUsageTermination(s) if (s == "") =>
+    case BadUsageTermination(s) if s == "" =>
       Console.err.println(usageMessage)
       System.exit(1)
     case BadUsageTermination(s) =>

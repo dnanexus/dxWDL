@@ -18,12 +18,12 @@ case class WfInputs(wf: TAT.Workflow,
                     runtimeDebugLevel: Int) {
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
   def apply(inputs: Map[String, (WdlTypes.T, WdlValues.V)]): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"Environment: ${inputs}")
     Utils.appletLog(
         verbose,

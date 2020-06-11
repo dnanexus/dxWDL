@@ -36,8 +36,6 @@ case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 case class WdlVarLinksConverter(verbose: Verbose,
                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                                 typeAliases: Map[String, WdlTypes.T]) {
-  val wdlTypeSerializer = WomTypeSerialization(typeAliases)
-
   private def isDoubleOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
     t match {
       case WdlTypes.T_Optional(WdlTypes.T_Optional(_)) => return true
@@ -47,7 +45,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
       case WdlValues.V_Optional(WdlValues.V_Optional(_)) => return true
       case _                                             => ()
     }
-    return false
+    false
   }
 
   // Serialize a complex WDL value into a JSON value. The value could potentially point
@@ -63,7 +61,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
     }
     def handleFile(path: String): JsValue = {
       Furl.parse(path) match {
-        case FurlDx(path, _, dxFile) =>
+        case FurlDx(_, _, dxFile) =>
           DxUtils.dxFileToJsValue(dxFile)
         case FurlLocal(path) =>
           // A local file.
@@ -112,9 +110,9 @@ case class WdlVarLinksConverter(verbose: Verbose,
       // a map to an array.
       //
       // Base case: empty array
-      case (_, WdlValues.V_Array(ar)) if ar.length == 0 =>
+      case (_, WdlValues.V_Array(ar)) if ar.isEmpty =>
         JsArray(Vector.empty)
-      case (WdlTypes.T_Array(t, _), null) =>
+      case (WdlTypes.T_Array(_, _), null) =>
         JsArray(Vector.empty)
 
       // Non empty array
@@ -122,12 +120,12 @@ case class WdlVarLinksConverter(verbose: Verbose,
         val jsVals = elems.map { x =>
           jsFromWdlValue(t, x)
         }
-        JsArray(jsVals.toVector)
+        JsArray(jsVals)
 
       // Strip optional type
       case (WdlTypes.T_Optional(t), WdlValues.V_Optional(w)) =>
         jsFromWdlValue(t, w)
-      case (WdlTypes.T_Optional(t), WdlValues.V_Null) =>
+      case (WdlTypes.T_Optional(_), WdlValues.V_Null) =>
         JsNull
       case (WdlTypes.T_Optional(t), w) =>
         jsFromWdlValue(t, w)
@@ -151,7 +149,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
               case Some(t) => t
             }
             key -> jsFromWdlValue(elemType, wdlValue)
-        }.toMap
+        }
         JsObject(mJs)
 
       case (_, _) =>
@@ -209,17 +207,17 @@ case class WdlVarLinksConverter(verbose: Verbose,
             val kWom = jobInputToWomValue(name, keyType, k)
             val vWom = jobInputToWomValue(name, valueType, v)
             kWom -> vWom
-        }.toMap
+        }
         WdlValues.V_Map(m)
 
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if (List("left", "right").forall(fields contains _)) =>
+          if List("left", "right").forall(fields.contains) =>
         val left = jobInputToWomValue(name, lType, fields("left"))
         val right = jobInputToWomValue(name, rType, fields("right"))
         WdlValues.V_Pair(left, right)
 
       // empty array
-      case (WdlTypes.T_Array(t, _), JsNull) =>
+      case (WdlTypes.T_Array(_, _), JsNull) =>
         WdlValues.V_Array(Vector.empty[WdlValues.V])
 
       // array
@@ -229,7 +227,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
         }
         WdlValues.V_Array(wVec)
 
-      case (WdlTypes.T_Optional(t), JsNull) =>
+      case (WdlTypes.T_Optional(_), JsNull) =>
         WdlValues.V_Null
       case (WdlTypes.T_Optional(t), jsv) =>
         val value = jobInputToWomValue(name, t, jsv)
@@ -251,7 +249,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
               case Some(t) => t
             }
             key -> jobInputToWomValue(key, t, jsValue)
-        }.toMap
+        }
         WdlValues.V_Struct(structName, m)
 
       case _ =>
@@ -306,7 +304,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
       }
       (bindEncName, jsv)
     }
-    def mkComplex(wdlType: WdlTypes.T): Map[String, JsValue] = {
+    def mkComplex: Map[String, JsValue] = {
       val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
       wvl.dxlink match {
         case DxlValue(jsn) =>
@@ -357,7 +355,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
     } else {
       // General complex type requiring two fields: a JSON
       // structure, and a flat array of files.
-      mkComplex(wdlType).toList
+      mkComplex.toList
     }
   }
 }
