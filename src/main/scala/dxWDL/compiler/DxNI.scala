@@ -213,7 +213,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     }
   }
 
-  private def path(dxProject: DxProject, path: String): Option[TAT.Task] = {
+  private def path(dxProject: DxProject, path: String): Option[TAT.Document] = {
     val dxObj = path match {
       case id if path.startsWith("app-")  => DxApp.getInstance(id)
       case id if id.startsWith("applet-") => DxApplet.getInstance(id)
@@ -221,7 +221,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         val fullPath = Utils.DX_URL_PREFIX + "/" + path
         DxPath.resolveOnePath(fullPath, dxProject)
     }
-    dxObj match {
+    val task: Option[TAT.Task] = dxObj match {
       // an applet
       case applet: DxApplet =>
         val desc = applet.describe(Set(Field.Properties))
@@ -240,6 +240,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
       case _ => None
     }
+    task.map(t => documentFromTasks(Vector(t)))
   }
 
   private def checkedGetJsString(jsv: JsValue, fieldName: String): String = {
@@ -397,7 +398,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
 object DxNI {
   private def writeHeadersToFile(header: Vector[String],
-                                 element: TAT.Element,
+                                 element: TAT.Document,
                                  outputPath: Path,
                                  force: Boolean): Unit = {
     if (Files.exists(outputPath)) {
@@ -411,7 +412,7 @@ object DxNI {
       outputPath.toFile.delete
     }
     val generator = WdlV1Generator()
-    val lines = generator.generateElement(element, header)
+    val lines = generator.generateDocument(element, header)
     Utils.writeFileContent(outputPath, lines.mkString("\n"))
   }
 
@@ -425,7 +426,7 @@ object DxNI {
             language: Language.Value,
             verbose: Verbose): Unit = {
     val dxni = new DxNI(verbose, language)
-    val dxNativeTasks: Option[TAT.Element] = folderOrPath match {
+    val dxNativeTasks: Option[TAT.Document] = folderOrPath match {
       case Left(folder) => dxni.search(dxProject, folder, recursive)
       case Right(path)  => dxni.path(dxProject, path)
     }

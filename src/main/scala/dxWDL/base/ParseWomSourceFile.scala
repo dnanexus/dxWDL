@@ -216,18 +216,25 @@ case class ParseWomSourceFile(verbose: Boolean) {
     (wf, tasks, aliases, tDoc)
   }
 
+  def parseWdlTasks(
+      wfSource: String
+  ): (Map[String, TAT.Task], Map[String, WdlTypes.T], TAT.Document) = {
+    val (tDoc, typeCtx) = parseWdlFromString(wfSource)
+    val tasks = tDoc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    (tasks, typeCtx.aliases, tDoc)
+  }
+
   def parseWdlTask(taskSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {
-    val (tDoc, typeCtx) = parseWdlFromString(taskSource)
+    val (tasks, aliases, tDoc) = parseWdlTasks(taskSource)
     if (tDoc.workflow.isDefined)
       throw new Exception("a workflow that shouldn't be a member of this document")
-    val tasks = tDoc.elements.collect {
-      case task: TAT.Task => task
-    }
     if (tasks.isEmpty)
       throw new Exception("no tasks in this WDL program")
     if (tasks.size > 1)
       throw new Exception("More than one task in this WDL program")
-    (tasks.head, typeCtx.aliases, tDoc)
+    (tasks.values.head, aliases, tDoc)
   }
 
   // Extract the only task from a namespace

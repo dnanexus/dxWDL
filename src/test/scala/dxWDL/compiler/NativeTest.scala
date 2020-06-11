@@ -168,7 +168,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
+    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set(
         "native_sum",
@@ -204,7 +204,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
+    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -239,7 +239,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (_, tasks, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(content)
+    val (tasks, _, _) = ParseWomSourceFile(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
