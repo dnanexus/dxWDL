@@ -51,8 +51,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.generators.code.WdlV1Generator
-import wdlTools.syntax.CommentMap
-
+import wdlTools.syntax.{CommentMap, TextSource}
 import dxWDL.base._
 import dxWDL.dx._
 
@@ -147,11 +146,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
       TAT.Document(
           None,
-          null,
-          TAT.Version(codeGen.wdlVersion, null),
+          "",
+          TAT.Version(codeGen.wdlVersion, TextSource.empty),
           docTasks,
           None,
-          null,
+          TextSource.empty,
           CommentMap.empty
       )
     }
