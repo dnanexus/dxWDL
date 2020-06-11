@@ -219,6 +219,55 @@ case class WfFragRunner(wf: TAT.Workflow,
       }
   }
 
+  // Access a field in a WDL pair/struct/object
+  private def accessField(obj : WdlValues.V,
+                          fieldName : String) : Option[WdlValues.V] = {
+    obj match {
+      case WdlValues.V_Pair(lv, rv) if fieldName == "left" =>
+        Some(lv)
+      case WdlValues.V_Pair(lv, rv) if fieldName == "right" =>
+        Some(rv)
+      case WdlValues.V_Struct(_, members) if members contains fieldName =>
+        Some(members(fieldName))
+      case WdlValues.V_Call(_, members) if members contains fieldName =>
+        Some(members(fieldName))
+      case WdlValues.V_Object(members) if members contains fieldName =>
+        Some(members(fieldName))
+
+        // A map has keys that may not be strings
+        //  case (WdlTypes.T_Map(kt, vt), WdlValues.V_Map(m)) if m contains fieldName =>
+        //     Some(vt, m(fieldName))
+
+      case _ =>
+        None
+    }
+  }
+
+  private def lookupInEnv(fqn: String,
+                          env: Map[String, (WdlTypes.T, WdlValues.V)]): Option[WdlValues.V] = {
+    if (env contains fqn) {
+      // exact match, bottom of recursion
+      val (_, v) = env(fqn)
+      Some(v)
+    } else {
+      // A.B.C --> A.B
+      val pos = fqn.lastIndexOf(".")
+      if (pos < 0) {
+        None
+      } else {
+        val lhs = fqn.substring(0, pos)  // A.B
+        val rhs = fqn.substring(pos)     // C
+
+        // Look for "A.B"
+        lookupInEnv(lhs, env) match {
+          case None => None
+          case Some(v) =>
+            accessField(v, rhs)
+        }
+      }
+    }
+  }
+
   /**
       In the workflow below, we want to correctly pass the [k] value
       to each [inc] Task invocation.
@@ -239,13 +288,13 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     val inputs: Map[String, WdlValues.V] = linkInfo.inputs.flatMap {
       case (varName, _) =>
-        env.get(varName) match {
+        lookupInEnv(varName, env) match {
           case None =>
             // No binding for this input. It might be optional,
             // it could have a default value. It could also actually be missing,
             // which will result in a platform error.
             None
-          case Some((_, womValue)) =>
+          case Some(womValue) =>
             Some(varName -> womValue)
         }
     }
@@ -652,22 +701,16 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
-    val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] = block.inputs.flatMap {
-      inputDef: Block.InputDefinition =>
-        (envInitial.get(inputDef.name), Block.isOptional(inputDef)) match {
-          case (None, true) =>
-            None
-          case (None, false) =>
-            // input is missing, and there is no default.
-            Utils.warning(
-                utlVerbose,
-                s"input is missing for ${inputDef.name}, and there is no default at the callee"
-            )
-            None
-          case (Some((t, v)), _) =>
-            Some(inputDef.name -> (t, v))
-        }
-    }.toMap
+    val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] =
+      block.inputs.flatMap {
+        case inputDef: Block.InputDefinition =>
+          envInitial.get(inputDef.name) match {
+            case None =>
+              None
+            case Some((t, v)) =>
+              Some(inputDef.name -> (t, v))
+          }
+      }.toMap
 
     val catg = Block.categorize(block)
     val env = evalExpressions(catg.nodes, envInitialFilled) ++ envInitialFilled

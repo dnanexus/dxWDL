@@ -98,7 +98,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
             s"""|Internal compiler error.
                 |
                 |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                |is missing from the environment.""".stripMargin
+                |is missing from the environment. We don't have ${fqn} in the environment.
+                |""".stripMargin
               .replaceAll("\n", " ")
         )
       case Some(lVar) => lVar.sArg
@@ -166,8 +167,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         case Some(TAT.ExprIdentifier(id, _, _)) =>
           getFqnFromEnv(id, cVar, env, call)
 
-        case Some(TAT.ExprGetName(TAT.ExprIdentifier(callname, _: WdlTypes.T_Call, _), id, _, _)) =>
-          getFqnFromEnv(s"$callname.$id", cVar, env, call)
+        case Some(TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), field, _, _)) =>
+          getFqnFromEnv(s"$id.$field", cVar, env, call)
 
         case Some(expr) =>
           throw new Exception(s"Expression $expr is not a constant nor an identifier")
@@ -186,7 +187,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   // to return "p" when looking for "p.left" or "p.right".
   //
   @scala.annotation.tailrec
-  private def lookupInEnvInner(fqn: String, env: CallEnv): Option[(String, LinkedVar)] = {
+  private def lookupInEnv(fqn: String, env: CallEnv): Option[(String, LinkedVar)] = {
     if (env contains fqn) {
       // exact match
       Some(fqn, env(fqn))
@@ -196,7 +197,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       if (pos < 0) None
       else {
         val lhs = fqn.substring(0, pos)
-        lookupInEnvInner(lhs, env)
+        lookupInEnv(lhs, env)
       }
     }
   }
@@ -213,41 +214,26 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
   }
 
-  // Lookup in the environment. Provide a human readable error message
-  // if the fully-qualified-name is not found.
-  private def lookupInEnv(fqn: String,
-                          womType: WdlTypes.T,
-                          env: CallEnv,
-                          optional: Boolean): Option[(String, LinkedVar)] = {
-    lookupInEnvInner(fqn, env) match {
-      case None if Utils.isOptional(womType) =>
-        None
-      case None =>
-        if (!optional) {
-          // A missing compulsory argument
-          Utils.warning(verbose, s"""|Missing argument $fqn, it will have to be provided at runtime
-                                     |env =
-                                     |${env.mkString("\n")}
-                                     |""".stripMargin)
-        }
-        None
-      case Some((name, lVar)) =>
-        Some((name, lVar))
-    }
-  }
-
-  // Find the closure of a block. All the variables defined earlier
+  // Find the closure of a block, all the variables defined earlier
   // that are required for the calculation.
+  //
+  // Note: some referenced variables may be undefined. This could be because they are:
+  // 1) optional
+  // 2) defined -inside- the block
   private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
-    block.inputs.flatMap { i: Block.InputDefinition =>
-      lookupInEnv(i.name, i.wdlType, env, Block.isOptional(i))
+    block.inputs.flatMap {
+      case i: Block.InputDefinition =>
+        lookupInEnv(i.name, env) match {
+          case None => None
+          case Some((name, lVar)) => Some((name, lVar))
+        }
     }.toMap
   }
 
-  // Find the closure of a graph, excluding the straightforward inputs. Create an input
+  // Find the closure of the input nodes. Do not include the inputs themselves. Create an input
   // node for each of these external references.
-  private def graphClosure(inputNodes: Vector[Block.InputDefinition],
-                           subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
+  private def inputNodeClosure(inputNodes: Vector[Block.InputDefinition],
+                               subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
     val allInputs: Vector[Block.InputDefinition] = subBlocks.flatMap { block =>
       block.inputs
     }
@@ -315,7 +301,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       //       |- stage-4
       //
       val pathStr = blockPath.map(x => x.toString).mkString("_")
-      val closureInputs = graphClosure(inputNodes, subBlocks)
+      val closureInputs = inputNodeClosure(inputNodes, subBlocks)
       Utils.trace(
           verbose.on,
           s"""|compileNestedBlock
@@ -348,6 +334,9 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case Some(name) => name
     }
     Utils.trace(verbose.on, s"Compiling fragment <$stageName> as stage")
+    Utils.trace(verbose2, s"""|block=
+                              |${WomPrettyPrintApproxWdl.block(block)}
+                              |""".stripMargin)
 
     // Figure out the closure required for this block, out of the
     // environment

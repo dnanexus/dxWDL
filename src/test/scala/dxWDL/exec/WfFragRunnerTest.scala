@@ -260,7 +260,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       nodes.foldLeft(None: Option[TAT.Call]) {
         case (Some(call), _) =>
           Some(call)
-        case (None, call: TAT.Call) if call.fullyQualifiedName == callName =>
+        case (None, call: TAT.Call) if call.actualName == callName =>
           Some(call)
         case (None, _: TAT.Call) =>
           None
@@ -311,16 +311,16 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  ignore should "evaluate call constant inputs" in {
+  it should "evaluate call constant inputs" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Utils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
-    val inc4Call = findCallByName("inc5", wf.body)
+    val zincCall = findCallByName("zincWithNoParams", wf.body)
 
-    val args = fragRunner.evalCallInputs(inc4Call, Map.empty)
-    args shouldBe Map("a" -> (WdlTypes.T_Int, WdlValues.V_Int(3)))
+    val args = fragRunner.evalCallInputs(zincCall, Map.empty)
+    args shouldBe Map.empty  // ("a" -> (WdlTypes.T_Int, WdlValues.V_Int(3)))
   }
 
   it should "expressions with structs" in {
@@ -354,7 +354,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "fill in missing optionals" taggedAs EdgeTest in {
+  it should "fill in missing optionals" in {
     val path = pathFromBasename("frag_runner", "missing_args.wdl")
     val wfSourceCode = Utils.readFileContent(path)
 
@@ -379,5 +379,22 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
     results.keys should contain("bam_lane1")
     results("bam_lane1") shouldBe JsObject("___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull))
+  }
+
+  it should "handle pair field access (left/right)" taggedAs EdgeTest in {
+    val path = pathFromBasename("frag_runner", "scatter_with_eval.wdl")
+    val wfSourceCode = Utils.readFileContent(path)
+
+    val (dxPathConfig, dxIoFunctions) = setup()
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val results: Map[String, JsValue] =
+      fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
+
+    results.keys should contain("info")
+    results("info") shouldBe JsArray(JsString("Michael_27"),
+                                     JsString("Lukas_9"),
+                                     JsString("Martin_13"),
+                                     JsString("Shelly_67"),
+                                     JsString("Amy_2"))
   }
 }
