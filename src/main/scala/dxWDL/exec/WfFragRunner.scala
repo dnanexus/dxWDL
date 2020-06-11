@@ -59,7 +59,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                         runtimeDebugLevel: Int) {
   private val MAX_JOB_NAME = 50
   private val verbose = runtimeDebugLevel >= 1
-  //private val maxVerboseLevel = (runtimeDebugLevel == 2)
+  private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, fragInputOutput.typeAliases)
@@ -189,7 +189,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                              fragResults: Map[String, WdlVarLinks],
                              exportedVars: Set[String]): Map[String, JsValue] = {
     Utils.appletLog(
-        verbose,
+        maxVerboseLevel,
         s"""|processOutputs
             |  env = ${env.keys}
             |  fragResults = ${fragResults.keys}
@@ -220,7 +220,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   // Access a field in a WDL pair/struct/object
-  private def accessField(obj : WdlValues.V, fieldName : String) : WdlValues.V = {
+  private def accessField(obj: WdlValues.V, fieldName: String): WdlValues.V = {
     obj match {
       case WdlValues.V_Pair(lv, rv) if fieldName == "left" =>
         lv
@@ -249,12 +249,12 @@ case class WfFragRunner(wf: TAT.Workflow,
       if (pos < 0) {
         None
       } else {
-        val lhs = fqn.substring(0, pos)  // A.B
-        val rhs = fqn.substring(pos+1)     // C
+        val lhs = fqn.substring(0, pos) // A.B
+        val rhs = fqn.substring(pos + 1) // C
 
         // Look for "A.B"
         lookupInEnv(lhs, env) match {
-          case None => None
+          case None    => None
           case Some(v) => Some(accessField(v, rhs))
         }
       }
@@ -272,7 +272,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                               linkInfo: ExecLinkInfo,
                               env: Map[String, (WdlTypes.T, WdlValues.V)]): JsValue = {
     Utils.appletLog(
-        verbose,
+        maxVerboseLevel,
         s"""|buildCallInputs (${callName})
             |env:
             |${env.mkString("\n")}
@@ -284,7 +284,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     val inputs: Map[String, WdlValues.V] = linkInfo.inputs.flatMap {
       case (varName, _) =>
         val retval = lookupInEnv(varName, env)
-        Utils.appletLog(verbose, s"lookupInEnv(${varName} = ${retval})")
+        Utils.appletLog(maxVerboseLevel, s"lookupInEnv(${varName} = ${retval})")
         retval match {
           case None =>
             // No binding for this input. It might be optional,
@@ -301,14 +301,15 @@ case class WfFragRunner(wf: TAT.Workflow,
         val womType = linkInfo.inputs(name)
         name -> wdlVarLinksConverter.importFromWDL(womType, womValue)
     }
-    Utils.appletLog(verbose, s"wvlInputs = ${wvlInputs}")
+    Utils.appletLog(maxVerboseLevel, s"wvlInputs = ${wvlInputs}")
 
     val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
         val fields = wdlVarLinksConverter.genFields(wvl, varName)
         accu ++ fields.toMap
     }
-    Utils.appletLog(verbose, s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}")
+    Utils.appletLog(maxVerboseLevel,
+                    s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}")
     JsObject(m)
   }
 
@@ -364,11 +365,27 @@ case class WfFragRunner(wf: TAT.Workflow,
     }
   }
 
-  private def execDNAxExecutable(dxExecId: String,
+  private def execDNAxExecutable(execLink: ExecLinkInfo,
                                  dbgName: String,
                                  callInputs: JsValue,
                                  instanceType: Option[String]): (Int, DxExecution) = {
-    Utils.appletLog(verbose, s"execDNAx ${callInputs.prettyPrint}")
+    Utils.appletLog(maxVerboseLevel, s"execDNAx ${callInputs.prettyPrint}")
+
+    // Last check that we have all the compulsory arguments.
+    //
+    // Note that we don't have the information here to tell difference between optional and non
+    // optionals. Right now, we are emitting warnings for optionals or arguments that have defaults
+    if (callInputs.isInstanceOf[JsObject]) {
+      val fields = callInputs.asJsObject.fields
+      execLink.inputs.foreach {
+        case (argName, wdlType) =>
+          fields.get(argName) match {
+            case None =>
+              Utils.warning(utlVerbose, s"Missing argument ${argName} to call ${execLink.name}")
+            case Some(_) => ()
+          }
+      }
+    }
 
     // We may need to run a collect subjob. Add the the sequence
     // number to each invocation, so the collect subjob will be
@@ -377,6 +394,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     // If this is a task that specifies the instance type
     // at runtime, launch it in the requested instance.
+    val dxExecId = execLink.dxExec.getId
     val dxExec =
       if (dxExecId.startsWith("app-")) {
         val applet = DxApp.getInstance(dxExecId)
@@ -416,9 +434,12 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def execCall(call: TAT.Call,
                        callInputs: Map[String, (WdlTypes.T, WdlValues.V)],
                        callNameHint: Option[String]): (Int, DxExecution) = {
-    Utils.appletLog(verbose, s"""|call = ${call}
-                                 |callInputs = ${callInputs}
-                                 |""".stripMargin)
+    Utils.appletLog(
+        maxVerboseLevel,
+        s"""|call = ${call}
+            |callInputs = ${callInputs}
+            |""".stripMargin
+    )
     val wvlInputs = callInputs.map {
       case (name, (wdlType, womValue)) =>
         name -> wdlVarLinksConverter.importFromWDL(wdlType, womValue)
@@ -430,7 +451,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         accu ++ fields.toMap
     }
     val callInputsJSON = JsObject(callInputsJs)
-    Utils.appletLog(verbose, s"callInputs = ${callInputsJSON.prettyPrint}")
+    Utils.appletLog(maxVerboseLevel, s"callInputsJSON = ${callInputsJSON.prettyPrint}")
 
     // This is presented in the UI, to inform the user
     val dbgName = callNameHint match {
@@ -448,7 +469,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         preCalcInstanceType(task, taskInputs)
     }
     val linkInfo = getCallLinkInfo(call)
-    execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)
+    execDNAxExecutable(linkInfo, dbgName, callInputsJSON, instanceType)
   }
 
   // create promises to this call. This allows returning
@@ -463,20 +484,43 @@ case class WfFragRunner(wf: TAT.Workflow,
     }
   }
 
-  // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
-  // in an expression like:
-  //    call volume { input: i = 10 }
-  // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
-  // under WDL version 1.0, it is compiled as "i".
-  // We just want the "i" component.
+  // Note that we may need to coerce the caller inputs to what the callee expects.
+  //
+  // For example:
+  //
+  // workflow foo {
+  //   call EmptyArray { input: fooAr=[] }
+  // }
+  //
+  // task EmptyArray {
+  //   input {
+  //      Array[Int] fooAr
+  //   }
+  //   command {
+  //   }
+  //   output {
+  //     Array[Int] result=fooAr
+  //   }
+  // }
+  //
+  //
+  // The fooAr should be coerced from Array[Any] to Array[Int]
+  //
   def evalCallInputs(
       call: TAT.Call,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, (WdlTypes.T, WdlValues.V)] = {
+    val calleeInputs = call.callee.input
     call.inputs.map {
       case (key, expr) =>
-        val value = evaluateWomExpression(expr, expr.wdlType, env)
-        key -> (expr.wdlType, value)
+        val actualCalleeType: WdlTypes.T = calleeInputs.get(key) match {
+          case None =>
+            throw new Exception(s"Sanity: callee ${call.callee.name} doesn't have input ${key}")
+          case Some((t, _)) => t
+        }
+
+        val value = evaluateWomExpression(expr, actualCalleeType, env)
+        key -> (actualCalleeType, value)
     }
   }
 
@@ -550,7 +594,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
       // The subblock is complex, and requires a fragment, or a subworkflow
       val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-      val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, callInputs, None)
+      val (_, dxExec) = execDNAxExecutable(linkInfo, linkInfo.name, callInputs, None)
 
       // create promises for results
       linkInfo.outputs.map {
@@ -685,7 +729,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
         // The subblock is complex, and requires a fragment, or a subworkflow
         val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-        val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
+        val (_, dxJob) = execDNAxExecutable(linkInfo, dbgName, callInputs, None)
         dxJob
       }
 

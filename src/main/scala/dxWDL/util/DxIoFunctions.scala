@@ -7,13 +7,14 @@ import dxWDL.dx.{DxFileDescribe, DxFile, DxPath, DxUtils}
 
 case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                          config: DxPathConfig,
-                         runtimeDebugLevel: Int) extends FileAccessProtocol {
+                         runtimeDebugLevel: Int)
+    extends FileAccessProtocol {
   private val verbose = runtimeDebugLevel >= 1
 
   val prefixes = Vector("dx")
 
   // Get the size of the file in bytes
-  def size(uri : URI) : Long = {
+  def size(uri: URI): Long = {
     val path = uri.getPath
     Utils.appletLog(verbose, s"DxIoFunctions size(${path})")
 
@@ -30,7 +31,9 @@ case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     val furl = Furl.parse(path)
     val dxFile = furl match {
       case FurlLocal(_) =>
-        throw new Exception(s"Sanity: ${path} should be a dnanexus file, but it is a local file instead")
+        throw new Exception(
+            s"Sanity: ${path} should be a dnanexus file, but it is a local file instead"
+        )
       case FurlDx(_, dxProj, dxFile) =>
         dxFile
     }
@@ -39,7 +42,7 @@ case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   }
 
   // Read the entire file into a string
-  def readFile(uri : URI) : String = {
+  def readFile(uri: URI): String = {
     val path = uri.getPath
     Utils.appletLog(verbose, s"DxIoFunctions readFile(${path})")
 

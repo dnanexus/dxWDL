@@ -224,7 +224,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     block.inputs.flatMap {
       case i: Block.InputDefinition =>
         lookupInEnv(i.name, env) match {
-          case None => None
+          case None               => None
           case Some((name, lVar)) => Some((name, lVar))
         }
     }.toMap

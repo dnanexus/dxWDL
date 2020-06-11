@@ -1620,7 +1620,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "work correctly with pairs in a scatter" taggedAs (EdgeTest) in {
     val path = pathFromBasename("subworkflows", basename = "scatter_subworkflow_with_optional.wdl")
 
-    val cFlagsNotQuiet = cFlags.filter( _ != "-quiet" )
+    val cFlagsNotQuiet = cFlags.filter(_ != "-quiet")
     val retval = Main.compile(
         path.toString
 //          :: "--verbose"

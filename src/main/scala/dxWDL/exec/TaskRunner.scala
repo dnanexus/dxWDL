@@ -109,13 +109,11 @@ case class TaskRunner(task: TAT.Task,
     }
 
     // marshal into json, and then to a string
-    val json = JsObject("localizedInputs" -> JsObject(locInputsM),
-                        "dxUrl2path" -> JsObject(dxUrlM))
+    val json = JsObject("localizedInputs" -> JsObject(locInputsM), "dxUrl2path" -> JsObject(dxUrlM))
     Utils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
-  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)],
-                          Map[Furl, Path]) = {
+  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
     val buf = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
     val (locInputsM, dxUrlM) = json match {
@@ -385,8 +383,9 @@ case class TaskRunner(task: TAT.Task,
     env.map { case (name, (_, v)) => name -> v }
   }
 
-  private def evalInputsAndDeclarations(inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, (WdlTypes.T, WdlValues.V)] = {
+  private def evalInputsAndDeclarations(
+      inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
     // evaluate the declarations using the inputs
     val env: Map[String, (WdlTypes.T, WdlValues.V)] =
       task.declarations.foldLeft(inputsWithTypes) {
@@ -439,7 +438,7 @@ case class TaskRunner(task: TAT.Task,
     }
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
-      taskInputs.map {
+      localizedInputs.map {
         case (inpDfn, value) =>
           inpDfn.name -> (inpDfn.wdlType, value)
       }
@@ -451,8 +450,9 @@ case class TaskRunner(task: TAT.Task,
   // HERE we download all the inputs, or mount them with dxfuse
 
   // instantiate the bash command
-  def instantiateCommand(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)])
-      : Map[String, (WdlTypes.T, WdlValues.V)] = {
+  def instantiateCommand(
+      localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)]
+  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
     Utils.appletLog(verbose, s"InstantiateCommand, env = ${localizedInputs}")
 
     val env = evalInputsAndDeclarations(localizedInputs)
@@ -489,12 +489,12 @@ case class TaskRunner(task: TAT.Task,
       task.outputs
         .foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {
           case (env, outDef: TAT.OutputDefinition) =>
-          val inputsNoTypes = stripTypesFromEnv(localizedInputs)
-          val envNoTypes = stripTypesFromEnv(env)
-          val value = evaluator.applyExprAndCoerce(outDef.expr,
-                                                   outDef.wdlType,
-                                                   EvalContext(envNoTypes ++ inputsNoTypes))
-          env + (outDef.name -> (outDef.wdlType, value))
+            val inputsNoTypes = stripTypesFromEnv(localizedInputs)
+            val envNoTypes = stripTypesFromEnv(env)
+            val value = evaluator.applyExprAndCoerce(outDef.expr,
+                                                     outDef.wdlType,
+                                                     EvalContext(envNoTypes ++ inputsNoTypes))
+            env + (outDef.name -> (outDef.wdlType, value))
         }
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -541,9 +541,10 @@ case class TaskRunner(task: TAT.Task,
             case Some(dra) => dra.m.get(attrName)
           }
         case Some(expr) =>
-          Some(evaluator.applyExprAndCoerce(expr,
-                                            WdlTypes.T_String,
-                                            EvalContext(stripTypesFromEnv(env))))
+          Some(
+              evaluator
+                .applyExprAndCoerce(expr, WdlTypes.T_String, EvalContext(stripTypesFromEnv(env)))
+          )
       }
     }
 

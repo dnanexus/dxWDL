@@ -25,8 +25,7 @@ object Main extends App {
   }
   object InternalOp extends Enumeration {
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
-        TaskCheckInstanceType,
-        TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value
+        TaskCheckInstanceType, TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value
   }
 
   case class DxniBaseOptions(force: Boolean,
@@ -973,8 +972,8 @@ object Main extends App {
                   delayWorkspaceDestruction,
                   rtDebugLvl
               )
-            case InternalOp.TaskCheckInstanceType |
-                InternalOp.TaskProlog | InternalOp.TaskInstantiateCommand | InternalOp.TaskEpilog |
+            case InternalOp.TaskCheckInstanceType | InternalOp.TaskProlog |
+                InternalOp.TaskInstantiateCommand | InternalOp.TaskEpilog |
                 InternalOp.TaskRelaunch =>
               taskAction(op,
                          womSourceCode,
