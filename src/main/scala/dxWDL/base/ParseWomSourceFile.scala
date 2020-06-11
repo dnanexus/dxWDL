@@ -2,10 +2,11 @@ package dxWDL.base
 
 import java.nio.file.Path
 
-import wdlTools.syntax.Parsers
+import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.util.{SourceCode => WdlSourceCode, Util => WdlUtil, Verbosity => WdlVerbosity}
 import wdlTools.types.{
   Context,
+  TypeException,
   TypeInfer,
   TypeOptions,
   WdlTypes,
@@ -163,10 +164,20 @@ case class ParseWomSourceFile(verbose: Boolean) {
   ): (TAT.Document, Context) = {
     val lines = Source.fromString(src).getLines.toVector
     val sourceCode = WdlSourceCode(None, lines)
-    val parser = Parsers(opts).getParser(sourceCode)
-    val doc = parser.parseDocument(sourceCode)
-    val (tDoc, ctx) = TypeInfer(opts).apply(doc)
-    (tDoc, ctx)
+    try {
+      val parser = Parsers(opts).getParser(sourceCode)
+      val doc = parser.parseDocument(sourceCode)
+      TypeInfer(opts).apply(doc)
+    } catch {
+      case se: SyntaxException =>
+        System.out.println("WDL code is syntactically invalid ----- ")
+        System.out.println(src)
+        throw se
+      case te: TypeException =>
+        System.out.println("WDL code is syntactically valid BUT it fails type-checking ----- ")
+        System.out.println(src)
+        throw te
+    }
   }
 
   // throw an exception if this WDL program is invalid
