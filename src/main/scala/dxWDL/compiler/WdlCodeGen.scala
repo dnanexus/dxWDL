@@ -198,7 +198,7 @@ case class WdlCodeGen(verbose: Verbose,
         }
 
     language match {
-      case Language.WDLv1_0 | Language.WDLv2_0 =>
+      case Language.WDLvDraft2 | Language.WDLv1_0 | Language.WDLv2_0 =>
         TAT.Task(
             callable.name,
             WdlTypes.T_Task(

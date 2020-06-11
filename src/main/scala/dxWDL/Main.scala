@@ -452,8 +452,14 @@ object Main extends App {
         val suffix = bufNorm.substring("wdl".length)
         if (suffix contains "draft2")
           Language.WDLvDraft2
+        else if (suffix contains "draft3")
+          Language.WDLv1_0
         else if (suffix contains "10")
           Language.WDLv1_0
+        else if (suffix contains "20")
+          Language.WDLv2_0
+        else if (suffix contains "development")
+          Language.WDLv2_0
         else
           throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
       case _ => throw new Exception("only one language can be specified")

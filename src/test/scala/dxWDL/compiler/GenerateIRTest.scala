@@ -1369,8 +1369,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
 
+    // TODO: the whitespace is messed up on the generated code (it adds the extra lines and two
+    //  extra spaces on the blank line), but that does not affect the functionality.
     val commandSection =
-      """|  command {
+      """|  command <<<
+         |    
          |  echo 1 hello world | sed 's/world/wdl/'
          |  echo 2 hello \
          |  world \
@@ -1378,7 +1381,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
          |  echo 3 hello \
          |  world | \
          |  sed 's/world/wdl/'
-         |  }
+         |  
+         |  >>>
          |""".stripMargin
 
     inside(retval) {
