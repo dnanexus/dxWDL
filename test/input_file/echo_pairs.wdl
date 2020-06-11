@@ -8,8 +8,7 @@ task echo_this_pair {
   command <<<
   set -exo
 
-  echo ~{first_word} >> output.txt
-  echo ~{second_word} >> output.txt
+  echo ~{first_word} ~{second_word} >> output.txt
   >>>
   runtime {
     docker: "debian:stretch-slim"
