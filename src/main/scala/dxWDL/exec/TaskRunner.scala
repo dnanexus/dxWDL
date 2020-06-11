@@ -23,8 +23,8 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import java.lang.management._
 import spray.json._
-import wdlTools.eval.{WdlValues, Context => EvalContext}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.eval.{Context => EvalContext, WdlValues}
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base._
 import dxWDL.dx._
