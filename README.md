@@ -1,4 +1,4 @@
-<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
+![](https://github.com/dnanexus/dxWDL/workflows/Master%20Test%20Workflow/badge.svg)
 
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
