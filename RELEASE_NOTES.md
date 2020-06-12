@@ -1,4 +1,6 @@
 # Release Notes
+## 1.48 9-Jun-2020
+- Replaced Travis CI/CD with Github Actions
 
 ## 1.47  14-May-2020
 - Improvements to `exectree` option

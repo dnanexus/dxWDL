@@ -1,4 +1,4 @@
-<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
+[![Actions Status](https://xxx.execute-api.us-west-2.amazonaws.com/production/badge/dnanexus/dxWDL)](https://xxx.execute-api.us-west-2.amazonaws.com/production/results/dnanexus/dxWDL)
 
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
