@@ -415,10 +415,15 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
       db.chooseAttrs(None, None, Some(8), Some(false))
     }
   }
-
-  it should "Query returns correct pricing models for org and user" in {
+  // FIXME: This test will not pass on CI/CD as we are using scoped-token.
+  ignore should "Query returns correct pricing models for org and user" in {
+    val userBilltoProject = DxProject("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
     val orgBilltoProject = DxProject("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
+
+    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
     val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on = false, quiet = true, null))
+
+    userResult.pricingAvailable shouldBe true
     orgResult.pricingAvailable shouldBe true
   }
 }
