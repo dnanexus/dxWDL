@@ -1,4 +1,4 @@
-name: Master Workflow
+name: Master Test Workflow
 
 on:
   push:

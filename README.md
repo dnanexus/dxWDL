@@ -1,4 +1,4 @@
-![](https://github.com/dnanexus/dxWDL/workflows/Master%20Workflow/badge.svg)
+![](https://github.com/dnanexus/dxWDL/workflows/Master%20Test%20Workflow/badge.svg)
 
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
