@@ -474,7 +474,7 @@ case class TaskRunner(task: TAT.Task,
       case None => ()
     }
 
-    // Record the localized inputs, we need them in the epilog
+    // Record the localized inputs, we need them in the ilog
     env
   }
 

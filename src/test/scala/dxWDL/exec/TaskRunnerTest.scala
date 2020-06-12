@@ -130,7 +130,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       }
 
     // Create a clean directory in "/tmp" for the task to use
-    val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
+    val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = verbose)

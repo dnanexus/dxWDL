@@ -70,18 +70,6 @@ object Utils {
     p
   }
 
-  // Convert a fully qualified name to a local name.
-  // Examples:
-  //   SOURCE         RESULT
-  //   lib.concat     concat
-  //   lib.sum_list   sum_list
-  def getUnqualifiedName(fqn: String): String = {
-    if (fqn contains ".")
-      fqn.split("\\.").last
-    else
-      fqn
-  }
-
   // Create a file from a string
   def writeFileContent(path: Path, str: String): Unit = {
     Files.write(path, str.getBytes(StandardCharsets.UTF_8))

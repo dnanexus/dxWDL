@@ -116,7 +116,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   //
   private def compileCall(call: TAT.Call, env: CallEnv, locked: Boolean): IR.Stage = {
     // Find the callee
-    val calleeName = Utils.getUnqualifiedName(call.callee.name)
+    val calleeName = call.unqualifiedName
     val callee: IR.Callable = callables.get(calleeName) match {
       case None =>
         throw new Exception(s"""|sanity: callable ${calleeName} should exist
@@ -383,16 +383,16 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
       // A block with no nested sub-blocks, and a single call.
       case Block.CallWithSubexpressions(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callee.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
       case Block.CallFragment(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callee.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
 
       // A conditional/scatter with exactly one call in the sub-block.
       // Can be executed by a fragment.
       case Block.CondOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callee.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
       case Block.ScatterOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callee.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
 
       case Block.CondFullBlock(_, condNode) =>
         val (callable, aux) = compileNestedBlock(wfName, condNode.body, blockPath, env)

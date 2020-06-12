@@ -301,7 +301,7 @@ case class WdlCodeGen(verbose: Verbose,
   private def cleanCalls(body: Vector[TAT.WorkflowElement]): Vector[TAT.WorkflowElement] = {
     body.map {
       case call: TAT.Call =>
-        call.copy(fullyQualifiedName = call.actualName)
+        call.copy(fullyQualifiedName = call.unqualifiedName)
       case scat: TAT.Scatter =>
         scat.copy(body = cleanCalls(scat.body))
       case cond: TAT.Conditional =>

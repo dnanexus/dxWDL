@@ -13,6 +13,19 @@ case class GenerateIR(verbose: Verbose,
                       defaultHintAttrs: WdlHintAttrs) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
+  // Convert a fully qualified name to a local name.
+  // Examples:
+  //   SOURCE         RESULT
+  //   lib.concat     concat
+  //   lib.sum_list   sum_list
+  private def getUnqualifiedName(fqn: String): String = {
+    if (fqn contains ".") {
+      fqn.split("\\.").last
+    } else {
+      fqn
+    }
+  }
+
   def sortByDependencies(allCallables: Vector[TAT.Callable]): Vector[TAT.Callable] = {
     // figure out, for each element, what it depends on.
     // tasks don't depend on anything else. They are at the bottom of the dependency
@@ -28,11 +41,11 @@ case class GenerateIR(verbose: Verbose,
               // We need the task/workflow itself ("add", "concat"). We are
               // assuming that the namespace can be flattened; there are
               // no lib.add and lib2.add.
-              Utils.getUnqualifiedName(call.callee.name)
+              call.unqualifiedName
             }
             .toSet
       }
-      Utils.getUnqualifiedName(callable.name) -> deps
+      getUnqualifiedName(callable.name) -> deps
     }.toMap
 
     // Find executables such that all of their dependencies are
@@ -91,7 +104,7 @@ case class GenerateIR(verbose: Verbose,
       Block
         .deepFindCalls(wf.body)
         .map { cNode: TAT.Call =>
-          val localname = Utils.getUnqualifiedName(cNode.callee.name)
+          val localname = cNode.unqualifiedName
           callables(localname)
         }
 
@@ -196,7 +209,7 @@ case class GenerateIR(verbose: Verbose,
     // We already compiled all the individual wdl:tasks and
     // wdl:workflows, let's find the entrypoint.
     val primary = womBundle.primaryCallable.map { callable =>
-      allCallables(Utils.getUnqualifiedName(callable.name))
+      allCallables(getUnqualifiedName(callable.name))
     }
     val allCallablesSortedNames = allCallablesSorted.map(_.name).distinct
     Utils.trace(verbose.on, s"allCallables=${allCallables.keys}")
