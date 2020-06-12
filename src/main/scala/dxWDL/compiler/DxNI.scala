@@ -50,10 +50,10 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.generators.code.WdlV1Generator
+import wdlTools.syntax.{CommentMap, TextSource}
 import dxWDL.base._
 import dxWDL.dx._
-import wdlTools.generators.code.WdlV1Generator
-import wdlTools.syntax.CommentMap
 
 case class DxNI(verbose: Verbose, language: Language.Value) {
   private val codeGen = WdlCodeGen(verbose, Map.empty, language)
@@ -143,18 +143,39 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   }
 
   private def documentFromTasks(tasks: Vector[TAT.Task]): TAT.Document = {
+    def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
+      TAT.Document(
+          None,
+          "",
+          TAT.Version(codeGen.wdlVersion, TextSource.empty),
+          docTasks,
+          None,
+          TextSource.empty,
+          CommentMap.empty
+      )
+    }
+
     // uniquify and sort tasks
     val sortedUniqueTasks =
       tasks.map(t => t.name -> t).toMap.values.toVector.sortWith(_.name < _.name)
-    TAT.Document(
-        None,
-        null,
-        TAT.Version(codeGen.wdlVersion, null),
-        sortedUniqueTasks,
-        None,
-        null,
-        CommentMap.empty
-    )
+    // validate each task and warn if it doesn't generate valid WDL
+    val parser = ParseWomSourceFile(verbose.on)
+    val validTasks = sortedUniqueTasks.flatMap { task =>
+      try {
+        // TODO: currently we always generate WDL 1.0 - other versions of the code generator
+        //  need to be implemented in wdlTools
+        val taskDoc = createDocument(Vector(task))
+        val sourceCode = codeGen.generateDocument(taskDoc)
+        parser.validateWdlCode(sourceCode)
+        Some(task)
+      } catch {
+        case e: Throwable =>
+          Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${task.name}")
+          Utils.warning(verbose, e.getMessage)
+          None
+      }
+    }
+    createDocument(validTasks)
   }
 
   // Search a platform path for all applets in it. Use
