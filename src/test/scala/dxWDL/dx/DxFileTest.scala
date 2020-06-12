@@ -2,8 +2,6 @@ package dxWDL.dx
 
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 class DxFileTest extends FlatSpec with Matchers {
 
   val TEST_PROJECT: DxProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // dxWDL_playground
