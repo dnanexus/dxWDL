@@ -1,4 +1,4 @@
-[![Actions Status](https://xxx.execute-api.us-west-2.amazonaws.com/production/badge/dnanexus/dxWDL)](https://xxx.execute-api.us-west-2.amazonaws.com/production/results/dnanexus/dxWDL)
+[![Actions Status](https://xxx.execute-api.us-west-2.amazonaws.com/production/badge/dnanexus/dxWDL?branch=DEVEX-1609-gha)](https://xxx.execute-api.us-west-2.amazonaws.com/production/results/dnanexus/dxWDL?branch=DEVEX-1609-gha)
 
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
