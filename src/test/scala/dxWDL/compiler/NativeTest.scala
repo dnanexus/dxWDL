@@ -87,13 +87,15 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val folder = Paths.get(path).getParent().toAbsolutePath().toString()
     val basename = Paths.get(path).getFileName().toString()
     val verbose = Verbose(false, true, Set.empty)
-    val results = DxFindDataObjects(Some(10), verbose).apply(dxTestProject,
+    val results = DxFindDataObjects(Some(10), verbose).apply(Some(dxTestProject),
                                                              Some(folder),
                                                              recurse = false,
                                                              klassRestriction = None,
                                                              withProperties = Vector.empty,
                                                              nameConstraints = Vector(basename),
-                                                             withInputOutputSpec = false)
+                                                             withInputOutputSpec = false,
+                                                             Vector.empty,
+                                                             Set.empty)
     results.size shouldBe (1)
     val desc = results.values.head
     desc.id

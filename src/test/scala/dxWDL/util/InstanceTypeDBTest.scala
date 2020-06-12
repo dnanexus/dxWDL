@@ -415,11 +415,10 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
       db.chooseAttrs(None, None, Some(8), Some(false))
     }
   }
-
-  // FIXME: un-ignore after we move to GHA, also change projects accordingly
+  // FIXME: This test will not pass on CI/CD as we are using scoped-token.
   ignore should "Query returns correct pricing models for org and user" in {
-    val userBilltoProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // project name: dxWDL playground
-    val orgBilltoProject = DxProject("project-Fq78JVj09vZZK3x3J66QXpf6") // project name: public org billto
+    val userBilltoProject = DxProject("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
+    val orgBilltoProject = DxProject("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
 
     val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
     val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on = false, quiet = true, null))

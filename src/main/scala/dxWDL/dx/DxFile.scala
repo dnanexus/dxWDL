@@ -1,8 +1,8 @@
 package dxWDL.dx
 
-import com.dnanexus.exceptions.ResourceNotFoundException
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
+import dxWDL.base.Verbose
 import spray.json._
 
 // maximal number of objects in a single API request
@@ -163,59 +163,22 @@ object DxFile {
 
   // Describe a large number of platform objects in bulk.
   private def submitRequest(objs: Vector[DxFile],
-                            extraFields: Vector[String]): Map[DxFile, DxFileDescribe] = {
-    val requestFields = Map(
-        "objects" ->
-          JsArray(objs.map { x: DxObject =>
-            JsString(x.id)
-          })
-    )
+                            extraFields: Set[Field.Value],
+                            project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
+    val ids = objs.map(file => file.getId)
+    val dxFindDataObjects = DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
 
-    // extra describe options, if specified
-    val extraDescribeFields: Map[String, JsValue] =
-      if (extraFields.isEmpty) {
-        Map.empty
-      } else {
-        val m = extraFields.map { fieldName =>
-          fieldName -> JsBoolean(true)
-        }.toMap
-        Map(
-            "classDescribeOptions" -> JsObject(
-                "*" -> JsObject(m)
-            )
-        )
-      }
-    val request = JsObject(requestFields ++ extraDescribeFields)
-
-    val response = DXAPI.systemDescribeDataObjects(DxUtils.jsonNodeOfJsValue(request),
-                                                   classOf[JsonNode],
-                                                   DxUtils.dxEnv)
-    val repJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val resultsPerObj: Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x
-      case other            => throw new Exception(s"API call returned invalid data ${other}")
-    }
-    resultsPerObj.zipWithIndex.map {
-      case (jsv, i) =>
-        val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
-          case None =>
-            throw new ResourceNotFoundException(s""""${objs(i).id}" is not a recognized ID""", 404)
-          case Some(descJs) =>
-            val dxDesc = parseJsonFileDesribe(descJs)
-
-            // The parts may be empty, only files have it, and we don't always ask for it.
-            val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
-            val details = descJs.asJsObject.fields.get("details")
-            val dxDescFull = dxDesc.copy(parts = parts, details = details)
-
-            // This could be a container, not a project.
-            val dxContainer = DxProject.getInstance(dxDesc.project)
-            val dxFile = DxFile.getInstance(dxDesc.id, dxContainer)
-
-            (dxFile, dxDescFull)
-        }
-        dxFile -> dxFullDesc
-    }.toMap
+    dxFindDataObjects.apply(
+      dxProject = project,
+      folder = None,
+      recurse = true,
+      klassRestriction = Some("file"),
+      withProperties = Vector.empty,
+      nameConstraints = Vector.empty,
+      withInputOutputSpec = true,
+      idConstraints = ids,
+      extrafields = extraFields
+    ).asInstanceOf[Map[DxFile, DxFileDescribe]]
   }
 
   // Describe the names of all the files in one batch. This is much more efficient
@@ -227,22 +190,20 @@ object DxFile {
       // that do not have a network connection.
       return Map.empty
     }
+    var descriptions: Map[DxFile, DxFileDescribe] = Map.empty
+    // group files by projects, in order to avoid searching in all projects (unless project is not specified)
+    val objsByProj = objs.groupBy(file => file.project)
+    for ((proj, files) <- objsByProj) {
 
-    // Limit on number of objects in one API request
-    val slices = objs.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+      // Limit on number of objects in one API request
+      val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
-    val extraFieldsStr = extraFields
-      .map {
-        case Field.Details => "details"
-        case Field.Parts   => "parts"
+      // iterate on the ranges
+      descriptions ++= slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
+        case (accu, objRange) =>
+          accu ++ submitRequest(objRange.toVector, extraFields, proj)
       }
-      .toSet
-      .toVector
-
-    // iterate on the ranges
-    slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
-      case (accu, objRange) =>
-        accu ++ submitRequest(objRange.toVector, extraFieldsStr)
     }
+    descriptions
   }
 }

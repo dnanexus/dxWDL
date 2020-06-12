@@ -55,7 +55,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
             "folder" -> JsString(local.toFile().getParent())
         )
         JsObject(fields)
-    }.toVector
+    }.toVector.reverse
 
     manifest shouldBe (DxdaManifest(
         JsObject(dxTestProject.getId -> JsArray(expected))
