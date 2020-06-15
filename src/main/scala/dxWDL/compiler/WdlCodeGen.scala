@@ -207,7 +207,12 @@ case class WdlCodeGen(verbose: Verbose,
             callable.name,
             WdlTypes.T_Task(
                 callable.name,
-                inputs.map(d => d.name -> (d.wdlType, false)).toMap,
+                inputs.map {
+                  case TAT.RequiredInputDefinition(name, wdlType, _) =>
+                    name -> (wdlType, false)
+                  case other: TAT.InputDefinition =>
+                    other.name -> (other.wdlType, true)
+                }.toMap,
                 outputs.map(d => d.name -> d.wdlType).toMap
             ),
             inputs,
