@@ -17,7 +17,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
     sentence should be(encodeDecode)
   }
 
-  it should "make JSON maps deterministic" in {
+  it should "Make JSON maps deterministic" in {
     val x = JsObject("a" -> JsNumber(1), "b" -> JsNumber(2))
     val y = JsObject("b" -> JsNumber(2), "a" -> JsNumber(1))
     Utils.makeDeterministic(x) should be(Utils.makeDeterministic(y))
@@ -27,7 +27,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
     assert(Utils.makeDeterministic(x2) != Utils.makeDeterministic(y2))
   }
 
-  it should "build limited sized names" in {
+  it should "Build limited sized names" in {
     val retval = Utils.buildLimitedSizeName(Vector(1, 2, 3).map(_.toString), 10)
     retval should be("[1, 2, 3]")
 

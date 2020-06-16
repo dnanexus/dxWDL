@@ -1,4 +1,4 @@
-<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
+![](https://github.com/dnanexus/dxWDL/workflows/Master%20Test%20Workflow/badge.svg)
 
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
@@ -128,17 +128,21 @@ task foo {
 ```
 
 
-# Additional information
+## Additional information
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) describes current compiler structure (_work in progress_)
 - [Internals v0.81](doc/Internals_v_081.md) describes design for version 0.81 and prior.
 - [Tips](doc/Tips.md) examples for how to write good WDL code
 
-# Contributions
+## Contributing to dxWDL
 
-This software is a community effort! You can browse any of the contributions below in
-our [contrib](contrib) folder, or [let us know](https://github.com/dnanexus/dxWDL/issues)
-if you would like to contribute or request a feature.
+See [development](development/) for more information on how to set up your development environment to contribute to dxWDL and how to test your updates.
 
- - [docker](contrib/docker): A Dockerfile to deploy the software ([@vsoch](https://www.github.com/vsoch))
+## Contributions
+
+This software is a community effort! You can browse any of the contributions, that are not a part of dxWDL main source codebase, below in our [contrib](contrib) folder, and add your own (see [Contributing to dxWDL](#Contributing-to-dxWDL)).
+
+## Issues and feature requests
+
+[Let us know](https://github.com/dnanexus/dxWDL/issues) if you would like to contribute, request a feature, or report a bug.

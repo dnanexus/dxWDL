@@ -130,7 +130,12 @@ sbt keeps the cache of downloaded jar files in `${HOME}/.ivy2/cache`. For exampl
 - Update release notes and README.md
 - Make sure the version number in `src/main/resources/application.conf` is correct. It is used
 when building the release.
-- Merge onto master branch, and make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
+- Merge onto master branch, and make sure all [Github Actions](https://github.com/dnanexus/dxWDL/actions) tests pass
+- Clean your `dx` environment because you'll be using limited-power tokens to run the release script. Do not
+mix them with your regular user token.
+```
+dx clearenv
+```
 - Build new externally visible release
   ```
   ./scripts/build_all_releases.sh --staging-token XXX --production-token YYY --docker-user UUU --docker-password WWW

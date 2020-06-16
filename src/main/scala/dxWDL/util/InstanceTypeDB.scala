@@ -466,7 +466,12 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     )
     val rep =
       try {
-        DXAPI.userDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        if(billTo.startsWith("org")) {
+          DXAPI.orgDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        }
+        else {
+          DXAPI.userDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+        }
       } catch {
         case _: Throwable =>
           throw new Exception("Insufficient permissions")
