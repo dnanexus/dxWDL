@@ -243,8 +243,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
         wf
       case _ => throw new Exception("bad value in bundle")
     }
-    val stage = wf.stages.head
-    stage.description shouldBe "native_sum_wf"
+    wf.stages.size shouldBe 2
+    wf.stages(0).description shouldBe "native_sum_012"
+    wf.stages(1).description shouldBe "native_sum_wf"
   }
 
   it should "three nesting levels" in {

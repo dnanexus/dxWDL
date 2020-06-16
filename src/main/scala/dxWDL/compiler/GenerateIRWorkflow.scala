@@ -170,6 +170,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         }
         IR.SArgConst(value)
 
+      case Some(TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), field, _, _))
+          if env.contains(s"$id.$field") =>
+        env(s"$id.$field").sArg
+
       case Some(TAT.ExprGetName(expr, id, _, _)) =>
         val lhs = constInputToSArg(Some(expr), cVar, env, locked, callFqn)
         val lhsWdlValue = lhs match {
@@ -222,7 +226,6 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
 
     // Extract the input values/links from the environment
-    println(env)
     val inputs: Vector[SArg] = callee.inputVars.map(cVar =>
       constInputToSArg(call.inputs.get(cVar.name), cVar, env, locked, call.fullyQualifiedName)
     )
