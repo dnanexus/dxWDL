@@ -188,7 +188,15 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
                      recursive: Boolean): Option[TAT.Document] = {
     val dxObjectsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose)
-        .apply(Some(dxProject), Some(folder), recursive, None, Vector.empty, Vector.empty, true, Vector.empty, Set.empty)
+        .apply(Some(dxProject),
+               Some(folder),
+               recursive,
+               None,
+               Vector.empty,
+               Vector.empty,
+               true,
+               Vector.empty,
+               Set.empty)
 
     // we just want the applets
     val dxAppletsInFolder: Map[DxApplet, DxAppletDescribe] = dxObjectsInFolder.collect {

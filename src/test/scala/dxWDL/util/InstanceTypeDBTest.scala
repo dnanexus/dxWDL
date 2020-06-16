@@ -421,7 +421,8 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
     val userBilltoProject = DxProject("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
     val orgBilltoProject = DxProject("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
 
-    val userResult = InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
+    val userResult =
+      InstanceTypeDB.query(userBilltoProject, Verbose(on = false, quiet = true, null))
     val orgResult = InstanceTypeDB.query(orgBilltoProject, Verbose(on = false, quiet = true, null))
 
     userResult.pricingAvailable shouldBe true

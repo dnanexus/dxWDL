@@ -165,19 +165,22 @@ object DxFile {
                             extraFields: Set[Field.Value],
                             project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
     val ids = objs.map(file => file.getId)
-    val dxFindDataObjects = DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
+    val dxFindDataObjects =
+      DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
 
-    dxFindDataObjects.apply(
-      dxProject = project,
-      folder = None,
-      recurse = true,
-      klassRestriction = Some("file"),
-      withProperties = Vector.empty,
-      nameConstraints = Vector.empty,
-      withInputOutputSpec = true,
-      idConstraints = ids,
-      extrafields = extraFields
-    ).asInstanceOf[Map[DxFile, DxFileDescribe]]
+    dxFindDataObjects
+      .apply(
+          dxProject = project,
+          folder = None,
+          recurse = true,
+          klassRestriction = Some("file"),
+          withProperties = Vector.empty,
+          nameConstraints = Vector.empty,
+          withInputOutputSpec = true,
+          idConstraints = ids,
+          extrafields = extraFields
+      )
+      .asInstanceOf[Map[DxFile, DxFileDescribe]]
   }
 
   // Describe the names of all the files in one batch. This is much more efficient

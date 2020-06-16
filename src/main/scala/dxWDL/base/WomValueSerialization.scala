@@ -57,7 +57,8 @@ case class WomValueSerialization(typeAliases: Map[String, WdlTypes.T]) {
         womToJSON(t, w)
 
       // missing value
-      case (_, WdlValues.V_Optional(_)) => JsNull
+      case (WdlTypes.T_Optional(_), WdlValues.V_Null) => JsNull
+      case (_, WdlValues.V_Optional(_))               => JsNull
 
       // keys are strings, requiring no conversion. We do
       // need to carry the types are runtime.

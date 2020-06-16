@@ -15,7 +15,7 @@ task BroadGenomicsDocker {
       disks: "local-disk 10 HDD"
   }
   output {
-    String version = read_string(stdout())
+    String ver = read_string(stdout())
   }
 }
 
@@ -79,6 +79,6 @@ workflow advanced {
         Array[Int] cgrep_count = cgrep.count
         String str_animals_result = str_animals.result
         String str_animals_family = str_animals.family
-        String BroadGenomicsDocker_version = BroadGenomicsDocker.version
+        String BroadGenomicsDocker_version = BroadGenomicsDocker.ver
     }
 }

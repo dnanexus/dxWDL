@@ -466,10 +466,9 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     )
     val rep =
       try {
-        if(billTo.startsWith("org")) {
+        if (billTo.startsWith("org")) {
           DXAPI.orgDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-        }
-        else {
+        } else {
           DXAPI.userDescribe(billTo, DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         }
       } catch {
