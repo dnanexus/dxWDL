@@ -6,7 +6,8 @@ workflow hello {
     call hello_A as ha2 { input: who = empty }
     call hello_A as ha3 { input: who = "Porcupine" }
 
-    call hello_B as hb1 { input: who = s }
+    # originally, the input was `who = s` but that is an invalid conversion (T? -> T)
+    call hello_B as hb1 { input: who = select_first([s]) }
 
     call hello_C as hc1
     call hello_C as hc2 { input: who = empty }

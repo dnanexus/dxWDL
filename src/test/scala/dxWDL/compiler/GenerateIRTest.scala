@@ -31,7 +31,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // task compilation
   private val cFlags = List("--compileMode",
                             "ir",
-                            "-quiet",
+                            "-verbose",
                             "-fatalValidationWarnings",
                             "--locked",
                             "--project",
@@ -1455,6 +1455,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
        cVar.womType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))*/
       case None => ()
     }
+  }
+  it should "compile a workflow taking arguments from a Pair" in {
+    val path = pathFromBasename("draft2", "pair.wdl")
+    val retval = Main.compile(
+        path.toString
+        //                                      :: "--verbose"
+        //                                      :: "--verboseKey" :: "GenerateIR"
+          :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
   it should "pass as subworkflows do not have expression statement in output block" in {

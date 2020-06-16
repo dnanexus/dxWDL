@@ -5,7 +5,6 @@ package dxWDL.compiler
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes
-
 import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
@@ -82,9 +81,25 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
   }
 
-  def getFqnFromEnv(fqn: String, cVar: CVar, env: CallEnv, call: TAT.Call): SArg = {
-    env.get(fqn) match {
-      case None =>
+  // In an expression like `a.b`, the left-hand side (a) is an expression and the
+  // right-hand side (b) is an identifier. The env only contains a, so we need to
+  // resolve a before we can access b.
+
+  def constInputToSArg(expr: Option[TAT.Expr],
+                       cVar: CVar,
+                       env: CallEnv,
+                       locked: Boolean,
+                       callFqn: String): SArg = {
+    expr match {
+      case None if Utils.isOptional(cVar.womType) =>
+        // optional argument that is not provided
+        IR.SArgEmpty
+
+      case None if cVar.default.isDefined =>
+        // argument that has a default, it can be omitted in the call
+        IR.SArgEmpty
+
+      case None if locked =>
         val envDbg = env
           .map {
             case (name, lVar) =>
@@ -94,14 +109,95 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         Utils.trace(verbose.on, s"""|env =
                                     |$envDbg""".stripMargin)
         throw new Exception(
-            s"""|Internal compiler error.
-                |
-                |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                |is missing from the environment. We don't have ${fqn} in the environment.
-                |""".stripMargin
+            s"""|input <${cVar.name}, ${cVar.womType}> to call <${callFqn}>
+                |is unspecified. This is illegal in a locked workflow.""".stripMargin
               .replaceAll("\n", " ")
         )
-      case Some(lVar) => lVar.sArg
+
+      case None =>
+        // Perhaps the callee is not going to use the argument, lets not fail
+        // right here, but leave it for runtime.
+        IR.SArgEmpty
+
+      case Some(_: TAT.ValueNone) =>
+        // same as above
+        IR.SArgEmpty
+
+      case Some(expr) if WomValueAnalysis.isExpressionConst(cVar.womType, expr) =>
+        IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, expr))
+
+      case Some(TAT.ExprIdentifier(id, _, _)) =>
+        env.get(id) match {
+          case None =>
+            val envDbg = env
+              .map {
+                case (name, lVar) =>
+                  s"  $name -> ${lVar.sArg}"
+              }
+              .mkString("\n")
+            Utils.trace(verbose.on, s"""|env =
+                                        |$envDbg""".stripMargin)
+            throw new Exception(
+                s"""|Internal compiler error.
+                    |
+                    |Input <${cVar.name}, ${cVar.womType}> to call <${callFqn}>
+                    |is missing from the environment. We don't have ${id} in the environment.
+                    |""".stripMargin
+                  .replaceAll("\n", " ")
+            )
+          case Some(lVar) => lVar.sArg
+        }
+
+      case Some(TAT.ExprAt(expr, index, _, _)) =>
+        val indexValue = constInputToSArg(Some(index), cVar, env, locked, callFqn) match {
+          case IR.SArgConst(WdlValues.V_Int(value))                              => value
+          case IR.SArgWorkflowInput(CVar(_, _, Some(WdlValues.V_Int(value)), _)) => value
+          case other =>
+            throw new Exception(
+                s"Array index expression ${other} is not a constant nor an identifier"
+            )
+        }
+        val value = constInputToSArg(Some(expr), cVar, env, locked, callFqn) match {
+          case IR.SArgConst(WdlValues.V_Array(arrayValue)) if arrayValue.size > indexValue =>
+            arrayValue(indexValue)
+          case IR.SArgWorkflowInput(CVar(_, _, Some(WdlValues.V_Array(arrayValue)), _))
+              if arrayValue.size > indexValue =>
+            arrayValue(indexValue)
+          case other =>
+            throw new Exception(
+                s"Left-hand side expression ${other} is not a constant nor an identifier"
+            )
+        }
+        IR.SArgConst(value)
+
+      case Some(TAT.ExprGetName(expr, id, _, _)) =>
+        val lhs = constInputToSArg(Some(expr), cVar, env, locked, callFqn)
+        val lhsWdlValue = lhs match {
+          case IR.SArgConst(wdlValue)                              => wdlValue
+          case IR.SArgWorkflowInput(cVar) if cVar.default.nonEmpty => cVar.default.get
+          case other =>
+            throw new Exception(
+                s"Left-hand side expression ${other} is not a constant nor an identifier"
+            )
+        }
+        val wdlValue = lhsWdlValue match {
+          case WdlValues.V_Object(members) if members.contains(id) => members(id)
+          case WdlValues.V_Pair(l, r) =>
+            id match {
+              case "left"  => l
+              case "right" => r
+              case _ =>
+                throw new Exception(s"Pair member name must be 'left' or 'right', not ${id}")
+            }
+          case WdlValues.V_Call(_, members) if members.contains(id)   => members(id)
+          case WdlValues.V_Struct(_, members) if members.contains(id) => members(id)
+          case other =>
+            throw new Exception(s"Cannot resolve id ${id} for value ${other}")
+        }
+        IR.SArgConst(wdlValue)
+
+      case Some(expr) =>
+        throw new Exception(s"Expression $expr is not a constant nor an identifier")
     }
   }
 
@@ -126,53 +222,9 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
 
     // Extract the input values/links from the environment
-    val inputs: Vector[SArg] = callee.inputVars.map { cVar =>
-      call.inputs.get(cVar.name) match {
-        case None if Utils.isOptional(cVar.womType) =>
-          // optional argument that is not provided
-          IR.SArgEmpty
-
-        case None if cVar.default.isDefined =>
-          // argument that has a default, it can be omitted in the call
-          IR.SArgEmpty
-
-        case None if locked =>
-          val envDbg = env
-            .map {
-              case (name, lVar) =>
-                s"  $name -> ${lVar.sArg}"
-            }
-            .mkString("\n")
-          Utils.trace(verbose.on, s"""|env =
-                                      |$envDbg""".stripMargin)
-          throw new Exception(
-              s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                  |is unspecified. This is illegal in a locked workflow.""".stripMargin
-                .replaceAll("\n", " ")
-          )
-
-        case None =>
-          // Perhaps the callee is not going to use the argument, lets not fail
-          // right here, but leave it for runtime.
-          IR.SArgEmpty
-
-        case Some(_: TAT.ValueNone) =>
-          // same as above
-          IR.SArgEmpty
-
-        case Some(expr) if WomValueAnalysis.isExpressionConst(cVar.womType, expr) =>
-          IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, expr))
-
-        case Some(TAT.ExprIdentifier(id, _, _)) =>
-          getFqnFromEnv(id, cVar, env, call)
-
-        case Some(TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), field, _, _)) =>
-          getFqnFromEnv(s"$id.$field", cVar, env, call)
-
-        case Some(expr) =>
-          throw new Exception(s"Expression $expr is not a constant nor an identifier")
-      }
-    }
+    val inputs: Vector[SArg] = callee.inputVars.map(cVar =>
+      constInputToSArg(call.inputs.get(cVar.name), cVar, env, locked, call.fullyQualifiedName)
+    )
 
     val stageName = call.actualName
     IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
