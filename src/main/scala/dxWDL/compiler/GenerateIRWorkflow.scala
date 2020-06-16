@@ -222,6 +222,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     }
 
     // Extract the input values/links from the environment
+    println(env)
     val inputs: Vector[SArg] = callee.inputVars.map(cVar =>
       constInputToSArg(call.inputs.get(cVar.name), cVar, env, locked, call.fullyQualifiedName)
     )

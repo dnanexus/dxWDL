@@ -31,7 +31,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // task compilation
   private val cFlags = List("--compileMode",
                             "ir",
-                            "-verbose",
+                            "-quiet",
                             "-fatalValidationWarnings",
                             "--locked",
                             "--project",
