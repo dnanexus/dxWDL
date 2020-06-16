@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.47.2 05-Jun-2020
+- Upgrade dx-download-agent (includes a fix to the early database close issue) 
+- Fix to describing billTo of a project
+
+## 1.47.1 26-May-2020
+- Log dxda and dxfuse version in applet execution
+
+## 1.47  14-May-2020
+- Improvements to `exectree` option
+- Upgrade dxfuse to v0.22.2
+- Bug fix in dx-download-agent (https://github.com/dnanexus/dxda/issues/34)
+
 ## 1.46.4 8-Apr-2020
 - Limit scatters to 500 elements. Running more than that risks causing platform problems.
 - Uprade dxfuse to v0.22.1

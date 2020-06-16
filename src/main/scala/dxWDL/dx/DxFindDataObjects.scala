@@ -146,22 +146,31 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
 
   // Submit a request for a limited number of objects
   private def submitRequest(
-      scope: JsValue,
-      dxProject: DxProject,
+      scope: Option[JsValue],
+      dxProject: Option[DxProject],
       cursor: Option[JsValue],
       klass: Option[String],
       propertyConstraints: Vector[String],
       nameConstraints: Vector[String],
-      withInputOutputSpec: Boolean
+      withInputOutputSpec: Boolean,
+      idConstraints: Vector[String],
+      extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
     var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
+    fields ++= extraFields
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
     }
     val reqFields = Map("visibility" -> JsString("either"),
-                        "project" -> JsString(dxProject.getId),
-                        "describe" -> DxObject.requestFields(fields),
-                        "scope" -> scope)
+                        "describe" -> DxObject.requestFields(fields))
+    val projField = dxProject match {
+      case None => Map.empty
+      case Some(p) => Map("project" -> JsString(p.getId))
+    }
+    val scopeField = scope match {
+      case None => Map.empty
+      case Some(s) => Map("scope" -> s)
+    }
     val limitField = limit match {
       case None      => Map.empty
       case Some(lim) => Map("limit" -> JsNumber(lim))
@@ -201,10 +210,16 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
         Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
       }
 
+    val idField =
+      if (idConstraints.isEmpty) {
+        Map.empty
+      } else {
+        Map("id" -> JsArray(idConstraints.map { x: String => JsString(x)}))
+      }
+
     val request = JsObject(
-        reqFields ++ cursorField ++ limitField
-          ++ classField ++ propertiesField
-          ++ namePcreField
+        reqFields ++ projField ++ scopeField ++ cursorField ++ limitField
+          ++ classField ++ propertiesField ++ namePcreField ++ idField
     )
 
     //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
@@ -230,30 +245,37 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     (results.toMap, next)
   }
 
-  def apply(dxProject: DxProject,
+  def apply(dxProject: Option[DxProject],
             folder: Option[String],
             recurse: Boolean,
             klassRestriction: Option[String],
             withProperties: Vector[String], // object must have these properties
             nameConstraints: Vector[String], // the object name has to be one of these strings
-            withInputOutputSpec: Boolean // should the IO spec be described?
+            withInputOutputSpec: Boolean, // should the IO spec be described?
+            idConstraints: Vector[String],
+            extrafields: Set[Field.Value]
   ): Map[DxDataObject, DxObjectDescribe] = {
     klassRestriction.map { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
-    val scope = buildScope(dxProject, folder, recurse)
 
+    val scope: Option[JsValue] = dxProject match {
+      case None => None
+      case Some(p) => Some(buildScope(p, folder, recurse))
+    }
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {
       val (results, next) = submitRequest(scope,
-                                          dxProject,
-                                          cursor,
-                                          klassRestriction,
-                                          withProperties,
-                                          nameConstraints,
-                                          withInputOutputSpec)
+                                  dxProject,
+                                  cursor,
+                                  klassRestriction,
+                                  withProperties,
+                                  nameConstraints,
+                                  withInputOutputSpec,
+                                  idConstraints,
+                                  extrafields)
       allResults = allResults ++ results
       cursor = next
     } while (cursor != None);
