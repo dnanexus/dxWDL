@@ -109,8 +109,9 @@ draft2_test_list = [
     "subblocks",
     "var_type_change",
 
-     # calling native dx applets/apps
-    "call_native"
+    # calling native dx applets/apps
+    # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
+    #"call_native"
 ]
 
 single_tasks_list = [

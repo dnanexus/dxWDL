@@ -275,4 +275,8 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
   it should "handle missing optional files" in {
     runTask("missing_optional_output_file")
   }
+
+  it should "run a python script" in {
+    runTask("python_heredoc")
+  }
 }
