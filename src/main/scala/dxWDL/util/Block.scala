@@ -75,8 +75,9 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
+import dxWDL.base.Utils
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.types.{Util => TUtil, WdlTypes}
+import wdlTools.types.{WdlTypes, Util => TUtil}
 
 // Block: a continuous list of workflow elements from a user
 // workflow.
@@ -506,13 +507,16 @@ object Block {
       case OutputDefinition(_, _, expr) =>
         Vector(expr)
     }
-
+    // TODO: remove
+    Utils.trace(true, s"inputExpressions ${inputExpressions}")
     val allInputDefs = inputExpressions.flatMap(exprInputs)
-
-    allInputDefs.foldLeft(Map.empty[String, WdlTypes.T]) {
+    Utils.trace(true, s"allInputDefs ${allInputDefs}")
+    val result = allInputDefs.foldLeft(Map.empty[String, WdlTypes.T]) {
       case (accu, inpDef) =>
         accu + (inpDef.name -> inpDef.wdlType)
     }
+    Utils.trace(true, s"result ${result}")
+    result
   }
 
   // figure out all the outputs from a block of statements
