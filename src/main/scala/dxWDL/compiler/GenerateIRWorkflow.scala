@@ -628,11 +628,6 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     // Figure out what variables from the environment we need to pass
     // into the applet.
     val closure = Block.outputClosure(outputNodes)
-    // TODO: revert
-    Utils.trace(true, s"wfName ${wfName}")
-    Utils.trace(true, s"outputNodes ${outputNodes}")
-    Utils.trace(true, s"env ${env}")
-    Utils.trace(true, s"closure ${closure.toString}")
 
     val inputVars: Vector[LinkedVar] = closure.map {
       case (name, _) =>
@@ -642,7 +637,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         }
         lVar
     }.toVector
-    Utils.trace(true, s"inputVars=${inputVars.map(_.cVar)}")
+    Utils.trace(verbose = true, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
     val outputVars: Vector[CVar] = outputNodes
@@ -661,14 +656,12 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
               accu :+ CVar(output.name, output.wdlType, None)
           }
       }
-    Utils.trace(true, s"outputVars ${outputVars}")
 
     val updatedOutputVars: Vector[CVar] = reorg match {
       case Left(_)             => outputVars
       case Right(_) if locked  => outputVars
       case Right(_) if !locked => addOutputStatus(outputVars)
     }
-    Utils.trace(true, s"updatedOutputVars ${updatedOutputVars}")
 
     val appletKind: IR.AppletKind = reorg match {
       case Left(_) => IR.AppletKindWfOutputs
@@ -678,7 +671,6 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       case Right(_) if locked  => IR.AppletKindWfOutputs
       case Right(_) if !locked => IR.AppletKindWfCustomReorgOutputs
     }
-    Utils.trace(true, s"appletKind ${appletKind}")
 
     val applet = IR.Applet(s"${wfName}_$OUTPUT_SECTION",
                            inputVars.map(_.cVar),

@@ -75,7 +75,6 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
-import dxWDL.base.Utils
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.types.{WdlTypes, Util => TUtil}
 
@@ -502,21 +501,21 @@ object Block {
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
   def outputClosure(outputs: Vector[OutputDefinition]): Map[String, WdlTypes.T] = {
-    // collect all the expressions that go into the output definitions
-    val inputExpressions = outputs.flatMap {
-      case OutputDefinition(_, _, expr) =>
-        Vector(expr)
-    }
-    // TODO: remove
-    Utils.trace(true, s"inputExpressions ${inputExpressions}")
-    val allInputDefs = inputExpressions.flatMap(exprInputs)
-    Utils.trace(true, s"allInputDefs ${allInputDefs}")
-    val result = allInputDefs.foldLeft(Map.empty[String, WdlTypes.T]) {
-      case (accu, inpDef) =>
-        accu + (inpDef.name -> inpDef.wdlType)
-    }
-    Utils.trace(true, s"result ${result}")
-    result
+    // create inputs from outputs
+    val outputInputs = outputs.map {
+      case OutputDefinition(name, wdlType, _) => name -> wdlType
+    }.toMap
+    // create inputs from all the expressions that go into outputs
+    val outputExpressionInputs = outputs
+      .flatMap {
+        case OutputDefinition(_, _, expr) => Vector(expr)
+      }
+      .flatMap(exprInputs)
+      .foldLeft(Map.empty[String, WdlTypes.T]) {
+        case (accu, inpDef) =>
+          accu + (inpDef.name -> inpDef.wdlType)
+      }
+    outputInputs ++ outputExpressionInputs
   }
 
   // figure out all the outputs from a block of statements
@@ -544,15 +543,13 @@ object Block {
     splitToBlocks(wf.body)
   }
 
-  // Does this output require evaluation? If so, we will need to create
-  // another applet for this.
-  def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
-    outputNode.expr match {
+  private def isSimpleExpression(expr: TAT.Expr, definedVars: Set[String]): Boolean = {
+    expr match {
       // A constant or a reference to a variable
       case expr if WomValueAnalysis.isTrivialExpression(expr)      => true
       case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
 
-      //for example, c1 is call, and the output section is:
+      // for example, c1 is call, and the output section is:
       //
       // output {
       //    Int? result1 = c1.result
@@ -563,8 +560,29 @@ object Block {
         val fqn = s"$id2.$id"
         definedVars contains fqn
 
+      // TODO: these should be simple - they were with WOM - but with wdlTools they're
+      //  not since they can't be represented by a constant
+      // the expression is non-trivial, but it involves only constants and/or defined
+      // variables - we don't need a special output applet+stage.
+      //case oper: TAT.ExprOperator1 => isSimpleExpression(oper.value, definedVars)
+      //case oper: TAT.ExprOperator2 =>
+      //  Vector(oper.a, oper.b).forall(e => isSimpleExpression(e, definedVars))
+      // access an element of a simple array
+      //case TAT.ExprAt(array, index, _, _) =>
+      //  Vector(array, index).forall(e => isSimpleExpression(e, definedVars))
+      // an if-then-else that consists of simple expressions
+      //case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
+      //  Vector(cond, tBranch, fBranch).forall(e => isSimpleExpression(e, definedVars))
+      // TODO: should any functions be considered simple?
+
       case _ => false
     }
+  }
+
+  // Does this output require evaluation? If so, we will need to create
+  // another applet for this.
+  def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
+    isSimpleExpression(outputNode.expr, definedVars)
   }
 
   // is an output used directly as an input? For example, in the

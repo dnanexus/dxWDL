@@ -111,12 +111,7 @@ object WomValueAnalysis {
     }
   }
 
-  // A trivial expression has no operators, it is either (1) a
-  // constant, (2) a single identifier, or (3) an accesss to a call
-  // field.
-  //
-  // For example, '5' and 'x' are trivial. 'x + y'  is not.
-  def isTrivialExpression(expr: TAT.Expr): Boolean = {
+  private def isConstantExpression(expr: TAT.Expr): Boolean = {
     expr match {
       case _: TAT.ValueNull      => true
       case _: TAT.ValueNone      => true
@@ -126,15 +121,35 @@ object WomValueAnalysis {
       case _: TAT.ValueString    => true
       case _: TAT.ValueFile      => true
       case _: TAT.ValueDirectory => true
-      case _: TAT.ExprIdentifier => true
+      case _                     => false
+    }
+  }
+
+  // A trivial expression has no operators, it is either (1) a
+  // constant, (2) a single identifier, or (3) an access to a call
+  // field.
+  //
+  // For example, `5`, `['a', 'b', 'c']`, and `true` are trivial.
+  // 'x + y'  is not.
+  def isTrivialExpression(expr: TAT.Expr): Boolean = {
+    expr match {
+      case expr if isConstantExpression(expr) => true
+      case _: TAT.ExprIdentifier              => true
+
+      // A collection of constants
+      case TAT.ExprPair(l, r, _, _)   => Vector(l, r).forall(isConstantExpression)
+      case TAT.ExprArray(value, _, _) => value.forall(isConstantExpression)
+      case TAT.ExprMap(value, _, _) =>
+        value.forall {
+          case (k, v) => isConstantExpression(k) && isConstantExpression(v)
+        }
+      case TAT.ExprObject(value, _, _) => value.values.forall(isConstantExpression)
 
       // Access a field in a call or a struct
       //   Int z = eliminateDuplicate.fields
-      case TAT.ExprGetName(_: TAT.ExprIdentifier, _, _, _) =>
-        true
+      case TAT.ExprGetName(_: TAT.ExprIdentifier, _, _, _) => true
 
-      case _ =>
-        false
+      case _ => false
     }
   }
 
