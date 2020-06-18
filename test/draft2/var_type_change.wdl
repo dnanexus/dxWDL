@@ -1,5 +1,5 @@
 # The type of workflow input "fruit" is Array[String]. However,
-# but a call is made to a task PTAsays where "fruit" has type String.
+# a call is made to a task PTAsays where "fruit" has type String.
 # This can confuse the decomposition algorithm
 #
 workflow var_type_change {

@@ -275,17 +275,21 @@ def validate_result(tname, exec_outputs, key, expected_val):
     exec_name = key.split('.')[0]
     field_name_parts = key.split('.')[1:]
 
+    field_name1 = ".".join(field_name_parts)
     # convert dots to ___
-    field_name = "___".join(field_name_parts)
+    field_name2 = "___".join(field_name_parts)
     if exec_name != tname:
         raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
         # get the actual results
-        if field_name not in exec_outputs:
+        if field_name1 in exec_outputs:
+            result = exec_outputs[field_name1]
+        elif field_name2 in exec_outputs:
+            result = exec_outputs[field_name2]
+        else:
             cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
                    "red")
             return False
-        result = exec_outputs[field_name]
         if ((type(result) is list) and
             (type(expected_val) is list)):
             result.sort()

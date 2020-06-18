@@ -266,31 +266,14 @@ object Block {
         exprInputs(sep) ++ exprInputs(value)
 
       // operators on one argument
-      case TAT.ExprUnaryPlus(value: TAT.Expr, _, _) =>
-        exprInputs(value)
-      case TAT.ExprUnaryMinus(value: TAT.Expr, _, _) =>
-        exprInputs(value)
-      case TAT.ExprNegate(value: TAT.Expr, _, _) =>
-        exprInputs(value)
+      case oper1: TAT.ExprOperator1 => exprInputs(oper1.value)
 
       // operators on two arguments
-      case TAT.ExprLor(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprLand(a, b, _, _)   => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprEqeq(a, b, _, _)   => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprLt(a, b, _, _)     => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprGte(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprNeq(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprLte(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprGt(a, b, _, _)     => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprAdd(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprSub(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprMod(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprMul(a, b, _, _)    => exprInputs(a) ++ exprInputs(b)
-      case TAT.ExprDivide(a, b, _, _) => exprInputs(a) ++ exprInputs(b)
+      case oper2: TAT.ExprOperator2 => exprInputs(oper2.a) ++ exprInputs(oper2.b)
 
       // Access an array element at [index]
-      case TAT.ExprAt(value, _, _, _) =>
-        exprInputs(value)
+      case TAT.ExprAt(value, index, _, _) =>
+        exprInputs(value) ++ exprInputs(index)
 
       // conditional:
       case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>

@@ -312,8 +312,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
                                  statements: Vector[TAT.WorkflowElement],
                                  blockPath: Vector[Int],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
-    val (inputNodes, subBlocks, outputNodes) =
-      Block.split(statements)
+    val (inputNodes, subBlocks, outputNodes) = Block.split(statements)
     assert(subBlocks.nonEmpty)
 
     if (subBlocks.size == 1) {
