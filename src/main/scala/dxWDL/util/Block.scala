@@ -538,46 +538,34 @@ object Block {
     splitToBlocks(wf.body)
   }
 
-  private def isSimpleExpression(expr: TAT.Expr, definedVars: Set[String]): Boolean = {
-    expr match {
-      // A constant or a reference to a variable
-      case expr if WomValueAnalysis.isTrivialExpression(expr)      => true
-      case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
-
-      // for example, c1 is call, and the output section is:
-      //
-      // output {
-      //    Int? result1 = c1.result
-      //    Int? result2 = c2.result
-      // }
-      // We don't need a special output applet+stage.
-      case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
-        val fqn = s"$id2.$id"
-        definedVars contains fqn
-
-      // TODO: these should be simple - they were with WOM - but with wdlTools they're
-      //  not since they can't be represented by a constant
-      // the expression is non-trivial, but it involves only constants and/or defined
-      // variables - we don't need a special output applet+stage.
-      //case oper: TAT.ExprOperator1 => isSimpleExpression(oper.value, definedVars)
-      //case oper: TAT.ExprOperator2 =>
-      //  Vector(oper.a, oper.b).forall(e => isSimpleExpression(e, definedVars))
-      // access an element of a simple array
-      //case TAT.ExprAt(array, index, _, _) =>
-      //  Vector(array, index).forall(e => isSimpleExpression(e, definedVars))
-      // an if-then-else that consists of simple expressions
-      //case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
-      //  Vector(cond, tBranch, fBranch).forall(e => isSimpleExpression(e, definedVars))
-      // TODO: should any functions be considered simple?
-
-      case _ => false
-    }
-  }
-
   // Does this output require evaluation? If so, we will need to create
   // another applet for this.
   def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
-    isSimpleExpression(outputNode.expr, definedVars)
+    if (definedVars.contains(outputNode.name)) {
+      // the environment has a stage with this output node - we can get it by linking
+      true
+    } else {
+      // check if the expression can be resolved without evaluation (i.e. is a constant
+      // or a reference to a defined variable
+      outputNode.expr match {
+        // A constant or a reference to a variable
+        case expr if WomValueAnalysis.isTrivialExpression(expr)      => true
+        case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
+
+        // for example, c1 is call, and the output section is:
+        //
+        // output {
+        //    Int? result1 = c1.result
+        //    Int? result2 = c2.result
+        // }
+        // We don't need a special output applet+stage.
+        case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
+          val fqn = s"$id2.$id"
+          definedVars contains fqn
+
+        case _ => false
+      }
+    }
   }
 
   // is an output used directly as an input? For example, in the

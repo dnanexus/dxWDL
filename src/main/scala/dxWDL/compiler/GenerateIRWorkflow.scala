@@ -561,32 +561,38 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   private def buildSimpleWorkflowOutput(output: Block.OutputDefinition,
                                         env: CallEnv): (CVar, SArg) = {
-    output.expr match {
-      case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
-        // the output is a constant
-        val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
-        val cVar = CVar(output.name, output.wdlType, Some(womConst))
-        val sArg = IR.SArgConst(womConst)
-        (cVar, sArg)
-      case TAT.ExprIdentifier(id, _, _) =>
-        // The output is a reference to a previously defined variable
-        val cVar = CVar(output.name, output.wdlType, None)
-        val sArg = getSArgFromEnv(id, env)
-        (cVar, sArg)
-      case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
-        // The output is a reference to a previously defined variable
-        val fqn = s"$id2.$id"
-        if (!(env contains fqn))
-          throw new Exception(s"Internal error: (${fqn}) is not in the environment")
-        val cVar = CVar(output.name, output.wdlType, None)
-        val sArg = getSArgFromEnv(fqn, env)
-        (cVar, sArg)
-      case _ =>
-        // An expression that requires evaluation
-        throw new Exception(
-            s"""|Internal error: (${output.expr}) is a non trivial expression.
-                |It requires constructing an output applet and a stage""".stripMargin
-        )
+    if (env.contains(output.name)) {
+      val cVar = CVar(output.name, output.wdlType, None)
+      val sArg = getSArgFromEnv(output.name, env)
+      (cVar, sArg)
+    } else {
+      output.expr match {
+        case expr if WomValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+          // the output is a constant
+          val womConst = WomValueAnalysis.evalConst(output.wdlType, expr)
+          val cVar = CVar(output.name, output.wdlType, Some(womConst))
+          val sArg = IR.SArgConst(womConst)
+          (cVar, sArg)
+        case TAT.ExprIdentifier(id, _, _) =>
+          // The output is a reference to a previously defined variable
+          val cVar = CVar(output.name, output.wdlType, None)
+          val sArg = getSArgFromEnv(id, env)
+          (cVar, sArg)
+        case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
+          // The output is a reference to a previously defined variable
+          val fqn = s"$id2.$id"
+          if (!(env contains fqn))
+            throw new Exception(s"Internal error: (${fqn}) is not in the environment")
+          val cVar = CVar(output.name, output.wdlType, None)
+          val sArg = getSArgFromEnv(fqn, env)
+          (cVar, sArg)
+        case _ =>
+          // An expression that requires evaluation
+          throw new Exception(
+              s"""|Internal error: (${output.expr}) is a non trivial expression.
+                  |It requires constructing an output applet and a stage""".stripMargin
+          )
+      }
     }
   }
 
