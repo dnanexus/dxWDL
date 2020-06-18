@@ -501,12 +501,8 @@ object Block {
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
   def outputClosure(outputs: Vector[OutputDefinition]): Map[String, WdlTypes.T] = {
-    // create inputs from outputs
-    val outputInputs = outputs.map {
-      case OutputDefinition(name, wdlType, _) => name -> wdlType
-    }.toMap
     // create inputs from all the expressions that go into outputs
-    val outputExpressionInputs = outputs
+    outputs
       .flatMap {
         case OutputDefinition(_, _, expr) => Vector(expr)
       }
@@ -515,7 +511,6 @@ object Block {
         case (accu, inpDef) =>
           accu + (inpDef.name -> inpDef.wdlType)
       }
-    outputInputs ++ outputExpressionInputs
   }
 
   // figure out all the outputs from a block of statements

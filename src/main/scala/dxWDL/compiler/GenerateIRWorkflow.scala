@@ -9,6 +9,7 @@ import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
 import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
+import dxWDL.util.Block.OutputDefinition
 
 case class GenerateIRWorkflow(wf: TAT.Workflow,
                               wfStandAlone: TAT.Document,
@@ -625,19 +626,24 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   private def buildOutputStage(wfName: String,
                                outputNodes: Vector[Block.OutputDefinition],
                                env: CallEnv): (IR.Stage, IR.Applet) = {
-    // Figure out what variables from the environment we need to pass
-    // into the applet.
+    // Figure out what variables from the environment we need to pass into the applet.
+    // create inputs from outputs
+    val outputInputVars: Map[String, LinkedVar] = outputNodes.collect {
+      case OutputDefinition(name, _, _) if env.contains(name) => name -> env(name)
+    }.toMap
+    // create inputs from the closure of the output nodes, which includes (recursively)
+    // all the variables in the output node expressions
     val closure = Block.outputClosure(outputNodes)
-
-    val inputVars: Vector[LinkedVar] = closure.map {
+    val closureInputVars: Map[String, LinkedVar] = closure.map {
       case (name, _) =>
-        val lVar = env.find { case (key, _) => key == name } match {
-          case None            => throw new Exception(s"could not find variable $name in the environment")
-          case Some((_, lVar)) => lVar
+        val lVar = env.get(name) match {
+          case None       => throw new Exception(s"could not find variable $name in the environment")
+          case Some(lVar) => name -> lVar
         }
         lVar
-    }.toVector
-    Utils.trace(verbose = true, s"inputVars=${inputVars.map(_.cVar)}")
+    }
+    val inputVars = (outputInputVars ++ closureInputVars).values.toVector
+    Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
     val outputVars: Vector[CVar] = outputNodes
