@@ -76,7 +76,7 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
       DxFile.bulkDescribe(realOutputs.toVector)
 
     // Retain only files that were created AFTER the analysis started
-    val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate()
+    val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
     val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap {
       case (dxFile, desc) =>
         val creationDate = new java.util.Date(desc.created)

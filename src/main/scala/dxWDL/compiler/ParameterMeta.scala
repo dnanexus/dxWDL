@@ -7,7 +7,7 @@ import dxWDL.dx._
 
 object ParameterMeta {
 
-  // Convert a WOM Vector[MetaValue] of Strings into a Vector of Strings
+  // Convert a WDL Vector[MetaValue] of Strings into a Vector of Strings
   // Anything not a string will be filtered out.
   private def unwrapMetaStringArray(array: Vector[TAT.MetaValue]): Vector[String] = {
     array.flatMap {
@@ -23,14 +23,14 @@ object ParameterMeta {
   // Array[T]          T
   // Array[Array[T]]   T
   @scala.annotation.tailrec
-  private def unwrapWomArrayType(womType: WdlTypes.T): WdlTypes.T = {
-    womType match {
-      case WdlTypes.T_Array(t, _) => unwrapWomArrayType(t)
+  private def unwrapWdlArrayType(wdlType: WdlTypes.T): WdlTypes.T = {
+    wdlType match {
+      case WdlTypes.T_Array(t, _) => unwrapWdlArrayType(t)
       case x                      => x
     }
   }
 
-  // Convert a patterns WOM object value to IR
+  // Convert a patterns WDL object value to IR
   private def metaPatternsObjToIR(obj: Map[String, TAT.MetaValue]): IR.IOAttrPatterns = {
     val name = obj.get("name") match {
       case Some(TAT.MetaValueArray(array, _)) =>
@@ -62,7 +62,7 @@ object ParameterMeta {
   // OR
   // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaChoicesArrayToIR(array: Vector[TAT.MetaValue],
-                                   womType: WdlTypes.T): Vector[IR.ChoiceRepr] = {
+                                   wdlType: WdlTypes.T): Vector[IR.ChoiceRepr] = {
     if (array.isEmpty) {
       Vector()
     } else {
@@ -72,13 +72,13 @@ object ParameterMeta {
             throw new Exception("Annotated choice must have a 'value' key")
           } else {
             metaChoiceValueToIR(
-                womType = womType,
+                wdlType = wdlType,
                 value = fields("value"),
                 name = fields.get("name")
             )
           }
         case rawElement: TAT.MetaValue =>
-          metaChoiceValueToIR(womType = womType, value = rawElement)
+          metaChoiceValueToIR(wdlType = wdlType, value = rawElement)
         case _ =>
           throw new Exception(
               "Choices array must contain only raw values or annotated values (hash with "
@@ -88,10 +88,10 @@ object ParameterMeta {
     }
   }
 
-  private def metaChoiceValueToIR(womType: WdlTypes.T,
+  private def metaChoiceValueToIR(wdlType: WdlTypes.T,
                                   value: TAT.MetaValue,
                                   name: Option[TAT.MetaValue] = None): IR.ChoiceRepr = {
-    (womType, value) match {
+    (wdlType, value) match {
       case (WdlTypes.T_String, TAT.MetaValueString(str, _)) =>
         IR.ChoiceReprString(value = str)
       case (WdlTypes.T_Int, TAT.MetaValueInt(i, _)) =>
@@ -126,21 +126,21 @@ object ParameterMeta {
   // suggestions: [
   //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
   private def metaSuggestionsArrayToIR(array: Vector[TAT.MetaValue],
-                                       womType: WdlTypes.T): Vector[IR.SuggestionRepr] = {
+                                       wdlType: WdlTypes.T): Vector[IR.SuggestionRepr] = {
     if (array.isEmpty) {
       Vector()
     } else {
       array.map {
         case TAT.MetaValueObject(fields, _) =>
           metaSuggestionValueToIR(
-              womType = womType,
+              wdlType = wdlType,
               name = fields.get("name"),
               value = fields.get("value"),
               project = fields.get("project"),
               path = fields.get("path")
           )
         case rawElement: TAT.MetaValue =>
-          metaSuggestionValueToIR(womType = womType, value = Some(rawElement))
+          metaSuggestionValueToIR(wdlType = wdlType, value = Some(rawElement))
         case _ =>
           throw new Exception(
               "Suggestions array must contain only raw values or annotated (hash) values"
@@ -149,12 +149,12 @@ object ParameterMeta {
     }
   }
 
-  private def metaSuggestionValueToIR(womType: WdlTypes.T,
+  private def metaSuggestionValueToIR(wdlType: WdlTypes.T,
                                       value: Option[TAT.MetaValue],
                                       name: Option[TAT.MetaValue] = None,
                                       project: Option[TAT.MetaValue] = None,
                                       path: Option[TAT.MetaValue] = None): IR.SuggestionRepr = {
-    (womType, value) match {
+    (wdlType, value) match {
       case (WdlTypes.T_String, Some(TAT.MetaValueString(str, _))) =>
         IR.SuggestionReprString(value = str)
       case (WdlTypes.T_Int, Some(TAT.MetaValueInt(i, _))) =>
@@ -222,8 +222,8 @@ object ParameterMeta {
     }
   }
 
-  private def metaDefaultToIR(value: TAT.MetaValue, womType: WdlTypes.T): IR.DefaultRepr = {
-    (womType, value) match {
+  private def metaDefaultToIR(value: TAT.MetaValue, wdlType: WdlTypes.T): IR.DefaultRepr = {
+    (wdlType, value) match {
       case (WdlTypes.T_String, TAT.MetaValueString(str, _)) =>
         IR.DefaultReprString(value = str)
       case (WdlTypes.T_Int, TAT.MetaValueInt(i, _)) =>
@@ -245,10 +245,10 @@ object ParameterMeta {
     }
   }
 
-  // Extract the parameter_meta info from the WOM structure
+  // Extract the parameter_meta info from the WDL structure
   // The parameter's WdlTypes.T is passed in since some parameter metadata values are required to
   // have the same type as the parameter.
-  def unwrap(paramMeta: Option[TAT.MetaValue], womType: WdlTypes.T): Option[Vector[IR.IOAttr]] = {
+  def unwrap(paramMeta: Option[TAT.MetaValue], wdlType: WdlTypes.T): Option[Vector[IR.IOAttr]] = {
     paramMeta match {
       case None => None
       // If the parameter metadata is a string, treat it as help
@@ -274,19 +274,19 @@ object ParameterMeta {
             Some(metaPatternsObjToIR(obj))
           // Try to parse the choices key, which will be an array of either values or objects
           case (IR.PARAM_META_CHOICES, TAT.MetaValueArray(array, _)) =>
-            val wt = unwrapWomArrayType(womType)
+            val wt = unwrapWdlArrayType(wdlType)
             Some(IR.IOAttrChoices(metaChoicesArrayToIR(array, wt)))
           case (IR.PARAM_META_SUGGESTIONS, TAT.MetaValueArray(array, _)) =>
-            val wt = unwrapWomArrayType(womType)
+            val wt = unwrapWdlArrayType(wdlType)
             Some(IR.IOAttrSuggestions(metaSuggestionsArrayToIR(array, wt)))
           case (IR.PARAM_META_TYPE, dx_type: TAT.MetaValue) =>
-            val wt = unwrapWomArrayType(womType)
+            val wt = unwrapWdlArrayType(wdlType)
             wt match {
               case WdlTypes.T_File => Some(IR.IOAttrType(metaConstraintToIR(dx_type)))
               case _               => throw new Exception("'dx_type' can only be specified for File parameters")
             }
           case (IR.PARAM_META_DEFAULT, default: TAT.MetaValue) =>
-            Some(IR.IOAttrDefault(metaDefaultToIR(default, womType)))
+            Some(IR.IOAttrDefault(metaDefaultToIR(default, wdlType)))
           case _ => None
         }.toVector)
       }

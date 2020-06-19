@@ -17,7 +17,7 @@ import wdlTools.types.{
 import scala.io.Source
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
-case class ParseWomSourceFile(verbose: Boolean) {
+case class ParseWdlSourceFile(verbose: Boolean) {
 
   private case class BInfo(callables: Map[String, TAT.Callable],
                            sources: Map[String, TAT.Document],
@@ -120,7 +120,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // Also returns 1) a mapping of input files to source documents; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
   def apply(mainFile: Path, imports: List[Path]): (Language.Value,
-                                                   WomBundle,
+                                                   WdlBundle,
                                                    Map[String, TAT.Document],
                                                    Map[String, Vector[Adjuncts.AdjunctFile]]) = {
     // Resolves for:
@@ -153,7 +153,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     val flatInfo: BInfo = dfsFlatten(tMainDoc)
 
     (Language.fromWdlVersion(tMainDoc.version.value),
-     WomBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
+     WdlBundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      flatInfo.sources,
      flatInfo.adjunctFiles)
   }
@@ -238,7 +238,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
   }
 
   // Extract the only task from a namespace
-  def getMainTask(bundle: WomBundle): TAT.Task = {
+  def getMainTask(bundle: WdlBundle): TAT.Task = {
     bundle.primaryCallable match {
       case None                 => throw new Exception("found no callable")
       case Some(task: TAT.Task) => task

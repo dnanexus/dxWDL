@@ -6,7 +6,7 @@ import wdlTools.eval.Coercion
 
 import dxWDL.base.Utils
 
-object WomValueAnalysis {
+object WdlValueAnalysis {
 
   private class ExprNotConst(message: String) extends RuntimeException(message)
 

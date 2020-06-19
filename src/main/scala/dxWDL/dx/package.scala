@@ -26,7 +26,7 @@ object DxIOClass extends Enumeration {
       case "hash" => HASH
 
       // we don't deal with anything else
-      case other => OTHER
+      case _ => OTHER
     }
   }
 }
@@ -73,11 +73,11 @@ final case class IOParameterSuggestionFile(name: Option[String],
     extends IOParameterSuggestion
 
 // Types for the IO 'type' section
-final object DxConstraint {
+object DxConstraint {
   val AND = "$and"
   val OR = "$or"
 }
-final object ConstraintOper extends Enumeration {
+object ConstraintOper extends Enumeration {
   val AND, OR = Value
 }
 sealed abstract class IOParameterTypeConstraint
@@ -127,7 +127,7 @@ trait DxObjectDescribe {
   val properties: Option[Map[String, String]]
   val details: Option[JsValue]
 
-  def getCreationDate(): java.util.Date = new java.util.Date(created)
+  def getCreationDate: java.util.Date = new java.util.Date(created)
 }
 
 trait DxObject {
@@ -142,14 +142,14 @@ object DxObject {
       case (k, JsString(v)) => k -> v
       case (_, _) =>
         throw new Exception(s"malform JSON properties ${props}")
-    }.toMap
+    }
   }
 
   def parseIoParam(jsv: JsValue): IOParameter = {
     val ioParam = jsv.asJsObject.getFields(DxIOSpec.NAME, DxIOSpec.CLASS) match {
       case Seq(JsString(name), JsString(klass)) =>
         val ioClass = DxIOClass.fromString(klass)
-        IOParameter(name, ioClass, false)
+        IOParameter(name, ioClass, optional = false)
       case other =>
         throw new Exception(s"Malformed io spec ${other}")
     }
@@ -264,7 +264,7 @@ object DxObject {
           Some(ioParamDefaultFromJs(v))
         } catch {
           // Currently, some valid defaults won't parse, so we ignore them for now
-          case e: Exception => None
+          case _: Exception => None
         }
       case _ => None
     }
@@ -315,7 +315,7 @@ object DxObject {
   }
 
   def parseIOSpec(specs: Vector[JsValue]): Vector[IOParameter] = {
-    specs.map(ioSpec => parseIoParam(ioSpec)).toVector
+    specs.map(ioSpec => parseIoParam(ioSpec))
   }
 
   def maybeSpecifyProject(project: Option[DxProject]): Map[String, JsValue] = {
@@ -412,7 +412,7 @@ object DxObject {
       val o = getInstance(id, None)
       o.isInstanceOf[DxDataObject]
     } catch {
-      case e: IllegalArgumentException =>
+      case _: IllegalArgumentException =>
         false
     }
   }
@@ -428,7 +428,7 @@ trait DxExecution extends DxObject
 
 // A stand in for the DxWorkflow.Stage inner class (we don't have a constructor for it)
 case class DxWorkflowStage(id: String) {
-  def getId() = id
+  def getId: String = id
 
   def getInputReference(inputName: String): JsValue = {
     JsObject(

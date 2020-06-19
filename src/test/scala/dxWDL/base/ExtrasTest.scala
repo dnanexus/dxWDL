@@ -11,11 +11,11 @@ import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
-  val verbose = Verbose(true, true, Set.empty)
-  val verbose2 = Verbose(false, true, Set.empty)
+  val verbose: Verbose = Verbose(on = true, quiet = true, Set.empty)
+  val verbose2: Verbose = Verbose(on = false, quiet = true, Set.empty)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
+    val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
@@ -398,7 +398,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
+  it should "take app id as well as applet id for custom reorg" taggedAs EdgeTest in {
 
     val appId: String = getIdFromName("cloud_workstation")
     val reorg: JsValue =
@@ -827,7 +827,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
     )
 
     val runSpecJson: Map[String, JsValue] = dxAttrs.getRunSpecJson
-    (runSpecJson) should be(expected)
+    runSpecJson should be(expected)
 
   }
 

@@ -6,8 +6,8 @@ import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 // These tests involve compilation -without- access to the platform.
 //
-class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
-  private val parseWomSourceFile = ParseWomSourceFile(false)
+class ParseWdlSourceFileTest extends AnyFlatSpec with Matchers {
+  private val parseWdlSourceFile = ParseWdlSourceFile(false)
 
   private def validateTaskMeta(task: TAT.Task): Unit = {
     val kvs = task.meta match {
@@ -39,7 +39,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -64,7 +64,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -89,7 +89,7 @@ class ParseWomSourceFileTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWomSourceFile.parseWdlTask(srcCode)
+    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
     validateTaskMeta(task)
   }
 }

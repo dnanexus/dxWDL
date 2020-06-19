@@ -159,7 +159,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val sortedUniqueTasks =
       tasks.map(t => t.name -> t).toMap.values.toVector.sortWith(_.name < _.name)
     // validate each task and warn if it doesn't generate valid WDL
-    val parser = ParseWomSourceFile(verbose.on)
+    val parser = ParseWdlSourceFile(verbose.on)
     val validTasks = sortedUniqueTasks.flatMap { task =>
       try {
         // TODO: currently we always generate WDL 1.0 - other versions of the code generator
@@ -194,7 +194,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
                None,
                Vector.empty,
                Vector.empty,
-               true,
+               withInputOutputSpec = true,
                Vector.empty,
                Set.empty)
 

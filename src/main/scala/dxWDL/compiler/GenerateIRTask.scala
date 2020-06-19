@@ -22,8 +22,8 @@ case class GenerateIRTask(verbose: Verbose,
       message: String = "Runtime instance type calculation required"
   ) extends RuntimeException(message)
 
-  def evalWomExpression(expr: TAT.Expr): WdlValues.V = {
-    WomValueAnalysis.ifConstEval(expr.wdlType, expr) match {
+  def evalWdlExpression(expr: TAT.Expr): WdlValues.V = {
+    WdlValueAnalysis.ifConstEval(expr.wdlType, expr) match {
       case None    => throw new DynamicInstanceTypesException()
       case Some(x) => x
     }
@@ -47,7 +47,7 @@ case class GenerateIRTask(verbose: Verbose,
           // Check the overall defaults, there might be a setting over there
           defaultRuntimeAttrs.m.get(attrName)
         case Some(expr) =>
-          Some(evalWomExpression(expr))
+          Some(evalWdlExpression(expr))
       }
     }
 
@@ -104,8 +104,8 @@ case class GenerateIRTask(verbose: Verbose,
     dockerExpr match {
       case None =>
         IR.DockerImageNone
-      case Some(expr) if WomValueAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
-        val wdlConst = WomValueAnalysis.evalConst(WdlTypes.T_String, expr)
+      case Some(expr) if WdlValueAnalysis.isExpressionConst(WdlTypes.T_String, expr) =>
+        val wdlConst = WdlValueAnalysis.evalConst(WdlTypes.T_String, expr)
         triageDockerImageFromValue(wdlConst)
       // TODO: handle array case
       case _ =>
@@ -285,16 +285,16 @@ case class GenerateIRTask(verbose: Verbose,
     // create dx:applet input definitions. Note, some "inputs" are
     // actually expressions.
     val inputs: Vector[CVar] = task.inputs.flatMap {
-      case TAT.RequiredInputDefinition(iName, womType, _) => {
+      case TAT.RequiredInputDefinition(iName, wdlType, _) => {
         // This is a task "input" parameter declaration of the form:
         //     Int y
         val paramMeta = lookupInputParam(iName, task)
-        val attr = ParameterMeta.unwrap(paramMeta, womType)
-        Some(CVar(iName, womType, None, attr))
+        val attr = ParameterMeta.unwrap(paramMeta, wdlType)
+        Some(CVar(iName, wdlType, None, attr))
       }
 
-      case TAT.OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _) =>
-        WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+      case TAT.OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _) =>
+        WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
           case None =>
             // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
@@ -305,20 +305,20 @@ case class GenerateIRTask(verbose: Verbose,
             // This is a task "input" parameter definition of the form:
             //    Int y = 3
             val paramMeta = lookupInputParam(iName, task)
-            val attr = ParameterMeta.unwrap(paramMeta, womType)
-            Some(CVar(iName, womType, Some(value), attr))
+            val attr = ParameterMeta.unwrap(paramMeta, wdlType)
+            Some(CVar(iName, wdlType, Some(value), attr))
         }
 
-      case TAT.OptionalInputDefinition(iName, WdlTypes.T_Optional(womType), _) =>
+      case TAT.OptionalInputDefinition(iName, WdlTypes.T_Optional(wdlType), _) =>
         val paramMeta = lookupInputParam(iName, task)
-        val attr = ParameterMeta.unwrap(paramMeta, womType)
-        Some(CVar(iName, WdlTypes.T_Optional(womType), None, attr))
+        val attr = ParameterMeta.unwrap(paramMeta, wdlType)
+        Some(CVar(iName, WdlTypes.T_Optional(wdlType), None, attr))
     }
 
     // create dx:applet outputs
     val outputs: Vector[CVar] = task.outputs.map {
-      case TAT.OutputDefinition(id, womType, expr, _) =>
-        val defaultValue = WomValueAnalysis.ifConstEval(womType, expr) match {
+      case TAT.OutputDefinition(id, wdlType, expr, _) =>
+        val defaultValue = WdlValueAnalysis.ifConstEval(wdlType, expr) match {
           case None =>
             // This is an expression to be evaluated at runtime
             None
@@ -326,7 +326,7 @@ case class GenerateIRTask(verbose: Verbose,
             // A constant, we can assign it now.
             Some(value)
         }
-        CVar(id, womType, defaultValue)
+        CVar(id, wdlType, defaultValue)
     }
 
     val instanceType = calcInstanceType(task)

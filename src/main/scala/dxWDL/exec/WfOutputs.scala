@@ -23,10 +23,10 @@ case class WfOutputs(wf: TAT.Workflow,
 
   private val evaluator = WdlEvaluator.make(dxIoFunctions, document.version.value)
 
-  private def evaluateWomExpression(expr: TAT.Expr,
-                                    womType: WdlTypes.T,
+  private def evaluateWdlExpression(expr: TAT.Expr,
+                                    wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
-    evaluator.applyExprAndCoerce(expr, womType, EvalContext(env))
+    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(env))
   }
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -36,7 +36,7 @@ case class WfOutputs(wf: TAT.Workflow,
     Utils.appletLog(
         verbose,
         s"""|Evaluating workflow outputs
-            |${WomPrettyPrintApproxWdl.graphOutputs(wf.outputs)}
+            |${WdlPrettyPrintApprox.graphOutputs(wf.outputs)}
             |""".stripMargin
     )
 
@@ -64,7 +64,7 @@ case class WfOutputs(wf: TAT.Workflow,
     var envFull = envInitialFilled
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
       case Block.OutputDefinition(name, wdlType, expr) =>
-        val value = evaluateWomExpression(expr, wdlType, envFull)
+        val value = evaluateWdlExpression(expr, wdlType, envFull)
         envFull += (name -> value)
         name -> (wdlType, value)
     }.toMap

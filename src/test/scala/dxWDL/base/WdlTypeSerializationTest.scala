@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
 
-class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
+class WdlTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   val testCases: List[WdlTypes.T] = List(
       // Primitive types
@@ -14,28 +14,28 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
       WdlTypes.T_String,
       WdlTypes.T_File,
       // arrays
-      WdlTypes.T_Array(WdlTypes.T_String, false),
-      WdlTypes.T_Array(WdlTypes.T_File, true),
+      WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false),
+      WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = true),
       // maps
       WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_File),
       WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Map(WdlTypes.T_Float, WdlTypes.T_Int)),
       // optionals
       WdlTypes.T_Optional(WdlTypes.T_Int),
-      WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Boolean, false)),
+      WdlTypes.T_Optional(WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false)),
       WdlTypes.T_Pair(WdlTypes.T_Int, WdlTypes.T_String)
   )
 
   it should "work for various WDL types" in {
-    val typeSerialize = WomTypeSerialization(Map.empty)
+    val typeSerialize = WdlTypeSerialization(Map.empty)
 
     for (t <- testCases) {
       typeSerialize.fromString(typeSerialize.toString(t)) should be(t)
     }
   }
 
-  val personType =
+  private val personType =
     WdlTypes.T_Struct("Person", Map("name" -> WdlTypes.T_String, "age" -> WdlTypes.T_Int))
-  val houseType = WdlTypes.T_Struct(
+  private val houseType = WdlTypes.T_Struct(
       "House",
       Map("street" -> WdlTypes.T_String, "zip code" -> WdlTypes.T_Int, "owner" -> personType)
   )
@@ -48,7 +48,7 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "work for structs" in {
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize = WomTypeSerialization(typeAliases)
+    val typeSerialize = WdlTypeSerialization(typeAliases)
 
     for (t <- structTestCases) {
       typeSerialize.fromString(typeSerialize.toString(t)) should be(t)
@@ -64,7 +64,7 @@ class WomTypeSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "detect bad type descriptions" in {
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val typeSerialize = WomTypeSerialization(typeAliases)
+    val typeSerialize = WdlTypeSerialization(typeAliases)
 
     for (typeDesc <- badTypeNames) {
       assertThrows[Exception] {

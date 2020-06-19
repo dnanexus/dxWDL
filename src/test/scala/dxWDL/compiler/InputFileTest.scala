@@ -5,7 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
 
-import dxWDL.{Main}
+import dxWDL.Main
 import dxWDL.dx._
 
 // These tests involve compilation -without- access to the platform.
@@ -17,7 +17,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   }
 
   private val dxProject = {
-    val p = DxUtils.dxEnv.getProjectContext()
+    val p = DxUtils.dxEnv.getProjectContext
     if (p == null)
       throw new Exception("Must be logged in to run this test")
     DxProject(p)
@@ -129,7 +129,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "support array of pairs" taggedAs (EdgeTest) in {
+  it should "support array of pairs" taggedAs EdgeTest in {
     val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
     val inputs = pathFromBasename("input_file", "echo_pairs.json")
 

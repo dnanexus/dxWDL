@@ -6,13 +6,13 @@ import spray.json._
 import wdlTools.eval.WdlValues._
 import wdlTools.types.WdlTypes._
 
-class WomValueSerializationTest extends AnyFlatSpec with Matchers {
-  val personType =
+class WdlValueSerializationTest extends AnyFlatSpec with Matchers {
+  private val personType =
     T_Struct("Person", Map("name" -> T_String, "age" -> T_Int))
-  val houseType =
+  private val houseType =
     T_Struct("House", Map("street" -> T_String, "zip code" -> T_Int, "owner" -> personType))
-  val typeAliases: Map[String, T] = Map("Person" -> personType, "House" -> houseType)
-  val valueSerializer = WomValueSerialization(typeAliases)
+  private val typeAliases: Map[String, T] = Map("Person" -> personType, "House" -> houseType)
+  private val valueSerializer = WdlValueSerialization(typeAliases)
 
   val valueTestCases: List[(T, V)] = List(
       // primitive types
@@ -22,7 +22,7 @@ class WomValueSerializationTest extends AnyFlatSpec with Matchers {
       (T_String, V_String("charming")),
       (T_File, V_File("/tmp/foo.txg")),
       // arrays
-      (T_Array(T_Int, false), V_Array(Vector(V_Int(4), V_Int(5)))),
+      (T_Array(T_Int, nonEmpty = false), V_Array(Vector(V_Int(4), V_Int(5)))),
       // compounds
       (T_Optional(T_Int), V_Optional(V_Int(13))),
       (T_Pair(T_String, T_Array(T_Int)), V_Pair(V_String("A"), V_Array(Vector.empty))),

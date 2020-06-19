@@ -28,7 +28,7 @@ object DxfuseManifest {
 
     val files = file2LocalMapping.map {
       case (dxFile, path) =>
-        val parentDir = path.getParent().toString
+        val parentDir = path.getParent.toString
 
         // remove the mountpoint from the directory. We need
         // paths that are relative to the mount point.

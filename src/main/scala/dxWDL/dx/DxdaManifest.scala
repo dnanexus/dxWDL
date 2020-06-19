@@ -29,9 +29,9 @@ object DxdaManifest {
 
   // create a manifest for a single file
   private def processFile(desc: DxFileDescribe, destination: Path): JsValue = {
-    val destinationFile: java.io.File = destination.toFile()
-    val name = destinationFile.getName()
-    val folder = destinationFile.getParent().toString
+    val destinationFile: java.io.File = destination.toFile
+    val name = destinationFile.getName
+    val folder = destinationFile.getParent
     JsObject("id" -> JsString(desc.id), "name" -> JsString(name), "folder" -> JsString(folder))
   }
 
@@ -45,7 +45,6 @@ object DxdaManifest {
         .map {
           case (dxFile, desc) => dxFile.id -> (dxFile, desc)
         }
-        .toMap
 
     // Make sure they are all in the live state. Archived files cannot be accessed.
     fileDescs.foreach {
@@ -59,7 +58,7 @@ object DxdaManifest {
     // create a sub-map per container
     val fileDescsByContainer: Map[DxProject, Map[String, (DxFile, DxFileDescribe)]] =
       fileDescs.foldLeft(Map.empty[DxProject, Map[String, (DxFile, DxFileDescribe)]]) {
-        case (accu, (fid, (dxFile, dxDesc))) =>
+        case (accu, (_, (dxFile, dxDesc))) =>
           val container = DxProject.getInstance(dxDesc.project)
           accu.get(container) match {
             case None =>
@@ -73,12 +72,12 @@ object DxdaManifest {
       case (dxContainer, fileDescs) =>
         val projectFilesToLocalPath: Vector[JsValue] =
           fileDescs.map {
-            case (fid, (dxFile, dxDesc)) =>
+            case (fid, (_, dxDesc)) =>
               val (_, local: Path) = file2LocalMapping(fid)
               processFile(dxDesc, local)
           }.toVector
         dxContainer.getId -> JsArray(projectFilesToLocalPath)
-    }.toMap
+    }
     new DxdaManifest(JsObject(m))
   }
 }

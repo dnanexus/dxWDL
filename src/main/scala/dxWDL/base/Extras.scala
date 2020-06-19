@@ -230,28 +230,28 @@ case class WdlHintAttrs(m: Map[String, TAT.MetaValue])
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
-    private def readWomValue(value: JsValue): WdlValues.V = value match {
+    private def readWdlValue(value: JsValue): WdlValues.V = value match {
       case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
       case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
       case JsString(s)   => WdlValues.V_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
-    private def writeWomValue(wValue: WdlValues.V): JsValue = wValue match {
+    private def writeWdlValue(wValue: WdlValues.V): JsValue = wValue match {
       case WdlValues.V_Boolean(b) => JsBoolean(b)
       case WdlValues.V_Int(i)     => JsNumber(i)
       case WdlValues.V_String(s)  => JsString(s)
-      case other                  => throw new Exception(s"Unsupported wom value value ${other}")
+      case other                  => throw new Exception(s"Unsupported WDL value ${other}")
     }
 
     def read(jsv: JsValue): WdlRuntimeAttrs = {
-      val m = jsv.asJsObject.fields.map { case (k, v) => k -> readWomValue(v) }
+      val m = jsv.asJsObject.fields.map { case (k, v) => k -> readWdlValue(v) }
       WdlRuntimeAttrs(m)
     }
 
     def write(wra: WdlRuntimeAttrs): JsValue = {
       val fields = wra.m.map {
         case (k, v) =>
-          k -> writeWomValue(v)
+          k -> writeWdlValue(v)
       }
       JsObject(fields)
     }

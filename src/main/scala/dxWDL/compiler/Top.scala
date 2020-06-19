@@ -161,9 +161,9 @@ case class Top(cOpt: CompilerOptions) {
     (allResults.path2file, allFiles)
   }
 
-  private def womToIR(source: Path): IR.Bundle = {
+  private def wdlToIR(source: Path): IR.Bundle = {
     val (language, everythingBundle, allSources, adjunctFiles) =
-      ParseWomSourceFile(verbose.on).apply(source, cOpt.importDirs)
+      ParseWdlSourceFile(verbose.on).apply(source, cOpt.importDirs)
 
     // validate
     everythingBundle.allCallables.foreach { case (_, c) => validate(c) }
@@ -226,7 +226,7 @@ case class Top(cOpt: CompilerOptions) {
   // compile and generate intermediate code only
   def applyOnlyIR(source: Path, dxProject: DxProject): IR.Bundle = {
     // generate IR
-    val bundle: IR.Bundle = womToIR(source)
+    val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
     val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
@@ -242,7 +242,7 @@ case class Top(cOpt: CompilerOptions) {
             dxProject: DxProject,
             runtimePathConfig: DxPathConfig,
             execTree: Option[TreePrinter]): (String, Option[Either[String, JsValue]]) = {
-    val bundle: IR.Bundle = womToIR(source)
+    val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
     val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)

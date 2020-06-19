@@ -121,7 +121,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
             case _           => throw new Exception("sanity")
           }
           name -> price
-      }.toMap
+      }
     }
 
     val allInstances: Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
@@ -139,7 +139,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
         val memoryMB = intOfJs(traits("totalMemoryMB"))
         val diskGB = intOfJs(traits("ephemeralStorageGB"))
         val cpu = intOfJs(traits("numCores"))
-        DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, false)
+        DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, gpu = false)
     }.toVector
     InstanceTypeDB(pricingInfo, db)
   }
@@ -198,9 +198,9 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
     )
   }
 
-  val dbFull = genTestDB(true)
-  val dbOpaque = InstanceTypeDB.opaquePrices(dbFull)
-  val dbNoPrices = genTestDB(false)
+  private val dbFull = genTestDB(true)
+  private val dbOpaque = InstanceTypeDB.opaquePrices(dbFull)
+  private val dbNoPrices = genTestDB(false)
 
   it should "Work even without access to pricing information" in {
     // parameters are:          RAM,     disk,     cores
@@ -221,7 +221,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "pretty print" in {
     // Test pretty printing
-    Utils.ignore(dbFull.prettyPrint)
+    Utils.ignore(dbFull.prettyPrint())
   }
 
   it should "work even with opaque prices" in {
@@ -330,7 +330,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "work on large instances (JIRA-1258)" in {
     val db = InstanceTypeDB(
-        true,
+        pricingAvailable = true,
         Vector(
             DxInstanceType(
                 "mem3_ssd1_x32",
@@ -339,7 +339,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 597,
                 13.0.toFloat,
                 Vector(("Ubuntu", "16.04")),
-                false
+                gpu = false
             ),
             DxInstanceType(
                 "mem4_ssd1_x128",
@@ -348,7 +348,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 3573,
                 14.0.toFloat,
                 Vector(("Ubuntu", "16.04")),
-                false
+                gpu = false
             )
         )
     )
@@ -359,7 +359,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "prefer v2 instances over v1's" in {
     val db = InstanceTypeDB(
-        true,
+        pricingAvailable = true,
         Vector(
             DxInstanceType("mem1_ssd1_v2_x4",
                            8000,
@@ -367,23 +367,23 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                            4,
                            0.2.toFloat,
                            Vector(("Ubuntu", "16.04")),
-                           false),
+                           gpu = false),
             DxInstanceType("mem1_ssd1_x4",
                            8000,
                            80,
                            4,
                            0.2.toFloat,
                            Vector(("Ubuntu", "16.04")),
-                           false)
+                           gpu = false)
         )
     )
 
     db.chooseAttrs(None, None, Some(4), None) should equal("mem1_ssd1_v2_x4")
   }
 
-  it should "respect requests for GPU instances" taggedAs (EdgeTest) in {
+  it should "respect requests for GPU instances" taggedAs EdgeTest in {
     val db = InstanceTypeDB(
-        true,
+        pricingAvailable = true,
         Vector(
             DxInstanceType("mem1_ssd1_v2_x4",
                            8000,
@@ -391,21 +391,21 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                            4,
                            0.2.toFloat,
                            Vector(("Ubuntu", "16.04")),
-                           false),
+                           gpu = false),
             DxInstanceType("mem1_ssd1_x4",
                            8000,
                            80,
                            4,
                            0.2.toFloat,
                            Vector(("Ubuntu", "16.04")),
-                           false),
+                           gpu = false),
             DxInstanceType("mem3_ssd1_gpu_x8",
                            30000,
                            100,
                            8,
                            1.0.toFloat,
                            Vector(("Ubuntu", "16.04")),
-                           true)
+                           gpu = true)
         )
     )
 

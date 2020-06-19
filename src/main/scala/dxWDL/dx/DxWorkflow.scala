@@ -32,16 +32,15 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
       case JsArray(a) => a
       case other      => throw new Exception(s"Malfored JSON ${other}")
     }
-    jsVec.map {
-      case jsv2 =>
-        val stage = jsv2.asJsObject.getFields("id", "executable", "name", "input") match {
-          case Seq(JsString(id), JsString(exec), JsString(name), input) =>
-            DxWorkflowStageDesc(id, exec, name, input)
-          case other =>
-            throw new Exception(s"Malfored JSON ${other}")
-        }
-        stage
-    }.toVector
+    jsVec.map { jsv2 =>
+      val stage = jsv2.asJsObject.getFields("id", "executable", "name", "input") match {
+        case Seq(JsString(id), JsString(exec), JsString(name), input) =>
+          DxWorkflowStageDesc(id, exec, name, input)
+        case other =>
+          throw new Exception(s"Malfored JSON ${other}")
+      }
+      stage
+    }
   }
 
   def describe(fields: Set[Field.Value] = Set.empty): DxWorkflowDescribe = {
@@ -94,8 +93,8 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
             modified.toLong,
             None,
             None,
-            Some(DxObject.parseIOSpec(inputSpec.toVector)),
-            Some(DxObject.parseIOSpec(outputSpec.toVector)),
+            Some(DxObject.parseIOSpec(inputSpec)),
+            Some(DxObject.parseIOSpec(outputSpec)),
             None
         )
       case _ =>
@@ -112,11 +111,11 @@ case class DxWorkflow(id: String, project: Option[DxProject]) extends DxExecutab
     val types = descFields.get("types").flatMap(unwrapStringArray)
     val tags = descFields.get("tags").flatMap(unwrapStringArray)
     val inputs = descFields.get("inputs") match {
-      case Some(JsArray(inps)) => Some(DxObject.parseIOSpec(inps.toVector))
+      case Some(JsArray(inps)) => Some(DxObject.parseIOSpec(inps))
       case _                   => None
     }
     val outputs = descFields.get("outputs") match {
-      case Some(JsArray(outs)) => Some(DxObject.parseIOSpec(outs.toVector))
+      case Some(JsArray(outs)) => Some(DxObject.parseIOSpec(outs))
       case _                   => None
     }
     desc.copy(

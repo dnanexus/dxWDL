@@ -1,6 +1,6 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -34,7 +34,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(iSpecVec)) =>
-        Some(iSpecVec.map(DxObject.parseIoParam).toVector)
+        Some(iSpecVec.map(DxObject.parseIoParam))
       case Some(other) =>
         throw new Exception(s"malformed inputSpec field ${other}")
     }
@@ -42,7 +42,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(oSpecVec)) =>
-        Some(oSpecVec.map(DxObject.parseIoParam).toVector)
+        Some(oSpecVec.map(DxObject.parseIoParam))
       case Some(other) =>
         throw new Exception(s"malformed output field ${other}")
     }
@@ -256,7 +256,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
             withInputOutputSpec: Boolean, // should the IO spec be described?
             idConstraints: Vector[String],
             extrafields: Set[Field.Value]): Map[DxDataObject, DxObjectDescribe] = {
-    klassRestriction.map { k =>
+    klassRestriction.foreach { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
@@ -279,7 +279,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
                                           extrafields)
       allResults = allResults ++ results
       cursor = next
-    } while (cursor != None);
+    } while (cursor.isDefined)
 
     if (nameConstraints.isEmpty) {
       allResults
@@ -287,7 +287,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       // Ensure the the data objects have names in the allowed set
       val allowedNames = nameConstraints.toSet
       allResults.filter {
-        case (appletOrWorkflow, desc) => allowedNames contains desc.name
+        case (_, desc) => allowedNames contains desc.name
       }
     }
   }

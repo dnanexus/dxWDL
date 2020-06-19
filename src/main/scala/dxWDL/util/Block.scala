@@ -532,7 +532,7 @@ object Block {
       // or a reference to a defined variable
       outputNode.expr match {
         // A constant or a reference to a variable
-        case expr if WomValueAnalysis.isTrivialExpression(expr)      => true
+        case expr if WdlValueAnalysis.isTrivialExpression(expr)      => true
         case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
 
         // for example, c1 is call, and the output section is:
@@ -589,7 +589,7 @@ object Block {
     val node = nodes.head
     node match {
       case call: TAT.Call if trivialExpressionsOnly =>
-        call.inputs.values.forall(expr => WomValueAnalysis.isTrivialExpression(expr))
+        call.inputs.values.forall(expr => WdlValueAnalysis.isTrivialExpression(expr))
       case _: TAT.Call =>
         // any input expression is allowed
         true

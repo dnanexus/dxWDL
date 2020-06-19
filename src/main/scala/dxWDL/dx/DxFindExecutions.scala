@@ -59,7 +59,7 @@ object DxFindExecutions {
       val (results, next) = submitRequest(parentJob, cursor, None)
       allResults = allResults ++ results
       cursor = next
-    } while (cursor != None);
+    } while (cursor.isDefined)
     allResults
   }
 }

@@ -38,8 +38,8 @@ case class DxApp(id: String) extends DxExecutable {
                       modified.toLong,
                       None,
                       None,
-                      Some(DxObject.parseIOSpec(inputSpec.toVector)),
-                      Some(DxObject.parseIOSpec(outputSpec.toVector)))
+                      Some(DxObject.parseIOSpec(inputSpec)),
+                      Some(DxObject.parseIOSpec(outputSpec)))
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")
     }

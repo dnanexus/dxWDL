@@ -12,7 +12,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
@@ -38,7 +38,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
         val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile.id -> (dxFile, local)
-    }.toMap
+    }
 
     // create a manifest
     val manifest: DxdaManifest = DxdaManifest.apply(filesInManifest)
@@ -53,17 +53,17 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
           // add the target folder and name
           val fields = Map(
               "id" -> JsString(dxFile.getId),
-              "name" -> JsString(local.toFile().getName()),
-              "folder" -> JsString(local.toFile().getParent())
+              "name" -> JsString(local.toFile.getName),
+              "folder" -> JsString(local.toFile.getParent)
           )
           JsObject(fields)
       }
       .toVector
       .reverse
 
-    manifest shouldBe (DxdaManifest(
+    manifest shouldBe DxdaManifest(
         JsObject(dxTestProject.getId -> JsArray(expected))
-    ))
+    )
   }
 
   it should "detect and provide legible error for archived files" in {
@@ -84,7 +84,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
         val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile.id -> (dxFile, local)
-    }.toMap
+    }
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {

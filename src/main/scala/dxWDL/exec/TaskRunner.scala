@@ -98,8 +98,8 @@ case class TaskRunner(task: TAT.Task,
                      dxUrl2path: Map[Furl, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
-        val wdlTypeRepr = WomTypeSerialization(typeAliases).toString(t)
-        val value = WomValueSerialization(typeAliases).toJSON(t, v)
+        val wdlTypeRepr = WdlTypeSerialization(typeAliases).toString(t)
+        val value = WdlValueSerialization(typeAliases).toJSON(t, v)
         (name, JsArray(JsString(wdlTypeRepr), value))
     }
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
@@ -129,8 +129,8 @@ case class TaskRunner(task: TAT.Task,
     }
     val localizedInputs = locInputsM.map {
       case (key, JsArray(Vector(JsString(wdlTypeRepr), jsVal))) =>
-        val t = WomTypeSerialization(typeAliases).fromString(wdlTypeRepr)
-        val value = WomValueSerialization(typeAliases).fromJSON(jsVal)
+        val t = WdlTypeSerialization(typeAliases).fromString(wdlTypeRepr)
+        val value = WdlValueSerialization(typeAliases).fromJSON(jsVal)
         key -> (t, value)
       case (_, other) =>
         throw new Exception(s"sanity: bad deserialization value ${other}")
@@ -508,8 +508,8 @@ case class TaskRunner(task: TAT.Task,
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
       .map {
-        case (outputVarName, (wdlType, womValue)) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, womValue)
+        case (outputVarName, (wdlType, wdlValue)) =>
+          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList

@@ -8,9 +8,10 @@ import dxWDL.util._
 
 class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
-  lazy val homeDir = Paths.get(System.getProperty("user.home"))
-  lazy val dxPathConfig = DxPathConfig.apply(homeDir, false, runtimeDebugLevel >= 1)
-  lazy private val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
+  private lazy val homeDir = Paths.get(System.getProperty("user.home"))
+  private lazy val dxPathConfig =
+    DxPathConfig.apply(homeDir, streamAllFiles = false, verbose = runtimeDebugLevel >= 1)
+  private lazy val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
 
   it should "detect and provide legible error for archived files" in {
     val ARCHIVED_PROJ = "ArchivedStuff"
@@ -30,7 +31,7 @@ class DxfuseManifestTest extends AnyFlatSpec with Matchers {
         val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile -> local
-    }.toMap
+    }
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {

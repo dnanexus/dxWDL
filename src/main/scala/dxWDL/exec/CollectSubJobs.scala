@@ -80,14 +80,14 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           runtimeDebugLevel: Int,
                           typeAliases: Map[String, WdlTypes.T]) {
   //private val verbose = runtimeDebugLevel >= 1
-  private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val maxVerboseLevel = runtimeDebugLevel == 2
+  private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
              exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {
-    assert(!childJobs.isEmpty)
+    assert(childJobs.nonEmpty)
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
@@ -103,12 +103,12 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     exportTypes.map {
       case (eVarName, wdlType) =>
         eVarName -> WdlVarLinks(wdlType, DxlExec(dxSubJob, eVarName))
-    }.toMap
+    }
   }
 
   private def findChildExecs(): Vector[DxExecution] = {
     // get the parent job
-    val dxJob = DxJob(DxUtils.dxEnv.getJob())
+    val dxJob = DxJob(DxUtils.dxEnv.getJob)
     val parentJob: DxJob = dxJob.describe().parentJob.get
 
     val childExecs: Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
@@ -138,7 +138,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
           DXAPI.systemDescribeExecutions(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
       )
     val results: Vector[JsValue] = retval.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x.toVector
+      case Some(JsArray(x)) => x
       case _                => throw new Exception(s"wrong type for executableName ${retval}")
     }
     (execs zip results).map {
@@ -164,7 +164,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
           case Some(o) => o
         }
         ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
-    }.toVector
+    }
   }
 
   def executableFromSeqNum(): Vector[ChildExecDesc] = {
@@ -191,23 +191,22 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                                wdlType: WdlTypes.T,
                                childJobsComplete: Vector[ChildExecDesc]): WdlValues.V = {
     val vec: Vector[WdlValues.V] =
-      childJobsComplete.flatMap {
-        case childExec =>
-          val dxName = Utils.transformVarName(name)
-          val fieldValue = childExec.outputs.get(dxName)
-          (wdlType, fieldValue) match {
-            case (WdlTypes.T_Optional(_), None) =>
-              // Optional field that has not been returned
-              None
-            case (WdlTypes.T_Optional(_), Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
-            case (_, None) =>
-              // Required output that is missing
-              throw new Exception(s"Could not find compulsory field <${name}> in results")
-            case (_, Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
-          }
-      }.toVector
+      childJobsComplete.flatMap { childExec =>
+        val dxName = Utils.transformVarName(name)
+        val fieldValue = childExec.outputs.get(dxName)
+        (wdlType, fieldValue) match {
+          case (WdlTypes.T_Optional(_), None) =>
+            // Optional field that has not been returned
+            None
+          case (WdlTypes.T_Optional(_), Some(jsv)) =>
+            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+          case (_, None) =>
+            // Required output that is missing
+            throw new Exception(s"Could not find compulsory field <${name}> in results")
+          case (_, Some(jsv)) =>
+            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+        }
+      }
     WdlValues.V_Array(vec)
   }
 
@@ -220,10 +219,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         val value: WdlValues.V = collectCallField(oName, wdlType, childJobsComplete)
 
         // We get an array from collecting the values of a particular field
-        val arrayType = WdlTypes.T_Array(wdlType, false)
+        val arrayType = WdlTypes.T_Array(wdlType, nonEmpty = false)
         val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
         fullName -> wvl
-    }.toMap
+    }
   }
 
   // collect results from a sub-workflow generated for the sole purpose of calculating
@@ -237,9 +236,9 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         val value: WdlValues.V = collectCallField(name, wdlType, childJobsComplete)
 
         // We get an array from collecting the values of a particular field
-        val arrayType = WdlTypes.T_Array(wdlType, false)
+        val arrayType = WdlTypes.T_Array(wdlType, nonEmpty = false)
         val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
         name -> wvl
-    }.toMap
+    }
   }
 }

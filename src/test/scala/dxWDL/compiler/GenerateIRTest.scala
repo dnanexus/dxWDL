@@ -411,7 +411,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   // Check parameter_meta pattern: ["array"]
-  it should "recognize pattern in parameters_meta via WOM" in {
+  it should "recognize pattern in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -494,7 +494,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   // Check parameter_meta pattern: {"object"}
-  it should "recognize pattern object in parameters_meta via WOM" in {
+  it should "recognize pattern object in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -936,7 +936,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     // TODO: make assertion about exception message
   }
 
-  it should "recognize help, group, and label in parameters_meta via WOM" in {
+  it should "recognize help, group, and label in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")
     val retval = Main.compile(
         path.toString :: cFlags
@@ -1062,7 +1062,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   }
 
   // This is actually more of a test to confirm that symbols that are not input
-  // variables are ignored. WOM doesn't include a paramMeta member for the output
+  // variables are ignored. WDL doesn't include a paramMeta member for the output
   // var class anyways, so it's basically impossible for this to happen
   it should "ignore help in parameters_meta via CVar for output CVars" in {
     val path = pathFromBasename("compiler", "help_output_params.wdl")
@@ -1449,7 +1449,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val samtools = wf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
     inside(samtools) {
       /*case Some((cVar, _)) =>
-       cVar.womType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))*/
+       cVar.wdlType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))*/
       case None => ()
     }
   }

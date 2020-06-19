@@ -65,15 +65,17 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // find applets
     val t0 = System.nanoTime()
     val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
-      DxFindDataObjects(None, verbose).apply(Some(dxProject),
-                                             Some(folder),
-                                             recurse = false,
-                                             Some("applet"),
-                                             Vector(CHECKSUM_PROP),
-                                             allExecutableNames.toVector,
-                                             false,
-                                             Vector.empty,
-                                             Set.empty)
+      DxFindDataObjects(None, verbose).apply(
+          Some(dxProject),
+          Some(folder),
+          recurse = false,
+          Some("applet"),
+          Vector(CHECKSUM_PROP),
+          allExecutableNames.toVector,
+          withInputOutputSpec = false,
+          Vector.empty,
+          Set.empty
+      )
     val t1 = System.nanoTime()
     var diffMSec = (t1 - t0) / (1000 * 1000)
     Utils.trace(
@@ -86,15 +88,17 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // find workflows
     val t2 = System.nanoTime()
     val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
-      DxFindDataObjects(None, verbose).apply(Some(dxProject),
-                                             Some(folder),
-                                             recurse = false,
-                                             Some("workflow"),
-                                             Vector(CHECKSUM_PROP),
-                                             allExecutableNames.toVector,
-                                             false,
-                                             Vector.empty,
-                                             Set.empty)
+      DxFindDataObjects(None, verbose).apply(
+          Some(dxProject),
+          Some(folder),
+          recurse = false,
+          Some("workflow"),
+          Vector(CHECKSUM_PROP),
+          allExecutableNames.toVector,
+          withInputOutputSpec = false,
+          Vector.empty,
+          Set.empty
+      )
     val t3 = System.nanoTime()
     diffMSec = (t3 - t2) / (1000 * 1000)
     Utils.trace(
@@ -154,7 +158,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                                              Some("applet"),
                                              Vector(CHECKSUM_PROP),
                                              allExecutableNames.toVector,
-                                             false,
+                                             withInputOutputSpec = false,
                                              Vector.empty,
                                              Set.empty)
     val nrApplets = dxAppletsInProject.size

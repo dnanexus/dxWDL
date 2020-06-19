@@ -3,8 +3,8 @@ package dxWDL.base
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{Util => TUtil}
 
-// Write a wom type as a string, and be able to convert back.
-case class WomTypeSerialization(typeAliases: Map[String, T]) {
+// Write a WDL type as a string, and be able to convert back.
+case class WdlTypeSerialization(typeAliases: Map[String, T]) {
   def toString(t: T): String = {
     t match {
       // Base case: primitive types.
@@ -122,12 +122,12 @@ case class WomTypeSerialization(typeAliases: Map[String, T]) {
         typeAliases(name)
 
       case _ =>
-        throw new Exception(s"Cannot convert ${str} to a wom type")
+        throw new Exception(s"Cannot convert ${str} to a WDL type")
     }
   }
 }
 
-object WomTypeSerialization {
+object WdlTypeSerialization {
   // Get a human readable type name
   // Int ->   "Int"
   // Array[Int] -> "Array[Int]"

@@ -23,28 +23,28 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
   val TEST_PROJECT = "dxWDL_playground"
 
-  lazy val dxTestProject =
+  private lazy val dxTestProject =
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
 
-  lazy val username = System.getProperty("user.name")
-  lazy val unitTestsPath = s"unit_tests/${username}"
-  lazy val cFlags = List("-compileMode",
-                         "NativeWithoutRuntimeAsset",
-                         "-project",
-                         dxTestProject.getId,
-                         "-folder",
-                         "/" + unitTestsPath,
-                         "-force",
-                         "-locked",
-                         "-quiet")
+  private lazy val username = System.getProperty("user.name")
+  private lazy val unitTestsPath = s"unit_tests/${username}"
+  private lazy val cFlags = List("-compileMode",
+                                 "NativeWithoutRuntimeAsset",
+                                 "-project",
+                                 dxTestProject.getId,
+                                 "-folder",
+                                 "/" + unitTestsPath,
+                                 "-force",
+                                 "-locked",
+                                 "-quiet")
 
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" in {
@@ -55,14 +55,14 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     inside(retval) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not be the pretty string version
+          case Left(_) => false // should not be the pretty string version
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-                name shouldBe ("wf_linear_no_expr")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (3)
-              case other =>
+                name shouldBe "wf_linear_no_expr"
+                kind shouldBe "workflow"
+                stages.size shouldBe 3
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -86,8 +86,8 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case Some(x: JsValue) => x.asJsObject.fields
       case _                => throw new Exception("Expect details to be set for workflow")
     }
-    // the compiled wf should at least have womSourceCode and execTree
-    details.contains("womSourceCode") shouldBe true
+    // the compiled wf should at least have wdlSourceCode and execTree
+    (details.contains("womSourceCode") || details.contains("wdlSourceCode")) shouldBe true
     details.contains("execTree") shouldBe true
 
     val execString = details("execTree") match {
@@ -102,10 +102,10 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-        name shouldBe ("wf_linear_no_expr")
-        kind shouldBe ("workflow")
-        stages.size shouldBe (3)
-      case other =>
+        name shouldBe "wf_linear_no_expr"
+        kind shouldBe "workflow"
+        stages.size shouldBe 3
+      case _ =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
@@ -124,11 +124,11 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     val treeJs = Tree.formDXworkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
-        id shouldBe (wf.id)
-        name shouldBe ("wf_linear_no_expr")
-        kind shouldBe ("workflow")
-        stages.size shouldBe (3)
-      case other =>
+        id shouldBe wf.id
+        name shouldBe "wf_linear_no_expr"
+        kind shouldBe "workflow"
+        stages.size shouldBe 3
+      case _ =>
         throw new Exception(s"tree representation is wrong ${treeJs}")
     }
   }
@@ -143,14 +143,14 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     inside(retval) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not produce a pretty string
+          case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-                name shouldBe ("two_levels")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (3)
-              case other =>
+                name shouldBe "two_levels"
+                kind shouldBe "workflow"
+                stages.size shouldBe 3
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -176,7 +176,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
             throw new Exception(s"tree representation is wrong ${str}") // should not produce a pretty string
           case Right(treeJs) => treeJs
         }
-      case other => throw new Exception(s"tree representation is wrong")
+      case _ => throw new Exception(s"tree representation is wrong")
     }
 
     val prettyTree = Tree.generateTreeFromJson(treeJs.asJsObject)
@@ -221,15 +221,15 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     inside(describeRet) {
       case Main.SuccessfulTerminationTree(pretty) =>
         pretty match {
-          case Left(str) => false // should not produce a pretty string
+          case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
             treeJs.asJsObject.getFields("name", "kind", "stages", "id") match {
               case Seq(JsString(name), JsString(kind), JsArray(stages), JsString(id)) =>
-                name shouldBe ("four_levels")
-                kind shouldBe ("workflow")
-                stages.size shouldBe (4)
+                name shouldBe "four_levels"
+                kind shouldBe "workflow"
+                stages.size shouldBe 4
                 id shouldBe wfID
-              case other =>
+              case _ =>
                 throw new Exception(s"tree representation is wrong ${treeJs}")
             }
           }
@@ -304,7 +304,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
                                                                |│           │   └───App Task: concat
                                                                |│           └───App Fragment: if ((j == "clease"))
                                                                |└───App Outputs: outputs""".stripMargin
-          case Right(treeJs) => false // should not go down this road
+          case Right(_) => false // should not go down this road
         }
     }
   }

@@ -3,7 +3,7 @@ package dxWDL
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 
-import spray.json._
+import spray.json.{JsString, _}
 import dxWDL.base._
 import dxWDL.compiler.Tree
 import dxWDL.dx._
@@ -686,13 +686,13 @@ object Main extends App {
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
                          rtDebugLvl: Int): Termination = {
-    // Parse the inputs, convert to WOM values. Delay downloading files
+    // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
     val verbose = rtDebugLvl > 0
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases, document) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
+    val (task, typeAliases, document) = ParseWdlSourceFile(verbose).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
@@ -767,7 +767,7 @@ object Main extends App {
 
   // Execute a part of a workflow
   private def workflowFragAction(op: InternalOp.Value,
-                                 womSourceCode: String,
+                                 wdlSourceCode: String,
                                  instanceTypeDB: InstanceTypeDB,
                                  metaInfo: JsValue,
                                  jobInputPath: Path,
@@ -781,13 +781,13 @@ object Main extends App {
     //val dxProject = DxUtils.dxEnv.getProjectContext()
     val verbose = rtDebugLvl > 0
 
-    // Parse the inputs, convert to WOM values. Delay downloading files
+    // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
     val inputLines: String = Utils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
-      ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
+      ParseWdlSourceFile(verbose).parseWdlWorkflow(wdlSourceCode)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
@@ -879,7 +879,13 @@ object Main extends App {
     SuccessfulTermination(s"success ${op}")
   }
 
-  // Get the WOM source code, and the instance type database from the
+  private def getWdlSourceCodeFromDetails(details: JsValue): String = {
+    val fields = details.asJsObject.fields
+    val JsString(wdlSourceCode) = fields.getOrElse("wdlSourceCode", fields("womSourceCode"))
+    wdlSourceCode
+  }
+
+  // Get the WDL source code, and the instance type database from the
   // details field stored on the platform
   private def retrieveFromDetails(
       jobInfoPath: Path
@@ -902,8 +908,8 @@ object Main extends App {
     }
 
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
-    val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
-    val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+    val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
+    val wdlSourceCode = Utils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
     val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
@@ -921,7 +927,7 @@ object Main extends App {
         case Some(JsBoolean(flag)) => Some(flag)
         case None                  => None
       }
-    (womSourceCode, instanceTypeDB, details, runtimeAttrs, delayWorkspaceDestruction)
+    (wdlSourceCode, instanceTypeDB, details, runtimeAttrs, delayWorkspaceDestruction)
   }
 
   // Make a list of all the files cloned for access by this applet.
@@ -958,9 +964,9 @@ object Main extends App {
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
-        // Get the WOM source code (currently WDL, could be also CWL in the future)
-        // Parse the inputs, convert to WOM values.
-        val (womSourceCode,
+        // Get the WDL source code (currently WDL, could be also CWL in the future)
+        // Parse the inputs, convert to WDL values.
+        val (wdlSourceCode,
              instanceTypeDB,
              metaInfo,
              defaultRuntimeAttrs,
@@ -974,7 +980,7 @@ object Main extends App {
                 InternalOp.WfCustomReorgOutputs =>
               workflowFragAction(
                   op,
-                  womSourceCode,
+                  wdlSourceCode,
                   instanceTypeDB,
                   metaInfo,
                   jobInputPath,
@@ -989,7 +995,7 @@ object Main extends App {
                 InternalOp.TaskInstantiateCommand | InternalOp.TaskEpilog |
                 InternalOp.TaskRelaunch =>
               taskAction(op,
-                         womSourceCode,
+                         wdlSourceCode,
                          instanceTypeDB,
                          jobInputPath,
                          jobOutputPath,

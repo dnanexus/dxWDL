@@ -1040,7 +1040,7 @@ field that contains the WDL source, in compressed, uuencoded
 form. To extract it you can do:
 
 ```
-dx describe /builds/1.02/applets/hello --json --details | jq '.details | .womSourceCode' | sed 's/"//g' | base64 --decode | gunzip
+dx describe /builds/1.02/applets/hello --json --details | jq '.details | .wdlSourceCode' | sed 's/"//g' | base64 --decode | gunzip
 ```
 
 # Recompilation

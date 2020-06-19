@@ -10,7 +10,7 @@ class DxTest extends AnyFlatSpec with Matchers {
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform on staging.""".stripMargin

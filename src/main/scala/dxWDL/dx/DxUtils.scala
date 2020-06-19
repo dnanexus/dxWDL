@@ -13,8 +13,8 @@ object DxUtils {
   private val DOWNLOAD_RETRY_LIMIT = 3
   private val UPLOAD_RETRY_LIMIT = 3
 
-  lazy val dxEnv = DXEnvironment.create()
-  lazy val dxCrntProject = DxProject(dxEnv.getProjectContext())
+  lazy val dxEnv: DXEnvironment = DXEnvironment.create()
+  lazy val dxCrntProject: DxProject = DxProject(dxEnv.getProjectContext)
 
   def isDxId(objName: String): Boolean = {
     objName match {
@@ -28,9 +28,9 @@ object DxUtils {
 
   def dxDataObjectToURL(dxObj: DxDataObject): String = {
     dxObj match {
-      case DxFile(id, Some(container)) =>
+      case DxFile(_, Some(container)) =>
         s"${Utils.DX_URL_PREFIX}${container.id}:${dxObj.id}"
-      case DxRecord(id, Some(container)) =>
+      case DxRecord(_, Some(container)) =>
         s"${Utils.DX_URL_PREFIX}${container.id}:${dxObj.id}"
       case _ =>
         s"${Utils.DX_URL_PREFIX}${dxObj.id}"
@@ -97,7 +97,7 @@ object DxUtils {
       case JsObject(fields) =>
         fields.map { case (_, v) => findDxFiles(v) }.toVector.flatten
       case JsArray(elems) =>
-        elems.map(e => findDxFiles(e)).flatten
+        elems.flatMap(e => findDxFiles(e))
     }
   }
 
@@ -112,23 +112,25 @@ object DxUtils {
 
   // Convert from jackson JsonNode to spray-json
   def jsValueOfJsonNode(jsNode: JsonNode): JsValue = {
-    jsNode.toString().parseJson
+    jsNode.toString.parseJson
   }
 
   // Create a dx link to a field in an execution. The execution could
   // be a job or an analysis.
   def makeEBOR(dxExec: DxExecution, fieldName: String): JsValue = {
-    if (dxExec.isInstanceOf[DxJob]) {
-      JsObject(
-          "$dnanexus_link" -> JsObject("field" -> JsString(fieldName), "job" -> JsString(dxExec.id))
-      )
-    } else if (dxExec.isInstanceOf[DxAnalysis]) {
-      JsObject(
-          "$dnanexus_link" -> JsObject("field" -> JsString(fieldName),
-                                       "analysis" -> JsString(dxExec.id))
-      )
-    } else {
-      throw new Exception(s"makeEBOR can't work with ${dxExec.id}")
+    dxExec match {
+      case _: DxJob =>
+        JsObject(
+            "$dnanexus_link" -> JsObject("field" -> JsString(fieldName),
+                                         "job" -> JsString(dxExec.id))
+        )
+      case _: DxAnalysis =>
+        JsObject(
+            "$dnanexus_link" -> JsObject("field" -> JsString(fieldName),
+                                         "analysis" -> JsString(dxExec.id))
+        )
+      case _ =>
+        throw new Exception(s"makeEBOR can't work with ${dxExec.id}")
     }
   }
 
@@ -157,7 +159,7 @@ object DxUtils {
       } else {
         val execIds = dependsOn.map { dxExec =>
           JsString(dxExec.id)
-        }.toVector
+        }
         Map("dependsOn" -> JsArray(execIds))
       }
     val dwd = delayWorkspaceDestruction match {
@@ -269,8 +271,8 @@ object DxUtils {
         x.map {
           case JsString(id) => id
           case _            => throw new Exception("bad type, not a string")
-        }.toVector
-      case other => throw new Exception(s"API call returned invalid exists field")
+        }
+      case _ => throw new Exception(s"API call returned invalid exists field")
     }
     val existingRecords = exists.filter(_.startsWith("record-"))
     existingRecords.size match {
@@ -293,8 +295,8 @@ object DxUtils {
       val fid = dxfile.id
       try {
         // Use dx download. Quote the path, because it may contains spaces.
-        val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
-        val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
+        val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString}" """
+        val (_, _) = Utils.execCommand(dxDownloadCmd, None)
         true
       } catch {
         case e: Throwable =>
@@ -303,7 +305,7 @@ object DxUtils {
           else throw e
       }
     }
-    val dir = path.getParent()
+    val dir = path.getParent
     if (dir != null) {
       if (!Files.exists(dir))
         Files.createDirectories(dir)
@@ -330,7 +332,7 @@ object DxUtils {
         // spaces
         val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
         Utils.appletLog(verbose, s"--  ${dxUploadCmd}")
-        val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+        val (outmsg, _) = Utils.execCommand(dxUploadCmd, None)
         if (!outmsg.startsWith("file-"))
           return None
         Some(outmsg.trim())
@@ -359,7 +361,7 @@ object DxUtils {
     try {
       Files.delete(p)
     } catch {
-      case e: Throwable => ()
+      case _: Throwable => ()
     }
   }
 

@@ -129,7 +129,7 @@ object DxFile {
 
     // populate the size field. It is missing from files that are in the open or closing
     // states.
-    val sizeRaw = descJs.asJsObject.fields.get("size").getOrElse(JsNumber(0))
+    val sizeRaw = descJs.asJsObject.fields.getOrElse("size", JsNumber(0))
     val size = sizeRaw match {
       case JsNumber(x) => x.toLong
       case other       => throw new Exception(s"size ${other} is not a number")
@@ -157,7 +157,7 @@ object DxFile {
           case _ => throw new Exception(s"malformed part description ${partDesc.prettyPrint}")
         }
         partNumber.toInt -> dxPart
-    }.toMap
+    }
   }
 
   // Describe a large number of platform objects in bulk.
@@ -203,7 +203,7 @@ object DxFile {
       // iterate on the ranges
       descriptions ++= slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
         case (accu, objRange) =>
-          accu ++ submitRequest(objRange.toVector, extraFields, proj)
+          accu ++ submitRequest(objRange, extraFields, proj)
       }
     }
     descriptions
