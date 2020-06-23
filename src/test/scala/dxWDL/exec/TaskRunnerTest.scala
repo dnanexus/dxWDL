@@ -1,26 +1,26 @@
 package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wom.callable.{CallableTaskDefinition}
-import wom.executable.WomBundle
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-import dxWDL.base.{Utils, WdlRuntimeAttrs}
-import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.base.{Language, ParseWdlSourceFile, Utils, Verbose, WdlRuntimeAttrs, WdlBundle}
+import dxWDL.compiler.WdlCodeGen
+import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-class TaskRunnerTest extends FlatSpec with Matchers {
+class TaskRunnerTest extends AnyFlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   private val unicornInstance =
-    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), false)
-  private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
-  private val verbose = false
+    DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), gpu = false)
+  private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
+  private val verbose = true
 
   // Note: if the file doesn't exist, this throws a null pointer exception
   private def pathFromBasename(basename: String): Path = {
@@ -33,7 +33,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         Paths.get(p)
     }*/
 
-  // Recursively go into a womValue, and add a base path to the file.
+  // Recursively go into a wdlValue, and add a base path to the file.
   // For example:
   //   foo.txt ---> /home/joe_heller/foo.txt
   //
@@ -49,51 +49,57 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   //    "in_file" : "/home/joe_heller/dxWDL/src/test/resources/runner_tasks/manuscript.txt"
   // }
   //
-  private def addBaseDir(womValue: WomValue): WomValue = {
-    womValue match {
+  private def addBaseDir(wdlValue: WdlValues.V): WdlValues.V = {
+    wdlValue match {
       // primitive types, pass through
-      case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
+      case WdlValues.V_Boolean(_) | WdlValues.V_Int(_) | WdlValues.V_Float(_) |
+          WdlValues.V_String(_) | WdlValues.V_Null =>
+        wdlValue
 
       // single file
-      case WomSingleFile(s) => WomSingleFile(pathFromBasename(s).toString)
+      case WdlValues.V_File(s) => WdlValues.V_File(pathFromBasename(s).toString)
 
       // Maps
-      case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
+      case WdlValues.V_Map(m: Map[WdlValues.V, WdlValues.V]) =>
         val m1 = m.map {
           case (k, v) =>
             val k1 = addBaseDir(k)
             val v1 = addBaseDir(v)
             k1 -> v1
         }
-        WomMap(t, m1)
+        WdlValues.V_Map(m1)
 
-      case (WomPair(l, r)) =>
+      case WdlValues.V_Pair(l, r) =>
         val left = addBaseDir(l)
         val right = addBaseDir(r)
-        WomPair(left, right)
+        WdlValues.V_Pair(left, right)
 
-      case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
+      case WdlValues.V_Array(a: Seq[WdlValues.V]) =>
         val a1 = a.map { v =>
           addBaseDir(v)
         }
-        WomArray(t, a1)
+        WdlValues.V_Array(a1)
 
-      case WomOptionalValue(t, None) =>
-        WomOptionalValue(t, None)
-      case WomOptionalValue(t, Some(v)) =>
+      case WdlValues.V_Optional(v) =>
         val v1 = addBaseDir(v)
-        WomOptionalValue(t, Some(v1))
+        WdlValues.V_Optional(v1)
 
-      case WomObject(m, t) =>
+      case WdlValues.V_Object(m) =>
         val m2 = m.map {
           case (k, v) =>
             k -> addBaseDir(v)
-        }.toMap
-        WomObject(m2, t)
+        }
+        WdlValues.V_Object(m2)
 
-      case _ =>
-        throw new Exception(s"Unsupported wom value ${womValue}")
+      case other =>
+        throw new Exception(s"Unsupported wdl value ${other}")
     }
+  }
+
+  private def scanForTasks(tDoc: TAT.Document): Map[String, TAT.Task] = {
+    tDoc.elements.collect {
+      case t: TAT.Task => t.name -> t
+    }.toMap
   }
 
   // Parse the WDL source code, and extract the single task that is supposed to be there.
@@ -124,27 +130,36 @@ class TaskRunnerTest extends FlatSpec with Matchers {
       }
 
     // Create a clean directory in "/tmp" for the task to use
-    val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
+    val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, verbose)
+    val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = verbose)
     dxPathConfig.createCleanDirs()
 
-    val (language, womBundle: WomBundle, allSources, _, _) =
-      ParseWomSourceFile(false).apply(wdlCode, List.empty)
-    val task: CallableTaskDefinition = ParseWomSourceFile(false).getMainTask(womBundle)
+    val (language, wdlBundle: WdlBundle, allSources, _) =
+      ParseWdlSourceFile(false).apply(wdlCode, List.empty)
+    val task: TAT.Task = ParseWdlSourceFile(false).getMainTask(wdlBundle)
     assert(allSources.size == 1)
-    val sourceDict = ParseWomSourceFile(false).scanForTasks(allSources.values.head)
+    val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
     val taskSourceCode = sourceDict.values.head
 
-    // Parse the inputs, convert to WOM values. Delay downloading files
+    // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
-    val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
+    val jobInputOutput = JobInputOutput(dxIoFunctions,
+                                        wdlBundle.typeAliases,
+                                        Language.toWdlVersion(language),
+                                        runtimeDebugLevel)
+
+    // Add the WDL version to the task source code, so the parser
+    // will pick up the correct language dielect.
+    val wdlCodeGen =
+      WdlCodeGen(Verbose(verbose, quiet = true, Set.empty), wdlBundle.typeAliases, language)
+    val taskDocument = wdlCodeGen.standAloneTask(taskSourceCode)
     val taskRunner = TaskRunner(task,
-                                taskSourceCode,
-                                womBundle.typeAliases,
+                                taskDocument,
+                                wdlBundle.typeAliases,
                                 instanceTypeDB,
                                 dxPathConfig,
                                 dxIoFunctions,
@@ -155,20 +170,23 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {
       case (inpDef, value) => (inpDef, addBaseDir(value))
-    }.toMap
+    }
 
     // run the entire task
 
-    // 1. prolog
-    val (env, dxUrl2path) = taskRunner.prolog(inputs)
+    // prolog
+    val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
 
-    // 2. execute the shell script in a child job
+    // instantiate the command
+    val env = taskRunner.instantiateCommand(localizedInputs)
+
+    // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      val (stdout, stderr) = Utils.execCommand(script.toString, None)
+      val (_, _) = Utils.execCommand(script.toString, None)
     }
 
-    // 3. epilog
+    // epilog
     val outputFields: Map[String, JsValue] = taskRunner.epilog(env, dxUrl2path)
 
     outputFieldsExpected match {
@@ -205,8 +223,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "localize a file to a task" in {
-    val taskRunner = runTask("cgrep")
-    taskRunner.commandSectionEmpty should be(false)
+    runTask("cgrep")
   }
 
   it should "handle type coercion" in {
@@ -226,8 +243,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
   }
 
   it should "optimize task with an empty command section" in {
-    val task = runTask("empty_command_section")
-    task.commandSectionEmpty should be(true)
+    val _ = runTask("empty_command_section")
+    //task.commandSectionEmpty should be(true)
   }
 
   it should "read a docker manifest file" in {
@@ -251,11 +268,15 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     repo should equal("ubuntu_18_04_minimal:latest")
   }
 
-  it should "handle structs" in {
+  it should "handle structs" taggedAs EdgeTest in {
     runTask("Person2")
   }
 
-  it should "handle missing optional files" taggedAs (EdgeTest) in {
+  it should "handle missing optional files" in {
     runTask("missing_optional_output_file")
+  }
+
+  it should "run a python script" in {
+    runTask("python_heredoc")
   }
 }

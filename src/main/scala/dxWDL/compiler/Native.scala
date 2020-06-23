@@ -6,19 +6,18 @@ package dxWDL.compiler
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.security.MessageDigest
+
 import scala.collection.immutable.TreeMap
 import spray.json._
-
-import wom.callable.MetaValueElement
-import wom.callable.MetaValueElement._
-import wom.types._
-import wom.values._
-
+import wdlTools.eval.WdlValues
+import wdlTools.types.WdlTypes
 import dxWDL.base._
 import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
 import java.io.EOFException
+
+import wdlTools.generators.code.WdlV1Generator
 
 // The end result of the compiler
 object Native {
@@ -36,7 +35,7 @@ case class Native(dxWDLrtId: Option[String],
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
                   fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                  typeAliases: Map[String, WomType],
+                  typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
                   leaveWorkflowsOpen: Boolean,
@@ -128,7 +127,7 @@ case class Native(dxWDLrtId: Option[String],
     val defaultVals: Map[String, JsValue] = cVar.default match {
       case None => Map.empty
       case Some(wdlValue) =>
-        val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wdlValue)
+        val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wdlValue)
         wdlVarLinksConverter.genFields(wvl, name).toMap
     }
 
@@ -162,54 +161,50 @@ case class Native(dxWDLrtId: Option[String],
                   if (attrs.isEmpty) None else Some(DxIOSpec.PATTERNS -> JsObject(attrs))
               }
             case IR.IOAttrChoices(choices) =>
-              Some(DxIOSpec.CHOICES -> JsArray(choices.map(choice => {
-                choice match {
-                  case IR.ChoiceReprString(value)  => JsString(value)
-                  case IR.ChoiceReprInteger(value) => JsNumber(value)
-                  case IR.ChoiceReprFloat(value)   => JsNumber(value)
-                  case IR.ChoiceReprBoolean(value) => JsBoolean(value)
-                  case IR.ChoiceReprFile(value, name) => {
-                    // TODO: support project and record choices
-                    val dxLink = DxPath.resolveDxURLFile(value).getLinkAsJson
-                    if (name.isDefined) {
-                      JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
-                    } else {
-                      dxLink
-                    }
+              Some(DxIOSpec.CHOICES -> JsArray(choices.map {
+                case IR.ChoiceReprString(value)  => JsString(value)
+                case IR.ChoiceReprInteger(value) => JsNumber(value)
+                case IR.ChoiceReprFloat(value)   => JsNumber(value)
+                case IR.ChoiceReprBoolean(value) => JsBoolean(value)
+                case IR.ChoiceReprFile(value, name) => {
+                  // TODO: support project and record choices
+                  val dxLink = DxPath.resolveDxURLFile(value).getLinkAsJson
+                  if (name.isDefined) {
+                    JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
+                  } else {
+                    dxLink
                   }
                 }
-              })))
+              }))
             case IR.IOAttrSuggestions(suggestions) =>
-              Some(DxIOSpec.SUGGESTIONS -> JsArray(suggestions.map(suggestion => {
-                suggestion match {
-                  case IR.SuggestionReprString(value)  => JsString(value)
-                  case IR.SuggestionReprInteger(value) => JsNumber(value)
-                  case IR.SuggestionReprFloat(value)   => JsNumber(value)
-                  case IR.SuggestionReprBoolean(value) => JsBoolean(value)
-                  case IR.SuggestionReprFile(value, name, project, path) => {
-                    // TODO: support project and record suggestions
-                    val dxLink: Option[JsValue] = value match {
-                      case Some(str) => Some(DxPath.resolveDxURLFile(str).getLinkAsJson)
-                      case None      => None
-                    }
-                    if (name.isDefined || project.isDefined || path.isDefined) {
-                      val attrs: Map[String, JsValue] = List(
-                          if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
-                          if (name.isDefined) Some("name" -> JsString(name.get)) else None,
-                          if (project.isDefined) Some("project" -> JsString(project.get)) else None,
-                          if (path.isDefined) Some("path" -> JsString(path.get)) else None
-                      ).flatten.toMap
-                      JsObject(attrs)
-                    } else if (dxLink.isDefined) {
-                      dxLink.get
-                    } else {
-                      throw new Exception(
-                          "Either 'value' or 'project' + 'path' must be defined for suggestions"
-                      )
-                    }
+              Some(DxIOSpec.SUGGESTIONS -> JsArray(suggestions.map {
+                case IR.SuggestionReprString(value)  => JsString(value)
+                case IR.SuggestionReprInteger(value) => JsNumber(value)
+                case IR.SuggestionReprFloat(value)   => JsNumber(value)
+                case IR.SuggestionReprBoolean(value) => JsBoolean(value)
+                case IR.SuggestionReprFile(value, name, project, path) => {
+                  // TODO: support project and record suggestions
+                  val dxLink: Option[JsValue] = value match {
+                    case Some(str) => Some(DxPath.resolveDxURLFile(str).getLinkAsJson)
+                    case None      => None
+                  }
+                  if (name.isDefined || project.isDefined || path.isDefined) {
+                    val attrs: Map[String, JsValue] = List(
+                        if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
+                        if (name.isDefined) Some("name" -> JsString(name.get)) else None,
+                        if (project.isDefined) Some("project" -> JsString(project.get)) else None,
+                        if (path.isDefined) Some("path" -> JsString(path.get)) else None
+                    ).flatten.toMap
+                    JsObject(attrs)
+                  } else if (dxLink.isDefined) {
+                    dxLink.get
+                  } else {
+                    throw new Exception(
+                        "Either 'value' or 'project' + 'path' must be defined for suggestions"
+                    )
                   }
                 }
-              })))
+              }))
             case IR.IOAttrType(constraint) =>
               Some(DxIOSpec.TYPE -> jsValueFromConstraint(constraint))
             case IR.IOAttrDefault(value) if !hasDefault =>
@@ -279,40 +274,45 @@ case class Native(dxWDLrtId: Option[String],
       )
     }
 
-    def handleType(wdlType: WomType, optional: Boolean): Vector[JsValue] = {
+    def handleType(wdlType: WdlTypes.T, optional: Boolean): Vector[JsValue] = {
       wdlType match {
         // primitive types
-        case WomBooleanType    => mkPrimitive("boolean", optional)
-        case WomIntegerType    => mkPrimitive("int", optional)
-        case WomFloatType      => mkPrimitive("float", optional)
-        case WomStringType     => mkPrimitive("string", optional)
-        case WomSingleFileType => mkPrimitive("file", optional)
+        case WdlTypes.T_Boolean => mkPrimitive("boolean", optional)
+        case WdlTypes.T_Int     => mkPrimitive("int", optional)
+        case WdlTypes.T_Float   => mkPrimitive("float", optional)
+        case WdlTypes.T_String  => mkPrimitive("string", optional)
+        case WdlTypes.T_File    => mkPrimitive("file", optional)
 
         // single dimension arrays of primitive types
-        case WomNonEmptyArrayType(WomBooleanType)      => mkPrimitiveArray("boolean", optional)
-        case WomNonEmptyArrayType(WomIntegerType)      => mkPrimitiveArray("int", optional)
-        case WomNonEmptyArrayType(WomFloatType)        => mkPrimitiveArray("float", optional)
-        case WomNonEmptyArrayType(WomStringType)       => mkPrimitiveArray("string", optional)
-        case WomNonEmptyArrayType(WomSingleFileType)   => mkPrimitiveArray("file", optional)
-        case WomMaybeEmptyArrayType(WomBooleanType)    => mkPrimitiveArray("boolean", true)
-        case WomMaybeEmptyArrayType(WomIntegerType)    => mkPrimitiveArray("int", true)
-        case WomMaybeEmptyArrayType(WomFloatType)      => mkPrimitiveArray("float", true)
-        case WomMaybeEmptyArrayType(WomStringType)     => mkPrimitiveArray("string", true)
-        case WomMaybeEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", true)
+        // non-empty array
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, true) => mkPrimitiveArray("boolean", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Int, true)     => mkPrimitiveArray("int", optional)
+        case WdlTypes.T_Array(WdlTypes.T_Float, true)   => mkPrimitiveArray("float", optional)
+        case WdlTypes.T_Array(WdlTypes.T_String, true)  => mkPrimitiveArray("string", optional)
+        case WdlTypes.T_Array(WdlTypes.T_File, true)    => mkPrimitiveArray("file", optional)
+
+        // array that may be empty
+        case WdlTypes.T_Array(WdlTypes.T_Boolean, false) =>
+          mkPrimitiveArray("boolean", optional = true)
+        case WdlTypes.T_Array(WdlTypes.T_Int, false)   => mkPrimitiveArray("int", optional = true)
+        case WdlTypes.T_Array(WdlTypes.T_Float, false) => mkPrimitiveArray("float", optional = true)
+        case WdlTypes.T_Array(WdlTypes.T_String, false) =>
+          mkPrimitiveArray("string", optional = true)
+        case WdlTypes.T_Array(WdlTypes.T_File, false) => mkPrimitiveArray("file", optional = true)
 
         // complex type, that may contains files
         case _ => mkComplex(optional)
       }
     }
-    cVar.womType match {
-      case WomOptionalType(t) => handleType(t, true)
-      case t                  => handleType(t, false)
+    cVar.wdlType match {
+      case WdlTypes.T_Optional(t) => handleType(t, optional = true)
+      case t                      => handleType(t, optional = false)
     }
   }
 
   // Create a bunch of bash export declarations, describing
   // the variables required to login to the docker private repository (if needed).
-  private def dockerPreamble(dockerImage: IR.DockerImage): String = {
+  private lazy val dockerPreamble: String = {
     dockerRegistryInfo match {
       case None                                                  => ""
       case Some(DockerRegistry(registry, username, credentials)) =>
@@ -444,6 +444,9 @@ case class Native(dxWDLrtId: Option[String],
         |       ls -Rl ${dxPathConfig.dxfuseMountpoint.toString}
         |    fi
         |
+        |    # construct the bash command and write it to a file
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |
         |    echo "bash command encapsulation script:"
         |    cat ${dxPathConfig.script.toString}
         |
@@ -514,14 +517,14 @@ case class Native(dxWDLrtId: Option[String],
       case IR.AppletKindTask(_) =>
         instanceType match {
           case IR.InstanceTypeDefault | IR.InstanceTypeConst(_, _, _, _, _) =>
-            s"""|${dockerPreamble(applet.docker)}
+            s"""|${dockerPreamble}
                 |
                 |set -e -o pipefail -x
                 |main() {
                 |${genBashScriptTaskBody()}
                 |}""".stripMargin
           case IR.InstanceTypeRuntime =>
-            s"""|${dockerPreamble(applet.docker)}
+            s"""|${dockerPreamble}
                 |
                 |set -e -o pipefail
                 |main() {
@@ -576,7 +579,7 @@ case class Native(dxWDLrtId: Option[String],
         case other                 => throw new Exception(s"Bad properties json value ${other}")
       }
     val props = preExistingProps ++ Map(
-        Utils.VERSION_PROP -> JsString(Utils.getVersion()),
+        Utils.VERSION_PROP -> JsString(Utils.getVersion),
         Utils.CHECKSUM_PROP -> JsString(digest)
     )
 
@@ -605,7 +608,7 @@ case class Native(dxWDLrtId: Option[String],
       case None => ()
       case Some((dxObj, desc)) =>
         desc match {
-          case a: DxAppDescribe =>
+          case _: DxAppDescribe =>
             Utils.trace(verbose.on, s"Found existing version of app ${name}")
           case apl: DxAppletDescribe =>
             Utils.trace(verbose.on,
@@ -643,7 +646,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     if (buildRequired) {
-      if (existingDxObjs.size > 0) {
+      if (existingDxObjs.nonEmpty) {
         if (archive) {
           // archive the applet/workflow(s)
           existingDxObjs.foreach(x => dxObjDir.archiveDxObject(x))
@@ -668,11 +671,11 @@ case class Native(dxWDLrtId: Option[String],
 
   // Create linking information for a dx:executable
   private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
-    val callInputDefs: Map[String, WomType] = irCall.inputVars.map {
-      case CVar(name, wdlType, _, _) => (name -> wdlType)
+    val callInputDefs: Map[String, WdlTypes.T] = irCall.inputVars.map {
+      case CVar(name, wdlType, _, _) => name -> wdlType
     }.toMap
-    val callOutputDefs: Map[String, WomType] = irCall.outputVars.map {
-      case CVar(name, wdlType, _, _) => (name -> wdlType)
+    val callOutputDefs: Map[String, WdlTypes.T] = irCall.outputVars.map {
+      case CVar(name, wdlType, _, _) => name -> wdlType
     }.toMap
     ExecLinkInfo(irCall.name, callInputDefs, callOutputDefs, dxObj)
   }
@@ -687,7 +690,7 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Match everything up to the first period; truncate after 50 characters.
-  lazy val firstLineRegex = "^([^.]{1,50}).*".r
+  private lazy val firstLineRegex = "^([^.]{1,50}).*".r
 
   private def calcSummary(description: Option[JsValue],
                           summary: Option[JsValue]): Map[String, JsValue] = {
@@ -706,7 +709,7 @@ case class Native(dxWDLrtId: Option[String],
                 Map("summary" -> JsString(descSummary))
               case _ => Map.empty
             }
-          case other => Map.empty
+          case _ => Map.empty
         }
     }
   }
@@ -743,16 +746,15 @@ case class Native(dxWDLrtId: Option[String],
     }
   }
 
-  private def metaValueToJs(value: MetaValueElement): JsValue = {
+  private def metaValueToJs(value: IR.MetaValue): JsValue = {
     value match {
-      case MetaValueElementString(text)   => JsString(text)
-      case MetaValueElementInteger(i)     => JsNumber(i)
-      case MetaValueElementFloat(f)       => JsNumber(f)
-      case MetaValueElementBoolean(b)     => JsBoolean(b)
-      case MetaValueElementArray(array)   => JsArray(array.map(metaValueToJs))
-      case MetaValueElementObject(fields) => JsObject(fields.mapValues(metaValueToJs))
-      case MetaValueElementNull           => JsNull
-      case other                          => throw new Exception(s"Expected MetaValueElement, got ${other}")
+      case IR.MetaValueNull           => JsNull
+      case IR.MetaValueBoolean(b)     => JsBoolean(b)
+      case IR.MetaValueInt(i)         => JsNumber(i)
+      case IR.MetaValueFloat(f)       => JsNumber(f)
+      case IR.MetaValueString(text)   => JsString(text)
+      case IR.MetaValueObject(fields) => JsObject(fields.view.mapValues(metaValueToJs).toMap)
+      case IR.MetaValueArray(array)   => JsArray(array.map(metaValueToJs))
     }
   }
 
@@ -763,7 +765,7 @@ case class Native(dxWDLrtId: Option[String],
       case f: Double    => JsNumber(f)
       case b: Boolean   => JsBoolean(b)
       case a: Vector[_] => JsArray(a.map(anyToJs))
-      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].mapValues(anyToJs))
+      case m: Map[_, _] => JsObject(m.asInstanceOf[Map[String, Any]].view.mapValues(anyToJs).toMap)
       case other        => throw new EOFException(s"Unsupported value ${other}")
     }
   }
@@ -783,30 +785,27 @@ case class Native(dxWDLrtId: Option[String],
 
     var meta: Map[String, JsValue] = applet.meta match {
       case Some(appAttrs) =>
-        appAttrs
-          .map {
-            case IR.TaskAttrTitle(text)          => Some("title" -> JsString(text))
-            case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
-            case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
-            case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
-            case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
-            case IR.TaskAttrTags(array)          =>
-              // merge default and user-specified tags
-              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
-            case IR.TaskAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs)))
-            case IR.TaskAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
-            // These are currently ignored because they only apply to apps
-            //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
-            //case IR.TaskAttrOpenSource(isOpenSource) =>
-            //  Some("openSource" -> JsBoolean(isOpenSource))
-            //case IR.TaskAttrCategories(categories) =>
-            //  Some("categories" -> categories.mapValues(anyToJs))
-            case _ => None
-          }
-          .flatten
-          .toMap
+        appAttrs.flatMap {
+          case IR.TaskAttrTitle(text)          => Some("title" -> JsString(text))
+          case IR.TaskAttrDescription(text)    => Some("description" -> JsString(text))
+          case IR.TaskAttrSummary(text)        => Some("summary" -> JsString(text))
+          case IR.TaskAttrDeveloperNotes(text) => Some("developerNotes" -> JsString(text))
+          case IR.TaskAttrTypes(array)         => Some("types" -> JsArray(array.map(anyToJs)))
+          case IR.TaskAttrTags(array)          =>
+            // merge default and user-specified tags
+            Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+          case IR.TaskAttrProperties(props) =>
+            Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
+          case IR.TaskAttrDetails(details) =>
+            Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
+          // These are currently ignored because they only apply to apps
+          //case IR.TaskAttrVersion(text) => Some("version" -> JsString(text))
+          //case IR.TaskAttrOpenSource(isOpenSource) =>
+          //  Some("openSource" -> JsBoolean(isOpenSource))
+          //case IR.TaskAttrCategories(categories) =>
+          //  Some("categories" -> categories.mapValues(anyToJs))
+          case _ => None
+        }.toMap
       case None => Map.empty
     }
 
@@ -849,7 +848,6 @@ case class Native(dxWDLrtId: Option[String],
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
     }
-    //System.out.println(s"Native: instanceType chosen = ${instanceType}")
     val runSpec: Map[String, JsValue] = Map(
         "code" -> JsString(bashScript),
         "interpreter" -> JsString("bash"),
@@ -885,7 +883,7 @@ case class Native(dxWDLrtId: Option[String],
     val hintRunspec: Map[String, JsValue] = applet.runtimeHints match {
       case Some(hints) =>
         hints
-          .map {
+          .flatMap {
             case IR.RuntimeHintRestart(max, default, errors) =>
               val defaultMap: Option[Map[String, Int]] = default match {
                 case Some(i) => Some(Map("*" -> i))
@@ -908,7 +906,6 @@ case class Native(dxWDLrtId: Option[String],
               )
             case _ => None
           }
-          .flatten
           .reduceOption(_ ++ _)
           .getOrElse(Map.empty)
       case _ => Map.empty
@@ -962,7 +959,7 @@ case class Native(dxWDLrtId: Option[String],
     val hintAccess: DxAccess = applet.runtimeHints match {
       case Some(hints) =>
         hints
-          .map {
+          .flatMap {
             case IR.RuntimeHintAccess(network, project, allProjects, developer, projectCreation) =>
               Some(
                   DxAccess(network,
@@ -973,7 +970,6 @@ case class Native(dxWDLrtId: Option[String],
               )
             case _ => None
           }
-          .flatten
           .headOption
           .getOrElse(DxAccess.empty)
       case _ => DxAccess.empty
@@ -1033,44 +1029,40 @@ case class Native(dxWDLrtId: Option[String],
   // equivalent to linking, in a standard C compiler.
   private def appletNewReq(applet: IR.Applet,
                            bashScript: String,
-                           folder: String,
                            aplLinks: Map[String, ExecLinkInfo]): (String, JsValue) = {
     Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
     val inputSpec: Vector[JsValue] = applet.inputs
       .sortWith(_.name < _.name)
-      .map(cVar => cVarToSpec(cVar))
-      .flatten
-      .toVector
+      .flatMap(cVar => cVarToSpec(cVar))
 
     // create linking information
     val linkInfo: Map[String, JsValue] =
       aplLinks.map {
         case (name, ali) =>
           name -> ExecLinkInfo.writeJson(ali, typeAliases)
-      }.toMap
+      }
 
     val metaInfo: Map[String, JsValue] =
       applet.kind match {
-        case IR.AppletKindWfFragment(calls, blockPath, fqnDictTypes) =>
+        case IR.AppletKindWfFragment(_, blockPath, fqnDictTypes) =>
           // meta information used for running workflow fragments
           Map(
               "execLinkInfo" -> JsObject(linkInfo),
               "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
               "fqnDictTypes" -> JsObject(fqnDictTypes.map {
                 case (k, t) =>
-                  val tStr = WomTypeSerialization(typeAliases).toString(t)
+                  val tStr = WdlTypeSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
-              }.toMap)
+              })
           )
 
         case IR.AppletKindWfInputs | IR.AppletKindWfOutputs | IR.AppletKindWfCustomReorgOutputs |
             IR.AppletKindWorkflowOutputReorg =>
           // meta information used for running workflow fragments
-          val fqnDictTypes = JsObject(applet.inputVars.map {
-            case cVar =>
-              val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
-              cVar.name -> JsString(tStr)
+          val fqnDictTypes = JsObject(applet.inputVars.map { cVar =>
+            val tStr = WdlTypeSerialization(typeAliases).toString(cVar.wdlType)
+            cVar.name -> JsString(tStr)
           }.toMap)
           Map("fqnDictTypes" -> fqnDictTypes)
 
@@ -1080,13 +1072,13 @@ case class Native(dxWDLrtId: Option[String],
 
     val outputSpec: Vector[JsValue] = applet.outputs
       .sortWith(_.name < _.name)
-      .map(cVar => cVarToSpec(cVar))
-      .flatten
-      .toVector
+      .flatMap(cVar => cVarToSpec(cVar))
 
-    // put the wom source code into the details field.
+    // put the WDL source code into the details field.
     // Add the pricing model, and make the prices opaque.
-    val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
+    val generator = WdlV1Generator()
+    val sourceLines = generator.generateDocument(applet.document)
+    val sourceCode = Utils.gzipAndBase64Encode(sourceLines.mkString("\n"))
     val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
     val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
@@ -1098,8 +1090,7 @@ case class Native(dxWDLrtId: Option[String],
     val (taskMeta, taskDetails) = buildTaskMetadata(applet, defaultTags)
 
     // Compute all the bits that get merged together into 'details'
-
-    val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
+    val auxInfo = Map("wdlSourceCode" -> JsString(sourceCode),
                       "instanceTypeDB" -> JsString(dbOpaqueInstance),
                       "runtimeAttrs" -> runtimeAttrs)
 
@@ -1108,7 +1099,7 @@ case class Native(dxWDLrtId: Option[String],
     val dxLinks = aplLinks.map {
       case (name, execLinkInfo) =>
         ("link_" + name) -> JsObject("$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
-    }.toMap
+    }
 
     val (runSpec: JsValue, runSpecDetails: Map[String, JsValue]) =
       calcRunSpec(applet, bashScript)
@@ -1151,11 +1142,10 @@ case class Native(dxWDLrtId: Option[String],
     val ignoreReuseHint: Map[String, JsValue] = applet.runtimeHints match {
       case Some(hints) =>
         hints
-          .map {
+          .flatMap {
             case IR.RuntimeHintIgnoreReuse(flag) => Some(Map("ignoreReuse" -> JsBoolean(flag)))
             case _                               => None
           }
-          .flatten
           .headOption
           .getOrElse(Map.empty)
       case _ => Map.empty
@@ -1203,7 +1193,7 @@ case class Native(dxWDLrtId: Option[String],
 
     // Calculate a checksum of the inputs that went into the
     // making of the applet.
-    val (digest, appletApiRequest) = appletNewReq(applet, bashScript, folder, aplLinks)
+    val (digest, appletApiRequest) = appletNewReq(applet, bashScript, aplLinks)
     if (verbose2) {
       val fName = s"${applet.name}_req.json"
       val trgPath = Utils.appCompileDirPath.resolve(fName)
@@ -1229,7 +1219,7 @@ case class Native(dxWDLrtId: Option[String],
 
   // Calculate the stage inputs from the call closure
   //
-  // It comprises mappings from variable name to WomType.
+  // It comprises mappings from variable name to WdlTypes.T.
   private def genStageInputs(inputs: Vector[(CVar, SArg)]): JsValue = {
     // sort the inputs, to make the request deterministic
     val jsInputs: TreeMap[String, JsValue] = inputs.foldLeft(TreeMap.empty[String, JsValue]) {
@@ -1241,15 +1231,15 @@ case class Native(dxWDLrtId: Option[String],
             // in a value at runtime.
             m
           case IR.SArgConst(wValue) =>
-            val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+            val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wValue)
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgLink(dxStage, argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgWorkflowInput(argName) =>
-            val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
         }
@@ -1264,7 +1254,7 @@ case class Native(dxWDLrtId: Option[String],
   //
   private def buildWorkflowInputSpec(cVar: CVar, sArg: SArg): Vector[JsValue] = {
     // deal with default values
-    val sArgDefault: Option[WomValue] = sArg match {
+    val sArgDefault: Option[WdlValues.V] = sArg match {
       case IR.SArgConst(wdlValue) =>
         Some(wdlValue)
       case _ =>
@@ -1292,7 +1282,7 @@ case class Native(dxWDLrtId: Option[String],
         case Some(JsString(nm)) => nm
         case _                  => throw new Exception("sanity")
       }
-      (nm -> jso)
+      nm -> jso
     }.toMap
 
     val outputSources: List[(String, JsValue)] = sArg match {
@@ -1302,10 +1292,10 @@ case class Native(dxWDLrtId: Option[String],
             s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
         )
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.womType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.womType, DxlWorkflowInput(argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case other =>
         throw new Exception(s"Bad value for sArg ${other}")
@@ -1334,27 +1324,24 @@ case class Native(dxWDLrtId: Option[String],
 
     var meta: Map[String, JsValue] = wf.meta match {
       case Some(appAttrs) =>
-        appAttrs
-          .map {
-            case IR.WorkflowAttrTitle(text)       => Some("title" -> JsString(text))
-            case IR.WorkflowAttrDescription(text) => Some("description" -> JsString(text))
-            case IR.WorkflowAttrSummary(text)     => Some("summary" -> JsString(text))
-            case IR.WorkflowAttrTypes(array)      => Some("types" -> JsArray(array.map(anyToJs)))
-            case IR.WorkflowAttrTags(array) =>
-              Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
-            case IR.WorkflowAttrProperties(props) =>
-              Some("properties" -> JsObject(props.mapValues(anyToJs)))
-            case IR.WorkflowAttrDetails(details) =>
-              Some("details" -> JsObject(details.mapValues(metaValueToJs)))
-            // These are currently ignored because they only apply to apps
-            //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
-            // These will be implemented in a future PR
-            case IR.WorkflowAttrCallNames(mappings)    => None
-            case IR.WorkflowAttrRunOnSingleNode(value) => None
-            case _                                     => None
-          }
-          .flatten
-          .toMap
+        appAttrs.flatMap {
+          case IR.WorkflowAttrTitle(text)       => Some("title" -> JsString(text))
+          case IR.WorkflowAttrDescription(text) => Some("description" -> JsString(text))
+          case IR.WorkflowAttrSummary(text)     => Some("summary" -> JsString(text))
+          case IR.WorkflowAttrTypes(array)      => Some("types" -> JsArray(array.map(anyToJs)))
+          case IR.WorkflowAttrTags(array) =>
+            Some("tags" -> JsArray((array.map(anyToJs).toSet ++ defaultTags.toSet).toVector))
+          case IR.WorkflowAttrProperties(props) =>
+            Some("properties" -> JsObject(props.view.mapValues(anyToJs).toMap))
+          case IR.WorkflowAttrDetails(details) =>
+            Some("details" -> JsObject(details.view.mapValues(metaValueToJs).toMap))
+          // These are currently ignored because they only apply to apps
+          //case IR.WorkflowAttrVersion(text) => Some("version" -> JsString(text))
+          // These will be implemented in a future PR
+          case IR.WorkflowAttrCallNames(_)       => None
+          case IR.WorkflowAttrRunOnSingleNode(_) => None
+          case _                                 => None
+        }.toMap
       case None => Map.empty
     }
 
@@ -1417,31 +1404,29 @@ case class Native(dxWDLrtId: Option[String],
         // Locked workflows have well defined inputs and outputs
         val wfInputSpec: Vector[JsValue] = wf.inputs
           .sortWith(_._1.name < _._1.name)
-          .map { case (cVar, sArg) => buildWorkflowInputSpec(cVar, sArg) }
-          .flatten
+          .flatMap { case (cVar, sArg) => buildWorkflowInputSpec(cVar, sArg) }
         val wfOutputSpec: Vector[JsValue] = wf.outputs
           .sortWith(_._1.name < _._1.name)
-          .map { case (cVar, sArg) => buildWorkflowOutputSpec(cVar, sArg) }
-          .flatten
+          .flatMap { case (cVar, sArg) => buildWorkflowOutputSpec(cVar, sArg) }
         Map("inputs" -> JsArray(wfInputSpec), "outputs" -> JsArray(wfOutputSpec))
       } else {
         Map.empty
       }
 
-    // Add the workflow WOM source into the details field.
+    // Add the workflow source into the details field.
     // There could be JSON-invalid characters in the source code, so we use base64 encoding.
     // It could be quite large, so we use compression.
-    val womSourceCode = Utils.gzipAndBase64Encode(wf.womSourceCode)
-    val womSourceCodeField: Map[String, JsValue] =
-      Map("womSourceCode" -> JsString(womSourceCode))
+    val generator = WdlV1Generator()
+    val sourceLines = generator.generateElement(wf.document)
+    val sourceCode = Utils.gzipAndBase64Encode(sourceLines.mkString("\n"))
+    val sourceCodeField: Map[String, JsValue] = Map("wdlSourceCode" -> JsString(sourceCode))
 
     // link to applets used by the fragments. This notifies the platform that they
     // need to be cloned when copying workflows.
-    val dxLinks: Map[String, JsValue] = transitiveDependencies.map {
-      case execLinkInfo =>
-        ("link_" + execLinkInfo.name) -> JsObject(
-            "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
-        )
+    val dxLinks: Map[String, JsValue] = transitiveDependencies.map { execLinkInfo =>
+      ("link_" + execLinkInfo.name) -> JsObject(
+          "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
+      )
     }.toMap
 
     val delayWD: Map[String, JsValue] = extras match {
@@ -1459,7 +1444,7 @@ case class Native(dxWDLrtId: Option[String],
 
     val details = Map(
         "details" -> JsObject(
-            wfMetaDetails ++ womSourceCodeField ++ dxLinks ++ delayWD ++ execTreeMap
+            wfMetaDetails ++ sourceCodeField ++ dxLinks ++ delayWD ++ execTreeMap
         )
     )
 

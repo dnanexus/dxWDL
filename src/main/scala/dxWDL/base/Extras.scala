@@ -6,8 +6,9 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
-import wom.values._
 
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.eval.WdlValues
 import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
@@ -26,7 +27,7 @@ case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option
     if (m.isEmpty)
       Map.empty
     else
-      Map("executionPolicy" -> JsObject(m))
+      Map("executionPolicy" -> JsObject(m.toMap))
   }
 }
 
@@ -60,10 +61,7 @@ case class DxAccess(network: Option[Vector[String]],
     val networkField: Map[String, JsValue] = network match {
       case None => Map.empty
       case Some(hostsAndNetworks) =>
-        val arr = hostsAndNetworks.map { x =>
-          JsString(x)
-        }.toVector
-        Map("network" -> JsArray(arr))
+        Map("network" -> JsArray(hostsAndNetworks.map(x => JsString(x))))
     }
     val projectField: Map[String, JsValue] = project match {
       case None    => Map.empty
@@ -140,7 +138,7 @@ case class DxAccess(network: Option[Vector[String]],
 }
 
 object DxAccess {
-  val empty = DxAccess(None, None, None, None, None)
+  val empty: DxAccess = DxAccess(None, None, None, None, None)
 }
 
 case class DxRunSpec(access: Option[DxAccess],
@@ -163,7 +161,7 @@ case class DxRunSpec(access: Option[DxAccess],
       case None             => Map.empty
       case Some(execPolicy) => execPolicy.toJson
     }
-    execPolicyFields ++ restartableEntryPointsFields ++ timeoutFields
+    (execPolicyFields ++ restartableEntryPointsFields).toMap ++ timeoutFields
   }
 }
 
@@ -215,7 +213,7 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
         }
     }
 
-    return Map("upstreamProjects" -> upstreamProjectList.toJson)
+    Map("upstreamProjects" -> upstreamProjectList.toJson)
   }
 }
 
@@ -226,34 +224,35 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
 //    cpu
 //    docker
 //
-case class WdlRuntimeAttrs(m: Map[String, WomValue])
+case class WdlRuntimeAttrs(m: Map[String, WdlValues.V])
+case class WdlHintAttrs(m: Map[String, TAT.MetaValue])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
   implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
-    private def readWomValue(value: JsValue): WomValue = value match {
-      case JsBoolean(b)  => WomBoolean(b.booleanValue)
-      case JsNumber(nmb) => WomInteger(nmb.intValue)
-      case JsString(s)   => WomString(s)
+    private def readWdlValue(value: JsValue): WdlValues.V = value match {
+      case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
+      case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
+      case JsString(s)   => WdlValues.V_String(s)
       case other         => throw new Exception(s"Unsupported json value ${other}")
     }
-    private def writeWomValue(wValue: WomValue): JsValue = wValue match {
-      case WomBoolean(b) => JsBoolean(b)
-      case WomInteger(i) => JsNumber(i)
-      case WomString(s)  => JsString(s)
-      case other         => throw new Exception(s"Unsupported wom value value ${other}")
+    private def writeWdlValue(wValue: WdlValues.V): JsValue = wValue match {
+      case WdlValues.V_Boolean(b) => JsBoolean(b)
+      case WdlValues.V_Int(i)     => JsNumber(i)
+      case WdlValues.V_String(s)  => JsString(s)
+      case other                  => throw new Exception(s"Unsupported WDL value ${other}")
     }
 
     def read(jsv: JsValue): WdlRuntimeAttrs = {
-      val m = jsv.asJsObject.fields.map { case (k, v) => k -> readWomValue(v) }.toMap
+      val m = jsv.asJsObject.fields.map { case (k, v) => k -> readWdlValue(v) }
       WdlRuntimeAttrs(m)
     }
 
     def write(wra: WdlRuntimeAttrs): JsValue = {
       val fields = wra.m.map {
         case (k, v) =>
-          k -> writeWomValue(v)
-      }.toMap
+          k -> writeWdlValue(v)
+      }
       JsObject(fields)
     }
   }
@@ -389,7 +388,7 @@ object Extras {
   private def checkedParseAccessLevelField(fields: Map[String, JsValue],
                                            fieldName: String): Option[AccessLevel] = {
     checkedParseStringField(fields, fieldName) match {
-      case None    => return None
+      case None    => None
       case Some(s) => Some(stringToAccessLevel(s))
     }
   }
@@ -410,8 +409,8 @@ object Extras {
     val m1 = m.asJsObject.fields.map {
       case (name, JsNumber(nmb)) => name -> nmb.intValue
       case (name, other)         => throw new Exception(s"Malformed ${fieldName} (${name} -> ${other})")
-    }.toMap
-    return Some(m1)
+    }
+    Some(m1)
   }
 
   private def parseWdlRuntimeAttrs(jsv: JsValue, verbose: Verbose): WdlRuntimeAttrs = {
@@ -428,11 +427,11 @@ object Extras {
         )
     }
 
-    def wdlValueFromJsValue(jsv: JsValue): WomValue = {
+    def wdlValueFromJsValue(jsv: JsValue): WdlValues.V = {
       jsv match {
-        case JsBoolean(b)  => WomBoolean(b.booleanValue)
-        case JsNumber(nmb) => WomInteger(nmb.intValue)
-        case JsString(s)   => WomString(s)
+        case JsBoolean(b)  => WdlValues.V_Boolean(b.booleanValue)
+        case JsNumber(nmb) => WdlValues.V_Int(nmb.intValue)
+        case JsString(s)   => WdlValues.V_String(s)
         case other         => throw new Exception(s"Unsupported json value ${other}")
       }
     }
@@ -442,8 +441,7 @@ object Extras {
         case (name, jsValue) =>
           name -> wdlValueFromJsValue(jsValue)
       }
-      .toMap
-    return WdlRuntimeAttrs(attrs)
+    WdlRuntimeAttrs(attrs)
   }
 
   private def parseExecutionPolicy(jsv: JsValue): Option[DxExecPolicy] = {
@@ -468,7 +466,7 @@ object Extras {
     }
 
     val maxRestarts = checkedParseIntField(fields, "maxRestarts")
-    return Some(DxExecPolicy(restartOn, maxRestarts))
+    Some(DxExecPolicy(restartOn, maxRestarts))
   }
 
   private def parseAccess(jsv: JsValue): Option[DxAccess] = {
@@ -483,7 +481,7 @@ object Extras {
 
     }
 
-    return Some(
+    Some(
         DxAccess(
             checkedParseStringArrayField(fields, "network"),
             checkedParseAccessLevelField(fields, "project"),
@@ -521,7 +519,7 @@ object Extras {
                                 |""".stripMargin.replaceAll("\n", ""))
 
     }
-    return Some(
+    Some(
         DxTimeout(checkedParseIntField(subFields, "days"),
                   checkedParseIntField(subFields, "hours"),
                   checkedParseIntField(subFields, "minutes"))
@@ -546,7 +544,7 @@ object Extras {
         case Some(str) if List("all", "master") contains str => Some(str)
         case Some(str)                                       => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
       }
-    return Some(
+    Some(
         DxRunSpec(
             parseAccess(checkedParseObjectField(fields, "access")),
             parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
@@ -558,45 +556,43 @@ object Extras {
   }
 
   private def parseUpstreamProjects(jsv: Option[JsValue]): Option[List[DxLicense]] = {
-    if (jsv == JsNull)
-      return None
-
-    implicit val dxLicenseFormat = jsonFormat6(DxLicense)
-    return Some(jsv.get.convertTo[List[DxLicense]])
-
+    jsv match {
+      case None         => None
+      case Some(JsNull) => None
+      case Some(other) =>
+        implicit val dxLicenseFormat: RootJsonFormat[DxLicense] = jsonFormat6(DxLicense)
+        Some(other.convertTo[List[DxLicense]])
+    }
   }
 
   private def parseDxDetails(jsv: JsValue): Option[DxDetails] = {
-
-    if (jsv == JsNull)
-      return None
-    val fields = jsv.asJsObject.fields
-
-    Some(DxDetails(parseUpstreamProjects(fields.get("upstreamProjects"))))
+    jsv match {
+      case JsNull => None
+      case other =>
+        Some(DxDetails(parseUpstreamProjects(other.asJsObject.fields.get("upstreamProjects"))))
+    }
   }
 
-  private def parseTaskDxAttrs(jsv: JsValue, verbose: Verbose): Option[DxAttrs] = {
-    if (jsv == JsNull)
+  private def parseTaskDxAttrs(jsv: JsValue): Option[DxAttrs] = {
+    if (jsv == JsNull) {
       return None
+    }
     val fields = jsv.asJsObject.fields
-
     for (k <- fields.keys) {
       if (!(TASK_DX_ATTRS contains k))
         throw new Exception(s"""|Unsupported runtime attribute ${k},
                                 |we currently support ${TASK_DX_ATTRS}
                                 |""".stripMargin.replaceAll("\n", ""))
     }
-
     val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     val details = parseDxDetails(checkedParseObjectField(fields, "details"))
-
-    return Some(DxAttrs(runSpec, details))
-
+    Some(DxAttrs(runSpec, details))
   }
 
-  private def parseDockerRegistry(jsv: JsValue, verbose: Verbose): Option[DockerRegistry] = {
-    if (jsv == JsNull)
+  private def parseDockerRegistry(jsv: JsValue): Option[DockerRegistry] = {
+    if (jsv == JsNull) {
       return None
+    }
     val fields = jsv.asJsObject.fields
     for (k <- fields.keys) {
       if (!(DOCKER_REGISTRY_ATTRS contains k))
@@ -618,7 +614,6 @@ object Extras {
   }
 
   private def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
-
     for (k <- fields.keys) {
       if (!(CUSTOM_REORG_ATTRS contains k))
         throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute ${k},
@@ -641,12 +636,10 @@ object Extras {
       case Some(x) => x
     }
 
-    return (reorgAppId, reorgConf)
-
+    (reorgAppId, reorgConf)
   }
 
   private def veryifyReorgApp(reorgAppId: String): Unit = {
-
     val app_regex = "app-[0-9a-zA-Z]{24}"
     val applet_regex = "applet-[0-9a-zA-Z]{24}"
 
@@ -677,7 +670,6 @@ object Extras {
   }
 
   private def verifyInputs(reorgConf: String): Unit = {
-
     // if provided, check that the fileID is valid and present
     if (reorgConf != "") {
       // format dx file ID
@@ -687,18 +679,16 @@ object Extras {
       // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
       file.describe()
     }
-
   }
 
   def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
-    if (jsv == JsNull)
+    if (jsv == JsNull) {
       return None
-
+    }
     val fields = jsv.asJsObject.fields
     val (reorgAppId, reorgConf) = checkAttrs(fields)
     veryifyReorgApp(reorgAppId)
     verifyInputs(reorgConf)
-
     Utils.trace(
         verbose.on,
         s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
@@ -736,8 +726,7 @@ object Extras {
           val fields = jsObj.asJsObject.fields
           fields.foldLeft(Map.empty[String, DxAttrs]) {
             case (accu, (name, jsValue)) =>
-              val dxAttrs = parseTaskDxAttrs(jsValue, verbose)
-              dxAttrs match {
+              parseTaskDxAttrs(jsValue) match {
                 case None =>
                   accu
                 case Some(attrs) =>
@@ -747,11 +736,13 @@ object Extras {
       }
 
     Extras(
-        parseWdlRuntimeAttrs(checkedParseObjectField(fields, "default_runtime_attributes"),
-                             verbose),
-        parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes"), verbose),
+        parseWdlRuntimeAttrs(
+            checkedParseObjectField(fields, "default_runtime_attributes"),
+            verbose
+        ),
+        parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes")),
         perTaskDxAttrs,
-        parseDockerRegistry(checkedParseObjectField(fields, "docker_registry"), verbose),
+        parseDockerRegistry(checkedParseObjectField(fields, "docker_registry")),
         parseCustomReorgAttrs(
             checkedParseObjectField(fields, fieldName = "custom_reorg"),
             verbose
@@ -759,6 +750,5 @@ object Extras {
         checkedParseBooleanField(fields, fieldName = "ignoreReuse"),
         checkedParseBooleanField(fields, fieldName = "delayWorkspaceDestruction")
     )
-
   }
 }

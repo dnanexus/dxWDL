@@ -9,16 +9,15 @@ package dxWDL.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.types.WomType
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 import dxWDL.base.Utils
 import dxWDL.dx._
 import dxWDL.util._
 
-case class WorkflowOutputReorg(wf: WorkflowDefinition,
-                               wfSourceCode: String,
-                               typeAliases: Map[String, WomType],
+case class WorkflowOutputReorg(wf: TAT.Workflow,
+                               document: TAT.Document,
+                               typeAliases: Map[String, WdlTypes.T],
                                dxPathConfig: DxPathConfig,
                                dxIoFunctions: DxIoFunctions,
                                runtimeDebugLevel: Int) {
@@ -30,7 +29,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
   //
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
-  def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject): Vector[String] = {
+  private def bulkGetFilenames(files: Seq[DxFile]): Vector[String] = {
     val info: Map[DxFile, DxFileDescribe] = DxFile.bulkDescribe(files.toVector)
     info.values.map(_.name).toVector
   }
@@ -45,7 +44,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
   // however, that would require a describe API call per output
   // file. Instead, we find all the output files that do not also
   // appear in the input.
-  def analysisFileOutputs(dxProject: DxProject, dxAnalysis: DxAnalysis): Vector[DxFile] = {
+  private def analysisFileOutputs(dxAnalysis: DxAnalysis): Vector[DxFile] = {
     val req = JsObject(
         "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
     )
@@ -62,7 +61,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
 
     val fileOutputs: Set[DxFile] = DxUtils.findDxFiles(outputs).toSet
     val fileInputs: Set[DxFile] = DxUtils.findDxFiles(inputs).toSet
-    val realOutputs: Set[DxFile] = fileOutputs.toSet -- fileInputs.toSet
+    val realOutputs: Set[DxFile] = fileOutputs -- fileInputs
     Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
     Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
     Utils.appletLog(verbose, s"analysis has ${realOutputs.size} real outputs")
@@ -77,7 +76,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
       DxFile.bulkDescribe(realOutputs.toVector)
 
     // Retain only files that were created AFTER the analysis started
-    val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate()
+    val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
     val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap {
       case (dxFile, desc) =>
         val creationDate = new java.util.Date(desc.created)
@@ -94,7 +93,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
   // Move all intermediate results to a sub-folder
   def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
     val dxEnv = DxUtils.dxEnv
-    val dxProject = DxProject(dxEnv.getProjectContext())
+    val dxProject = DxProject(dxEnv.getProjectContext)
     val dxProjDesc = dxProject.describe()
     val dxAnalysis = DxJob(dxEnv.getJob).describe().analysis.get
     val outFolder = dxAnalysis.describe().folder
@@ -102,17 +101,17 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
     // find all analysis output files
-    val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxProject, dxAnalysis)
+    val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxAnalysis)
     if (analysisFiles.isEmpty)
       return
 
     val exportIds: Set[String] = exportFiles.map(_.id).toSet
-    val exportNames: Seq[String] = bulkGetFilenames(exportFiles, dxProject)
+    val exportNames: Seq[String] = bulkGetFilenames(exportFiles)
     Utils.appletLog(verbose, s"exportFiles=${exportNames}")
 
     // Figure out which of the files should be kept
     val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
-    val iNames: Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
+    val iNames: Seq[String] = bulkGetFilenames(intermediateFiles)
     Utils.appletLog(verbose, s"intermediate files=${iNames}")
     if (intermediateFiles.isEmpty)
       return
@@ -123,7 +122,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     Utils.appletLog(verbose, s"subfolders=${folderContents.subFolders}")
     if (!(folderContents.subFolders contains intermFolder)) {
       Utils.appletLog(verbose, s"Creating intermediate results sub-folder ${intermFolder}")
-      dxProject.newFolder(intermFolder, true)
+      dxProject.newFolder(intermFolder, parents = true)
     } else {
       Utils.appletLog(verbose, s"Intermediate results sub-folder ${intermFolder} already exists")
     }
@@ -131,7 +130,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
   }
 
   def apply(wfOutputFiles: Vector[DxFile]): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
 
     // Reorganize directory structure
     moveIntermediateResultFiles(wfOutputFiles)

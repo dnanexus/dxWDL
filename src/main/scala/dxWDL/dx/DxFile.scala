@@ -129,7 +129,7 @@ object DxFile {
 
     // populate the size field. It is missing from files that are in the open or closing
     // states.
-    val sizeRaw = descJs.asJsObject.fields.get("size").getOrElse(JsNumber(0))
+    val sizeRaw = descJs.asJsObject.fields.getOrElse("size", JsNumber(0))
     val size = sizeRaw match {
       case JsNumber(x) => x.toLong
       case other       => throw new Exception(s"size ${other} is not a number")
@@ -149,7 +149,6 @@ object DxFile {
   //}
   //
   def parseFileParts(jsv: JsValue): Map[Int, DxFilePart] = {
-    //System.out.println(jsv.prettyPrint)
     jsv.asJsObject.fields.map {
       case (partNumber, partDesc) =>
         val dxPart = partDesc.asJsObject.getFields("md5", "size", "state") match {
@@ -158,7 +157,7 @@ object DxFile {
           case _ => throw new Exception(s"malformed part description ${partDesc.prettyPrint}")
         }
         partNumber.toInt -> dxPart
-    }.toMap
+    }
   }
 
   // Describe a large number of platform objects in bulk.
@@ -166,19 +165,22 @@ object DxFile {
                             extraFields: Set[Field.Value],
                             project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
     val ids = objs.map(file => file.getId)
-    val dxFindDataObjects = DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
+    val dxFindDataObjects =
+      DxFindDataObjects(None, Verbose(on = false, quiet = true, keywords = Set.empty))
 
-    dxFindDataObjects.apply(
-      dxProject = project,
-      folder = None,
-      recurse = true,
-      klassRestriction = Some("file"),
-      withProperties = Vector.empty,
-      nameConstraints = Vector.empty,
-      withInputOutputSpec = true,
-      idConstraints = ids,
-      extrafields = extraFields
-    ).asInstanceOf[Map[DxFile, DxFileDescribe]]
+    dxFindDataObjects
+      .apply(
+          dxProject = project,
+          folder = None,
+          recurse = true,
+          klassRestriction = Some("file"),
+          withProperties = Vector.empty,
+          nameConstraints = Vector.empty,
+          withInputOutputSpec = true,
+          idConstraints = ids,
+          extrafields = extraFields
+      )
+      .asInstanceOf[Map[DxFile, DxFileDescribe]]
   }
 
   // Describe the names of all the files in one batch. This is much more efficient
@@ -201,7 +203,7 @@ object DxFile {
       // iterate on the ranges
       descriptions ++= slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
         case (accu, objRange) =>
-          accu ++ submitRequest(objRange.toVector, extraFields, proj)
+          accu ++ submitRequest(objRange, extraFields, proj)
       }
     }
     descriptions

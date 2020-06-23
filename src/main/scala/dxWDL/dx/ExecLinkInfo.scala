@@ -2,38 +2,39 @@ package dxWDL.dx
 
 import spray.json._
 import scala.collection.immutable.TreeMap
-import wom.types._
+import wdlTools.types.WdlTypes
+
 import dxWDL.base._
 
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
 case class ExecLinkInfo(name: String,
-                        inputs: Map[String, WomType],
-                        outputs: Map[String, WomType],
+                        inputs: Map[String, WdlTypes.T],
+                        outputs: Map[String, WdlTypes.T],
                         dxExec: DxExecutable)
 
 object ExecLinkInfo {
   // Serialize applet input definitions, so they could be used
   // at runtime.
-  def writeJson(ali: ExecLinkInfo, typeAliases: Map[String, WomType]): JsValue = {
-    val womTypeConverter = WomTypeSerialization(typeAliases)
+  def writeJson(ali: ExecLinkInfo, typeAliases: Map[String, WdlTypes.T]): JsValue = {
+    val wdlTypeConverter = WdlTypeSerialization(typeAliases)
 
     val appInputDefs: Map[String, JsString] = ali.inputs.map {
-      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-    }.toMap
+      case (name, wdlType) => name -> JsString(wdlTypeConverter.toString(wdlType))
+    }
     val appOutputDefs: Map[String, JsString] = ali.outputs.map {
-      case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-    }.toMap
+      case (name, wdlType) => name -> JsString(wdlTypeConverter.toString(wdlType))
+    }
     JsObject(
         "name" -> JsString(ali.name),
-        "inputs" -> JsObject(TreeMap(appInputDefs.toArray: _*)),
-        "outputs" -> JsObject(TreeMap(appOutputDefs.toArray: _*)),
+        "inputs" -> JsObject(appInputDefs.to(TreeMap)),
+        "outputs" -> JsObject(appOutputDefs.to(TreeMap)),
         "id" -> JsString(ali.dxExec.getId)
     )
   }
 
-  def readJson(aplInfo: JsValue, typeAliases: Map[String, WomType]): ExecLinkInfo = {
-    val womTypeConverter = WomTypeSerialization(typeAliases)
+  def readJson(aplInfo: JsValue, typeAliases: Map[String, WdlTypes.T]): ExecLinkInfo = {
+    val wdlTypeConverter = WdlTypeSerialization(typeAliases)
 
     val name = aplInfo.asJsObject.fields("name") match {
       case JsString(x) => x
@@ -44,19 +45,17 @@ object ExecLinkInfo {
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case (key, JsString(wdlTypeStr)) => key -> wdlTypeConverter.fromString(wdlTypeStr)
         case _                           => throw new Exception("Bad JSON")
       }
-      .toMap
     val outputDefs = aplInfo.asJsObject
       .fields("outputs")
       .asJsObject
       .fields
       .map {
-        case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
+        case (key, JsString(wdlTypeStr)) => key -> wdlTypeConverter.fromString(wdlTypeStr)
         case _                           => throw new Exception("Bad JSON")
       }
-      .toMap
     val dxExec = aplInfo.asJsObject.fields("id") match {
       case JsString(id) if id.startsWith("app-")      => DxApp(id)
       case JsString(id) if id.startsWith("applet-")   => DxApplet(id, None)

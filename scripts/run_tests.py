@@ -81,8 +81,7 @@ docker_test_list = [
     "private_registry",
     "native_docker_file_image",
     "native_docker_file_image_gzip",
-    "samtools_count",
-    "hostname_is_jobid",
+    "samtools_count"
 ]
 
 # wdl draft-2
@@ -110,8 +109,9 @@ draft2_test_list = [
     "subblocks",
     "var_type_change",
 
-     # calling native dx applets/apps
-    "call_native"
+    # calling native dx applets/apps
+    # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
+    #"call_native"
 ]
 
 single_tasks_list = [
@@ -275,25 +275,29 @@ def validate_result(tname, exec_outputs, key, expected_val):
     exec_name = key.split('.')[0]
     field_name_parts = key.split('.')[1:]
 
+    field_name1 = ".".join(field_name_parts)
     # convert dots to ___
-    field_name = "___".join(field_name_parts)
+    field_name2 = "___".join(field_name_parts)
     if exec_name != tname:
         raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
         # get the actual results
-        if field_name not in exec_outputs:
+        if field_name1 in exec_outputs:
+            result = exec_outputs[field_name1]
+        elif field_name2 in exec_outputs:
+            result = exec_outputs[field_name2]
+        else:
             cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
                    "red")
             return False
-        result = exec_outputs[field_name]
         if ((type(result) is list) and
             (type(expected_val) is list)):
             result.sort()
             expected_val.sort()
-        if result != expected_val:
+        if str(result).strip() != str(expected_val).strip():
             cprint("Analysis {} gave unexpected results".format(tname),
                    "red")
-            cprint("Field {} should be {}, actual = {}".format(field_name, expected_val, result),
+            cprint("Field {} should be ({}), actual = ({})".format(field_name, expected_val, result),
                    "red")
             return False
         return True
@@ -345,15 +349,16 @@ def wait_for_completion(test_exec_objs):
     noise = subprocess.Popen(["/bin/bash", "-c", "while true; do sleep 60; date; done"])
     try:
         for exec_obj in test_exec_objs:
+            tname = find_test_from_exec(exec_obj)
+            desc = test_files[tname]
             try:
                 exec_obj.wait_on_done()
+                print("Executable {} succeeded".format(desc.name))
             except DXJobFailureError:
-                tname = find_test_from_exec(exec_obj)
-                desc = test_files[tname]
                 if tname in test_failing:
                     print("Executable {} failed as expected".format(desc.name))
                 else:
-                    raise RuntimeError("Executable {} failed".format(desc.name))
+                    cprint("Error: executable {} failed".format(desc.name), "red")
     finally:
         noise.kill()
     print("done")

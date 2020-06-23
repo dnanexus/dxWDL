@@ -47,12 +47,12 @@ case class DxProject(id: String) extends DxDataObject {
   def listFolder(path: String): FolderContents = {
     val request = JsObject("folder" -> JsString(path))
     val response = id match {
-      case _ if (id.startsWith("container-")) =>
+      case _ if id.startsWith("container-") =>
         DXAPI.containerListFolder(id,
                                   DxUtils.jsonNodeOfJsValue(request),
                                   classOf[JsonNode],
                                   DxUtils.dxEnv)
-      case _ if (id.startsWith("project-")) =>
+      case _ if id.startsWith("project-") =>
         DXAPI.projectListFolder(id,
                                 DxUtils.jsonNodeOfJsValue(request),
                                 classOf[JsonNode],
@@ -78,7 +78,7 @@ case class DxProject(id: String) extends DxDataObject {
         }
       case other =>
         throw new Exception(s"malformed json reply ${other}")
-    }.toVector
+    }
 
     // extract sub folders
     val subdirsJs = repJs.asJsObject.fields("folders") match {
@@ -89,7 +89,7 @@ case class DxProject(id: String) extends DxDataObject {
       case JsString(x) => x
       case other =>
         throw new Exception(s"malformed json reply ${other}")
-    }.toVector
+    }
 
     FolderContents(objs, subdirs)
   }
@@ -99,12 +99,12 @@ case class DxProject(id: String) extends DxDataObject {
                            "folder" -> JsString(folderPath),
                            "parents" -> (if (parents) JsTrue else JsFalse))
     val response = id match {
-      case _ if (id.startsWith("container-")) =>
+      case _ if id.startsWith("container-") =>
         DXAPI.containerNewFolder(id,
                                  DxUtils.jsonNodeOfJsValue(request),
                                  classOf[JsonNode],
                                  DxUtils.dxEnv)
-      case _ if (id.startsWith("project-")) =>
+      case _ if id.startsWith("project-") =>
         DXAPI.projectNewFolder(id,
                                DxUtils.jsonNodeOfJsValue(request),
                                classOf[JsonNode],
@@ -118,17 +118,15 @@ case class DxProject(id: String) extends DxDataObject {
 
   def moveObjects(objs: Vector[DxDataObject], destinationFolder: String): Unit = {
     val request = JsObject("objects" -> JsArray(objs.map { x =>
-                             JsString(x.id)
-                           }.toVector),
-                           "folders" -> JsArray(Vector.empty[JsString]),
-                           "destination" -> JsString(destinationFolder))
+      JsString(x.id)
+    }), "folders" -> JsArray(Vector.empty[JsString]), "destination" -> JsString(destinationFolder))
     val response = id match {
-      case _ if (id.startsWith("container-")) =>
+      case _ if id.startsWith("container-") =>
         DXAPI.containerMove(id,
                             DxUtils.jsonNodeOfJsValue(request),
                             classOf[JsonNode],
                             DxUtils.dxEnv)
-      case _ if (id.startsWith("project-")) =>
+      case _ if id.startsWith("project-") =>
         DXAPI.projectMove(id, DxUtils.jsonNodeOfJsValue(request), classOf[JsonNode], DxUtils.dxEnv)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -140,14 +138,14 @@ case class DxProject(id: String) extends DxDataObject {
   def removeObjects(objs: Vector[DxDataObject]): Unit = {
     val request = JsObject("objects" -> JsArray(objs.map { x =>
       JsString(x.id)
-    }.toVector), "force" -> JsFalse)
+    }), "force" -> JsFalse)
     val response = id match {
-      case _ if (id.startsWith("container-")) =>
+      case _ if id.startsWith("container-") =>
         DXAPI.containerRemoveObjects(id,
                                      DxUtils.jsonNodeOfJsValue(request),
                                      classOf[JsonNode],
                                      DxUtils.dxEnv)
-      case _ if (id.startsWith("project-")) =>
+      case _ if id.startsWith("project-") =>
         DXAPI.projectRemoveObjects(id,
                                    DxUtils.jsonNodeOfJsValue(request),
                                    classOf[JsonNode],

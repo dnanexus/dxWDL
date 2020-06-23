@@ -9,6 +9,6 @@ workflow top {
 
     call lib.unpassed_default_arg {
         input:
-            initial_arr=arr,
+            initial_arr=arr
     }
 }

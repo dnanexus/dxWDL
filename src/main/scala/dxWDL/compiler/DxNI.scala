@@ -43,50 +43,53 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
+import java.nio.file.{Files, Path}
+
+import scala.util.matching.Regex
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.{Files, Path}
-import scala.util.matching.Regex
 import spray.json._
-import wom.types._
-
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.generators.code.WdlV1Generator
+import wdlTools.syntax.{CommentMap, TextSource}
 import dxWDL.base._
 import dxWDL.dx._
 
 case class DxNI(verbose: Verbose, language: Language.Value) {
+  private val codeGen = WdlCodeGen(verbose, Map.empty, language)
 
   private def wdlTypeOfIOClass(appletName: String,
                                argName: String,
                                ioClass: DxIOClass.Value,
-                               isOptional: Boolean): WomType = {
+                               isOptional: Boolean): WdlTypes.T = {
     if (isOptional) {
       ioClass match {
-        case DxIOClass.BOOLEAN           => WomOptionalType(WomBooleanType)
-        case DxIOClass.INT               => WomOptionalType(WomIntegerType)
-        case DxIOClass.FLOAT             => WomOptionalType(WomFloatType)
-        case DxIOClass.STRING            => WomOptionalType(WomStringType)
-        case DxIOClass.FILE              => WomOptionalType(WomSingleFileType)
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
-        case DxIOClass.ARRAY_OF_INTS     => WomMaybeEmptyArrayType(WomIntegerType)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomMaybeEmptyArrayType(WomFloatType)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomMaybeEmptyArrayType(WomStringType)
-        case DxIOClass.ARRAY_OF_FILES    => WomMaybeEmptyArrayType(WomSingleFileType)
+        case DxIOClass.BOOLEAN           => WdlTypes.T_Optional(WdlTypes.T_Boolean)
+        case DxIOClass.INT               => WdlTypes.T_Optional(WdlTypes.T_Int)
+        case DxIOClass.FLOAT             => WdlTypes.T_Optional(WdlTypes.T_Float)
+        case DxIOClass.STRING            => WdlTypes.T_Optional(WdlTypes.T_String)
+        case DxIOClass.FILE              => WdlTypes.T_Optional(WdlTypes.T_File)
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = false)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
       }
     } else {
       ioClass match {
-        case DxIOClass.BOOLEAN           => WomBooleanType
-        case DxIOClass.INT               => WomIntegerType
-        case DxIOClass.FLOAT             => WomFloatType
-        case DxIOClass.STRING            => WomStringType
-        case DxIOClass.FILE              => WomSingleFileType
-        case DxIOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
-        case DxIOClass.ARRAY_OF_INTS     => WomNonEmptyArrayType(WomIntegerType)
-        case DxIOClass.ARRAY_OF_FLOATS   => WomNonEmptyArrayType(WomFloatType)
-        case DxIOClass.ARRAY_OF_STRINGS  => WomNonEmptyArrayType(WomStringType)
-        case DxIOClass.ARRAY_OF_FILES    => WomNonEmptyArrayType(WomSingleFileType)
+        case DxIOClass.BOOLEAN           => WdlTypes.T_Boolean
+        case DxIOClass.INT               => WdlTypes.T_Int
+        case DxIOClass.FLOAT             => WdlTypes.T_Float
+        case DxIOClass.STRING            => WdlTypes.T_String
+        case DxIOClass.FILE              => WdlTypes.T_File
+        case DxIOClass.ARRAY_OF_BOOLEANS => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_INTS     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_FLOATS   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_STRINGS  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = true)
+        case DxIOClass.ARRAY_OF_FILES    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = true)
         case _ =>
           throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                                   |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -101,13 +104,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def wdlTypesOfDxApplet(
       aplName: String,
       desc: DxAppletDescribe
-  ): (Map[String, WomType], Map[String, WomType]) = {
+  ): (Map[String, WdlTypes.T], Map[String, WdlTypes.T]) = {
     Utils.trace(verbose.on, s"analyzing applet ${aplName}")
-    val inputSpec: Map[String, WomType] =
+    val inputSpec: Map[String, WdlTypes.T] =
       desc.inputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
-    val outputSpec: Map[String, WomType] =
+    val outputSpec: Map[String, WdlTypes.T] =
       desc.outputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
@@ -115,7 +118,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   }
 
   // Create a small WDL snippet that is a header for this applet
-  private def createAppletWdlHeader(desc: DxAppletDescribe): Option[String] = {
+  private def createAppletWdlHeader(desc: DxAppletDescribe): Option[TAT.Task] = {
     val aplName = desc.name
     try {
       val (inputSpec, outputSpec) = wdlTypesOfDxApplet(aplName, desc)
@@ -124,16 +127,13 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
       val allInputNames = inputSpec.keys.toSet
       val allOutputNames = outputSpec.keys.toSet
       val both = allInputNames.intersect(allOutputNames)
-      if (!both.isEmpty) {
+      if (both.nonEmpty) {
         val bothStr = "[" + both.mkString(", ") + "]"
         throw new Exception(
             s"""Parameters ${bothStr} used as both input and output in applet ${aplName}"""
         )
       }
-      val WdlCodeSnippet(taskCode) =
-        WdlCodeGen(verbose, Map.empty, language)
-          .genDnanexusAppletStub(desc.id, aplName, inputSpec, outputSpec)
-      Some(taskCode)
+      Some(codeGen.genDnanexusAppletStub(desc.id, aplName, inputSpec, outputSpec))
     } catch {
       case e: Throwable =>
         Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${aplName}")
@@ -142,15 +142,61 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     }
   }
 
+  private def documentFromTasks(tasks: Vector[TAT.Task]): TAT.Document = {
+    def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
+      TAT.Document(
+          None,
+          "",
+          TAT.Version(codeGen.wdlVersion, TextSource.empty),
+          docTasks,
+          None,
+          TextSource.empty,
+          CommentMap.empty
+      )
+    }
+
+    // uniquify and sort tasks
+    val sortedUniqueTasks =
+      tasks.map(t => t.name -> t).toMap.values.toVector.sortWith(_.name < _.name)
+    // validate each task and warn if it doesn't generate valid WDL
+    val parser = ParseWdlSourceFile(verbose.on)
+    val validTasks = sortedUniqueTasks.flatMap { task =>
+      try {
+        // TODO: currently we always generate WDL 1.0 - other versions of the code generator
+        //  need to be implemented in wdlTools
+        val taskDoc = createDocument(Vector(task))
+        val sourceCode = codeGen.generateDocument(taskDoc)
+        parser.validateWdlCode(sourceCode)
+        Some(task)
+      } catch {
+        case e: Throwable =>
+          Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${task.name}")
+          Utils.warning(verbose, e.getMessage)
+          None
+      }
+    }
+    createDocument(validTasks)
+  }
+
   // Search a platform path for all applets in it. Use
   // one API call for efficiency. Return a list of tasks, and their
   // applet-ids.
   //
   // If the folder is not a valid path, an empty list will be returned.
-  private def search(dxProject: DxProject, folder: String, recursive: Boolean): Vector[String] = {
+  private def search(dxProject: DxProject,
+                     folder: String,
+                     recursive: Boolean): Option[TAT.Document] = {
     val dxObjectsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(None, verbose)
-        .apply(Some(dxProject), Some(folder), recursive, None, Vector.empty, Vector.empty, true, Vector.empty, Set.empty)
+        .apply(Some(dxProject),
+               Some(folder),
+               recursive,
+               None,
+               Vector.empty,
+               Vector.empty,
+               withInputOutputSpec = true,
+               Vector.empty,
+               Set.empty)
 
     // we just want the applets
     val dxAppletsInFolder: Map[DxApplet, DxAppletDescribe] = dxObjectsInFolder.collect {
@@ -169,12 +215,14 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
               case None    => Some(apl -> desc)
             }
         }
-    }.toMap
+    }
 
-    nativeApplets
-      .map { case (_, desc) => createAppletWdlHeader(desc) }
-      .flatten
-      .toVector
+    val tasks = nativeApplets.values.flatMap(createAppletWdlHeader).toVector
+    if (tasks.nonEmpty) {
+      Some(documentFromTasks(tasks))
+    } else {
+      None
+    }
   }
 
   private def isWdl(properties: Option[Map[String, String]]): Boolean = {
@@ -188,7 +236,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     }
   }
 
-  private def path(dxProject: DxProject, path: String): Option[String] = {
+  private def path(dxProject: DxProject, path: String): Option[TAT.Document] = {
     val dxObj = path match {
       case id if path.startsWith("app-")  => DxApp.getInstance(id)
       case id if id.startsWith("applet-") => DxApplet.getInstance(id)
@@ -196,7 +244,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
         val fullPath = Utils.DX_URL_PREFIX + "/" + path
         DxPath.resolveOnePath(fullPath, dxProject)
     }
-    dxObj match {
+    val task: Option[TAT.Task] = dxObj match {
       // an applet
       case applet: DxApplet =>
         val desc = applet.describe(Set(Field.Properties))
@@ -215,6 +263,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
       case _ => None
     }
+    task.map(t => documentFromTasks(Vector(t)))
   }
 
   private def checkedGetJsString(jsv: JsValue, fieldName: String): String = {
@@ -236,7 +285,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private def checkedGetJsArray(jsv: JsValue, fieldName: String): Vector[JsValue] = {
     val fields = jsv.asJsObject.fields
     fields.get(fieldName) match {
-      case Some(JsArray(x)) => x.toVector
+      case Some(JsArray(x)) => x
       case other            => throw new Exception(s"malformed field ${fieldName} (${other})")
     }
   }
@@ -258,9 +307,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   private val taskNameRegex: Regex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
   private def normalizeAppName(name: String): String = {
     def sanitizeChar(ch: Char): String = ch match {
-      case '_'                       => "_"
-      case _ if (ch.isLetterOrDigit) => ch.toString
-      case _                         => "_"
+      case '_'                     => "_"
+      case _ if ch.isLetterOrDigit => ch.toString
+      case _                       => "_"
     }
     name match {
       case taskNameRegex(_*) =>
@@ -296,20 +345,20 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
 
     val inputSpec = inputSpecJs.map { x =>
       checkedGetIoSpec(name, x)
-    }.toVector
+    }
     val outputSpec = outputSpecJs.map { x =>
       checkedGetIoSpec(name, x)
-    }.toVector
+    }
     val normName = normalizeAppName(name)
     DxAppDescribe(id, normName, 0, 0, None, None, Some(inputSpec), Some(outputSpec))
   }
 
-  private def appToWdlInterface(dxApp: DxAppDescribe): String = {
-    val inputSpec: Map[String, WomType] =
+  private def appToWdlInterface(dxApp: DxAppDescribe): TAT.Task = {
+    val inputSpec: Map[String, WdlTypes.T] =
       dxApp.inputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name, ioSpec.ioClass, ioSpec.optional)
       }.toMap
-    val outputSpec: Map[String, WomType] =
+    val outputSpec: Map[String, WdlTypes.T] =
       dxApp.outputSpec.get.map { ioSpec =>
         ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name, ioSpec.ioClass, ioSpec.optional)
       }.toMap
@@ -319,7 +368,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val allInputNames = inputSpec.keys.toSet
     val allOutputNames = outputSpec.keys.toSet
     val both = allInputNames.intersect(allOutputNames)
-    if (!both.isEmpty) {
+    if (both.nonEmpty) {
       val bothStr = "[" + both.mkString(", ") + "]"
       throw new Exception(
           s"""|Parameters ${bothStr} used as both input and
@@ -327,14 +376,11 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
             .replaceAll("\n", " ")
       )
     }
-    val WdlCodeSnippet(taskCode) =
-      WdlCodeGen(verbose, Map.empty, language)
-        .genDnanexusAppletStub(dxApp.id, dxApp.name, inputSpec, outputSpec)
-    taskCode
+    codeGen.genDnanexusAppletStub(dxApp.id, dxApp.name, inputSpec, outputSpec)
   }
 
   // Search for global apps
-  def searchApps: Vector[String] = {
+  def searchApps: Option[TAT.Document] = {
     val req = JsObject(
         "published" -> JsBoolean(true),
         "describe" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true)),
@@ -364,13 +410,18 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
           None
       }
     }
-    taskHeaders.toVector
+
+    if (taskHeaders.nonEmpty) {
+      Some(documentFromTasks(taskHeaders))
+    } else {
+      None
+    }
   }
 }
 
 object DxNI {
-  private def writeHeadersToFile(header: String,
-                                 tasks: Vector[String],
+  private def writeHeadersToFile(header: Vector[String],
+                                 element: TAT.Document,
                                  outputPath: Path,
                                  force: Boolean): Unit = {
     if (Files.exists(outputPath)) {
@@ -381,13 +432,11 @@ object DxNI {
               .replaceAll("\n", " ")
         )
       }
-      outputPath.toFile().delete
+      outputPath.toFile.delete
     }
-
-    // pretty print into a buffer
-    val lines = tasks.mkString("\n\n")
-    val allLines = header + "\n" + lines
-    Utils.writeFileContent(outputPath, allLines)
+    val generator = WdlV1Generator()
+    val lines = generator.generateDocument(element, header)
+    Utils.writeFileContent(outputPath, lines.mkString("\n"))
   }
 
   // create headers for calling dx:applets and dx:workflows
@@ -400,11 +449,10 @@ object DxNI {
             language: Language.Value,
             verbose: Verbose): Unit = {
     val dxni = new DxNI(verbose, language)
-    val dxNativeTasks: Vector[String] = folderOrPath match {
+    val dxNativeTasks: Option[TAT.Document] = folderOrPath match {
       case Left(folder) => dxni.search(dxProject, folder, recursive)
-      case Right(path)  => dxni.path(dxProject, path).toVector
+      case Right(path)  => dxni.path(dxProject, path)
     }
-
     val folderOrPathRepr = folderOrPath match {
       case Left(folder) => s"folder = ${folder}"
       case Right(path)  => s"path = ${path}"
@@ -413,44 +461,34 @@ object DxNI {
       Utils.warning(verbose, s"Found no DX native applets in ${folderOrPathRepr}")
       return
     }
+
     val projName = dxProject.describe().name
 
     // add comment describing how the file was created
-    val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
-    val header =
-      s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
-          |# project name = ${projName}
-          |# project ID = ${dxProject.getId}
-          |# folder = ${folderOrPathRepr}
-          |
-          |${languageHeader}
-          |""".stripMargin
+    val headerLines = Vector(
+        s"This file was generated by the Dx Native Interface (DxNI) tool ${Utils.getVersion}.",
+        s"project name = ${projName}",
+        s"project ID = ${dxProject.getId}",
+        s"folder = ${folderOrPathRepr}"
+    )
 
-    writeHeadersToFile(header, dxNativeTasks, output, force)
+    writeHeadersToFile(headerLines, dxNativeTasks.get, output, force)
   }
 
   def applyApps(output: Path, force: Boolean, language: Language.Value, verbose: Verbose): Unit = {
     val dxni = new DxNI(verbose, language)
-    val dxAppsAsTasks: Vector[String] = dxni.searchApps
+    val dxAppsAsTasks: Option[TAT.Document] = dxni.searchApps
     if (dxAppsAsTasks.isEmpty) {
       Utils.warning(verbose, s"Found no DX global apps")
       return
     }
 
-    // If there are many apps, we might end up with multiple definitions of
-    // the same task. This gets rid of duplicates.
-    val uniqueTasks = dxAppsAsTasks.toSet.toVector
-
     // add comment describing how the file was created
-    val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
-    val header =
-      s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
-          |# These are interfaces to apps.
-          |#
-          |${languageHeader}
-          |""".stripMargin
+    val header = Vector(
+        s"This file was generated by the Dx Native Interface (DxNI) tool ${Utils.getVersion}.",
+        "These are interfaces to apps."
+    )
 
-    writeHeadersToFile(header, uniqueTasks, output, force)
+    writeHeadersToFile(header, dxAppsAsTasks.get, output, force)
   }
-
 }

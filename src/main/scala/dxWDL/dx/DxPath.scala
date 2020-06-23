@@ -9,23 +9,24 @@ package dxWDL.dx
 
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
-import scala.collection.mutable.HashMap
-import spray.json._
 
-import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
+import spray.json._
+import DxUtils.{jsValueOfJsonNode, jsonNodeOfJsValue}
+
+import scala.collection.mutable
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
 object DxPath {
 
-  private case class DxPathComponents(name: String,
-                                      folder: Option[String],
-                                      projName: Option[String],
-                                      objFullName: String,
-                                      sourcePath: String)
+  case class DxPathComponents(name: String,
+                              folder: Option[String],
+                              projName: Option[String],
+                              objFullName: String,
+                              sourcePath: String)
 
-  private def parse(dxPath: String): DxPathComponents = {
+  def parse(dxPath: String): DxPathComponents = {
     // strip the prefix
     if (!dxPath.startsWith(DX_URL_PREFIX)) {
       throw new Exception(s"Path ${dxPath} does not start with prefix ${DX_URL_PREFIX}")
@@ -42,6 +43,17 @@ object DxPath {
       case projName :: tail =>
         val rest = tail.mkString(":")
         (Some(projName), rest)
+    }
+
+    // sanity test
+    projName match {
+      case None => ()
+      case Some(proj) =>
+        if (proj.startsWith("file-"))
+          throw new Exception("""|Path ${dxPath} does not look like: dx://PROJECT_NAME:/FILE_PATH
+                                 |For example:
+                                 |   dx://dxWDL_playground:/test_data/fileB
+                                 |""".stripMargin)
     }
 
     // split the object path into folder/name
@@ -64,7 +76,7 @@ object DxPath {
 
   // Lookup cache for projects. This saves
   // repeated searches for projects we already found.
-  private val projectDict = HashMap.empty[String, DxProject]
+  private val projectDict = mutable.HashMap.empty[String, DxProject]
 
   def resolveProject(projName: String): DxProject = {
     if (projName.startsWith("project-")) {
@@ -72,7 +84,6 @@ object DxPath {
       return DxProject.getInstance(projName)
     }
     if (projectDict contains projName) {
-      //System.err.println(s"Cached project ${projName}")
       return projectDict(projName)
     }
 
@@ -91,7 +102,7 @@ object DxPath {
     }
     if (results.length > 1)
       throw new Exception(s"Found more than one project named ${projName}")
-    if (results.length == 0)
+    if (results.isEmpty)
       throw new Exception(s"Project ${projName} not found")
     val dxProject = results(0).asJsObject.fields.get("id") match {
       case Some(JsString(id)) => DxProject.getInstance(id)
@@ -99,7 +110,7 @@ object DxPath {
         throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
     }
     projectDict(projName) = dxProject
-    return dxProject
+    dxProject
   }
 
   // Create a request from a path like:
@@ -121,7 +132,7 @@ object DxPath {
 
   private def submitRequest(dxPaths: Vector[DxPathComponents],
                             dxProject: DxProject): Map[String, DxDataObject] = {
-    val objectReqs: Vector[JsValue] = dxPaths.map { makeResolutionReq(_) }
+    val objectReqs: Vector[JsValue] = dxPaths.map(makeResolutionReq)
     val request = JsObject("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
 
     val response = DXAPI.systemResolveDataObjects(DxUtils.jsonNodeOfJsValue(request),
@@ -141,7 +152,7 @@ object DxPath {
                 s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
             )
           case JsArray(x) if x.length == 1 => x(0)
-          case JsArray(x) =>
+          case JsArray(_) =>
             throw new Exception(s"Found more than one dx object in path ${path}")
           case obj: JsObject => obj
           case other         => throw new Exception(s"malformed json ${other}")
@@ -211,7 +222,7 @@ object DxPath {
     // iterate on the ranges
     val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {
       case (accu, pathsRange) =>
-        accu ++ submitRequest(pathsRange.toVector, dxProject)
+        accu ++ submitRequest(pathsRange, dxProject)
     }
 
     alreadyResolved ++ resolved
@@ -221,7 +232,7 @@ object DxPath {
     val found: Map[String, DxDataObject] =
       resolveBulk(Vector(dxPath), dxProject)
 
-    if (found.size == 0)
+    if (found.isEmpty)
       throw new Exception(s"Could not find ${dxPath} in project ${dxProject.getId}")
     if (found.size > 1)
       throw new Exception(

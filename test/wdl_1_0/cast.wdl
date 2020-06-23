@@ -71,8 +71,8 @@ workflow cast {
 
     # Check various rarely used types (float, boolean)
     Boolean b = true
-    Int i2 = "3"
-    Float x = "4.2"
+    Int i2 = 3
+    Float x = 4.2
     String s2 = "zoology"
     call JoinMisc {
         input : b=b, i=i2, x=x, s=s2

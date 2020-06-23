@@ -5,18 +5,14 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 import spray.json._
-
-import wom.callable._
-import wom.executable.WomBundle
-import wom.graph.expression._
-
 import dxWDL.base._
 import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
 import dxWDL.dx._
 import dxWDL.util._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
 
 case class Top(cOpt: CompilerOptions) {
-  val verbose = cOpt.verbose
+  private val verbose = cOpt.verbose
 
   // The mapping from region to project name is list of (region, proj-name) pairs.
   // Get the project for this region.
@@ -41,7 +37,7 @@ case class Top(cOpt: CompilerOptions) {
   // Find the runtime dxWDL asset with the correct version. Look inside the
   // project configured for this region.
   private def getAssetId(region: String): String = {
-    val region2project = Utils.getRegions()
+    val region2project = Utils.getRegions
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
@@ -58,8 +54,8 @@ case class Top(cOpt: CompilerOptions) {
   private def cloneRtLibraryToProject(region: String,
                                       dxWDLrtId: String,
                                       dxProject: DxProject): Unit = {
-    val region2project = Utils.getRegions()
-    val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
+    val region2project = Utils.getRegions
+    val (projNameRt, _) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = DxPath.resolveProject(projNameRt)
     DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)
   }
@@ -82,7 +78,7 @@ case class Top(cOpt: CompilerOptions) {
       case CompilerFlag.All =>
         // get billTo and region from the project, then find the runtime asset
         // in the current region.
-        val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
+        val (_, region) = DxUtils.projectDescribeExtraInfo(dxProject)
         val lrtId = getAssetId(region)
         cloneRtLibraryToProject(region, lrtId, dxProject)
         Some(lrtId)
@@ -114,83 +110,29 @@ case class Top(cOpt: CompilerOptions) {
 
   // check the declarations in [graph], and make sure they
   // do not contain the reserved '___' substring.
-  private def checkDeclarations(varNames: Seq[String]): Unit = {
+  private def checkDeclarations(varNames: Vector[String]): Unit = {
     for (varName <- varNames)
       if (varName contains "___")
         throw new Exception(s"Variable ${varName} is using the reserved substring ___")
   }
 
   // check that streaming annotations are only done for files.
-  private def validate(callable: Callable): Unit = {
+  private def validate(callable: TAT.Callable): Unit = {
     callable match {
-      case wf: WorkflowDefinition =>
-        if (wf.parameterMeta.size > 0)
+      case wf: TAT.Workflow =>
+        if (wf.parameterMeta.isDefined)
           Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
-        val g = wf.innerGraph
-        checkDeclarations(g.inputNodes.map(_.localName).toSeq)
-        checkDeclarations(g.outputNodes.map(_.localName).toSeq)
-        val allDeclarations = g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
-        checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
+        checkDeclarations(wf.inputs.map(_.name))
+        checkDeclarations(wf.outputs.map(_.name))
+        val allDeclarations: Vector[TAT.Declaration] = wf.body.collect {
+          case d: TAT.Declaration => d
+        }
+        checkDeclarations(allDeclarations.map(_.name))
 
-      case task: CallableTaskDefinition =>
-        checkDeclarations(task.inputs.map(_.name).toSeq)
-        checkDeclarations(task.outputs.map(_.name).toSeq)
-
-      case other =>
-        throw new Exception(s"Unexpected object ${other}")
+      case task: TAT.Task =>
+        checkDeclarations(task.inputs.map(_.name))
+        checkDeclarations(task.outputs.map(_.name))
     }
-  }
-
-  // Check the uniqueness of tasks, Workflows, and Types
-  // merge everything into one bundle.
-  private def mergeIntoOneBundle(mainBundle: WomBundle,
-                                 subBundles: Vector[WomBundle]): WomBundle = {
-    var allCallables = mainBundle.allCallables
-    var allTypeAliases = mainBundle.typeAliases
-
-    subBundles.foreach { subBund =>
-      subBund.allCallables.foreach {
-        case (key, callable) =>
-          allCallables.get(key) match {
-            case None =>
-              allCallables = allCallables + (key -> callable)
-
-            // The comparision is done with "toString", because otherwise two
-            // identical definitions are somehow, through the magic of Scala,
-            // unequal.
-            case Some(existing) if (existing.toString != callable.toString) =>
-              Utils.error(s"""|${key} appears with two different callable definitions
-                              |1)
-                              |${callable}
-                              |
-                              |2)
-                              |${existing}
-                              |""".stripMargin)
-              throw new Exception(s"${key} appears twice, with two different definitions")
-            case _ => ()
-          }
-      }
-      subBund.typeAliases.foreach {
-        case (key, definition) =>
-          allTypeAliases.get(key) match {
-            case None =>
-              allTypeAliases = allTypeAliases + (key -> definition)
-            case Some(existing) if (existing != definition) =>
-              Utils.error(s"""|${key} appears twice, with two different definitions
-                              |1)
-                              |${definition}
-                              |
-                              |2)
-                              |${existing}
-                              |""".stripMargin)
-              throw new Exception(s"${key} type alias appears twice")
-            case _ => ()
-          }
-      }
-    }
-
-    // Merge all the bundles together
-    WomBundle(mainBundle.primaryCallable, allCallables, allTypeAliases, Set.empty)
   }
 
   // Scan the JSON inputs files for dx:files, and batch describe them. This
@@ -215,16 +157,13 @@ case class Top(cOpt: CompilerOptions) {
     val allFiles: Map[String, (DxFile, DxFileDescribe)] = allDescribe.map {
       case (f: DxFile, desc) => f.id -> (f, desc)
       case _                 => throw new Exception("has to be all files")
-    }.toMap
+    }
     (allResults.path2file, allFiles)
   }
 
-  private def womToIR(source: Path): IR.Bundle = {
-    val (language, womBundle, allSources, adjunctFiles, subBundles) =
-      ParseWomSourceFile(verbose.on).apply(source, cOpt.importDirs)
-
-    // Check that each workflow/task appears just one
-    val everythingBundle: WomBundle = mergeIntoOneBundle(womBundle, subBundles)
+  private def wdlToIR(source: Path): IR.Bundle = {
+    val (language, everythingBundle, allSources, adjunctFiles) =
+      ParseWdlSourceFile(verbose.on).apply(source, cOpt.importDirs)
 
     // validate
     everythingBundle.allCallables.foreach { case (_, c) => validate(c) }
@@ -251,7 +190,9 @@ case class Top(cOpt: CompilerOptions) {
 
     }
 
-    new GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
+    // TODO: load default hints from attrs
+    val defaultHintAttrs = WdlHintAttrs(Map.empty)
+    GenerateIR(cOpt.verbose, defaultRuntimeAttrs, defaultHintAttrs)
       .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 
@@ -285,7 +226,7 @@ case class Top(cOpt: CompilerOptions) {
   // compile and generate intermediate code only
   def applyOnlyIR(source: Path, dxProject: DxProject): IR.Bundle = {
     // generate IR
-    val bundle: IR.Bundle = womToIR(source)
+    val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
     val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
@@ -301,7 +242,7 @@ case class Top(cOpt: CompilerOptions) {
             dxProject: DxProject,
             runtimePathConfig: DxPathConfig,
             execTree: Option[TreePrinter]): (String, Option[Either[String, JsValue]]) = {
-    val bundle: IR.Bundle = womToIR(source)
+    val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
     val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)

@@ -1,17 +1,18 @@
 package dxWDL.dx
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import spray.json._
 
-class DxdaManifestTest extends FlatSpec with Matchers {
+class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
   val TEST_PROJECT = "dxWDL_playground"
   lazy val dxTestProject: DxProject =
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
@@ -37,29 +38,32 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile.id -> (dxFile, local)
-    }.toMap
+    }
 
     // create a manifest
     val manifest: DxdaManifest = DxdaManifest.apply(filesInManifest)
 
     // compare to data obtained with dx-toolkit
-    val expected: Vector[JsValue] = resolvedObjects.map {
-      case (dxPath, dataObj) =>
-        val dxFile = dataObj.asInstanceOf[DxFile]
-        val local: Path = fileDir(dxPath)
+    val expected: Vector[JsValue] = resolvedObjects
+      .map {
+        case (dxPath, dataObj) =>
+          val dxFile = dataObj.asInstanceOf[DxFile]
+          val local: Path = fileDir(dxPath)
 
-        // add the target folder and name
-        val fields = Map(
-            "id" -> JsString(dxFile.getId),
-            "name" -> JsString(local.toFile().getName()),
-            "folder" -> JsString(local.toFile().getParent())
-        )
-        JsObject(fields)
-    }.toVector.reverse
+          // add the target folder and name
+          val fields = Map(
+              "id" -> JsString(dxFile.getId),
+              "name" -> JsString(local.toFile.getName),
+              "folder" -> JsString(local.toFile.getParent)
+          )
+          JsObject(fields)
+      }
+      .toVector
+      .reverse
 
-    manifest shouldBe (DxdaManifest(
+    manifest shouldBe DxdaManifest(
         JsObject(dxTestProject.getId -> JsArray(expected))
-    ))
+    )
   }
 
   it should "detect and provide legible error for archived files" in {
@@ -80,7 +84,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         val dxFile = dataObj.asInstanceOf[DxFile]
         val local: Path = fileDir(dxPath)
         dxFile.id -> (dxFile, local)
-    }.toMap
+    }
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {

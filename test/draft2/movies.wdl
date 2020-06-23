@@ -6,6 +6,6 @@ workflow movies {
         input: film = m_name
     }
     output {
-        review.score
+        Float score = review.score
     }
 }

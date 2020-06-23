@@ -1,26 +1,33 @@
 package dxWDL.util
 
 import java.io.File
-import org.scalatest.{FlatSpec, Matchers}
-import wom.callable.{WorkflowDefinition}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
+import dxWDL.base.ParseWdlSourceFile
+
+class WdlPrettyPrintApproxTest extends AnyFlatSpec with Matchers {
 
   private def tryToPrintFile(path: File): Unit = {
-    val wfSourceCode = scala.io.Source.fromFile(path).mkString
+    val src = scala.io.Source.fromFile(path)
+    val wfSourceCode =
+      try {
+        src.mkString
+      } finally {
+        src.close()
+      }
     try {
-      val (wf: WorkflowDefinition, _, typeAliases) =
-        ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
-      val (_, _, blocks, outputs) = Block.split(wf.graph, wfSourceCode)
+      val (wf, _, _, _) = ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
+      val blocks = Block.splitWorkflow(wf)
 
-      WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)
-      WomPrettyPrintApproxWdl.graphOutputs(outputs)
+      WdlPrettyPrintApprox.graphInputs(wf.inputs)
+      WdlPrettyPrintApprox.graphOutputs(wf.outputs)
       blocks.foreach { b =>
-        WomPrettyPrintApproxWdl.block(b)
+        WdlPrettyPrintApprox.block(b)
       }
     } catch {
       // Some of the source files are invalid, or contain tasks and not workflows
-      case e: Throwable => ()
+      case _: Throwable => ()
     }
   }
 

@@ -1,22 +1,23 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
 
-import dxWDL.{Main}
+import dxWDL.Main
 import dxWDL.dx._
 
 // These tests involve compilation -without- access to the platform.
 //
-class InputFileTest extends FlatSpec with Matchers {
+class InputFileTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dirname: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dirname}/${basename}").getPath
     Paths.get(p)
   }
 
   private val dxProject = {
-    val p = DxUtils.dxEnv.getProjectContext()
+    val p = DxUtils.dxEnv.getProjectContext
     if (p == null)
       throw new Exception("Must be logged in to run this test")
     DxProject(p)
@@ -68,10 +69,9 @@ class InputFileTest extends FlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
           ++ cFlags
     )
-
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("Could not map all default fields")
+        errMsg should include("Could not map all input fields")
     }
   }
 
@@ -108,8 +108,7 @@ class InputFileTest extends FlatSpec with Matchers {
     )
     inside(retval) {
       case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("input")
-        errMsg should include("to call <missing_args.Add> is unspecified")
+        errMsg should include("Could not map all input fields")
     }
 
     // Missing arguments are legal in an unlocked workflow
@@ -130,12 +129,13 @@ class InputFileTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "support array of pairs" in {
+  it should "support array of pairs" taggedAs EdgeTest in {
     val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
     val inputs = pathFromBasename("input_file", "echo_pairs.json")
 
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
+//        ++ List("--verbose", "--verboseKey", "GenerateIR")
           ++ cFlags
     )
     retval shouldBe a[Main.SuccessfulTerminationIR]
@@ -163,7 +163,7 @@ class InputFileTest extends FlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTerminationIR]
   }
 
-  it should "WDL map input" taggedAs (EdgeTest) in {
+  it should "WDL map input" in {
     val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
     val inputs = pathFromBasename("input_file", "map_argument_input.json")
 

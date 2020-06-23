@@ -1,15 +1,16 @@
 package dxWDL.dx
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class DxTest extends FlatSpec with Matchers {
+class DxTest extends AnyFlatSpec with Matchers {
 
   val TEST_PROJECT = "dxWDL_playground"
   lazy val dxTestProject: DxProject =
     try {
       DxPath.resolveProject(TEST_PROJECT)
     } catch {
-      case e: Exception =>
+      case _: Exception =>
         throw new Exception(
             s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                 |the platform on staging.""".stripMargin

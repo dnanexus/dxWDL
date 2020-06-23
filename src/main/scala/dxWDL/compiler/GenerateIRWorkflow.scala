@@ -2,22 +2,17 @@
   */
 package dxWDL.compiler
 
-import wom.callable.WorkflowDefinition
-import wom.callable.MetaValueElement._
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
-import wom.types._
-import wom.values._
+import wdlTools.eval.WdlValues
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.WdlTypes
 import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
 import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
+import dxWDL.util.Block.OutputDefinition
 
-case class GenerateIRWorkflow(wf: WorkflowDefinition,
-                              wfSourceCode: String,
-                              wfSourceStandAlone: String,
-                              callsLoToHi: Vector[String],
+case class GenerateIRWorkflow(wf: TAT.Workflow,
+                              wfStandAlone: TAT.Document,
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose,
@@ -34,11 +29,11 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   private def genStageId(stageName: Option[String] = None): DxWorkflowStage = {
     stageName match {
       case None =>
-        val retval = DxWorkflowStage(s"stage-${stageNum}")
+        val retval = DxWorkflowStage(s"stage-$stageNum")
         stageNum += 1
         retval
       case Some(nm) =>
-        DxWorkflowStage(s"stage-${nm}")
+        DxWorkflowStage(s"stage-$nm")
     }
   }
 
@@ -61,43 +56,158 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   //   ...
   // }
   // We handle only the case where the default is a constant.
-  def buildWorkflowInput(input: GraphInputNode): CVar = {
+  def buildWorkflowInput(input: Block.InputDefinition): CVar = {
+    // figure out the meta attribute for this input, if it is
+    // specified in the parameter meta section.
+    val metaValue: Option[TAT.MetaValue] = wf.parameterMeta match {
+      case None => None
+      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+        kvs.get(input.name)
+    }
+    val attr = ParameterMeta.unwrap(metaValue, input.wdlType)
+
     input match {
-      case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
-        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
-        CVar(id.workflowLocalName, womType, None, attr)
-
-      case OptionalGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
-        assert(womType.isInstanceOf[WomOptionalType])
-        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
-        CVar(id.workflowLocalName, womType, None, attr)
-
-      case OptionalGraphInputNodeWithDefault(id,
-                                             womType,
-                                             defaultExpr: WomExpression,
-                                             nameInInputSet,
-                                             valueMapper) =>
-        val defaultValue: WomValue = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+      case Block.RequiredInputDefinition(id, wdlType) =>
+        CVar(id, wdlType, None, attr)
+      case Block.OverridableInputDefinitionWithDefault(id, wdlType, defaultExpr) =>
+        val defaultValue: WdlValues.V = WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
           case None        => throw new Exception(s"""|default expression in input should be a constant
-                                               | ${input}
+                                               | $defaultExpr
                                                |""".stripMargin)
           case Some(value) => value
         }
-        val attr = ParameterMeta.unwrap(wf.parameterMeta.get(id.workflowLocalName), womType)
-        CVar(id.workflowLocalName, womType, Some(defaultValue), attr)
-
-      case ScatterVariableNode(id, expression: ExpressionNode, womType) =>
-        CVar(id.workflowLocalName, womType, None)
-
-      case ogin: OuterGraphInputNode =>
-        val womType = ogin.linkToOuterGraph.womType
-        CVar(ogin.identifier.workflowLocalName, womType, None)
-
-      case other =>
-        throw new Exception(s"Unhandled type ${other.getClass}")
+        CVar(id, wdlType, Some(defaultValue), attr)
+      case Block.OptionalInputDefinition(id, wdlType) =>
+        CVar(id, wdlType, None, attr)
     }
   }
 
+  // In an expression like `a.b`, the left-hand side (a) is an expression and the
+  // right-hand side (b) is an identifier. The env only contains a, so we need to
+  // resolve a before we can access b.
+
+  def constInputToSArg(expr: Option[TAT.Expr],
+                       cVar: CVar,
+                       env: CallEnv,
+                       locked: Boolean,
+                       callFqn: String): SArg = {
+    expr match {
+      case None if Utils.isOptional(cVar.wdlType) =>
+        // optional argument that is not provided
+        IR.SArgEmpty
+
+      case None if cVar.default.isDefined =>
+        // argument that has a default, it can be omitted in the call
+        IR.SArgEmpty
+
+      case None if locked =>
+        val envDbg = env
+          .map {
+            case (name, lVar) =>
+              s"  $name -> ${lVar.sArg}"
+          }
+          .mkString("\n")
+        Utils.trace(verbose.on, s"""|env =
+                                    |$envDbg""".stripMargin)
+        throw new Exception(
+            s"""|input <${cVar.name}, ${cVar.wdlType}> to call <${callFqn}>
+                |is unspecified. This is illegal in a locked workflow.""".stripMargin
+              .replaceAll("\n", " ")
+        )
+
+      case None =>
+        // Perhaps the callee is not going to use the argument, lets not fail
+        // right here, but leave it for runtime.
+        IR.SArgEmpty
+
+      case Some(_: TAT.ValueNone) =>
+        // same as above
+        IR.SArgEmpty
+
+      case Some(expr) if WdlValueAnalysis.isExpressionConst(cVar.wdlType, expr) =>
+        IR.SArgConst(WdlValueAnalysis.evalConst(cVar.wdlType, expr))
+
+      case Some(TAT.ExprIdentifier(id, _, _)) =>
+        env.get(id) match {
+          case None =>
+            val envDbg = env
+              .map {
+                case (name, lVar) =>
+                  s"  $name -> ${lVar.sArg}"
+              }
+              .mkString("\n")
+            Utils.trace(verbose.on, s"""|env =
+                                        |$envDbg""".stripMargin)
+            throw new Exception(
+                s"""|Internal compiler error.
+                    |
+                    |Input <${cVar.name}, ${cVar.wdlType}> to call <${callFqn}>
+                    |is missing from the environment. We don't have ${id} in the environment.
+                    |""".stripMargin
+                  .replaceAll("\n", " ")
+            )
+          case Some(lVar) => lVar.sArg
+        }
+
+      case Some(TAT.ExprAt(expr, index, _, _)) =>
+        val indexValue = constInputToSArg(Some(index), cVar, env, locked, callFqn) match {
+          case IR.SArgConst(WdlValues.V_Int(value))                              => value
+          case IR.SArgWorkflowInput(CVar(_, _, Some(WdlValues.V_Int(value)), _)) => value
+          case other =>
+            throw new Exception(
+                s"Array index expression ${other} is not a constant nor an identifier"
+            )
+        }
+        val value = constInputToSArg(Some(expr), cVar, env, locked, callFqn) match {
+          case IR.SArgConst(WdlValues.V_Array(arrayValue)) if arrayValue.size > indexValue =>
+            arrayValue(indexValue)
+          case IR.SArgWorkflowInput(CVar(_, _, Some(WdlValues.V_Array(arrayValue)), _))
+              if arrayValue.size > indexValue =>
+            arrayValue(indexValue)
+          case other =>
+            throw new Exception(
+                s"Left-hand side expression ${other} is not a constant nor an identifier"
+            )
+        }
+        IR.SArgConst(value)
+
+      case Some(TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), field, _, _))
+          if env.contains(s"$id.$field") =>
+        env(s"$id.$field").sArg
+
+      case Some(TAT.ExprGetName(expr, id, _, _)) =>
+        val lhs = constInputToSArg(Some(expr), cVar, env, locked, callFqn)
+        val lhsWdlValue = lhs match {
+          case IR.SArgConst(wdlValue)                              => wdlValue
+          case IR.SArgWorkflowInput(cVar) if cVar.default.nonEmpty => cVar.default.get
+          case other =>
+            throw new Exception(
+                s"Left-hand side expression ${other} is not a constant nor an identifier"
+            )
+        }
+        val wdlValue = lhsWdlValue match {
+          case WdlValues.V_Object(members) if members.contains(id) => members(id)
+          case WdlValues.V_Pair(l, r) =>
+            id match {
+              case "left"  => l
+              case "right" => r
+              case _ =>
+                throw new Exception(s"Pair member name must be 'left' or 'right', not ${id}")
+            }
+          case WdlValues.V_Call(_, members) if members.contains(id)   => members(id)
+          case WdlValues.V_Struct(_, members) if members.contains(id) => members(id)
+          case other =>
+            throw new Exception(s"Cannot resolve id ${id} for value ${other}")
+        }
+        IR.SArgConst(wdlValue)
+
+      case Some(expr) =>
+        throw new Exception(s"Expression $expr is not a constant nor an identifier")
+    }
+  }
+
+  // compile a call into a stage in an IR.Workflow
+  //
   // In a call like:
   //   call lib.native_mk_list as mk_list {
   //     input: a=x, b=5
@@ -105,90 +215,23 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // it maps callee input <a> to expression <x>. The expressions are
   // trivial because this is a case where we can directly call an applet.
   //
-  // Note that in an expression like:
-  //    call volume { input: i = 10 }
-  // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
-  // under WDL version 1.0, it is compiled as "i"
-  //
-  private def findInputByName(callInputs: Seq[AnonymousExpressionNode],
-                              cVar: CVar): Option[AnonymousExpressionNode] = {
-    val retval = callInputs.find {
-      case expr: AnonymousExpressionNode =>
-        //Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
-        cVar.name == Utils.getUnqualifiedName(expr.identifier.localName.value)
-    }
-    retval
-  }
-
-  // compile a call into a stage in an IR.Workflow
-  private def compileCall(call: CallNode, env: CallEnv, locked: Boolean): IR.Stage = {
+  private def compileCall(call: TAT.Call, env: CallEnv, locked: Boolean): IR.Stage = {
     // Find the callee
-    val calleeName = Utils.getUnqualifiedName(call.callable.name)
-    val callee: IR.Callable = callables(calleeName)
-    val callInputs: Seq[AnonymousExpressionNode] = call.upstream.collect {
-      case tcExpr: AnonymousExpressionNode => tcExpr
-    }.toSeq
+    val calleeName = call.unqualifiedName
+    val callee: IR.Callable = callables.get(calleeName) match {
+      case None =>
+        throw new Exception(s"""|sanity: callable ${calleeName} should exist
+                                |but is missing from the list of known tasks/workflows ${callables.keys}
+                                |""".stripMargin)
+      case Some(x) => x
+    }
 
     // Extract the input values/links from the environment
-    val inputs: Vector[SArg] = callee.inputVars.map { cVar =>
-      findInputByName(callInputs, cVar) match {
-        case None if Utils.isOptional(cVar.womType) =>
-          // optional argument that is not provided
-          IR.SArgEmpty
+    val inputs: Vector[SArg] = callee.inputVars.map(cVar =>
+      constInputToSArg(call.inputs.get(cVar.name), cVar, env, locked, call.fullyQualifiedName)
+    )
 
-        case None if cVar.default != None =>
-          // argument that has a default, it can be omitted in the call
-          IR.SArgEmpty
-
-        case None if locked =>
-          val envDbg = env
-            .map {
-              case (name, lVar) =>
-                s"  ${name} -> ${lVar.sArg}"
-            }
-            .mkString("\n")
-          Utils.trace(verbose.on, s"""|env =
-                                      |${envDbg}""".stripMargin)
-          throw new Exception(
-              s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                  |is unspecified. This is illegal in a locked workflow.""".stripMargin
-                .replaceAll("\n", " ")
-          )
-
-        case None =>
-          // Perhaps the callee is not going to use the argument, lets not fail
-          // right here, but leave it for runtime.
-          IR.SArgEmpty
-
-        case Some(tcInput)
-            if WomValueAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
-          IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, tcInput.womExpression))
-
-        case Some(tcInput) =>
-          val exprSourceString = tcInput.womExpression.sourceString
-          env.get(exprSourceString) match {
-            case None =>
-              val envDbg = env
-                .map {
-                  case (name, lVar) =>
-                    s"  ${name} -> ${lVar.sArg}"
-                }
-                .mkString("\n")
-              Utils.trace(verbose.on, s"""|env =
-                                          |${envDbg}""".stripMargin)
-              throw new Exception(
-                  s"""|Internal compiler error.
-                      |
-                      |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                      |is missing from the environment.""".stripMargin
-                    .replaceAll("\n", " ")
-              )
-            case Some(lVar) => lVar.sArg
-          }
-      }
-    }
-
-    val stageName = call.identifier.localName.value
+    val stageName = call.actualName
     IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
   }
 
@@ -199,7 +242,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // If the environment has a pair "p", then we want to be able to
   // to return "p" when looking for "p.left" or "p.right".
   //
-  private def lookupInEnvInner(fqn: String, env: CallEnv): Option[(String, LinkedVar)] = {
+  @scala.annotation.tailrec
+  private def lookupInEnv(fqn: String, env: CallEnv): Option[(String, LinkedVar)] = {
     if (env contains fqn) {
       // exact match
       Some(fqn, env(fqn))
@@ -209,7 +253,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       if (pos < 0) None
       else {
         val lhs = fqn.substring(0, pos)
-        lookupInEnvInner(lhs, env)
+        lookupInEnv(lhs, env)
       }
     }
   }
@@ -219,75 +263,57 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       case None =>
         val envDesc = env.mkString("\n")
         Utils.trace(verbose.on, s"""|env=[
-                                    |${envDesc}
+                                    |$envDesc
                                     |]""".stripMargin)
-        throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
+        throw new Exception(s"Sanity: could not find $source in the workflow environment")
       case Some(lVar) => lVar.sArg
     }
   }
 
-  // Lookup in the environment. Provide a human readable error message
-  // if the fully-qualified-name is not found.
-  private def lookupInEnv(fqn: String,
-                          womType: WomType,
-                          env: CallEnv,
-                          optional: Boolean): Option[(String, LinkedVar)] = {
-    lookupInEnvInner(fqn, env) match {
-      case None if Utils.isOptional(womType) =>
-        None
-      case None =>
-        if (!optional) {
-          // A missing compulsory argument
-          Utils.warning(verbose, s"Missing argument ${fqn}, it will have to be provided at runtime")
-        }
-        None
-      case Some((name, lVar)) =>
-        Some((name, lVar))
-    }
-  }
-
-  // Find the closure of a block. All the variables defined earlier
+  // Find the closure of a block, all the variables defined earlier
   // that are required for the calculation.
-  private def blockClosure(block: Block, env: CallEnv, dbg: String): CallEnv = {
-    val allInputs = Block.closure(block)
-    allInputs.flatMap {
-      case (name, (womType, isOptionalArg)) =>
-        lookupInEnv(name, womType, env, isOptionalArg)
+  //
+  // Note: some referenced variables may be undefined. This could be because they are:
+  // 1) optional
+  // 2) defined -inside- the block
+  private def blockClosure(block: Block, env: CallEnv): CallEnv = {
+    block.inputs.flatMap { i: Block.InputDefinition =>
+      lookupInEnv(i.name, env) match {
+        case None               => None
+        case Some((name, lVar)) => Some((name, lVar))
+      }
     }.toMap
   }
 
-  // Find the closure of a graph, besides its normal inputs. Create an input
+  // Find the closure of the input nodes. Do not include the inputs themselves. Create an input
   // node for each of these external references.
-  private def graphClosure(inputNodes: Vector[GraphInputNode],
-                           subBlocks: Vector[Block]): Map[String, (WomType, Boolean)] = {
-    val allInputs: Map[String, (WomType, Boolean)] = subBlocks
-      .map { block =>
-        Block.closure(block)
-      }
-      .flatten
-      .toMap
+  private def inputNodeClosure(inputNodes: Vector[Block.InputDefinition],
+                               subBlocks: Vector[Block]): Map[String, (WdlTypes.T, Boolean)] = {
+    val allInputs: Vector[Block.InputDefinition] = subBlocks.flatMap { block =>
+      block.inputs
+    }
+    val allInputs2: Map[String, (WdlTypes.T, Boolean)] = allInputs.map { bInput =>
+      bInput.name -> (bInput.wdlType, Block.isOptional(bInput))
+    }.toMap
+
+    val regularInputNames: Set[String] = inputNodes.map(_.name).toSet
 
     // remove the regular inputs
-    val regularInputNames: Set[String] = inputNodes.map {
-      case iNode => iNode.localName
-    }.toSet
-
-    allInputs.filter {
+    allInputs2.filter {
       case (name, _) =>
         !(regularInputNames contains name)
-    }.toMap
+    }
   }
 
   // A block inside a conditional or scatter. If it is simple,
   // we can use a direct call. Otherwise, recursively call into the asssemble-backbone method, and
   // get a locked subworkflow.
   private def compileNestedBlock(wfName: String,
-                                 graph: Graph,
+                                 statements: Vector[TAT.WorkflowElement],
                                  blockPath: Vector[Int],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
-    val (inputNodes, _, subBlocks, outputNodes) =
-      Block.splitGraph(graph, callsLoToHi)
-    assert(subBlocks.size > 0)
+    val (inputNodes, subBlocks, outputNodes) = Block.split(statements)
+    assert(subBlocks.nonEmpty)
 
     if (subBlocks.size == 1) {
       Block.categorize(subBlocks(0)) match {
@@ -305,7 +331,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       val (stage, aux) = compileWfFragment(wfName, subBlocks(0), blockPath :+ 0, env)
       val fragName = stage.calleeName
       val main = aux.find(_.name == fragName) match {
-        case None    => throw new Exception(s"Could not find ${fragName}")
+        case None    => throw new Exception(s"Could not find $fragName")
         case Some(x) => x
       }
       (main, aux)
@@ -329,12 +355,12 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       //       |- stage-4
       //
       val pathStr = blockPath.map(x => x.toString).mkString("_")
-      val closureInputs = graphClosure(inputNodes, subBlocks)
+      val closureInputs = inputNodeClosure(inputNodes, subBlocks)
       Utils.trace(
           verbose.on,
           s"""|compileNestedBlock
-              |    inputNodes = ${inputNodes.map(_.singleOutputPort)}
-              |    closureInputs= ${closureInputs}
+              |    inputNodes = $inputNodes
+              |    closureInputs= $closureInputs
               |""".stripMargin
       )
       val (subwf, auxCallables, _) = compileWorkflowLocked(wfName + "_block_" + pathStr,
@@ -361,11 +387,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       case None       => "eval"
       case Some(name) => name
     }
-    Utils.trace(verbose.on, s"Compiling fragment <${stageName}> as stage")
+    Utils.trace(verbose.on, s"Compiling fragment <$stageName> as stage")
+    Utils.trace(verbose2, s"""|block=
+                              |${WdlPrettyPrintApprox.block(block)}
+                              |""".stripMargin)
 
     // Figure out the closure required for this block, out of the
     // environment
-    val closure = blockClosure(block, env, stageName)
+    val closure = blockClosure(block, env)
     val inputVars: Vector[CVar] = closure.map {
       case (fqn, LinkedVar(cVar, _)) =>
         cVar.copy(name = fqn)
@@ -377,17 +406,19 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     // This is a simplifying assumption, that is hopefully sufficient. It disallows
     // users from using variables with the ___ character sequence.
     val fqnDictTypes = inputVars.map { cVar =>
-      cVar.dxVarName -> cVar.womType
+      cVar.dxVarName -> cVar.wdlType
     }.toMap
 
     // Figure out the block outputs
-    val outputs: Map[String, WomType] = Block.outputs(block)
+    val outputs: Map[String, WdlTypes.T] = block.outputs.map { bOut =>
+      bOut.name -> bOut.wdlType
+    }.toMap
 
     // create a cVar definition from each block output. The dx:stage
     // will output these cVars.
     val outputVars = outputs.map {
-      case (fqn, womType) =>
-        CVar(fqn, womType, None)
+      case (fqn, wdlType) =>
+        CVar(fqn, wdlType, None)
     }.toVector
 
     // The fragment runner can only handle a single call. If the
@@ -408,29 +439,30 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
       // A block with no nested sub-blocks, and a single call.
       case Block.CallWithSubexpressions(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
       case Block.CallFragment(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
 
       // A conditional/scatter with exactly one call in the sub-block.
       // Can be executed by a fragment.
       case Block.CondOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
       case Block.ScatterOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(cNode.unqualifiedName), Vector.empty)
 
       case Block.CondFullBlock(_, condNode) =>
-        val (callable, aux) = compileNestedBlock(wfName, condNode.innerGraph, blockPath, env)
+        val (callable, aux) = compileNestedBlock(wfName, condNode.body, blockPath, env)
         (Some(callable.name), aux :+ callable)
 
       case Block.ScatterFullBlock(_, sctNode) =>
         // add the iteration variable to the inner environment
-        assert(sctNode.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-        val iterVarName = svNode.identifier.localName.value
-        val cVar = CVar(iterVarName, svNode.womType, None)
-        val innerEnv = env + (iterVarName -> LinkedVar(cVar, IR.SArgEmpty))
-        val (callable, aux) = compileNestedBlock(wfName, sctNode.innerGraph, blockPath, innerEnv)
+        val iterWdlType = sctNode.expr.wdlType match {
+          case WdlTypes.T_Array(t, _) => t
+          case _                      => throw new Exception("scatter doesn't have an array expression")
+        }
+        val cVar = CVar(sctNode.identifier, iterWdlType, None)
+        val innerEnv = env + (sctNode.identifier -> LinkedVar(cVar, IR.SArgEmpty))
+        val (callable, aux) = compileNestedBlock(wfName, sctNode.body, blockPath, innerEnv)
         (Some(callable.name), aux :+ callable)
     }
 
@@ -441,7 +473,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes),
-        wfSourceStandAlone
+        wfStandAlone
     )
 
     val sArgs: Vector[SArg] = closure.map {
@@ -462,10 +494,10 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       subBlocks: Vector[Block],
       locked: Boolean
   ): (Vector[(IR.Stage, Vector[IR.Callable])], CallEnv) = {
-    Utils.trace(verbose.on, s"Assembling workflow backbone ${wfName}")
+    Utils.trace(verbose.on, s"Assembling workflow backbone $wfName")
     Utils.traceLevelInc()
     val inputNamesDbg = wfInputs.map { case (cVar, _) => cVar.name }
-    Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
+    Utils.trace(verbose.on, s"inputs= $inputNamesDbg")
 
     var env: CallEnv = wfInputs.map {
       case (cVar, sArg) =>
@@ -476,7 +508,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     var remainingBlocks = subBlocks
 
     // link together all the stages into a linear workflow
-    for (blockNum <- 0 to (subBlocks.length - 1)) {
+    for (blockNum <- subBlocks.indices) {
       val block = remainingBlocks.head
       remainingBlocks = remainingBlocks.tail
 
@@ -486,13 +518,13 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
           // All the variables are already in the environment, so there
           // is no need to do any extra work. Compile directly into a workflow
           // stage.
-          Utils.trace(verbose.on, s"Compiling call ${call.callable.name} as stage")
+          Utils.trace(verbose.on, s"Compiling call ${call.actualName} as stage")
           val stage = compileCall(call, env, locked)
 
           // Add bindings for the output variables. This allows later calls to refer
           // to these results.
           for (cVar <- stage.outputs) {
-            val fqn = call.identifier.localName.value ++ "." + cVar.name
+            val fqn = call.actualName ++ "." + cVar.name
             val cVarFqn = cVar.copy(name = fqn)
             env = env + (fqn -> LinkedVar(cVarFqn, IR.SArgLink(stage.id, cVar)))
           }
@@ -512,11 +544,13 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     }
 
     if (verbose2) {
-      Utils.trace(verbose2, s"stages for workflow ${wfName} = [")
+      Utils.trace(verbose2, s"stages for workflow $wfName = [")
       allStageInfo.foreach {
         case (stage, _) =>
-          Utils.trace(verbose2,
-                      s"    ${stage.description}, ${stage.id.getId} -> callee=${stage.calleeName}")
+          Utils.trace(
+              verbose2,
+              s"    ${stage.description}, ${stage.id.getId} -> callee=${stage.calleeName}"
+          )
       }
       Utils.trace(verbose2, "]")
     }
@@ -524,54 +558,68 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     (allStageInfo, env)
   }
 
-  private def buildSimpleWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv): (CVar, SArg) = {
-    outputNode match {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        val cVar = CVar(id.fullyQualifiedName.value, womType, None)
-        val source = sourcePort.name
-        (cVar, getSArgFromEnv(source, env))
-      case expr: ExpressionBasedGraphOutputNode
-          if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
-        val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
-        val source = expr.womExpression.sourceString
-        (cVar, getSArgFromEnv(source, env))
-      case expr: ExpressionBasedGraphOutputNode =>
-        // An expression that requires evaluation
-        throw new Exception(
-            s"Internal error: non trivial expressions are handled elsewhere ${expr}"
-        )
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
+  private def buildSimpleWorkflowOutput(output: Block.OutputDefinition,
+                                        env: CallEnv): (CVar, SArg) = {
+    if (env.contains(output.name)) {
+      val cVar = CVar(output.name, output.wdlType, None)
+      val sArg = getSArgFromEnv(output.name, env)
+      (cVar, sArg)
+    } else {
+      output.expr match {
+        case expr if WdlValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+          // the output is a constant
+          val wdlConst = WdlValueAnalysis.evalConst(output.wdlType, expr)
+          val cVar = CVar(output.name, output.wdlType, Some(wdlConst))
+          val sArg = IR.SArgConst(wdlConst)
+          (cVar, sArg)
+        case TAT.ExprIdentifier(id, _, _) =>
+          // The output is a reference to a previously defined variable
+          val cVar = CVar(output.name, output.wdlType, None)
+          val sArg = getSArgFromEnv(id, env)
+          (cVar, sArg)
+        case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
+          // The output is a reference to a previously defined variable
+          val fqn = s"$id2.$id"
+          if (!(env contains fqn))
+            throw new Exception(s"Internal error: (${fqn}) is not in the environment")
+          val cVar = CVar(output.name, output.wdlType, None)
+          val sArg = getSArgFromEnv(fqn, env)
+          (cVar, sArg)
+        case _ =>
+          // An expression that requires evaluation
+          throw new Exception(
+              s"""|Internal error: (${output.expr}) is a non trivial expression.
+                  |It requires constructing an output applet and a stage""".stripMargin
+          )
+      }
     }
   }
 
   // Create a preliminary applet to handle workflow input/outputs. This is
   // used only in the absence of workflow-level inputs/outputs.
-  private def buildCommonApplet(wfName: String,
-                                wfSourceStandAlone: String,
-                                inputVars: Vector[CVar]): (IR.Stage, IR.Applet) = {
+  private def buildCommonApplet(wfName: String, inputVars: Vector[CVar]): (IR.Stage, IR.Applet) = {
     val outputVars: Vector[CVar] = inputVars
 
-    val applet = IR.Applet(s"${wfName}_${COMMON}",
+    val applet = IR.Applet(s"${wfName}_$COMMON",
                            inputVars,
                            outputVars,
                            IR.InstanceTypeDefault,
                            IR.DockerImageNone,
                            IR.AppletKindWfInputs,
-                           wfSourceStandAlone)
+                           wfStandAlone)
     Utils.trace(verbose.on, s"Compiling common applet ${applet.name}")
 
     val sArgs: Vector[SArg] = inputVars.map { _ =>
       IR.SArgEmpty
-    }.toVector
+    }
     (IR.Stage(COMMON, genStageId(Some(COMMON)), applet.name, sArgs, outputVars), applet)
   }
 
   private def addOutputStatus(outputsVar: Vector[CVar]) = {
     outputsVar :+ CVar(
         Utils.REORG_STATUS,
-        WomStringType,
-        Some(WomString(Utils.REORG_STATUS_COMPLETE))
+        WdlTypes.T_String,
+        Some(WdlValues.V_String(Utils.REORG_STATUS_COMPLETE))
     )
   }
 
@@ -581,37 +629,49 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // 2. Unlocked workflow: there are no workflow outputs, so we create
   //    them artificially with a separate stage that collects the outputs.
   private def buildOutputStage(wfName: String,
-                               wfSourceStandAlone: String,
-                               outputNodes: Vector[GraphOutputNode],
+                               outputNodes: Vector[Block.OutputDefinition],
                                env: CallEnv): (IR.Stage, IR.Applet) = {
-    // Figure out what variables from the environment we need to pass
-    // into the applet.
+    // Figure out what variables from the environment we need to pass into the applet.
+    // create inputs from outputs
+    val outputInputVars: Map[String, LinkedVar] = outputNodes.collect {
+      case OutputDefinition(name, _, _) if env.contains(name) => name -> env(name)
+    }.toMap
+    // create inputs from the closure of the output nodes, which includes (recursively)
+    // all the variables in the output node expressions
     val closure = Block.outputClosure(outputNodes)
-
-    val inputVars: Vector[LinkedVar] = closure.map { name =>
-      val lVar = env.find { case (key, _) => key == name } match {
-        case None            => throw new Exception(s"could not find variable ${name} in the environment")
-        case Some((_, lVar)) => lVar
-      }
-      lVar
-    }.toVector
+    val closureInputVars: Map[String, LinkedVar] = closure.map {
+      case (name, _) =>
+        val lVar = env.get(name) match {
+          case None       => throw new Exception(s"could not find variable $name in the environment")
+          case Some(lVar) => name -> lVar
+        }
+        lVar
+    }
+    val inputVars = (outputInputVars ++ closureInputVars).values.toVector
     Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
 
     // build definitions of the output variables
-    val outputVars: Vector[CVar] = outputNodes.map {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        CVar(id.workflowLocalName, womType, None)
-      case expr: ExpressionBasedGraphOutputNode =>
-        CVar(expr.graphOutputPort.name, expr.womType, None)
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
-    }.toVector
+    val outputVars: Vector[CVar] = outputNodes
+      .foldLeft(Vector.empty[CVar]) {
+        case (accu, output) =>
+          output.expr match {
+            case expr if WdlValueAnalysis.isExpressionConst(output.wdlType, expr) =>
+              // the output is a constant
+              val wdlConst = WdlValueAnalysis.evalConst(output.wdlType, expr)
+              accu :+ CVar(output.name, output.wdlType, Some(wdlConst))
+            case _: TAT.ExprIdentifier =>
+              // The output is a reference to a previously defined variable
+              accu :+ CVar(output.name, output.wdlType, None)
+            case _ =>
+              // An expression that requires evaluation
+              accu :+ CVar(output.name, output.wdlType, None)
+          }
+      }
 
     val updatedOutputVars: Vector[CVar] = reorg match {
       case Left(_)             => outputVars
       case Right(_) if locked  => outputVars
       case Right(_) if !locked => addOutputStatus(outputVars)
-
     }
 
     val appletKind: IR.AppletKind = reorg match {
@@ -621,16 +681,15 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       // This is checked in Main.scala
       case Right(_) if locked  => IR.AppletKindWfOutputs
       case Right(_) if !locked => IR.AppletKindWfCustomReorgOutputs
-
     }
 
-    val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
+    val applet = IR.Applet(s"${wfName}_$OUTPUT_SECTION",
                            inputVars.map(_.cVar),
                            updatedOutputVars,
                            IR.InstanceTypeDefault,
                            IR.DockerImageNone,
                            appletKind,
-                           wfSourceStandAlone)
+                           wfStandAlone)
 
     // define the extra stage we add to the workflow
     (IR.Stage(OUTPUT_SECTION,
@@ -646,46 +705,43 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   // needs to process all the workflow outputs, to find the files
   // that belong to the final results.
   private def buildReorgStage(wfName: String,
-                              wfSourceStandAlone: String,
                               wfOutputs: Vector[(CVar, SArg)]): (IR.Stage, IR.Applet) = {
     // We need minimal compute resources, use the default instance type
     val applet = IR.Applet(
-        s"${wfName}_${REORG}",
+        s"${wfName}_$REORG",
         wfOutputs.map { case (cVar, _) => cVar },
         Vector.empty,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         IR.AppletKindWorkflowOutputReorg,
-        wfSourceStandAlone
+        wfStandAlone
     )
     Utils.trace(verbose.on, s"Compiling output reorganization applet ${applet.name}")
 
     // Link to the X.y original variables
-    val inputs: Vector[IR.SArg] = wfOutputs.map { case (_, sArg) => sArg }.toVector
+    val inputs: Vector[IR.SArg] = wfOutputs.map { case (_, sArg) => sArg }
 
     (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs, Vector.empty[CVar]), applet)
   }
 
-  private def addCustomReorgStage(wfName: String,
-                                  wfSourceStandAlone: String,
-                                  wfOutputs: Vector[(CVar, SArg)],
+  private def addCustomReorgStage(wfOutputs: Vector[(CVar, SArg)],
                                   reorgAttributes: ReorgAttrs): (IR.Stage, IR.Applet) = {
 
     val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAttributes.appId)
 
     // will throw error if there is no status string. Should consider checking there i s only one.
     val (reorgStatusCvar, reorgStatusSArg): (CVar, SArg) = wfOutputs.filter {
-      case (x, y) => x.name == Utils.REORG_STATUS
+      case (x, _) => x.name == Utils.REORG_STATUS
     }.head
 
-    val configFile: Option[WomSingleFile] = reorgAttributes.reorgConf match {
+    val configFile: Option[WdlValues.V_File] = reorgAttributes.reorgConf match {
       case ""        => None
-      case x: String => Some(WomSingleFile(x))
+      case x: String => Some(WdlValues.V_File(x))
     }
 
     val appInputs = Vector(
         reorgStatusCvar,
-        CVar(Utils.REORG_CONFIG, WomSingleFileType, configFile)
+        CVar(Utils.REORG_CONFIG, WdlTypes.T_File, configFile)
     )
 
     val applet = IR.Applet(
@@ -695,7 +751,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
         appletKind,
-        wfSourceStandAlone
+        wfStandAlone
     )
 
     Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAttributes.appId}")
@@ -711,34 +767,39 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   }
 
   private def unwrapWorkflowMeta(): Vector[IR.WorkflowAttr] = {
-    val wfAttrs = wf.meta.flatMap {
-      case (IR.META_TITLE, MetaValueElementString(text)) => Some(IR.WorkflowAttrTitle(text))
-      case (IR.META_DESCRIPTION, MetaValueElementString(text)) =>
+    val kvs: Map[String, TAT.MetaValue] = wf.meta match {
+      case None                          => Map.empty
+      case Some(TAT.MetaSection(kvs, _)) => kvs
+    }
+    val wfAttrs = kvs.flatMap {
+      case (IR.META_TITLE, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrTitle(text))
+      case (IR.META_DESCRIPTION, TAT.MetaValueString(text, _)) =>
         Some(IR.WorkflowAttrDescription(text))
-      case (IR.META_SUMMARY, MetaValueElementString(text))   => Some(IR.WorkflowAttrSummary(text))
-      case (IR.META_VERSION, MetaValueElementString(text))   => Some(IR.WorkflowAttrVersion(text))
-      case (IR.META_DETAILS, MetaValueElementObject(fields)) => Some(IR.WorkflowAttrDetails(fields))
-      case (IR.META_TYPES, MetaValueElementArray(array)) =>
+      case (IR.META_SUMMARY, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrSummary(text))
+      case (IR.META_VERSION, TAT.MetaValueString(text, _)) => Some(IR.WorkflowAttrVersion(text))
+      case (IR.META_DETAILS, TAT.MetaValueObject(fields, _)) =>
+        Some(IR.WorkflowAttrDetails(ParameterMeta.translateMetaKVs(fields)))
+      case (IR.META_TYPES, TAT.MetaValueArray(array, _)) =>
         Some(IR.WorkflowAttrTypes(array.map {
-          case MetaValueElementString(text) => text
-          case other                        => throw new Exception(s"Invalid type: ${other}")
+          case TAT.MetaValueString(text, _) => text
+          case other                        => throw new Exception(s"Invalid type: $other")
         }))
-      case (IR.META_TAGS, MetaValueElementArray(array)) =>
+      case (IR.META_TAGS, TAT.MetaValueArray(array, _)) =>
         Some(IR.WorkflowAttrTags(array.map {
-          case MetaValueElementString(text) => text
-          case other                        => throw new Exception(s"Invalid tag: ${other}")
+          case TAT.MetaValueString(text, _) => text
+          case other                        => throw new Exception(s"Invalid tag: $other")
         }))
-      case (IR.META_PROPERTIES, MetaValueElementObject(fields)) =>
-        Some(IR.WorkflowAttrProperties(fields.mapValues {
-          case MetaValueElementString(text) => text
-          case other                        => throw new Exception(s"Invalid property value: ${other}")
-        }))
-      case (IR.META_CALL_NAMES, MetaValueElementObject(fields)) =>
-        Some(IR.WorkflowAttrCallNames(fields.mapValues {
-          case MetaValueElementString(text) => text
-          case other                        => throw new Exception(s"Invalid call name value: ${other}")
-        }))
-      case (IR.META_RUN_ON_SINGLE_NODE, MetaValueElementBoolean(value)) =>
+      case (IR.META_PROPERTIES, TAT.MetaValueObject(fields, _)) =>
+        Some(IR.WorkflowAttrProperties(fields.view.mapValues {
+          case TAT.MetaValueString(text, _) => text
+          case other                        => throw new Exception(s"Invalid property value: $other")
+        }.toMap))
+      case (IR.META_CALL_NAMES, TAT.MetaValueObject(fields, _)) =>
+        Some(IR.WorkflowAttrCallNames(fields.view.mapValues {
+          case TAT.MetaValueString(text, _) => text
+          case other                        => throw new Exception(s"Invalid call name value: $other")
+        }.toMap))
+      case (IR.META_RUN_ON_SINGLE_NODE, TAT.MetaValueBoolean(value, _)) =>
         Some(IR.WorkflowAttrRunOnSingleNode(value))
       case _ => None
     }.toVector
@@ -747,49 +808,49 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     wfAttrs ++ (adjunctFiles match {
       case Some(adj) =>
         adj.flatMap {
-          case Adjuncts.Readme(text) if !wf.meta.contains(IR.META_DESCRIPTION) =>
+          case Adjuncts.Readme(text) if !wf.meta.exists(_.kvs.contains(IR.META_DESCRIPTION)) =>
             Some(IR.WorkflowAttrDescription(text))
           case _ => None
-        }.toVector
+        }
       case None => Vector.empty
     })
   }
 
   private def compileWorkflowLocked(
       wfName: String,
-      inputNodes: Vector[GraphInputNode],
-      closureInputs: Map[String, (WomType, Boolean)],
-      outputNodes: Vector[GraphOutputNode],
+      inputNodes: Vector[Block.InputDefinition],
+      closureInputs: Map[String, (WdlTypes.T, Boolean)],
+      outputNodes: Vector[Block.OutputDefinition],
       blockPath: Vector[Int],
       subBlocks: Vector[Block],
       level: IR.Level.Value
   ): (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) = {
-    val wfInputs: Vector[(CVar, SArg)] = inputNodes.map {
-      case iNode =>
-        val cVar = buildWorkflowInput(iNode)
-        (cVar, IR.SArgWorkflowInput(cVar))
-    }.toVector
+    val wfInputs: Vector[(CVar, SArg)] = inputNodes.map { iNode =>
+      val cVar = buildWorkflowInput(iNode)
+      (cVar, IR.SArgWorkflowInput(cVar))
+    }
 
     // inputs that are a result of accessing declarations in an encompassing
     // WDL workflow.
     val clsInputs: Vector[(CVar, SArg)] = closureInputs.map {
-      case (name, (womType, false)) =>
+      case (name, (wdlType, false)) =>
         // no default value
-        val cVar = CVar(name, womType, None)
+        val cVar = CVar(name, wdlType, None)
         (cVar, IR.SArgWorkflowInput(cVar))
-      case (name, (womType, true)) =>
+      case (name, (wdlType, true)) =>
         // there is a default value. This input is de facto optional.
         // We change the type of the CVar and make sure it is optional.
         val cVar =
-          if (Utils.isOptional(womType))
-            CVar(name, womType, None)
+          if (Utils.isOptional(wdlType))
+            CVar(name, wdlType, None)
           else
-            CVar(name, WomOptionalType(womType), None)
+            CVar(name, WdlTypes.T_Optional(wdlType), None)
         (cVar, IR.SArgWorkflowInput(cVar))
     }.toVector
     val allWfInputs = wfInputs ++ clsInputs
 
-    val (allStageInfo, env) = assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, true)
+    val (allStageInfo, env) =
+      assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, locked = true)
     val (stages, auxCallables) = allStageInfo.unzip
     val wfAttr = unwrapWorkflowMeta()
 
@@ -809,24 +870,24 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     //
     // In locked dx:workflows, it is illegal to access a workflow input directly from
     // a workflow output. It is only allowed to access a stage input/output.
-    if (outputNodes.forall(Block.isSimpleOutput) &&
+    val definedVars = env.keys.toSet
+    if (outputNodes.forall(oNode => Block.isSimpleOutput(oNode, definedVars)) &&
         Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
-      val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
+      val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env))
       val irwf =
         IR.Workflow(wfName,
                     allWfInputs,
                     simpleWfOutputs,
                     stages,
-                    wfSourceCode,
-                    true,
+                    wf,
+                    locked = true,
                     level,
                     Some(wfAttr))
       (irwf, auxCallables.flatten, simpleWfOutputs)
     } else {
       // Some of the outputs are expressions. We need an extra applet+stage
       // to evaluate them.
-      val (outputStage, outputApplet) =
-        buildOutputStage(wfName, wfSourceStandAlone, outputNodes, env)
+      val (outputStage, outputApplet) = buildOutputStage(wfName, outputNodes, env)
       val wfOutputs = outputStage.outputs.map { cVar =>
         (cVar, IR.SArgLink(outputStage.id, cVar))
       }
@@ -834,8 +895,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                              allWfInputs,
                              wfOutputs,
                              stages :+ outputStage,
-                             wfSourceCode,
-                             true,
+                             wf,
+                             locked = true,
                              level,
                              Some(wfAttr))
       (irwf, auxCallables.flatten :+ outputApplet, wfOutputs)
@@ -843,8 +904,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   }
 
   private def compileWorkflowRegular(
-      inputNodes: Vector[GraphInputNode],
-      outputNodes: Vector[GraphOutputNode],
+      inputNodes: Vector[Block.InputDefinition],
+      outputNodes: Vector[Block.OutputDefinition],
       subBlocks: Vector[Block]
   ): (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) = {
     // Create a special applet+stage for the inputs. This is a substitute for
@@ -852,37 +913,31 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     // they are references to the outputs of this first applet.
 
     // compile into dx:workflow inputs
-    val wfInputDefs: Vector[CVar] = inputNodes.map {
-      case iNode => buildWorkflowInput(iNode)
-    }.toVector
-    val (commonStg, commonApplet) = buildCommonApplet(wf.name, wfSourceStandAlone, wfInputDefs)
-    val fauxWfInputs: Vector[(CVar, SArg)] = commonStg.outputs.map {
-      case cVar: CVar =>
-        val sArg = IR.SArgLink(commonStg.id, cVar)
-        (cVar, sArg)
-    }.toVector
+    val wfInputDefs: Vector[CVar] = inputNodes.map(iNode => buildWorkflowInput(iNode))
+    val (commonStg, commonApplet) = buildCommonApplet(wf.name, wfInputDefs)
+    val fauxWfInputs: Vector[(CVar, SArg)] = commonStg.outputs.map { cVar: CVar =>
+      val sArg = IR.SArgLink(commonStg.id, cVar)
+      (cVar, sArg)
+    }
 
     val (allStageInfo, env) =
-      assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, false)
+      assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, locked = false)
     val (stages: Vector[IR.Stage], auxCallables) = allStageInfo.unzip
 
     // convert the outputs into an applet+stage
-    val (outputStage, outputApplet) =
-      buildOutputStage(wf.name, wfSourceStandAlone, outputNodes, env)
+    val (outputStage, outputApplet) = buildOutputStage(wf.name, outputNodes, env)
 
-    val wfInputs = wfInputDefs.map { cVar =>
-      (cVar, IR.SArgEmpty)
-    }
+    val wfInputs = wfInputDefs.map(cVar => (cVar, IR.SArgEmpty))
     val wfOutputs = outputStage.outputs.map { cVar =>
       (cVar, IR.SArgLink(outputStage.id, cVar))
     }
     val wfAttr = unwrapWorkflowMeta()
     val irwf = IR.Workflow(wf.name,
-                           wfInputs.toVector,
-                           wfOutputs.toVector,
+                           wfInputs,
+                           wfOutputs,
                            commonStg +: stages :+ outputStage,
-                           wfSourceCode,
-                           false,
+                           wf,
+                           locked = false,
                            IR.Level.Top,
                            Some(wfAttr))
     (irwf, commonApplet +: auxCallables.flatten :+ outputApplet, wfOutputs)
@@ -890,32 +945,33 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
   // Compile a (single) user defined WDL workflow into a dx:workflow.
   //
-  private def apply2() = {
+  private def apply2(): (IR.Workflow, Vector[IR.Callable]) = {
     Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
-    val graph = wf.innerGraph
 
     // Create a stage per call/scatter-block/declaration-block
-    val (inputNodes, _, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+    val subBlocks = Block.splitWorkflow(wf)
+    val inputs = wf.inputs.map(Block.translate)
+    val outputs = wf.outputs.map(Block.translate)
 
     // compile into an IR workflow
     val (irwf, irCallables, wfOutputs) =
       if (locked) {
         compileWorkflowLocked(wf.name,
-                              inputNodes,
+                              inputs,
                               Map.empty,
-                              outputNodes,
+                              outputs,
                               Vector.empty,
                               subBlocks,
                               IR.Level.Top)
       } else {
-        compileWorkflowRegular(inputNodes, outputNodes, subBlocks)
+        compileWorkflowRegular(inputs, outputs, subBlocks)
       }
 
     // Add a workflow reorg applet if necessary
     val (wf2: IR.Workflow, apl2: Vector[IR.Callable]) = reorg match {
       case Left(reorg_flag) =>
         if (reorg_flag) {
-          val (reorgStage, reorgApl) = buildReorgStage(wf.name, wfSourceStandAlone, wfOutputs)
+          val (reorgStage, reorgApl) = buildReorgStage(wf.name, wfOutputs)
           (irwf.copy(stages = irwf.stages :+ reorgStage), irCallables :+ reorgApl)
         } else {
           (irwf, irCallables)
@@ -927,8 +983,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       // This is checked in Main.scala.
       case Right(reorgAttributes) =>
         if (!locked) {
-          val (reorgStage, reorgApl) =
-            addCustomReorgStage(wf.name, wfSourceStandAlone, wfOutputs, reorgAttributes)
+          val (reorgStage, reorgApl) = addCustomReorgStage(wfOutputs, reorgAttributes)
           (irwf.copy(stages = irwf.stages :+ reorgStage), irCallables :+ reorgApl)
         } else {
           (irwf, irCallables)
@@ -943,25 +998,21 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
     // sanity check
     val callableNames: Set[String] =
-      irCallables.map(_.name).toSet ++ callables.map(_._1).toSet
+      irCallables.map(_.name).toSet ++ callables.keySet
 
-    irwf.stages.foreach {
-      case stage =>
-        if (!(callableNames contains stage.calleeName)) {
-          val allStages = irwf.stages
-            .map {
-              case stg =>
-                s"${stg}.description, ${stg}.id.getId"
-            }
-            .mkString("    ")
-          throw new Exception(s"""|Generated bad workflow.
-                                  |Stage <${stage.id.getId}, ${stage.description}> calls <${stage.calleeName}>
-                                  |which is missing.
-                                  |
-                                  |stages = ${allStages}
-                                  |callables = ${callableNames}
-                                  |""".stripMargin)
-        }
+    irwf.stages.foreach { stage =>
+      if (!(callableNames contains stage.calleeName)) {
+        val allStages = irwf.stages
+          .map(stg => s"$stg.description, $stg.id.getId")
+          .mkString("    ")
+        throw new Exception(s"""|Generated bad workflow.
+                                |Stage <${stage.id.getId}, ${stage.description}> calls <${stage.calleeName}>
+                                |which is missing.
+                                |
+                                |stages = $allStages
+                                |callables = $callableNames
+                                |""".stripMargin)
+      }
     }
 
     (irwf, irCallables)

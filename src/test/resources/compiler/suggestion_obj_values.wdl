@@ -14,7 +14,7 @@ task suggestion_values_cgrep {
           suggestions: [
               {
                   name: "file1",
-                  value: "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G",
+                  value: "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
               },
               {
                   name: "file2",
@@ -27,10 +27,10 @@ task suggestion_values_cgrep {
           suggestions: ["A", "B"]
         }
     }
-    command {
-        grep '${pattern}' ${in_file} | wc -l
-        cp ${in_file} out_file
-    }
+    command <<<
+        grep '~{pattern}' ~{in_file} | wc -l
+        cp ~{in_file} out_file
+    >>>
     output {
         Int count = read_int(stdout())
         File out_file = "out_file"

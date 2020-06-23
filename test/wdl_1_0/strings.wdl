@@ -30,6 +30,7 @@ task processTsv {
         cat ${write_tsv(words)}
     }
     output {
+      # This will read -only- the first line of the table
         String result = read_string(stdout())
     }
 }

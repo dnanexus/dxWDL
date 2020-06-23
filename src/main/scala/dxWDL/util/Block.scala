@@ -75,35 +75,46 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
-import wom.callable.Callable
-import wom.callable.Callable._
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
-import wom.types._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.{WdlTypes, Util => TUtil}
 
-// A sorted group of graph nodes, that match some original
-// set of WDL statements.
-case class Block(nodes: Vector[GraphNode]) {
-  def prettyPrint: String = {
-    val desc = nodes
-      .map { node =>
-        "    " + WomPrettyPrint.apply(node) + "\n"
-      }
-      .mkString("")
-    s"""|Block [
-        |${desc}
-        |]""".stripMargin
-  }
-
-  // Check that this block is valid.
-  def validate(): Unit = {
-    // There can be no calls in the first nodes
-    val allButLast: Vector[GraphNode] = this.nodes.dropRight(1)
-    val allCalls = Block.deepFindCalls(allButLast)
-    assert(allCalls.size == 0)
-  }
-
+// Block: a continuous list of workflow elements from a user
+// workflow.
+//
+// INPUTS: all the inputs required for a block. For example,
+// in the workflow:
+//
+// workflow optionals {
+//   input {
+//     Boolean flag
+//   }
+//   Int? rain = 13
+//   if (flag) {
+//     call opt_MaybeInt as mi3 { input: a=rain }
+//   }
+// }
+//
+// The conditional block:
+//    if (flag) {
+//     call opt_MaybeInt as mi3 { input: a=rain }
+//    }
+// requires "flag" and "rain".
+//
+// For each input also return whether is has a default. This makes it,
+// de facto, optional.
+//
+// OUTPUTS: all the outputs from a sequence of WDL statements. This includes -only-
+// variables that are used after the block completes.
+//
+// ALL_OUTPUTS : all the outputs, including those that are unused.
+//
+// Note: The type outside a scatter/conditional block is *different* than the type in
+// the block.  For example, 'Int x' declared inside a scatter, is
+// 'Array[Int] x' outside the scatter.
+//
+case class Block(inputs: Vector[Block.InputDefinition],
+                 outputs: Vector[Block.OutputDefinition],
+                 nodes: Vector[TAT.WorkflowElement]) {
   // Create a human readable name for a block of statements
   //
   // 1. Ignore all declarations
@@ -112,267 +123,455 @@ case class Block(nodes: Vector[GraphNode]) {
   //
   // If the entire block is made up of expressions, return None
   def makeName: Option[String] = {
-    val coreStmts = nodes.filter {
-      case _: ScatterNode     => true
-      case _: ConditionalNode => true
-      case _: CallNode        => true
-      case _                  => false
+    nodes.collectFirst {
+      case TAT.Scatter(id, expr, _, _) =>
+        val collection = TUtil.exprToString(expr)
+        s"scatter (${id} in ${collection})"
+      case TAT.Conditional(expr, _, _) =>
+        val cond = TUtil.exprToString(expr)
+        s"if (${cond})"
+      case call: TAT.Call =>
+        s"frag ${call.actualName}"
     }
-
-    if (coreStmts.isEmpty)
-      return None
-    val name = coreStmts.head match {
-      case ssc: ScatterNode =>
-        // WDL allows scatter on one element only
-        assert(ssc.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = ssc.scatterVariableNodes.head
-        val collection = svNode.scatterExpressionNode.womExpression.sourceString
-        val name = svNode.identifier.localName.value
-        s"scatter (${name} in ${collection})"
-      case cond: ConditionalNode =>
-        s"if (${cond.conditionExpression.womExpression.sourceString})"
-      case call: CallNode =>
-        s"frag ${call.identifier.localName.value}"
-      case _ =>
-        throw new Exception("sanity")
-    }
-    return Some(name)
   }
-
 }
 
 object Block {
-  // A trivial expression has no operators, it is either a constant WomValue
-  // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
-  // is not.
-  def isTrivialExpression(womType: WomType, expr: WomExpression): Boolean = {
-    val inputs = expr.inputs
-    if (inputs.size > 1)
-      return false
-    if (WomValueAnalysis.isExpressionConst(womType, expr))
-      return true
-    // The expression may have one input, but could still have an operator.
-    // For example: x+1, x + x.
-    expr.sourceString == inputs.head
+  // These are the same definitions as in TypedAbstractSyntax,
+  // with the TextSource field stripped out. This is because the inputs
+  // and outputs here are compiler constructs, they have not been defined by the user.
+  // They are computed by the algorithm and assigned to blocks of
+  // statements.
+  sealed trait InputDefinition {
+    val name: String
+    val wdlType: WdlTypes.T
   }
 
-  // The block is a singleton with one statement which is a call. The call
-  // has no subexpressions. Note that the call may not provide
-  // all the callee's arguments.
-  def isCallWithNoSubexpressions(node: GraphNode): Boolean = {
-    node match {
-      case call: CallNode =>
-        call.inputDefinitionMappings.forall {
-          case (inputDef, expr: WomExpression) =>
-            isTrivialExpression(inputDef.womType, expr)
-          case (_, _) => true
-        }
-      case _ => false
+  // A compulsory input that has no default, and must be provided by the caller
+  case class RequiredInputDefinition(name: String, wdlType: WdlTypes.T) extends InputDefinition
+
+  // An input that has a default and may be skipped by the caller
+  case class OverridableInputDefinitionWithDefault(name: String,
+                                                   wdlType: WdlTypes.T,
+                                                   defaultExpr: TAT.Expr)
+      extends InputDefinition
+
+  // an input that may be omitted by the caller. In that case the value will
+  // be null (or None).
+  case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T) extends InputDefinition
+
+  case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr: TAT.Expr)
+
+  def translate(i: TAT.InputDefinition): InputDefinition = {
+    i match {
+      case TAT.RequiredInputDefinition(name, wdlType, _) =>
+        RequiredInputDefinition(name, wdlType)
+      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, expr, _) =>
+        OverridableInputDefinitionWithDefault(name, wdlType, expr)
+      case TAT.OptionalInputDefinition(name, wdlType, _) =>
+        OptionalInputDefinition(name, wdlType)
     }
   }
 
-  // Is the call [callName] invoked in one of the nodes, or their
-  // inner graphs?
-  private def graphContainsCall(callName: String, nodes: Set[GraphNode]): Boolean = {
-    nodes.exists {
-      case callNode: CallNode =>
-        callNode.identifier.localName.value == callName
-      case cNode: ConditionalNode =>
-        graphContainsCall(callName, cNode.innerGraph.nodes)
-      case scNode: ScatterNode =>
-        graphContainsCall(callName, scNode.innerGraph.nodes)
-      case _ => false
+  def translate(o: TAT.OutputDefinition): OutputDefinition = {
+    OutputDefinition(o.name, o.wdlType, o.expr)
+  }
+
+  def isOptional(inputDef: InputDefinition): Boolean = {
+    inputDef match {
+      case _: RequiredInputDefinition               => false
+      case _: OverridableInputDefinitionWithDefault => true
+      case _: OptionalInputDefinition               => true
     }
   }
 
-  // Find the toplevel graph node that contains this call
-  def findCallByName(callName: String, nodes: Set[GraphNode]): Option[GraphNode] = {
-    val gnode: Option[GraphNode] = nodes.find {
-      case callNode: CallNode =>
-        callNode.identifier.localName.value == callName
-      case cNode: ConditionalNode =>
-        graphContainsCall(callName, cNode.innerGraph.nodes)
-      case scNode: ScatterNode =>
-        graphContainsCall(callName, scNode.innerGraph.nodes)
-      case _ => false
-    }
-    gnode
-  }
-
-  private def pickTopNodes(nodes: Set[GraphNode]) = {
-    assert(nodes.size > 0)
-    nodes.flatMap { node =>
-      val ancestors = node.upstreamAncestry
-      val others = nodes - node
-      if ((ancestors.intersect(others)).isEmpty) {
-        Some(node)
-      } else {
-        None
+  // Deep search for all calls in a graph
+  def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
+    nodes
+      .foldLeft(Vector.empty[TAT.Call]) {
+        case (accu, call: TAT.Call) =>
+          accu :+ call
+        case (accu, ssc: TAT.Scatter) =>
+          accu ++ deepFindCalls(ssc.body)
+        case (accu, ifStmt: TAT.Conditional) =>
+          accu ++ deepFindCalls(ifStmt.body)
+        case (accu, _) =>
+          accu
       }
-    }
   }
 
-  // Sort a group of nodes according to dependencies. Note that this is a partial
-  // ordering only.
-  def partialSortByDep(nodes: Set[GraphNode]): Vector[GraphNode] = {
-    var ordered = Vector.empty[GraphNode]
-    var rest: Set[GraphNode] = nodes
-
-    while (!rest.isEmpty) {
-      val tops = pickTopNodes(rest)
-      assert(!tops.isEmpty)
-      ordered = ordered ++ tops
-      rest = rest -- tops
-    }
-
-    assert(ordered.size == nodes.size)
-    ordered
+  def deepFindCalls(node: TAT.WorkflowElement): Vector[TAT.Call] = {
+    deepFindCalls(Vector(node))
   }
 
-  private def deepAncestors(node: GraphNode): Set[GraphNode] = {
-    node match {
-      case cndNode: ConditionalNode =>
-        cndNode.upstreamAncestry ++
-          cndNode.innerGraph.nodes.flatMap(deepAncestors(_))
-      case sctNode: ScatterNode =>
-        sctNode.upstreamAncestry ++
-          sctNode.innerGraph.nodes.flatMap(deepAncestors(_))
-      case ogin: OuterGraphInputNode =>
-        // follow the indirection, this is not by default
-        val sourceNode = ogin.linkToOuterGraphNode
-        sourceNode.upstreamAncestry + sourceNode
-      case _ =>
-        node.upstreamAncestry
-    }
+  // Check that this block is valid.
+  def validate(b: Block): Unit = {
+    // The only calls allowed are in the last node
+    val allButLast = b.nodes.dropRight(1)
+    val allCalls = deepFindCalls(allButLast)
+    assert(allCalls.isEmpty)
   }
 
-  // remove non local inputs, propagated from inner calls.
-  // In this workflow:
+  // figure out the inputs from an expression
   //
-  // workflow inner_wf {
-  //     input {}
-  //     call foo
-  //     output {}
-  // }
-  //
-  // task foo {
-  //     input {
-  //         Boolean unpassed_arg_default = true
-  //     }
-  //     command {}
-  //     output {}
-  // }
-  // unpassed_arg_default becomes a inner_wf argument, called
-  // 'inner_wf.foo.unpassed_arg_default'.
-  //
-  // As a result, we filter out any argument that has a dot it in.
-  private def distinguishTopLevelInputs(
-      inputs: Seq[GraphInputNode]
-  ): (Vector[GraphInputNode], Vector[GraphInputNode]) = {
-    val (inner, topLevelInputs) = inputs.partition { inNode =>
-      val name = inNode.identifier.localName.value
-      name contains '.'
-    }
-
-    (topLevelInputs.toVector, inner.toVector)
-  }
-
-  // Split an entire workflow.
-  //
-  // Sort the graph into a linear set of blocks, according to
-  // dependencies.  Each block is itself sorted. The dependencies
-  // impose a partial ordering on the graph. To make it correspond
-  // to the original WDL, we attempt to maintain the original line
-  // ordering.
-  //
-  // For example, in the workflow below:
-  // workflow foo {
-  //    call A
-  //    call B
-  //    call C
-  // }
-  // the block splitting algorithm could generate six permutions.
   // For example:
+  //   expression   inputs
+  //   x + y        Vector(x, y)
+  //   x + y + z    Vector(x, y, z)
+  //   foo.y + 3    Vector(foo.y)
+  //   1 + 9        Vector.empty
+  //   "a" + "b"    Vector.empty
   //
-  //    1           2
-  //  [ call C ]  [ call A ]
-  //  [ call A ]  [ call B ]
-  //  [ call B ]  [ call C ]
-  //
-  // We choose option #2 because it resembles the original.
-  def splitGraph(
-      graph: Graph,
-      callsLoToHi: Vector[String]
-  ): (Vector[GraphInputNode], // inputs
-      Vector[GraphInputNode], // missing inner inputs that propagate
-      Vector[Block], // blocks
-      Vector[GraphOutputNode]) // outputs
-  = {
-    var rest: Set[GraphNode] = graph.nodes
-    var blocks = Vector.empty[Block]
+  private def exprInputs(expr: TAT.Expr): Vector[InputDefinition] = {
+    expr match {
+      case _: TAT.ValueNull      => Vector.empty
+      case _: TAT.ValueNone      => Vector.empty
+      case _: TAT.ValueBoolean   => Vector.empty
+      case _: TAT.ValueInt       => Vector.empty
+      case _: TAT.ValueFloat     => Vector.empty
+      case _: TAT.ValueString    => Vector.empty
+      case _: TAT.ValueFile      => Vector.empty
+      case _: TAT.ValueDirectory => Vector.empty
+      case TAT.ExprIdentifier(id, wdlType, _) =>
+        val outputDef = wdlType match {
+          case optType: WdlTypes.T_Optional =>
+            OptionalInputDefinition(id, optType)
+          case _ =>
+            RequiredInputDefinition(id, wdlType)
+        }
+        Vector(outputDef)
 
-    // separate out the inputs
-    val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
-    rest --= graph.inputNodes.toSet
+      case TAT.ExprCompoundString(valArr, _, _) =>
+        valArr.flatMap(elem => exprInputs(elem))
+      case TAT.ExprPair(l, r, _, _) =>
+        exprInputs(l) ++ exprInputs(r)
+      case TAT.ExprArray(arrVal, _, _) =>
+        arrVal.flatMap(elem => exprInputs(elem))
+      case TAT.ExprMap(valMap, _, _) =>
+        valMap
+          .map { case (k, v) => exprInputs(k) ++ exprInputs(v) }
+          .toVector
+          .flatten
+      case TAT.ExprObject(fields, _, _) =>
+        fields
+          .map { case (_, v) => exprInputs(v) }
+          .toVector
+          .flatten
 
-    // separate out the outputs
-    val outputBlock = graph.outputNodes.toVector
-    rest --= graph.outputNodes.toSet
+      case TAT.ExprPlaceholderEqual(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(t) ++ exprInputs(f) ++ exprInputs(value)
+      case TAT.ExprPlaceholderDefault(default: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(default) ++ exprInputs(value)
+      case TAT.ExprPlaceholderSep(sep: TAT.Expr, value: TAT.Expr, _, _) =>
+        exprInputs(sep) ++ exprInputs(value)
 
-    if (graph.nodes.isEmpty)
-      return (inputBlock, innerInputs, Vector.empty, outputBlock)
+      // operators on one argument
+      case oper1: TAT.ExprOperator1 => exprInputs(oper1.value)
 
-    // Create a separate block for each call. This maintains
-    // the sort order from the origial code.
-    //
-    for (callName <- callsLoToHi) {
-      findCallByName(callName, rest) match {
-        case None =>
-          // we already accounted for this call. Several
-          // calls can be in the same node. For example, a
-          // scatter can have many calls inside its subgraph.
-          ()
-        case Some(node) =>
-          assert(!rest.isEmpty)
-          rest = rest - node
+      // operators on two arguments
+      case oper2: TAT.ExprOperator2 => exprInputs(oper2.a) ++ exprInputs(oper2.b)
 
-          // Build a vector where the callNode comes LAST. Choose
-          // the nodes from the ones that have not been picked yet.
-          val ancestors = deepAncestors(node).intersect(rest)
-          val nodes: Vector[GraphNode] =
-            (partialSortByDep(ancestors) :+ node)
-              .filter { x =>
-                !x.isInstanceOf[GraphInputNode]
-              }
-          val crnt = Block(nodes)
-          blocks :+= crnt
-          rest = rest -- nodes.toSet
-      }
+      // Access an array element at [index]
+      case TAT.ExprAt(value, index, _, _) =>
+        exprInputs(value) ++ exprInputs(index)
+
+      // conditional:
+      case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
+        exprInputs(cond) ++ exprInputs(tBranch) ++ exprInputs(fBranch)
+
+      // Apply a standard library function to arguments.
+      //
+      // TODO: some arguments may be _optional_ we need to take that
+      // into account. We need to look into the function type
+      // and figure out which arguments are optional.
+      case TAT.ExprApply(_, _, elements, _, _) =>
+        elements.flatMap(exprInputs)
+
+      // Access a field in a call
+      //   Int z = eliminateDuplicate.fields
+      case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
+        Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
+
+      case TAT.ExprGetName(expr, _, _, _) =>
+        throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
     }
-
-    val allBlocks =
-      if (rest.size > 0) {
-        // Add an additional block for anything not belonging to the calls
-        val lastBlock = partialSortByDep(rest)
-        blocks :+ Block(lastBlock)
-      } else {
-        blocks
-      }
-    allBlocks.foreach { b =>
-      b.validate()
-    }
-    (inputBlock, innerInputs, allBlocks, outputBlock)
   }
 
-  // An easy to use method that takes the workflow source
-  def split(graph: Graph, wfSource: String): (Vector[GraphInputNode], // inputs
-                                              Vector[GraphInputNode], // implicit inputs
-                                              Vector[Block], // blocks
-                                              Vector[GraphOutputNode]) // outputs
-  = {
-    // sort from low to high according to the source lines.
-    val callsLoToHi: Vector[String] = ParseWomSourceFile(false).scanForCalls(graph, wfSource)
-    splitGraph(graph, callsLoToHi)
+  private def callInputs(call: TAT.Call): Vector[InputDefinition] = {
+    // What the callee expects
+    call.callee.input.flatMap {
+      case (name: String, (_: WdlTypes.T, optional: Boolean)) =>
+        // provided by the caller
+        val actualInput = call.inputs.get(name)
+
+        (actualInput, optional) match {
+          case (None, false) =>
+            // A required input that will have to be provided at runtime
+            Vector.empty[InputDefinition]
+          case (Some(expr), false) =>
+            // required input that is provided
+            exprInputs(expr)
+          case (None, true) =>
+            // a missing optional input, doesn't have to be provided
+            Vector.empty[InputDefinition]
+          case (Some(expr), true) =>
+            // an optional input
+            exprInputs(expr).map { inpDef: InputDefinition =>
+              OptionalInputDefinition(inpDef.name, inpDef.wdlType)
+            }
+        }
+    }.toVector
+  }
+
+  private def makeOptional(t: WdlTypes.T): WdlTypes.T = {
+    t match {
+      case _: WdlTypes.T_Optional => t
+      case _                      => WdlTypes.T_Optional(t)
+    }
+  }
+
+  // keep track of the inputs, outputs, and local definitions when
+  // traversing a block of workflow elements (declarations, calls, scatters, and conditionals)
+  private case class BlockContext(inputs: Map[String, InputDefinition],
+                                  outputs: Map[String, OutputDefinition]) {
+
+    // remove from a list of potential inputs those that are locally defined.
+    def addInputs(newIdentifiedInputs: Vector[InputDefinition]): BlockContext = {
+      val reallyNew = newIdentifiedInputs.filter { x: InputDefinition =>
+        !((inputs.keys.toSet contains x.name) ||
+          (outputs.keys.toSet contains x.name))
+      }
+      this.copy(inputs = inputs ++ reallyNew.map { x =>
+        x.name -> x
+      }.toMap)
+    }
+
+    def addOutputs(newOutputs: Vector[OutputDefinition]): BlockContext = {
+      this.copy(outputs = outputs ++ newOutputs.map { x =>
+        x.name -> x
+      }.toMap)
+    }
+
+    def removeIdentifier(id: String): BlockContext = {
+      BlockContext(this.inputs - id, this.outputs - id)
+    }
+  }
+
+  private object BlockContext {
+    val empty: BlockContext = BlockContext(Map.empty, Map.empty)
+  }
+
+  // create a block from a group of statements.
+  // requires calculating all the inputs and outputs
+  //
+  private def makeBlock(elements: Vector[TAT.WorkflowElement]): Block = {
+    // accumulate the inputs, outputs, and local definitions.
+    //
+    // start with:
+    //  an empty list of inputs
+    //  empty list of local definitions
+    //  empty list of outputs
+    val ctx = elements.foldLeft(BlockContext.empty) {
+      case (ctx, elem) =>
+        elem match {
+          case decl: TAT.Declaration =>
+            val declInputs = decl.expr match {
+              case None       => Vector.empty
+              case Some(expr) => exprInputs(expr)
+            }
+            val declOutputs =
+              decl.expr match {
+                case None       => Vector.empty
+                case Some(expr) => Vector(OutputDefinition(decl.name, decl.wdlType, expr))
+              }
+            ctx
+              .addInputs(declInputs)
+              .addOutputs(declOutputs)
+
+          case call: TAT.Call =>
+            val callOutputs = call.callee.output.map {
+              case (name, wdlType) =>
+                val fqn = call.actualName + "." + name
+                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.text))
+            }.toVector
+            ctx
+              .addInputs(callInputs(call))
+              .addOutputs(callOutputs)
+
+          case cond: TAT.Conditional =>
+            // recurse into body of conditional
+            val subBlock = makeBlock(cond.body)
+
+            // make outputs optional
+            val subBlockOutputs = subBlock.outputs.map {
+              case OutputDefinition(name, wdlType, expr) =>
+                OutputDefinition(name, makeOptional(wdlType), expr)
+            }
+            ctx
+              .addInputs(subBlock.inputs)
+              .addInputs(exprInputs(cond.expr))
+              .addOutputs(subBlockOutputs)
+
+          case sct: TAT.Scatter =>
+            // recurse into body of the scatter
+            val subBlock = makeBlock(sct.body)
+
+            // make outputs arrays
+            val subBlockOutputs = subBlock.outputs.map {
+              case OutputDefinition(name, wdlType, expr) =>
+                OutputDefinition(name, WdlTypes.T_Array(wdlType, nonEmpty = false), expr)
+            }
+            val ctx2 = ctx
+              .addInputs(subBlock.inputs)
+              .addInputs(exprInputs(sct.expr))
+              .addOutputs(subBlockOutputs)
+
+            // remove the collection iteration variable
+            ctx2.removeIdentifier(sct.identifier)
+        }
+    }
+    Block(ctx.inputs.values.toVector, ctx.outputs.values.toVector, elements)
+  }
+
+  // split a sequence of statements into blocks
+  //
+  private def splitToBlocks(elements: Vector[TAT.WorkflowElement]): Vector[Block] = {
+    // add to last part
+    def addToLastPart(parts: Vector[Vector[TAT.WorkflowElement]],
+                      elem: TAT.WorkflowElement): Vector[Vector[TAT.WorkflowElement]] = {
+      val allButLast = parts.dropRight(1)
+      val last = parts.last :+ elem
+      allButLast :+ last
+    }
+    // add to last part and start a new one.
+    def startFresh(parts: Vector[Vector[TAT.WorkflowElement]],
+                   elem: TAT.WorkflowElement): Vector[Vector[TAT.WorkflowElement]] = {
+      val parts2 = addToLastPart(parts, elem)
+      parts2 :+ Vector.empty[TAT.WorkflowElement]
+    }
+
+    // split into sub-sequences (parts). Each part is a vector of workflow elements.
+    // We start with a single empty part, which is an empty vector. This ensures that
+    // down the line there is at least one part.
+    val parts = elements.foldLeft(Vector(Vector.empty[TAT.WorkflowElement])) {
+      case (parts, decl: TAT.Declaration) =>
+        addToLastPart(parts, decl)
+      case (parts, call: TAT.Call) =>
+        startFresh(parts, call)
+      case (parts, cond: TAT.Conditional) if deepFindCalls(cond).isEmpty =>
+        addToLastPart(parts, cond)
+      case (parts, cond: TAT.Conditional) =>
+        startFresh(parts, cond)
+      case (parts, sct: TAT.Scatter) if deepFindCalls(sct).isEmpty =>
+        addToLastPart(parts, sct)
+      case (parts, sct: TAT.Scatter) =>
+        startFresh(parts, sct)
+    }
+
+    // if the last block is empty, drop it
+    val cleanParts =
+      if (parts.last.isEmpty)
+        parts.dropRight(1)
+      else
+        parts
+
+    // convert to blocks
+    cleanParts.map(makeBlock)
+  }
+
+  // We are building an applet for the output section of a workflow.
+  // The outputs have expressions, and we need to figure out which
+  // variables they refer to. This will allow the calculations to proceeed
+  // inside a stand alone applet.
+  def outputClosure(outputs: Vector[OutputDefinition]): Map[String, WdlTypes.T] = {
+    // create inputs from all the expressions that go into outputs
+    outputs
+      .flatMap {
+        case OutputDefinition(_, _, expr) => Vector(expr)
+      }
+      .flatMap(exprInputs)
+      .foldLeft(Map.empty[String, WdlTypes.T]) {
+        case (accu, inpDef) =>
+          accu + (inpDef.name -> inpDef.wdlType)
+      }
+  }
+
+  // figure out all the outputs from a block of statements
+  //
+  def allOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, WdlTypes.T] = {
+    val b = makeBlock(elements)
+    b.outputs.map {
+      case OutputDefinition(name, wdlType, _) =>
+        name -> wdlType
+    }.toMap
+  }
+
+  // split a part of a workflow
+  def split(
+      statements: Vector[TAT.WorkflowElement]
+  ): (Vector[InputDefinition], Vector[Block], Vector[OutputDefinition]) = {
+    val top: Block = makeBlock(statements)
+    val subBlocks = splitToBlocks(statements)
+    (top.inputs, subBlocks, top.outputs)
+  }
+
+  // Split an entire workflow into blocks.
+  //
+  def splitWorkflow(wf: TAT.Workflow): Vector[Block] = {
+    splitToBlocks(wf.body)
+  }
+
+  // Does this output require evaluation? If so, we will need to create
+  // another applet for this.
+  def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
+    if (definedVars.contains(outputNode.name)) {
+      // the environment has a stage with this output node - we can get it by linking
+      true
+    } else {
+      // check if the expression can be resolved without evaluation (i.e. is a constant
+      // or a reference to a defined variable
+      outputNode.expr match {
+        // A constant or a reference to a variable
+        case expr if WdlValueAnalysis.isTrivialExpression(expr)      => true
+        case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
+
+        // for example, c1 is call, and the output section is:
+        //
+        // output {
+        //    Int? result1 = c1.result
+        //    Int? result2 = c2.result
+        // }
+        // We don't need a special output applet+stage.
+        case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
+          val fqn = s"$id2.$id"
+          definedVars contains fqn
+
+        case _ => false
+      }
+    }
+  }
+
+  // is an output used directly as an input? For example, in the
+  // small workflow below, 'lane' is used in such a manner.
+  //
+  // This makes a difference, because in locked dx:workflows, it is
+  // not possible to access a workflow input directly from a workflow
+  // output. It is only allowed to access a stage input/output.
+  //
+  // workflow inner {
+  //   input {
+  //      String lane
+  //   }
+  //   output {
+  //      String blah = lane
+  //   }
+  // }
+  def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
+                          outputNodes: Vector[OutputDefinition]): Set[String] = {
+    // Figure out all the variables needed to calculate the outputs
+    val outputs: Set[String] = outputClosure(outputNodes).keySet
+    val inputs: Set[String] = inputNodes.map(_.name).toSet
+    inputs.intersect(outputs)
   }
 
   // A block of nodes that represents a call with no subexpressions. These
@@ -381,73 +580,29 @@ object Block {
   // For example, the WDL code:
   // call add { input: a=x, b=y }
   //
-  // Is represented by the graph:
-  // Block [
-  //   TaskCallInputExpressionNode(a, x, WomIntegerType, GraphNodeOutputPort(a))
-  //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
-  //   CommandCall(add, Set(a, b))
-  // ]
-  private def isSimpleCall(nodes: Seq[GraphNode], trivialExpressionsOnly: Boolean): Boolean = {
-    // find the call
-    val calls: Seq[CallNode] = nodes.collect {
-      case cNode: CallNode => cNode
-    }
-    if (calls.size != 1)
+  private def isSimpleCall(nodes: Vector[TAT.WorkflowElement],
+                           trivialExpressionsOnly: Boolean): Boolean = {
+    assert(nodes.nonEmpty)
+    if (nodes.size >= 2)
       return false
-    val oneCall = calls.head
-
-    // All the other nodes have to be call inputs
-    //
-    // Some of the inputs may be missing, which is why we
-    // have the -subsetOf- call.
-    val rest = nodes.toSet - oneCall
-    //val callInputs = oneCall.upstream.toSet
-    //if (!rest.subsetOf(callInputs))
-    //return false
-
-    // All the call inputs have to be simple expressions, if the call is
-    // to be called "simple"
-    val retval = rest.forall {
-      case expr: AnonymousExpressionNode =>
-        if (trivialExpressionsOnly)
-          isTrivialExpression(expr.womType, expr.womExpression)
-        else
-          true
-
-      // These are ignored
-      case _: PortBasedGraphOutputNode =>
+    // there is example a single node
+    val node = nodes.head
+    node match {
+      case call: TAT.Call if trivialExpressionsOnly =>
+        call.inputs.values.forall(expr => WdlValueAnalysis.isTrivialExpression(expr))
+      case _: TAT.Call =>
+        // any input expression is allowed
         true
-      case _: GraphInputNode =>
-        true
-
-      case other =>
-        false
+      case _ => false
     }
-    retval
   }
 
-  private def getOneCall(graph: Graph): CallNode = {
-    val calls = graph.nodes.collect {
-      case node: CallNode => node
+  private def getOneCall(nodes: Vector[TAT.WorkflowElement]): TAT.Call = {
+    val calls = nodes.collect {
+      case node: TAT.Call => node
     }
     assert(calls.size == 1)
     calls.head
-  }
-
-  // Deep search for all calls in a graph
-  def deepFindCalls(nodes: Seq[GraphNode]): Vector[CallNode] = {
-    nodes
-      .foldLeft(Vector.empty[CallNode]) {
-        case (accu: Vector[CallNode], call: CallNode) =>
-          accu :+ call
-        case (accu, ssc: ScatterNode) =>
-          accu ++ deepFindCalls(ssc.innerGraph.nodes.toVector)
-        case (accu, ifStmt: ConditionalNode) =>
-          accu ++ deepFindCalls(ifStmt.innerGraph.nodes.toVector)
-        case (accu, _) =>
-          accu
-      }
-      .toVector
   }
 
   // These are the kinds of blocks that are run by the workflow-fragment-runner.
@@ -473,31 +628,27 @@ object Block {
   //   Compound
   //      contains multiple calls and/or dependencies
   sealed trait Category {
-    val nodes: Vector[GraphNode]
+    val nodes: Vector[TAT.WorkflowElement]
   }
-  case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
-  case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-  case class CallWithSubexpressions(override val nodes: Vector[GraphNode], value: CallNode)
+  case class AllExpressions(nodes: Vector[TAT.WorkflowElement]) extends Category
+  case class CallDirect(nodes: Vector[TAT.WorkflowElement], value: TAT.Call) extends Category
+  case class CallWithSubexpressions(nodes: Vector[TAT.WorkflowElement], value: TAT.Call)
       extends Category
-  case class CallFragment(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-  case class CondOneCall(override val nodes: Vector[GraphNode],
-                         value: ConditionalNode,
-                         call: CallNode)
+  case class CallFragment(nodes: Vector[TAT.WorkflowElement], value: TAT.Call) extends Category
+  case class CondOneCall(nodes: Vector[TAT.WorkflowElement], value: TAT.Conditional, call: TAT.Call)
       extends Category
-  case class CondFullBlock(override val nodes: Vector[GraphNode], value: ConditionalNode)
+  case class CondFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Conditional)
       extends Category
-  case class ScatterOneCall(override val nodes: Vector[GraphNode],
-                            value: ScatterNode,
-                            call: CallNode)
+  case class ScatterOneCall(nodes: Vector[TAT.WorkflowElement], value: TAT.Scatter, call: TAT.Call)
       extends Category
-  case class ScatterFullBlock(override val nodes: Vector[GraphNode], value: ScatterNode)
+  case class ScatterFullBlock(nodes: Vector[TAT.WorkflowElement], value: TAT.Scatter)
       extends Category
 
   object Category {
-    def getInnerGraph(catg: Category): Graph = {
+    def getInnerGraph(catg: Category): Vector[TAT.WorkflowElement] = {
       catg match {
-        case cond: CondFullBlock   => cond.value.innerGraph
-        case sct: ScatterFullBlock => sct.value.innerGraph
+        case cond: CondFullBlock   => cond.value.body
+        case sct: ScatterFullBlock => sct.value.body
         case other =>
           throw new UnsupportedOperationException(
               s"${other.getClass.toString} does not have an inner graph"
@@ -516,235 +667,50 @@ object Block {
   }
 
   def categorize(block: Block): Category = {
-    assert(!block.nodes.isEmpty)
-    val allButLast: Vector[GraphNode] = block.nodes.dropRight(1)
+    assert(block.nodes.nonEmpty)
+    val allButLast: Vector[TAT.WorkflowElement] = block.nodes.dropRight(1)
     assert(deepFindCalls(allButLast).isEmpty)
     val lastNode = block.nodes.last
     lastNode match {
-      case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
-        // The block comprises of expressions only
+      case _ if deepFindCalls(Vector(lastNode)).isEmpty =>
+        // The block comprises expressions only
         AllExpressions(allButLast :+ lastNode)
 
-      case callNode: CallNode =>
-        if (isSimpleCall(block.nodes, true))
+      case callNode: TAT.Call =>
+        if (isSimpleCall(block.nodes, trivialExpressionsOnly = true))
           CallDirect(allButLast, callNode)
-        else if (isSimpleCall(block.nodes.toSeq, false))
+        else if (isSimpleCall(block.nodes, trivialExpressionsOnly = false))
           CallWithSubexpressions(allButLast, callNode)
         else
           CallFragment(allButLast, callNode)
 
-      case condNode: ConditionalNode =>
-        if (isSimpleCall(condNode.innerGraph.nodes.toSeq, false)) {
-          CondOneCall(allButLast, condNode, getOneCall(condNode.innerGraph))
+      case condNode: TAT.Conditional =>
+        if (isSimpleCall(condNode.body, trivialExpressionsOnly = false)) {
+          CondOneCall(allButLast, condNode, getOneCall(condNode.body))
         } else {
           CondFullBlock(allButLast, condNode)
         }
 
-      case sctNode: ScatterNode =>
-        if (isSimpleCall(sctNode.innerGraph.nodes.toSeq, false)) {
-          ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.innerGraph))
+      case sctNode: TAT.Scatter =>
+        if (isSimpleCall(sctNode.body, trivialExpressionsOnly = false)) {
+          ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.body))
         } else {
           ScatterFullBlock(allButLast, sctNode)
         }
     }
   }
 
-  def getSubBlock(path: Vector[Int], graph: Graph, callsLoToHi: Vector[String]): Block = {
-    assert(path.size >= 1)
+  def getSubBlock(path: Vector[Int], nodes: Vector[TAT.WorkflowElement]): Block = {
+    assert(path.nonEmpty)
 
-    val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
+    val blocks = splitToBlocks(nodes)
     var subBlock = blocks(path.head)
     for (i <- path.tail) {
       val catg = categorize(subBlock)
       val innerGraph = Category.getInnerGraph(catg)
-      val (_, _, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
+      val blocks2 = splitToBlocks(innerGraph)
       subBlock = blocks2(i)
     }
-    return subBlock
-  }
-
-  // Find all the inputs required for a block. For example,
-  // in the workflow:
-  //
-  // workflow optionals {
-  //   input {
-  //     Boolean flag
-  //   }
-  //   Int? rain = 13
-  //   if (flag) {
-  //     call opt_MaybeInt as mi3 { input: a=rain }
-  //   }
-  // }
-  //
-  // The conditional block:
-  //    if (flag) {
-  //     call opt_MaybeInt as mi3 { input: a=rain }
-  //    }
-  // requires "flag" and "rain".
-  //
-  // For each input also return whether is has a default. This makes it,
-  // de facto, optional.
-  //
-  def closure(block: Block): Map[String, (WomType, Boolean)] = {
-    // make a deep list of all the nodes inside the block
-    val allBlockNodes: Set[GraphNode] = block.nodes
-      .map {
-        case sctNode: ScatterNode =>
-          sctNode.innerGraph.allNodes + sctNode
-        case cndNode: ConditionalNode =>
-          cndNode.innerGraph.allNodes + cndNode
-        case node: GraphNode =>
-          Set(node)
-      }
-      .flatten
-      .toSet
-
-    // Examine an input port, and keep it only if it points outside the block.
-    def keepOnlyOutsideRefs(inPort: GraphNodePort.InputPort): Option[(String, WomType)] = {
-      if (allBlockNodes contains inPort.upstream.graphNode) None
-      else Some((inPort.name, inPort.womType))
-    }
-
-    // Examine only the outer input nodes, check that they
-    // originate in a node outside the block.
-    def getInputsToGraph(graph: Graph): Map[String, WomType] = {
-      graph.nodes.flatMap {
-        case ogin: OuterGraphInputNode =>
-          if (allBlockNodes contains ogin.linkToOuterGraphNode)
-            None
-          else
-            Some((ogin.identifier.localName.value, ogin.womType))
-        case _ => None
-      }.toMap
-    }
-
-    val allInputs: Map[String, WomType] = block.nodes.flatMap {
-      case scNode: ScatterNode =>
-        val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
-      case cnNode: ConditionalNode =>
-        val cnInputs = cnNode.conditionExpression.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        cnInputs ++ getInputsToGraph(cnNode.innerGraph)
-      case node: GraphNode =>
-        node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-    }.toMap
-
-    // make list of call arguments that have defaults.
-    // In the example below, it is "unpassed_arg_default".
-    // It has a default, so it can be omitted.
-    //
-    // workflow inner_wf {
-    //     call foo
-    // }
-    //
-    // task foo {
-    //     input {
-    //         Boolean unpassed_arg_default = true
-    //     }
-    //     command {}
-    //     output {}
-    // }
-    //
-    val optionalInputs: Set[String] = block.nodes.flatMap {
-      case cNode: CallNode =>
-        val missingCallArgs = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        val callee: Callable = cNode.callable
-        missingCallArgs.flatMap {
-          case (name, womType) =>
-            val inputDef: InputDefinition = callee.inputs.find {
-              case iDef: InputDefinition => iDef.name == name
-            }.get
-            if (inputDef.optional) Some(name)
-            else None
-        }
-      case _ => None
-    }.toSet
-
-    allInputs.map {
-      case (name, womType) =>
-        val hasDefault = optionalInputs contains name
-        name -> (womType, hasDefault)
-    }.toMap
-  }
-
-  // Figure out all the outputs from a sequence of WDL statements.
-  //
-  // Note: The type outside a scatter/conditional block is *different* than the type in
-  // the block.  For example, 'Int x' declared inside a scatter, is
-  // 'Array[Int] x' outside the scatter.
-  //
-  def outputs(block: Block): Map[String, WomType] = {
-    val xtrnPorts: Vector[GraphNodePort.OutputPort] =
-      block.nodes.map {
-        case node: ExposedExpressionNode =>
-          node.outputPorts
-        case _: ExpressionNode =>
-          // an anonymous expression node, ignore it
-          Set.empty
-        case node =>
-          node.outputPorts
-      }.flatten
-
-    xtrnPorts.map { outputPort =>
-      // Is this really the fully qualified name?
-      val fqn = outputPort.identifier.localName.value
-      val womType = outputPort.womType
-      fqn -> womType
-    }.toMap
-  }
-
-  // Does this output require evaluation? If so, we will need to create
-  // another applet for this.
-  def isSimpleOutput(outputNode: GraphOutputNode): Boolean = {
-    outputNode match {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        true
-      case expr: ExpressionBasedGraphOutputNode
-          if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
-        true
-      case expr: ExpressionBasedGraphOutputNode =>
-        // An expression that requires evaluation
-        false
-      case other =>
-        throw new Exception(s"unhandled output class ${other}")
-    }
-  }
-
-  // Figure out what variables from the environment we need to pass
-  // into the applet. In other words, the closure.
-  def outputClosure(outputNodes: Vector[GraphOutputNode]): Set[String] = {
-    outputNodes.foldLeft(Set.empty[String]) {
-      case (accu, PortBasedGraphOutputNode(id, womType, sourcePort)) =>
-        accu + sourcePort.name
-      case (accu, expr: ExpressionBasedGraphOutputNode) =>
-        accu ++ expr.inputPorts.map(_.name)
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
-
-    }
-  }
-
-  // is an output used directly as an input? For example, in the
-  // small workflow below, 'lane' is used in such a manner.
-  //
-  // This makes a difference, because in locked dx:workflows, it is
-  // not possible to access a workflow input directly from a workflow
-  // output. It is only allowed to access a stage input/output.
-  //
-  // workflow inner {
-  //   input {
-  //      String lane
-  //   }
-  //   output {
-  //      String blah = lane
-  //   }
-  // }
-  def inputsUsedAsOutputs(inputNodes: Vector[GraphInputNode],
-                          outputNodes: Vector[GraphOutputNode]): Set[String] = {
-    // Figure out all the variables needed to calculate the outputs
-    val outputs: Set[String] = outputClosure(outputNodes)
-    val inputs: Set[String] = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
-    //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
-    inputs.intersect(outputs)
+    subBlock
   }
 }

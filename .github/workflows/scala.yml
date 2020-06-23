@@ -30,8 +30,20 @@ jobs:
           pip3 install dxpy
           export PATH="$PATH:$HOME/.local/bin"
 
+          # download and setup wdlTools
+          git clone https://github.com/dnanexus-rnd/wdlTools.git
+          # compile antlr4 sources
+          cd wdlTools
+          make
+          sbt compile && sbt publishLocal
+          pwd
+
+          # set up DNAnexus staging environment
           dx login --noprojects --staging --token $AUTH_TOKEN
           dx select dxWDL_playground
 
+          # run unit tests
+          cd ${GITHUB_WORKSPACE}
+          pwd
           sbt version && sbt compile && sbt "testOnly -- -l prod"
 

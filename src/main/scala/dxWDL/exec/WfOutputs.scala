@@ -3,110 +3,77 @@
 
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.expression.WomExpression
-import wom.graph._
-import wom.values._
-import wom.types._
-
+import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
-case class WfOutputs(wf: WorkflowDefinition,
-                     wfSourceCode: String,
-                     typeAliases: Map[String, WomType],
+case class WfOutputs(wf: TAT.Workflow,
+                     document: TAT.Document,
+                     typeAliases: Map[String, WdlTypes.T],
                      dxPathConfig: DxPathConfig,
                      dxIoFunctions: DxIoFunctions,
                      runtimeDebugLevel: Int) {
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
-  private def evaluateWomExpression(expr: WomExpression,
-                                    womType: WomType,
-                                    env: Map[String, WomValue]): WomValue = {
-    val result: ErrorOr[WomValue] =
-      expr.evaluateValue(env, dxIoFunctions)
-    val value = result match {
-      case Invalid(errors) =>
-        throw new Exception(s"Failed to evaluate expression ${expr} with ${errors}")
-      case Valid(x: WomValue) => x
-    }
+  private val evaluator = WdlEvaluator.make(dxIoFunctions, document.version.value)
 
-    // cast the result value to the correct type
-    // For example, an expression like:
-    //   Float x = "3.2"
-    // requires casting from string to float
-    womType.coerceRawValue(value).get
+  private def evaluateWdlExpression(expr: TAT.Expr,
+                                    wdlType: WdlTypes.T,
+                                    env: Map[String, WdlValues.V]): WdlValues.V = {
+    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(env))
   }
 
-  def apply(envInitial: Map[String, WomValue], addStatus: Boolean = false): Map[String, JsValue] = {
-    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+  def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
+            addStatus: Boolean = false): Map[String, JsValue] = {
+    Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion}")
     Utils.appletLog(verbose, s"Environment: ${envInitial}")
-    val outputNodes: Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
     Utils.appletLog(
         verbose,
         s"""|Evaluating workflow outputs
-            |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
+            |${WdlPrettyPrintApprox.graphOutputs(wf.outputs)}
             |""".stripMargin
     )
 
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
-    val allInputs = Block.closure(Block(wf.innerGraph.outputNodes.toVector))
-    val envInitialFilled: Map[String, WomValue] = allInputs.flatMap {
-      case (name, (womType, hasDefaultVal)) =>
-        (envInitial.get(name), womType) match {
-          case (None, WomOptionalType(t)) =>
-            Some(name -> WomOptionalValue(t, None))
-          case (None, _) if hasDefaultVal =>
-            None
+    val wfOutputs = wf.outputs.map(Block.translate)
+    val allInputs = Block.outputClosure(wfOutputs)
+    val envInitialFilled: Map[String, WdlValues.V] = allInputs.flatMap {
+      case (name, wdlType) =>
+        (envInitial.get(name), wdlType) match {
+          case (None, WdlTypes.T_Optional(_)) =>
+            Some(name -> WdlValues.V_Null)
           case (None, _) =>
             // input is missing, and there is no default at the callee,
-            Utils.warning(utlVerbose,
-                          s"input is missing for ${name}, and there is no default at the callee")
+            Utils.warning(utlVerbose, s"value is missing for ${name}")
             None
-          case (Some(x), _) =>
-            Some(name -> x)
+          case (Some((_, v)), _) =>
+            Some(name -> v)
         }
-    }.toMap
+    }
 
     // Evaluate the output declarations. Add outputs evaluated to
     // the environment, so they can be referenced by expressions in the next
     // lines.
     var envFull = envInitialFilled
-    val outputs: Map[String, WomValue] = outputNodes.map {
-      case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-        val value = envFull.get(sourcePort.name) match {
-          case None =>
-            throw new Exception(s"could not find ${sourcePort}")
-          case Some(value) =>
-            value
-        }
-        val name = id.workflowLocalName
+    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
+      case Block.OutputDefinition(name, wdlType, expr) =>
+        val value = evaluateWdlExpression(expr, wdlType, envFull)
         envFull += (name -> value)
-        name -> value
-
-      case expr: ExpressionBasedGraphOutputNode =>
-        val value = evaluateWomExpression(expr.womExpression, expr.womType, envFull)
-        val name = expr.graphOutputPort.name
-        envFull += (name -> value)
-        name -> value
-
-      case other =>
-        throw new Exception(s"unhandled output ${other}")
+        name -> (wdlType, value)
     }.toMap
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
       .map {
-        case (outputVarName, womValue) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+        case (outputVarName, (wdlType, wdlValue)) =>
+          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
       .toList

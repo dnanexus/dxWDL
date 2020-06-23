@@ -1,6 +1,6 @@
 {"echo_pairs.pairs_of_words":
   [
-    ["hello", "world"],
-    ["hello_again", "world_again"]
+    ["alpine", "env"],
+    ["shasta", "lake"]
   ]
 }

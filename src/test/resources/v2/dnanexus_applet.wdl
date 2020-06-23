@@ -1,5 +1,4 @@
-
-version development
+version 2.0
 
 workflow native_sum_wf {
     input {

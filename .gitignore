@@ -20,6 +20,8 @@ dx_app_extern.wdl
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
+antlr*.jar
+lib/
 
 # Draft WDL files
 test/scratch
@@ -27,6 +29,8 @@ test/scratch
 # misc
 applet_resources/
 src/main/resources/dxWDL_runtime.conf
+src/main/antlr4
+src/main/scala/wdlTools
 *.tmp
 
 # IntelliJ
@@ -41,3 +45,7 @@ metals.sbt
 
 # editor files
 .vscode/
+
+# antlr generated code
+src/main/java/Wdl*Lexer*
+src/main/java/Wdl*Parser*

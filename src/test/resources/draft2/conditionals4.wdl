@@ -15,12 +15,12 @@ workflow conditionals4 {
 
     scatter (i in [1, 3, 5]) {
         Int k = select_first([add2.result])
-        call lib.z_mul as mul {input: a=i, b=k, n=n}
+        call lib.z_mul as mul1 {input: a=i, b=k, n=n}
     }
 
     output {
         Int? add2_r = add2.result
-        Array[Int] mul = mul.result
+        Array[Int] mul = mul1.result
         File lc = lewis_carol
     }
 }

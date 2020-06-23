@@ -1,5 +1,7 @@
 version 1.0
 
+# It should be allowed to call bwa_for_hba without the
+# `damtools_memory` argument because it has a default.
 workflow scatter_subworkflow_with_optional {
     Array[Int] reads = [1, 2, 3]
     Array[Int] reads2 = [7, 9, 13]

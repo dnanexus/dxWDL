@@ -25,19 +25,18 @@ case class Tree(execDict: Map[String, ExecRecord]) {
   }
 
   def fromWorkflowIR(wf: IR.Workflow): JsValue = {
-    val vec = wf.stages.map {
-      case stage =>
-        val calleeRecord = execDict(stage.calleeName)
-        val jsv: JsValue = apply(calleeRecord)
-        JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
-    }.toVector
+    val vec = wf.stages.map { stage =>
+      val calleeRecord = execDict(stage.calleeName)
+      val jsv: JsValue = apply(calleeRecord)
+      JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
+    }
     val stages = JsArray(vec)
     JsObject("name" -> JsString(wf.name), "kind" -> JsString("workflow"), "stages" -> stages)
   }
 
   def apply(primary: Native.ExecRecord): JsValue = {
     primary.callable match {
-      case apl: IR.Applet if primary.links.size == 0 =>
+      case apl: IR.Applet if primary.links.isEmpty =>
         JsObject("name" -> JsString(apl.name),
                  "id" -> JsString(primary.dxExec.id),
                  "kind" -> JsString(kindToString(apl.kind)))
@@ -45,23 +44,21 @@ case class Tree(execDict: Map[String, ExecRecord]) {
       case apl: IR.Applet =>
         // applet that calls other applets/workflows at runtime.
         // recursively describe all called elements.
-        val links: Vector[JsValue] = primary.links.map {
-          case eli =>
-            val calleeRecord = execDict(eli.name)
-            apply(calleeRecord)
-        }.toVector
+        val links: Vector[JsValue] = primary.links.map { eli =>
+          val calleeRecord = execDict(eli.name)
+          apply(calleeRecord)
+        }
         JsObject("name" -> JsString(apl.name),
                  "id" -> JsString(primary.dxExec.id),
                  "kind" -> JsString(kindToString(apl.kind)),
                  "executables" -> JsArray(links))
 
       case wf: IR.Workflow =>
-        val vec = wf.stages.map {
-          case stage =>
-            val calleeRecord = execDict(stage.calleeName)
-            val jsv: JsValue = apply(calleeRecord)
-            JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
-        }.toVector
+        val vec = wf.stages.map { stage =>
+          val calleeRecord = execDict(stage.calleeName)
+          val jsv: JsValue = apply(calleeRecord)
+          JsObject("stage_name" -> JsString(stage.description), "callee" -> jsv)
+        }
         val stages = JsArray(vec)
         JsObject("name" -> JsString(wf.name),
                  "id" -> JsString(primary.dxExec.id),
@@ -128,7 +125,7 @@ object Tree {
 
     TreeJS.fields.get("kind") match {
       case Some(JsString("workflow")) => processWorkflow(prefix, TreeJS)
-      case Some(JsString(x))          => processApplets(prefix, stageDesc, TreeJS)
+      case Some(JsString(_))          => processApplets(prefix, stageDesc, TreeJS)
       case _                          => throw new Exception(s"Missing 'kind' field to be in execTree's entry ${TreeJS}.")
     }
   }
@@ -174,7 +171,7 @@ object Tree {
             }
             generateTreeFromJson(callee, Some(stageName), wholePrefix)
           }
-        }.toVector
+        }
         generateTreeBlock(prefix, stageLines, "Workflow: ", Console.YELLOW + wfName)
       }
     }
@@ -184,19 +181,19 @@ object Tree {
                              stageDesc: Option[String],
                              TreeJS: JsObject): String = {
     TreeJS.getFields("name", "id", "kind", "executables") match {
-      case Seq(JsString(stageName), JsString(id), JsString(kind)) => {
+      case Seq(JsString(stageName), JsString(_), JsString(kind)) => {
         val name = determineDisplayName(stageDesc, stageName)
         generateTreeBlock(prefix, Vector.empty, s"App ${kind}: ", Console.WHITE + name)
 
       }
-      case Seq(JsString(stageName), JsString(id), JsString(kind), JsArray(executables)) => {
+      case Seq(JsString(stageName), JsString(_), JsString(kind), JsArray(executables)) => {
         val links = executables.zipWithIndex.map {
           case (link, index) => {
             val isLast = index == (executables.size - 1)
             val wholePrefix = generateWholePrefix(prefix, isLast)
             generateTreeFromJson(link.asJsObject, None, wholePrefix)
           }
-        }.toVector
+        }
         val name = determineDisplayName(stageDesc, stageName)
         generateTreeBlock(prefix, links, s"App ${kind}: ", Console.WHITE + name)
       }

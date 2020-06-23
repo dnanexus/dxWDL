@@ -8,9 +8,8 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import wom.callable.{CallableTaskDefinition, MetaValueElement}
-import wom.types.WomType
-import wom.values.WomValue
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.eval.WdlValues
 
 import dxWDL.base.Utils
 import dxWDL.dx.{ConstraintOper, DxFile, DxWorkflowStage}
@@ -41,13 +40,25 @@ object IR {
   val META_CALL_NAMES = "call_names"
   val META_RUN_ON_SINGLE_NODE = "run_on_single_node"
 
+  // This is equivalent to the MetaValue type from the typed-abstract-syntax. It
+  // strips the text-source token so it would be easier to compare maps
+  // and complex structures.
+  sealed abstract class MetaValue
+  final case object MetaValueNull extends MetaValue
+  final case class MetaValueBoolean(value: Boolean) extends MetaValue
+  final case class MetaValueInt(value: Int) extends MetaValue
+  final case class MetaValueFloat(value: Double) extends MetaValue
+  final case class MetaValueString(value: String) extends MetaValue
+  final case class MetaValueObject(value: Map[String, MetaValue]) extends MetaValue
+  final case class MetaValueArray(value: Vector[MetaValue]) extends MetaValue
+
   sealed abstract class TaskAttr
   final case class TaskAttrTitle(text: String) extends TaskAttr
   final case class TaskAttrDescription(text: String) extends TaskAttr
   final case class TaskAttrSummary(text: String) extends TaskAttr
   final case class TaskAttrDeveloperNotes(text: String) extends TaskAttr
   final case class TaskAttrVersion(text: String) extends TaskAttr
-  final case class TaskAttrDetails(details: Map[String, MetaValueElement]) extends TaskAttr
+  final case class TaskAttrDetails(details: Map[String, MetaValue]) extends TaskAttr
   final case class TaskAttrOpenSource(isOpenSource: Boolean) extends TaskAttr
   final case class TaskAttrCategories(categories: Vector[String]) extends TaskAttr
   final case class TaskAttrTypes(types: Vector[String]) extends TaskAttr
@@ -59,7 +70,7 @@ object IR {
   final case class WorkflowAttrDescription(text: String) extends WorkflowAttr
   final case class WorkflowAttrSummary(text: String) extends WorkflowAttr
   final case class WorkflowAttrVersion(text: String) extends WorkflowAttr
-  final case class WorkflowAttrDetails(details: Map[String, MetaValueElement]) extends WorkflowAttr
+  final case class WorkflowAttrDetails(details: Map[String, MetaValue]) extends WorkflowAttr
   final case class WorkflowAttrTypes(types: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrTags(tags: Vector[String]) extends WorkflowAttr
   final case class WorkflowAttrProperties(properties: Map[String, String]) extends WorkflowAttr
@@ -162,7 +173,7 @@ object IR {
       extends PatternsRepr
 
   // TODO: we can probably get rid of some of the repr types and just leave them as
-  // MetaValueElements
+  // MetaValue
 
   /** Compile time representation of the dxapp IO spec choices
     * Choices is an array of suggested values, where each value can be raw (a primitive type)
@@ -267,8 +278,8 @@ object IR {
   //
   case class CVar(
       name: String,
-      womType: WomType,
-      default: Option[WomValue],
+      wdlType: WdlTypes.T,
+      default: Option[WdlValues.V],
       attrs: Option[Vector[IOAttr]] = None
   ) {
     // dx does not allow dots in variable names, so we
@@ -334,10 +345,10 @@ object IR {
   //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
   sealed trait AppletKind
   case class AppletKindNative(id: String) extends AppletKind
-  case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
+  case class AppletKindTask(task: TAT.Task) extends AppletKind
   case class AppletKindWfFragment(calls: Vector[String],
                                   blockPath: Vector[Int],
-                                  fqnDictTypes: Map[String, WomType])
+                                  fqnDictTypes: Map[String, WdlTypes.T])
       extends AppletKind
   case object AppletKindWfInputs extends AppletKind
 
@@ -352,11 +363,10 @@ object IR {
   /** @param name          Name of applet
     * @param inputs        input arguments
     * @param outputs       output arguments
-    * @param instaceType   a platform instance name
+    * @param instanceType  a platform instance name
     * @param docker        is docker used? if so, what image
     * @param kind          Kind of applet: task, scatter, ...
-    * @param task          Task definition
-    * @param womSourceCode WDL/CWL source code for task.
+    * @param document          Task definition
     * @param meta          Additional applet metadata
     * @param runtimeHints  Runtime hints
     */
@@ -366,12 +376,12 @@ object IR {
                     instanceType: InstanceType,
                     docker: DockerImage,
                     kind: AppletKind,
-                    womSourceCode: String,
+                    document: TAT.Document,
                     meta: Option[Vector[TaskAttr]] = None,
                     runtimeHints: Option[Vector[RuntimeHint]] = None)
       extends Callable {
-    def inputVars = inputs
-    def outputVars = outputs
+    def inputVars: Vector[CVar] = inputs
+    def outputVars: Vector[CVar] = outputs
   }
 
   /** An input to a stage. Could be empty, a wdl constant,
@@ -380,7 +390,7 @@ object IR {
     */
   sealed trait SArg
   case object SArgEmpty extends SArg
-  case class SArgConst(wdlValue: WomValue) extends SArg
+  case class SArgConst(wdlValue: WdlValues.V) extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
   case class SArgWorkflowInput(argName: CVar) extends SArg
 
@@ -410,13 +420,13 @@ object IR {
                       inputs: Vector[(CVar, SArg)],
                       outputs: Vector[(CVar, SArg)],
                       stages: Vector[Stage],
-                      womSourceCode: String,
+                      document: TAT.Workflow,
                       locked: Boolean,
                       level: Level.Value,
                       meta: Option[Vector[WorkflowAttr]] = None)
       extends Callable {
-    def inputVars = inputs.map { case (cVar, _)   => cVar }.toVector
-    def outputVars = outputs.map { case (cVar, _) => cVar }.toVector
+    def inputVars: Vector[CVar] = inputs.map { case (cVar, _)   => cVar }
+    def outputVars: Vector[CVar] = outputs.map { case (cVar, _) => cVar }
   }
 
   // dependencies: the order in which to compile the workflows and tasks.
@@ -425,5 +435,5 @@ object IR {
   case class Bundle(primaryCallable: Option[Callable],
                     allCallables: Map[String, Callable],
                     dependencies: Vector[String],
-                    typeAliases: Map[String, WomType])
+                    typeAliases: Map[String, WdlTypes.T])
 }

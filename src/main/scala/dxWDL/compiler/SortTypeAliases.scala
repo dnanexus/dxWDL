@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import wom.types._
+import wdlTools.types.WdlTypes
 import dxWDL.base.{Utils, Verbose}
 
 // sort the definitions by dependencies
@@ -10,27 +10,25 @@ case class SortTypeAliases(verbose: Verbose) {
   // figure out all the types that type [a] depends on. Ignore
   // standard types like Int, String, Array, etc.
   //
-  private def dependencies(a: WomType): Set[String] = {
+  private def dependencies(a: WdlTypes.T): Set[String] = {
     a match {
       // Base case: primitive types.
-      case WomNothingType | WomBooleanType | WomIntegerType | WomLongType | WomFloatType |
-          WomStringType | WomSingleFileType =>
+      case WdlTypes.T_Boolean | WdlTypes.T_Int | WdlTypes.T_Float | WdlTypes.T_String |
+          WdlTypes.T_File | WdlTypes.T_Directory =>
         Set.empty
 
       // compound types
-      case WomMaybeEmptyArrayType(memberType) =>
+      case WdlTypes.T_Array(memberType, _) =>
         dependencies(memberType)
-      case WomMapType(keyType, valueType) =>
+      case WdlTypes.T_Map(keyType, valueType) =>
         dependencies(keyType) ++ dependencies(valueType)
-      case WomNonEmptyArrayType(memberType) =>
+      case WdlTypes.T_Optional(memberType) =>
         dependencies(memberType)
-      case WomOptionalType(memberType) =>
-        dependencies(memberType)
-      case WomPairType(lType, rType) =>
+      case WdlTypes.T_Pair(lType, rType) =>
         dependencies(lType) ++ dependencies(rType)
 
       // structs
-      case WomCompositeType(typeMap, Some(structName)) =>
+      case WdlTypes.T_Struct(structName, typeMap) =>
         typeMap.foldLeft(Set(structName)) {
           case (accu, (_, t)) =>
             accu ++ dependencies(t)
@@ -38,48 +36,49 @@ case class SortTypeAliases(verbose: Verbose) {
 
       // catch-all for other types not currently supported
       case other =>
-        throw new Exception(s"Unsupported WOM type ${other}, ${other.stableName}")
+        throw new Exception(s"Unsupported WDL type ${other}")
     }
   }
 
-  private def dependenciesOuter(a: WomType): Set[String] = {
+  private def dependenciesOuter(a: WdlTypes.T): Set[String] = {
     val d = dependencies(a)
     a match {
-      case WomCompositeType(_, Some(name)) => d - name
-      case _                               => d
+      case WdlTypes.T_Struct(name, _) => d - name
+      case _                          => d
     }
   }
 
-  private def next(remaining: Vector[WomType],
-                   alreadySorted: Vector[WomType]): (Vector[WomType], Vector[WomType]) = {
+  private def next(remaining: Vector[WdlTypes.T],
+                   alreadySorted: Vector[WdlTypes.T]): (Vector[WdlTypes.T], Vector[WdlTypes.T]) = {
     val alreadySortedNames: Set[String] = alreadySorted.collect {
-      case WomCompositeType(_, Some(name)) => name
+      case WdlTypes.T_Struct(name, _) => name
     }.toSet
 
     val (zeroDeps, top) = remaining.partition {
-      case a: WomCompositeType =>
+      case a: WdlTypes.T_Struct =>
         val deps = dependenciesOuter(a)
         Utils.trace(verbose2, s"dependencies(${a}) === ${deps}")
         deps.subsetOf(alreadySortedNames)
       case _ => true
     }
-    assert(!zeroDeps.isEmpty)
-    (zeroDeps.toVector, top.toVector)
+    assert(zeroDeps.nonEmpty)
+    (zeroDeps, top)
   }
 
-  private def getNames(ta: Vector[WomType]): Vector[String] = {
-    ta.map {
-      case WomCompositeType(_, Some(name)) => name
-    }.toVector
+  private def getNames(ta: Vector[WdlTypes.T]): Vector[String] = {
+    ta.flatMap {
+      case WdlTypes.T_Struct(name, _) => Some(name)
+      case _                          => None
+    }
   }
 
-  private def apply2(typeAliases: Vector[WomType]): Vector[WomType] = {
+  private def apply2(typeAliases: Vector[WdlTypes.T]): Vector[WdlTypes.T] = {
     val N = typeAliases.size
 
-    var accu = Vector.empty[WomType]
+    var accu = Vector.empty[WdlTypes.T]
     var crnt = typeAliases
 
-    while (!crnt.isEmpty) {
+    while (crnt.nonEmpty) {
       Utils.trace(verbose2, s"accu=${getNames(accu)}")
       Utils.trace(verbose2, s"crnt=${getNames(crnt)}")
       val (zeroDeps, top) = next(crnt, accu)
@@ -90,14 +89,14 @@ case class SortTypeAliases(verbose: Verbose) {
     accu
   }
 
-  def apply(typeAliases: Vector[(String, WomType)]): Vector[(String, WomType)] = {
+  def apply(typeAliases: Vector[(String, WdlTypes.T)]): Vector[(String, WdlTypes.T)] = {
     val justTypes = typeAliases.map { case (_, x) => x }
     val sortedTypes = apply2(justTypes)
 
     sortedTypes.map {
-      case a @ WomCompositeType(_, Some(name)) =>
+      case a @ WdlTypes.T_Struct(name, _) =>
         (name, a)
       case _ => throw new Exception("sanity")
-    }.toVector
+    }
   }
 }

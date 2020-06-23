@@ -1,5 +1,14 @@
 # Release Notes
 
+## 2.0.0 (in development)
+
+- Replaced WOM with wdlTools
+- TODO:
+    - Update Dockerfile
+    - Publish wdlTools to MavenCentral and update build.sbt
+    - Map parameter_meta output parameters, remove note in ExpertOptions
+    - Update Internals.md
+
 ## 1.47.2 05-Jun-2020
 - Upgrade dx-download-agent (includes a fix to the early database close issue) 
 - Fix to describing billTo of a project

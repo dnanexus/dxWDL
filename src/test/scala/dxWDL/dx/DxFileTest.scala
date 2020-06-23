@@ -1,8 +1,10 @@
 package dxWDL.dx
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.flatspec.AnyFlatSpec
 import spray.json._
-class DxFileTest extends FlatSpec with Matchers {
+
+class DxFileTest extends AnyFlatSpec with Matchers {
 
   val TEST_PROJECT: DxProject = DxProject("project-FGpfqjQ0ffPF1Q106JYP2j3v") // dxWDL_playground
   val PUBLIC_PROJECT: DxProject = DxProject("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // dxWDL_CI
