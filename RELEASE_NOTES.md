@@ -1,13 +1,15 @@
 # Release Notes
 
-## 2.0.0 (in development)
+## 2.0.0-rc 23-Jun-2020
 
 - Replaced WOM with wdlTools
 - TODO:
     - Update Dockerfile
-    - Publish wdlTools to MavenCentral and update build.sbt
-    - Map parameter_meta output parameters, remove note in ExpertOptions
-    - Update Internals.md
+    - Publish wdlTools to MavenCentral and update `build.sbt`
+    - Map `parameter_meta` output parameters, remove note in ExpertOptions
+    - Update `Internals.md`
+- Replaced Travis with Github Actions for unit testing
+- Optimized bulk description of files by replacing `system/describeDataObjects` with `system/findDataObjects` API call and scoping file search to projects
 
 ## 1.47.2 05-Jun-2020
 - Upgrade dx-download-agent (includes a fix to the early database close issue) 
