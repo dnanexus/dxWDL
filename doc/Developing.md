@@ -55,6 +55,18 @@
   * Make the file executable (e.g. `chmod +x .git/hooks/pre-commit`)
   * This hook runs the code formatter before committing code. You can run this command manually, but it is easiest just to have it run automatically.
 
+## Developing in a Docker container
+
+A Dockerfile with all the dependencies to build and test dxWDL is available [here](docker/Dockerfile). To build an image from it and run a Docker container, run from the [docker](docker/) directory:
+
+```
+make
+```
+
+See below on how to run unit and integration tests. To recompile dxWDL with your updates, run an integration test, as described below.
+
+> Always make sure you push your changes to the remote github repo before destroying your Docker container.
+
 ## Adding new code
 
 * Follow the style guidelines (below).
@@ -109,12 +121,28 @@ You may also need to delete artifiacts that have been cached on the platform:
 $ dx rm -r dxWDL_playground:/builds/<username>/<version>
 ```
 
+Note: <username> is your local computer's user so if you run tests from root, it will be under root/ folder in dxWDL_playground.
+
 Finally, run the integration tests. From the root dxWDL directory, run `./scripts/run_tests.py`.
 
 Note that the test script does a lot of things for you. If for some reason you want to run them manually, here is what happens:
 
 * TODO: fill out this list
 * The dxWDL JAR file is built and staged in the root dxWDL directory. To do this manually, run `sbt assembly`, then move the JAR file from the `target` folder to the root dxWDL folder, e.g. `mv target/dxWDL.jar ./dxWDL-1.44.jar`.
+
+You can also execute a subset of tests, for example to run medium set of tests:
+
+```
+./scripts/run_tests.py --test M
+```
+
+It's also possible to specify one test to run from the [/test](/test) directory and invoke it by name, for example:
+
+```
+./scripts/run_tests.py --test add3
+```
+
+Check the test runner script `--help` for more options.
 
 ### Other sbt tips
 

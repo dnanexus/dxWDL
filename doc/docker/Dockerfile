@@ -70,15 +70,16 @@ RUN go get github.com/google/subcommands && \
 # Obtain fresh repositories
 RUN mkdir -p devel && cd devel && \
     git clone https://github.com/dnanexus/dx-toolkit.git && \
-    git clone https://github.com/dnanexus/dxfuse.git && \
-    git clone https://github.com/broadinstitute/cromwell.git && \
-    wget https://github.com/broadinstitute/cromwell/releases/download/49/cromwell-49.jar && \
-    wget https://github.com/broadinstitute/cromwell/releases/download/49/womtool-49.jar
+    git clone https://github.com/dnanexus/dxfuse.git
 
 # move the dxfuse source code to the golang directory
 # build the executable
 RUN mv /devel/dxfuse /go/src/github.com/dnanexus && \
     go build -o /go/bin/dxfuse /go/src/github.com/dnanexus/dxfuse/cli/main.go
+
+# download and setup wdlTools
+RUN git clone https://github.com/dnanexus-rnd/wdlTools.git && \
+    cd wdlTools && make && sbt compile && sbt publishLocal
 
 # Clone and make dxWDL
 RUN git clone https://github.com/dnanexus/dxWDL.git
