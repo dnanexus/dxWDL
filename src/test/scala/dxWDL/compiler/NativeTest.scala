@@ -3,6 +3,10 @@ package dxWDL.compiler
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Path, Paths}
 
+import dx.core.io.Furl
+import dx.api.{DxApplet, DxFile, DxFindDataObjects, DxPath, DxProject, DxWorkflow}
+import dx.compiler.IR
+import dx.util.Verbose
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterAll
@@ -10,8 +14,8 @@ import org.scalatest.BeforeAndAfterAll
 import scala.io.Source
 import dxWDL.Main
 import dxWDL.Main.SuccessfulTermination
-import dxWDL.base.{ParseWdlSourceFile, Utils, Verbose}
-import dxWDL.dx._
+import dx.core.languages.wdl.ParseSource
+import dx.core.util.SysUtils
 import spray.json._
 
 // This test module requires being logged in to the platform.
@@ -72,7 +76,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val topDir = Paths.get(System.getProperty("user.dir"))
     native_applets.foreach { app =>
       try {
-        val (_, _) = Utils.execCommand(
+        val (_, _) = SysUtils.execCommand(
             s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/${unitTestsPath}/applets/",
             quiet = true
         )
@@ -172,7 +176,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set(
         "native_sum",
@@ -208,14 +212,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
 
   it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
     val dxObj = DxPath.resolveDxPath(
-        s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
+        s"${Furl.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
     dxObj shouldBe a[DxApplet]
     val applet = dxObj.asInstanceOf[DxApplet]
@@ -243,7 +247,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseWdlSourceFile(false).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(false).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -660,7 +664,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.developerNotes shouldBe Some("Check out my sick bash expression! Three dolla signs!!!")
     desc.properties match {
       case Some(m) =>
-        (m -- Set(Utils.VERSION_PROP, Utils.CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+        (m -- Set(VERSION_PROP, CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
       case _ => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("Adds two int together")
@@ -857,7 +861,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
     desc.properties match {
       case Some(m) =>
-        (m -- Set(Utils.VERSION_PROP, Utils.CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+        (m -- Set(VERSION_PROP, CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
       case _ => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("A workflow that defines some metadata")
@@ -909,7 +913,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -936,7 +940,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -959,7 +963,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -1015,7 +1019,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 1
-    reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS)
+    reorgInput.fields.keys shouldBe Set(SysUtils.REORG_STATUS)
   }
 
   // ignore for now as the test will fail in staging
@@ -1024,7 +1028,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
-    val (uploadOut, _) = Utils.execCommand(
+    val (uploadOut, _) = SysUtils.execCommand(
         s"dx upload ${path.toString} --destination /reorg_tests --brief"
     )
     val fileId = uploadOut.trim
@@ -1061,7 +1065,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 2
-    reorgInput.fields.keys shouldBe Set(Utils.REORG_STATUS, Utils.REORG_CONFIG)
+    reorgInput.fields.keys shouldBe Set(SysUtils.REORG_STATUS, REORG_CONFIG)
   }
 
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
@@ -1118,7 +1122,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the job reuse flag is set
     val (stdout, _) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
@@ -1145,7 +1149,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the job reuse flag is set
     val (stdout, _) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
@@ -1171,7 +1175,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the delayWorkspaceDestruction flag is set
     val (stdout, _) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
@@ -1198,7 +1202,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the flag is set on the resulting workflow
     val (stdout, _) =
-      Utils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)

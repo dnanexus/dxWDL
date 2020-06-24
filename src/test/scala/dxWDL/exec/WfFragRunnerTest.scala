@@ -1,16 +1,22 @@
 package dxWDL.exec
 
 import java.nio.file.{Path, Paths}
+
+import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.DxInstanceType
+import dx.api.{DxInstanceType, InstanceTypeDB}
+import dx.compiler.WdlRuntimeAttrs
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-
-import wdlTools.eval.{Context => EvalContext, WdlValues}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
-
-import dxWDL.base.{Language, ParseWdlSourceFile, RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
-import dxWDL.dx.ExecLinkInfo
-import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, WdlEvaluator}
+import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import dx.core.languages
+import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, ParseSource}
+import dx.core.languages.Language
+import dx.core.util.SysUtils
+import dx.exec.{WfFragInputOutput, WfFragRunner}
+import dxWDL.util.{ignore => ignoreObj}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -22,23 +28,23 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), gpu = false)
   private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
 
-  private def setup(): (DxPathConfig, DxIoFunctions) = {
+  private def setup(): (DxPathConfig, DxFileAccessProtocol) = {
     // Create a clean directory in "/tmp" for the task to use
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
-    Utils.deleteRecursive(jobHomeDir.toFile)
-    Utils.safeMkdir(jobHomeDir)
+    SysUtils.deleteRecursive(jobHomeDir.toFile)
+    SysUtils.safeMkdir(jobHomeDir)
     val dxPathConfig =
       DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = runtimeDebugLevel >= 1)
     dxPathConfig.createCleanDirs()
-    val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
+    val dxIoFunctions = DxFileAccessProtocol(Map.empty, dxPathConfig, runtimeDebugLevel)
     (dxPathConfig, dxIoFunctions)
   }
 
   private def setupFragRunner(dxPathConfig: DxPathConfig,
-                              dxIoFunctions: DxIoFunctions,
+                              dxIoFunctions: DxFileAccessProtocol,
                               wfSourceCode: String): (TAT.Workflow, WfFragRunner) = {
     val (wf, taskDir, typeAliases, document) =
-      ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
+      ParseSource(false).parseWdlWorkflow(wfSourceCode)
     val fragInputOutput =
       WfFragInputOutput(dxIoFunctions, null, typeAliases, document.version.value, runtimeDebugLevel)
     val fragRunner = WfFragRunner(
@@ -67,10 +73,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   def evaluateWdlExpression(expr: TAT.Expr,
                             env: Map[String, WdlValues.V],
-                            dxIoFunctions: DxIoFunctions,
+                            dxIoFunctions: DxFileAccessProtocol,
                             language: Language.Value): WdlValues.V = {
     // build an object capable of evaluating WDL expressions
-    val evaluator = WdlEvaluator.make(dxIoFunctions, Language.toWdlVersion(language))
+    val evaluator = Evaluator.make(dxIoFunctions, Language.toWdlVersion(language))
     evaluator.applyExpr(expr, EvalContext(env))
   }
 
@@ -79,7 +85,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val (_, dxIoFunctions) = setup()
 
     val (language, wdlBundle, _, _) =
-      ParseWdlSourceFile(false).apply(source, List.empty)
+      ParseSource(false).apply(source, List.empty)
 
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
@@ -105,7 +111,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate a scatter without a call" in {
     val path = pathFromBasename("frag_runner", "scatter_no_call.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -143,7 +149,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate a conditional without a call" in {
     val path = pathFromBasename("frag_runner", "conditional_no_call.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -165,7 +171,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate a nested conditional/scatter without a call" in {
     val path = pathFromBasename("frag_runner", "nested_no_call.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -185,8 +191,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "create proper names for scatter results" in {
     val path = pathFromBasename("frag_runner", "strings.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
-    val (wf, _, _, _) = ParseWdlSourceFile(false).parseWdlWorkflow(wfSourceCode)
+    val wfSourceCode = SysUtils.readFileContent(path)
+    val (wf, _, _, _) = ParseSource(false).parseWdlWorkflow(wfSourceCode)
 
     val scatters = wf.body.collect {
       case x: TAT.Scatter => x
@@ -199,7 +205,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "Make sure calls cannot be handled by evalExpressions" in {
     val path = pathFromBasename("draft2", "shapes.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -214,7 +220,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "handles draft2" in {
     val path = pathFromBasename("draft2", "conditionals2.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, _) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -223,12 +229,12 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WdlValue])
  Utils.ignore(results)*/
-    Utils.ignore(subBlocks)
+    ignoreObj(subBlocks)
   }
 
   it should "evaluate expressions that define variables" in {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -280,7 +286,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate call inputs properly" in {
     val path = pathFromBasename("draft2", "various_calls.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
@@ -318,7 +324,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate call constant inputs" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
@@ -330,7 +336,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "expressions with structs" in {
     val path = pathFromBasename("frag_runner", "House.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -361,7 +367,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "fill in missing optionals" in {
     val path = pathFromBasename("frag_runner", "missing_args.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -376,7 +382,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate expressions in correct order" in {
     val path = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -388,7 +394,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   it should "handle pair field access (left/right)" taggedAs EdgeTest in {
     val path = pathFromBasename("frag_runner", "scatter_with_eval.wdl")
-    val wfSourceCode = Utils.readFileContent(path)
+    val wfSourceCode = SysUtils.readFileContent(path)
 
     val (dxPathConfig, dxIoFunctions) = setup()
     val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
@@ -401,5 +407,21 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                                      JsString("Martin_13"),
                                      JsString("Shelly_67"),
                                      JsString("Amy_2"))
+  }
+
+  it should "Build limited sized names" in {
+    val retval = WfFragRunner.buildLimitedSizeName(Vector(1, 2, 3).map(_.toString), 10)
+    retval should be("[1, 2, 3]")
+
+    val retval2 = WfFragRunner.buildLimitedSizeName(Vector(100, 200, 300).map(_.toString), 10)
+    retval2 should be("[100, 200]")
+
+    WfFragRunner.buildLimitedSizeName(Vector("A", "B", "hel", "nope"), 10) should be("[A, B, hel]")
+
+    WfFragRunner.buildLimitedSizeName(Vector("A", "B", "C", "D", "neverland"), 13) should be(
+        "[A, B, C, D]"
+    )
+
+    WfFragRunner.buildLimitedSizeName(Vector.empty, 4) should be("[]")
   }
 }

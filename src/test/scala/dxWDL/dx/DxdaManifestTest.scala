@@ -1,6 +1,9 @@
 package dxWDL.dx
 
 import java.nio.file.{Path, Paths}
+
+import dx.core.io.DxdaManifest
+import dx.api.{DxFile, DxPath, DxProject}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._

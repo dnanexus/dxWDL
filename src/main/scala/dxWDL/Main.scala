@@ -3,10 +3,27 @@ package dxWDL
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 
+import dx.core.io.DxPathConfig
+import dx.core.{AppException, AppInternalException}
+import dx.Field
+import dx.api.{DxFile, DxFileDescribe, DxProject, DxUtils}
+import dx.compiler.{Extras, IR, Top, WdlRuntimeAttrs}
+import dx.util.{JsUtils, Logger, Verbose}
 import spray.json.{JsString, _}
-import dxWDL.base._
-import dxWDL.compiler.Tree
+import dxWDL.compiler.{
+  CompilerFlag,
+  CompilerOptions,
+  JsonTreePrinter,
+  PrettyTreePrinter,
+  TreePrinter
+}
+import dxWDL.config.WdlRuntimeAttrs
 import dxWDL.dx._
+import dxWDL.exec.{RunnerWfFragmentMode, jobFilesOfHomeDir}
+import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
+import dx.core.languages.Language
+import dx.core.util.SysUtils
+import dx.exec.{JobInputOutput, WfFragInputOutput}
 import dxWDL.util._
 
 import scala.collection.mutable
@@ -15,16 +32,18 @@ object Main extends App {
   sealed trait Termination
   case class SuccessfulTermination(output: String) extends Termination
   case class SuccessfulTerminationTree(pretty: Either[String, JsValue]) extends Termination
-  case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
+  case class SuccessfulTerminationIR(bundle: IR.Bundle) extends Termination
   case class UnsuccessfulTermination(output: String) extends Termination
   case class BadUsageTermination(info: String) extends Termination
 
   type OptionsMap = Map[String, List[String]]
 
   object Actions extends Enumeration {
+    type Actions = Value
     val Compile, Config, DXNI, Internal, Version, Describe = Value
   }
   object InternalOp extends Enumeration {
+    type InternalOp = Value
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
         TaskCheckInstanceType, TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value
   }
@@ -207,6 +226,12 @@ object Main extends App {
     options.toMap
   }
 
+  private def exceptionToString(e: Throwable): String = {
+    val sw = new java.io.StringWriter
+    e.printStackTrace(new java.io.PrintWriter(sw))
+    sw.toString
+  }
+
   // Report an error, since this is called from a bash script, we
   // can't simply raise an exception. Instead, we write the error to
   // a standard JSON file.
@@ -224,13 +249,13 @@ object Main extends App {
     val errMsg = JsObject(
         "error" -> JsObject(
             "type" -> JsString(errType),
-            "message" -> JsString(Utils.sanitize(e.getMessage))
+            "message" -> JsString(JsUtils.sanitize(e.getMessage))
         )
     ).prettyPrint
-    Utils.writeFileContent(jobErrorPath, errMsg)
+    SysUtils.writeFileContent(jobErrorPath, errMsg)
 
     // Write out a full stack trace to standard error.
-    System.err.println(Utils.exceptionToString(e))
+    System.err.println(exceptionToString(e))
   }
 
   private def pathOptions(options: OptionsMap, verbose: Verbose): (DxProject, String) = {
@@ -289,14 +314,14 @@ object Main extends App {
         DxPath.resolveProject(projectRaw)
       } catch {
         case e: Exception =>
-          Utils.error(e.getMessage)
+          Logger.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${projectRaw}, you probably need to be logged into
                   |the platform""".stripMargin
           )
       }
-    Utils.trace(verbose.on, s"""|project ID: ${dxProject.id}
-                                |folder: ${dxFolder}""".stripMargin)
+    Logger.trace(verbose.on, s"""|project ID: ${dxProject.id}
+                                 |folder: ${dxFolder}""".stripMargin)
     (dxProject, dxFolder)
   }
 
@@ -369,7 +394,7 @@ object Main extends App {
     val extras = options.get("extras") match {
       case None => None
       case Some(List(p)) =>
-        val contents = Utils.readFileContent(Paths.get(p))
+        val contents = SysUtils.readFileContent(Paths.get(p))
         Some(Extras.parse(contents.parseJson, verbose))
       case _ => throw new Exception("extras specified twice")
     }
@@ -408,7 +433,7 @@ object Main extends App {
       }
     }
 
-    CompilerOptions(
+    compiler.CompilerOptions(
         options contains "archive",
         compileMode,
         defaults,
@@ -479,7 +504,7 @@ object Main extends App {
         DxPath.resolveProject(project)
       } catch {
         case e: Exception =>
-          Utils.error(e.getMessage)
+          Logger.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${project}, you probably need to be logged into
                   |the platform""".stripMargin
@@ -530,18 +555,18 @@ object Main extends App {
         parseCmdlineOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
+          return BadUsageTermination(exceptionToString(e))
       }
     if (options contains "help")
       return BadUsageTermination("")
 
     try {
       val cOpt = compilerOptions(options)
-      val top = compiler.Top(cOpt)
+      val top = Top(cOpt)
       val (dxProject, folder) = pathOptions(options, cOpt.verbose)
       cOpt.compileMode match {
         case CompilerFlag.IR =>
-          val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
+          val ir: IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
           SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
@@ -557,7 +582,7 @@ object Main extends App {
       }
     } catch {
       case e: Throwable =>
-        UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(exceptionToString(e))
     }
   }
 
@@ -604,7 +629,7 @@ object Main extends App {
         DxWorkflow.getInstance(workflowId)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
+          return BadUsageTermination(exceptionToString(e))
       }
 
     val options =
@@ -612,7 +637,7 @@ object Main extends App {
         parseDescribeOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
-          return BadUsageTermination(Utils.exceptionToString(e))
+          return BadUsageTermination(exceptionToString(e))
       }
 
     if (options contains "help")
@@ -640,7 +665,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(exceptionToString(e))
     }
   }
 
@@ -650,7 +675,7 @@ object Main extends App {
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
-        UnsuccessfulTermination(Utils.exceptionToString(e))
+        UnsuccessfulTermination(exceptionToString(e))
     }
   }
 
@@ -672,7 +697,7 @@ object Main extends App {
       }
     } catch {
       case e: Throwable =>
-        BadUsageTermination(Utils.exceptionToString(e))
+        BadUsageTermination(exceptionToString(e))
     }
   }
 
@@ -682,23 +707,23 @@ object Main extends App {
                          jobInputPath: Path,
                          jobOutputPath: Path,
                          dxPathConfig: DxPathConfig,
-                         dxIoFunctions: DxIoFunctions,
+                         dxIoFunctions: DxFileAccessProtocol,
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
                          rtDebugLvl: Int): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
     val verbose = rtDebugLvl > 0
-    val inputLines: String = Utils.readFileContent(jobInputPath)
+    val inputLines: String = SysUtils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases, document) = ParseWdlSourceFile(verbose).parseWdlTask(taskSourceCode)
+    val (task, typeAliases, document) = ParseSource(verbose).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
 
     val jobInputOutput =
-      exec.JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
+      JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     System.err.println(s"""|Main processing inputs in taskAction
                            |originalInputs:
@@ -748,7 +773,7 @@ object Main extends App {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        SysUtils.writeFileContent(jobOutputPath, ast_pp)
         SuccessfulTermination(s"success ${op}")
 
       case InternalOp.TaskRelaunch =>
@@ -757,7 +782,7 @@ object Main extends App {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        SysUtils.writeFileContent(jobOutputPath, ast_pp)
         SuccessfulTermination(s"success ${op}")
 
       case _ =>
@@ -773,7 +798,7 @@ object Main extends App {
                                  jobInputPath: Path,
                                  jobOutputPath: Path,
                                  dxPathConfig: DxPathConfig,
-                                 dxIoFunctions: DxIoFunctions,
+                                 dxIoFunctions: DxFileAccessProtocol,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  rtDebugLvl: Int): Termination = {
@@ -783,19 +808,15 @@ object Main extends App {
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = Utils.readFileContent(jobInputPath)
+    val inputLines: String = SysUtils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
-      ParseWdlSourceFile(verbose).parseWdlWorkflow(wdlSourceCode)
+      ParseSource(verbose).parseWdlWorkflow(wdlSourceCode)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      exec.WfFragInputOutput(dxIoFunctions,
-                             dxProject,
-                             typeAliases,
-                             document.version.value,
-                             rtDebugLvl)
+      WfFragInputOutput(dxIoFunctions, dxProject, typeAliases, document.version.value, rtDebugLvl)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -874,7 +895,7 @@ object Main extends App {
     // values that were not specified.
     val json = JsObject(outputFields)
     val ast_pp = json.prettyPrint
-    Utils.writeFileContent(jobOutputPath, ast_pp)
+    SysUtils.writeFileContent(jobOutputPath, ast_pp)
 
     SuccessfulTermination(s"success ${op}")
   }
@@ -890,10 +911,10 @@ object Main extends App {
   private def retrieveFromDetails(
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
-    val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
+    val jobInfo = SysUtils.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
-        Utils.trace(
+        Logger.trace(
             verbose = true,
             s"""|applet field not found locally, performing
                 |an API call.
@@ -909,10 +930,10 @@ object Main extends App {
 
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
-    val wdlSourceCode = Utils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
+    val wdlSourceCode = SysUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+    val dbRaw = SysUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
     val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
     val runtimeAttrs: Option[WdlRuntimeAttrs] =
@@ -933,7 +954,7 @@ object Main extends App {
   // Make a list of all the files cloned for access by this applet.
   // Bulk describe all the them.
   private def runtimeBulkFileDescribe(jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
-    val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
+    val inputs: JsValue = SysUtils.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
       case (_, jsElem) => DxUtils.findDxFiles(jsElem)
@@ -958,11 +979,10 @@ object Main extends App {
         val homeDir = Paths.get(args(1))
         val rtDebugLvl = parseRuntimeDebugLevel(args(2))
         val streamAllFiles = parseStreamAllFiles(args(3))
-        val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
-          Utils.jobFilesOfHomeDir(homeDir)
+        val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
-        val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
+        val dxIoFunctions = DxFileAccessProtocol(fileInfoDir, dxPathConfig, rtDebugLvl)
 
         // Get the WDL source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WDL values.
@@ -1032,7 +1052,7 @@ object Main extends App {
           case Actions.Config   => SuccessfulTermination(ConfigFactory.load().toString)
           case Actions.DXNI     => dxni(args.tail)
           case Actions.Internal => internalOp(args.tail)
-          case Actions.Version  => SuccessfulTermination(Utils.getVersion)
+          case Actions.Version  => SuccessfulTermination(getVersion)
         }
     }
   }
@@ -1109,10 +1129,10 @@ object Main extends App {
       Console.err.println(usageMessage)
       System.exit(1)
     case BadUsageTermination(s) =>
-      Utils.error(s)
+      Logger.error(s)
       System.exit(1)
     case UnsuccessfulTermination(s) =>
-      Utils.error(s)
+      Logger.error(s)
       System.exit(1)
   }
   System.exit(0)

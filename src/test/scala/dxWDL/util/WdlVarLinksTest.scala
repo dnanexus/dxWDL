@@ -1,12 +1,14 @@
 package dxWDL.util
 
+import dx.util.Verbose
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-
-import dxWDL.base.{Utils, Verbose}
+import dx.core.languages.WdlVarLinksConverter
+import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
+import dx.core.util.SysUtils
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
@@ -22,7 +24,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
     val wvl: WdlVarLinks = wvlConverter.importFromWDL(elem.wdlType, elem.wdlValue)
     val allDxFields1: List[(String, JsValue)] = wvlConverter.genFields(wvl, prefix + elem.name)
     val allDxFields2 = allDxFields1.filter {
-      case (key, _) => !key.endsWith(Utils.FLAT_FILES_SUFFIX)
+      case (key, _) => !key.endsWith(SysUtils.FLAT_FILES_SUFFIX)
     }
     allDxFields2.size should be(1)
     val (name2, jsv) = allDxFields2.head

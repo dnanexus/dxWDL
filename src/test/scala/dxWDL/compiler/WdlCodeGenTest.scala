@@ -1,10 +1,13 @@
 package dxWDL.compiler
 
+import dx.compiler.WdlCodeGen
+import dx.util.Verbose
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.Util
 import wdlTools.types.WdlTypes._
 import dxWDL.base._
+import dx.core.languages.Language
 
 class WdlCodeGenTest extends AnyFlatSpec with Matchers {
   private val verbose = Verbose(on = false, quiet = true, Set.empty)

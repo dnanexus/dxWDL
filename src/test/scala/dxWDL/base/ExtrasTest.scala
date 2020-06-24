@@ -5,17 +5,33 @@ import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
 import spray.json._
 import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
+import dx.compiler.{
+  DockerRegistry,
+  DxAccess,
+  DxAttrs,
+  DxDetails,
+  DxExecPolicy,
+  DxLicense,
+  DxRunSpec,
+  DxTimeout,
+  Extras,
+  ReorgAttrs,
+  WdlRuntimeAttrs
+}
+import dx.core.util.{SysUtils, util}
+import dx.util.Verbose
+import dxWDL.config.DockerRegistry
+import dxWDL.util.PermissionDeniedException
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
   val verbose: Verbose = Verbose(on = true, quiet = true, Set.empty)
   val verbose2: Verbose = Verbose(on = false, quiet = true, Set.empty)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
@@ -238,7 +254,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+    val thrown = intercept[util.IllegalArgumentException] {
       Extras.parse(reorg, verbose2)
     }
 
@@ -257,7 +273,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+    val thrown = intercept[util.IllegalArgumentException] {
       Extras.parse(reorg, verbose2)
     }
 
@@ -299,7 +315,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+    val thrown = intercept[util.IllegalArgumentException] {
       Extras.parse(reorg, verbose2)
     }
 

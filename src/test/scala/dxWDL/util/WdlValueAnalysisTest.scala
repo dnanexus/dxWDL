@@ -1,16 +1,16 @@
 package dxWDL.util
 
+import dx.core.languages.WdlValueAnalysis
+import dx.core.languages.wdl.{ParseSource, WdlValueAnalysis}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
-
-import dxWDL.base.ParseWdlSourceFile
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 class WdlValueAnalysisTest extends AnyFlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
-    val (wf: TAT.Workflow, _, _, _) = ParseWdlSourceFile(false).parseWdlWorkflow(wdlCode)
+    val (wf: TAT.Workflow, _, _, _) = ParseSource(false).parseWdlWorkflow(wdlCode)
     wf.body.collect {
       case d: TAT.Declaration => d
     }

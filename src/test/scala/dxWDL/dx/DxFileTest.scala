@@ -1,5 +1,7 @@
 package dxWDL.dx
 
+import dx.DxProject
+import dx.api.{DxFile, DxProject}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.flatspec.AnyFlatSpec
 import spray.json._

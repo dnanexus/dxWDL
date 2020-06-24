@@ -2,15 +2,17 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 
+import dx.core.util.SysUtils
+import dx.api.{DxProject, DxUtils}
+import dx.compiler.IR
+import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import dxWDL.Main
-import dxWDL.base.Utils
-import dxWDL.dx._
-import dxWDL.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
+import dx.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
 import wdlTools.generators.code.WdlV1Generator
 
 // These tests involve compilation -without- access to the platform.
@@ -201,7 +203,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
-        Utils.error(other.toString)
+        Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {
@@ -218,7 +220,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
-        Utils.error(other.toString)
+        Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {
@@ -235,7 +237,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
       case Main.SuccessfulTerminationIR(bundle) => bundle
       case other =>
-        Utils.error(other.toString)
+        Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
     val wf: IR.Workflow = bundle.primaryCallable match {

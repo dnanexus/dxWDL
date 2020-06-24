@@ -1,12 +1,13 @@
 package dxWDL.util
 
+import dx.dx
+import dx.util.Verbose
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues._
 import dxWDL.base._
-import dxWDL.base.Utils
-import dxWDL.dx.DxProject
+import dxWDL.util.{ignore => ignoreObj}
 
 class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
@@ -221,7 +222,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "pretty print" in {
     // Test pretty printing
-    Utils.ignore(dbFull.prettyPrint())
+    ignoreObj(dbFull.prettyPrint())
   }
 
   it should "work even with opaque prices" in {

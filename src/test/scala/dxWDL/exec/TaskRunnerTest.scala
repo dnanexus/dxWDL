@@ -1,15 +1,21 @@
 package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
+
+import dx.util.Verbose
+import dx.DxInstanceType
+import dx.api.{DxInstanceType, InstanceTypeDB}
+import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-
-import dxWDL.base.{Language, ParseWdlSourceFile, Utils, Verbose, WdlRuntimeAttrs, WdlBundle}
 import dxWDL.compiler.WdlCodeGen
-import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB}
+import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
+import dx.core.languages.{Language, WdlBundle}
+import dx.core.util.SysUtils
+import dx.exec.{JobInputOutput, TaskRunner, TaskRunnerUtils}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -112,7 +118,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val inputsFile = pathFromBasename(s"${wdlName}_input.json")
         assert(Files.exists(inputsFile))
-        Utils.readFileContent(inputsFile).parseJson.asJsObject.fields
+        SysUtils.readFileContent(inputsFile).parseJson.asJsObject.fields
       } catch {
         case _: Throwable =>
           Map.empty
@@ -123,7 +129,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val outputsFile = pathFromBasename(s"${wdlName}_output.json")
         assert(Files.exists(outputsFile))
-        Some(Utils.readFileContent(outputsFile).parseJson.asJsObject.fields)
+        Some(SysUtils.readFileContent(outputsFile).parseJson.asJsObject.fields)
       } catch {
         case _: Throwable =>
           None
@@ -131,14 +137,14 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Create a clean directory in "/tmp" for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
-    Utils.deleteRecursive(jobHomeDir.toFile)
-    Utils.safeMkdir(jobHomeDir)
+    SysUtils.deleteRecursive(jobHomeDir.toFile)
+    SysUtils.safeMkdir(jobHomeDir)
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, verbose = verbose)
     dxPathConfig.createCleanDirs()
 
     val (language, wdlBundle: WdlBundle, allSources, _) =
-      ParseWdlSourceFile(false).apply(wdlCode, List.empty)
-    val task: TAT.Task = ParseWdlSourceFile(false).getMainTask(wdlBundle)
+      ParseSource(false).apply(wdlCode, List.empty)
+    val task: TAT.Task = ParseSource(false).getMainTask(wdlBundle)
     assert(allSources.size == 1)
     val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
@@ -146,7 +152,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
+    val dxIoFunctions = DxFileAccessProtocol(Map.empty, dxPathConfig, runtimeDebugLevel)
     val jobInputOutput = JobInputOutput(dxIoFunctions,
                                         wdlBundle.typeAliases,
                                         Language.toWdlVersion(language),
@@ -183,7 +189,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      val (_, _) = Utils.execCommand(script.toString, None)
+      val (_, _) = SysUtils.execCommand(script.toString, None)
     }
 
     // epilog

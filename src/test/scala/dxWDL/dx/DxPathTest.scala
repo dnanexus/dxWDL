@@ -1,5 +1,8 @@
 package dxWDL.dx
 
+import dx.core.util.SysUtils
+import dx.DxProject
+import dx.api.{DxFile, DxPath, DxProject}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -21,7 +24,7 @@ class DxPathTest extends AnyFlatSpec with Matchers {
 
   // describe a file on the platform using the dx-toolkit. This is a baseline for comparison
   private def describeDxFilePath(path: String): String = {
-    val (stdout, _) = Utils.execCommand(s"dx describe ${path} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${path} --json")
     val id = stdout.parseJson.asJsObject.fields.get("id") match {
       case Some(JsString(x)) => x.replaceAll("\"", "")
       case other             => throw new Exception(s"Unexpected result ${other}")

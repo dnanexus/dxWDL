@@ -1,12 +1,12 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+
+import dx.api.{DxProject, DxUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
-
 import dxWDL.Main
-import dxWDL.dx._
 
 // These tests involve compilation -without- access to the platform.
 //

@@ -1,5 +1,7 @@
 package dxWDL.dx
 
+import dx.DxRecord
+import dx.api.{DxFile, DxPath, DxProject, DxRecord}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

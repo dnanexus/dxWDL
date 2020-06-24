@@ -1,13 +1,14 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+
+import dx.core.util.SysUtils
+import dx.api.{DxPath, DxWorkflow}
+import dx.{DxPath, DxWorkflow, api}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inside._
-
 import dxWDL.Main
-import dxWDL.base.Utils
-import dxWDL.dx._
 import spray.json._
 
 // This test module requires being logged in to the platform.
@@ -98,7 +99,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         )
     }
 
-    val treeJs = Utils.base64DecodeAndGunzip(execString).parseJson
+    val treeJs = SysUtils.base64DecodeAndGunzip(execString).parseJson
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
@@ -117,7 +118,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Main.SuccessfulTermination]
 
     val wf: DxWorkflow = retval match {
-      case Main.SuccessfulTermination(id) => DxWorkflow(id, Some(dxTestProject))
+      case Main.SuccessfulTermination(id) => api.DxWorkflow(id, Some(dxTestProject))
       case _                              => throw new Exception("sanity")
     }
 
