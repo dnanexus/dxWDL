@@ -1,6 +1,6 @@
 # Release Notes
 
-## 2.0.0-rc 23-Jun-2020
+## 2.0.0-rc (upcoming release, in development)
 
 - Replaced WOM with wdlTools
 - TODO:
