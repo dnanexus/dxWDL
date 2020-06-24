@@ -79,7 +79,10 @@ RUN mv /devel/dxfuse /go/src/github.com/dnanexus && \
 
 # download and setup wdlTools
 RUN git clone https://github.com/dnanexus-rnd/wdlTools.git && \
-    cd wdlTools && make && sbt compile && sbt publishLocal
+    cd wdlTools && \
+    git checkout 1aee3df7b35297de8dc7e2d81f3273123dc9405f && \
+    make && \
+    sbt compile && sbt publishLocal
 
 # Clone and make dxWDL
 RUN git clone https://github.com/dnanexus/dxWDL.git
