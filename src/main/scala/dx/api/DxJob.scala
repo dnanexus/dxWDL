@@ -50,15 +50,15 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None) ex
           throw new Exception(s"Malformed JSON ${descJs}")
       }
 
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    val parentJob: Option[DxJob] = descJs.asJsObject.fields.get("parentJob") match {
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val parentJob: Option[DxJob] = descJs.fields.get("parentJob") match {
       case None              => None
       case Some(JsNull)      => None
       case Some(JsString(x)) => Some(dxApi.job(x))
       case Some(other)       => throw new Exception(s"should be a job ${other}")
     }
-    val analysis = descJs.asJsObject.fields.get("analysis") match {
+    val analysis = descJs.fields.get("analysis") match {
       case None              => None
       case Some(JsNull)      => None
       case Some(JsString(x)) => Some(dxApi.analysis(x))

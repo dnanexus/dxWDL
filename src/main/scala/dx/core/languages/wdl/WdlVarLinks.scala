@@ -12,7 +12,6 @@ import dx.AppInternalException
 import dx.core.io.{Furl, FurlDx, FurlLocal}
 import dx.api.{DxApi, DxExecution, DxFile, DxFileDescribe, DxUtils, DxWorkflowStage}
 import dx.core.languages.IORef
-import dx.util.Logger
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
@@ -278,7 +277,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
         case _ => jsv
       }
     val wdlValue = jobInputToWdlValue(name, wdlType, jsv1)
-    val dxFiles = DxFile.findDxFiles(dxApi, jsv)
+    val dxFiles = dxApi.findFiles(jsv)
     (wdlValue, dxFiles)
   }
 
@@ -364,7 +363,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       wvl.dxlink match {
         case DxlValue(jsn) =>
           // files that are embedded in the structure
-          val dxFiles = DxFile.findDxFiles(dxApi, jsn)
+          val dxFiles = dxApi.findFiles(jsn)
           val jsFiles = dxFiles.map(_.getLinkAsJson)
           // Dx allows hashes as an input/output type. If the JSON value is
           // not a hash (js-object), we need to add an outer layer to it.

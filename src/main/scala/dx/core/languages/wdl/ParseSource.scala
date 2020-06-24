@@ -79,7 +79,7 @@ case class ParseSource(logger: Logger) {
     TypeOptions(
         antlr4Trace = false,
         localDirectories = imports,
-        verbosity = if (logger.verbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
+        verbosity = if (logger.isVerbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
         followImports = true,
         typeChecking = WdlTypeCheckingRegime.Strict
     )

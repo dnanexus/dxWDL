@@ -262,12 +262,14 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
   }
 }
 
-case class InstanceTypeDbQuery(dxApi: DxApi) extends DefaultJsonProtocol {
+object InstanceTypeDB extends DefaultJsonProtocol {
   // support automatic conversion to/from JsValue
   implicit val instanceTypeDBFormat: RootJsonFormat[InstanceTypeDB] = jsonFormat2(
       InstanceTypeDB.apply
   )
+}
 
+case class InstanceTypeDbQuery(dxApi: DxApi) {
   // Query the platform for the available instance types in
   // this project.
   private def queryAvailableInstanceTypes(dxProject: DxProject): Map[String, DxInstanceType] = {

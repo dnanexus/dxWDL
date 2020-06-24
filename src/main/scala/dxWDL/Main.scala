@@ -4,27 +4,19 @@ import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 
 import dx.core.io.DxPathConfig
-import dx.core.{AppException, AppInternalException}
-import dx.Field
-import dx.api.{DxFile, DxFileDescribe, DxProject, DxUtils}
-import dx.compiler.{Extras, IR, Top, WdlRuntimeAttrs}
-import dx.util.{JsUtils, Logger, Verbose}
+import dx.{AppException, AppInternalException, InvalidInputException, exec}
+import dx.api.Field
+import dx.api.{DxFile, DxFileDescribe, DxProject}
+import dx.compiler._
+import dx.util.{JsUtils, Logger}
 import spray.json.{JsString, _}
-import dxWDL.compiler.{
-  CompilerFlag,
-  CompilerOptions,
-  JsonTreePrinter,
-  PrettyTreePrinter,
-  TreePrinter
-}
-import dxWDL.config.WdlRuntimeAttrs
-import dxWDL.dx._
-import dxWDL.exec.{RunnerWfFragmentMode, jobFilesOfHomeDir}
+import dx.api._
+import dx.exec.{RunnerWfFragmentMode, jobFilesOfHomeDir}
 import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
 import dx.core.languages.Language
 import dx.core.util.SysUtils
 import dx.exec.{JobInputOutput, WfFragInputOutput}
-import dxWDL.util._
+import dx.util._
 
 import scala.collection.mutable
 
@@ -51,7 +43,7 @@ object Main extends App {
   case class DxniBaseOptions(force: Boolean,
                              outputFile: Path,
                              language: Language.Value,
-                             verbose: Verbose)
+                             dxApi: DxApi)
 
   case class DxniAppletOptions(apps: Boolean,
                                force: Boolean,
@@ -60,7 +52,7 @@ object Main extends App {
                                language: Language.Value,
                                dxProject: DxProject,
                                folderOrPath: Either[String, String],
-                               verbose: Verbose)
+                               dxApi: DxApi)
 
   // This directory exists only at runtime in the cloud. Beware of using
   // it in code paths that run at compile time.
@@ -70,8 +62,8 @@ object Main extends App {
   // runtime, not at compile time. On the cloud instance running the
   // job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
-    DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
+  private def buildRuntimePathConfig(streamAllFiles: Boolean, logger: Logger): DxPathConfig = {
+    DxPathConfig.apply(baseDNAxDir, streamAllFiles, logger)
   }
 
   private def normKey(s: String): String = {
@@ -258,7 +250,7 @@ object Main extends App {
     System.err.println(exceptionToString(e))
   }
 
-  private def pathOptions(options: OptionsMap, verbose: Verbose): (DxProject, String) = {
+  private def pathOptions(options: OptionsMap, dxApi: DxApi): (DxProject, String) = {
     var folderOpt: Option[String] = options.get("folder") match {
       case None          => None
       case Some(List(f)) => Some(f)
@@ -311,17 +303,17 @@ object Main extends App {
     val dxFolder = folderRaw
     val dxProject =
       try {
-        DxPath.resolveProject(projectRaw)
+        dxApi.resolveProject(projectRaw)
       } catch {
         case e: Exception =>
-          Logger.error(e.getMessage)
+          dxApi.logger.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${projectRaw}, you probably need to be logged into
                   |the platform""".stripMargin
           )
       }
-    Logger.trace(verbose.on, s"""|project ID: ${dxProject.id}
-                                 |folder: ${dxFolder}""".stripMargin)
+    dxApi.logger.trace(s"""|project ID: ${dxProject.id}
+                           |folder: ${dxFolder}""".stripMargin)
     (dxProject, dxFolder)
   }
 
@@ -369,16 +361,33 @@ object Main extends App {
     }
   }
 
-  // Get basic information about the dx environment, and process
-  // the compiler flags
-  private def compilerOptions(options: OptionsMap): CompilerOptions = {
-    // First: get the verbosity mode. It is used almost everywhere.
+  private def getTraceLevel(runtimeDebugLevel: Option[Any],
+                            defaultLevel: Int = TraceLevel.None): Int = {
+    runtimeDebugLevel match {
+      case None                          => defaultLevel
+      case Some(numberStr: String)       => parseRuntimeDebugLevel(numberStr)
+      case Some(List(numberStr: String)) => parseRuntimeDebugLevel(numberStr)
+      case _                             => throw new Exception("debug level specified twice")
+    }
+  }
+
+  private def createDxApi(options: OptionsMap): DxApi = {
     val verboseKeys: Set[String] = options.get("verboseKey") match {
       case None                 => Set.empty
       case Some(modulesToTrace) => modulesToTrace.toSet
     }
-    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
+    val traceLevel: Int = getTraceLevel(
+        options.get("runtimeDebugLevel"),
+        if (options.contains("verbose")) TraceLevel.Verbose else TraceLevel.None
+    )
+    val logger = Logger(quiet = options.contains("quiet"), traceLevel = traceLevel, verboseKeys)
+    DxApi(logger)
+  }
 
+  // Get basic information about the dx environment, and process
+  // the compiler flags
+  private def compilerOptions(options: OptionsMap): CompilerOptions = {
+    val dxApi = createDxApi(options)
     val compileMode: CompilerFlag.Value = options.get("compileMode") match {
       case None                                               => CompilerFlag.All
       case Some(List(x)) if x.toLowerCase == "IR".toLowerCase => CompilerFlag.IR
@@ -395,7 +404,7 @@ object Main extends App {
       case None => None
       case Some(List(p)) =>
         val contents = SysUtils.readFileContent(Paths.get(p))
-        Some(Extras.parse(contents.parseJson, verbose))
+        Some(Extras.parse(contents.parseJson, dxApi))
       case _ => throw new Exception("extras specified twice")
     }
     val inputs: List[Path] = options.get("inputs") match {
@@ -406,34 +415,24 @@ object Main extends App {
       case None     => List.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
-
     val treePrinter: Option[TreePrinter] = options.get("execTree") match {
       case None => None
       case Some(treeType) =>
         Some(parseExecTree(treeType.head)) // take first element and drop the rest?
     }
-    val runtimeDebugLevel: Option[Int] =
-      options.get("runtimeDebugLevel") match {
-        case None                  => None
-        case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
-        case _                     => throw new Exception("debug level specified twice")
-      }
-
     if (extras.isDefined) {
       if (extras.contains("reorg") && (options contains "reorg")) {
         throw new InvalidInputException(
             "ERROR: cannot provide --reorg option when reorg is specified in extras."
         )
       }
-
       if (extras.contains("reorg") && (options contains "locked")) {
         throw new InvalidInputException(
             "ERROR: cannot provide --locked option when reorg is specified in extras."
         )
       }
     }
-
-    compiler.CompilerOptions(
+    CompilerOptions(
         options contains "archive",
         compileMode,
         defaults,
@@ -449,8 +448,7 @@ object Main extends App {
         options contains "streamAllFiles",
         // options contains "execTree",
         treePrinter,
-        runtimeDebugLevel,
-        verbose
+        dxApi
     )
   }
 
@@ -460,11 +458,7 @@ object Main extends App {
       case Some(List(p)) => Paths.get(p)
       case _             => throw new Exception("only one output file can be specified")
     }
-    val verboseKeys: Set[String] = options.get("verbose") match {
-      case None                 => Set.empty
-      case Some(modulesToTrace) => modulesToTrace.toSet
-    }
-    val verbose = Verbose(options contains "verbose", options contains "quiet", verboseKeys)
+    val dxApi = createDxApi(options)
     val language = options.get("language") match {
       case None => Language.WDLvDraft2
       case Some(List(buf)) =>
@@ -489,7 +483,7 @@ object Main extends App {
           throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
       case _ => throw new Exception("only one language can be specified")
     }
-    DxniBaseOptions(options contains "force", outputFile, language, verbose)
+    DxniBaseOptions(options contains "force", outputFile, language, dxApi)
   }
 
   private def dxniAppletOptions(options: OptionsMap): DxniAppletOptions = {
@@ -501,10 +495,10 @@ object Main extends App {
     }
     val dxProject =
       try {
-        DxPath.resolveProject(project)
+        dOpt.dxApi.resolveProject(project)
       } catch {
         case e: Exception =>
-          Logger.error(e.getMessage)
+          dOpt.dxApi.logger.error(e.getMessage)
           throw new Exception(
               s"""|Could not find project ${project}, you probably need to be logged into
                   |the platform""".stripMargin
@@ -543,7 +537,7 @@ object Main extends App {
                       dOpt.language,
                       dxProject,
                       folderOrPath,
-                      dOpt.verbose)
+                      dOpt.dxApi)
   }
 
   def compile(args: Seq[String]): Termination = {
@@ -563,14 +557,14 @@ object Main extends App {
     try {
       val cOpt = compilerOptions(options)
       val top = Top(cOpt)
-      val (dxProject, folder) = pathOptions(options, cOpt.verbose)
+      val (dxProject, folder) = pathOptions(options, cOpt.dxApi)
       cOpt.compileMode match {
         case CompilerFlag.IR =>
           val ir: IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
           SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
-          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
+          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.dxApi.logger)
           val (retval, treeDesc) =
             top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
           treeDesc match {
@@ -622,19 +616,21 @@ object Main extends App {
       return BadUsageTermination("Workflow ID is not provided")
     }
 
-    // validate workflow
-    val workflowId = args.head
-    val wf =
+    val options =
       try {
-        DxWorkflow.getInstance(workflowId)
+        parseDescribeOptions(args.tail.toList)
       } catch {
         case e: Throwable =>
           return BadUsageTermination(exceptionToString(e))
       }
 
-    val options =
+    val dxApi = createDxApi(options)
+
+    // validate workflow
+    val workflowId = args.head
+    val wf =
       try {
-        parseDescribeOptions(args.tail.toList)
+        dxApi.workflow(workflowId)
       } catch {
         case e: Throwable =>
           return BadUsageTermination(exceptionToString(e))
@@ -655,13 +651,13 @@ object Main extends App {
 
   private def dxniApplets(dOpt: DxniAppletOptions): Termination = {
     try {
-      compiler.DxNI.apply(dOpt.dxProject,
-                          dOpt.folderOrPath,
-                          dOpt.outputFile,
-                          dOpt.recursive,
-                          dOpt.force,
-                          dOpt.language,
-                          dOpt.verbose)
+      DxNI.apply(dOpt.dxProject,
+                 dOpt.folderOrPath,
+                 dOpt.outputFile,
+                 dOpt.recursive,
+                 dOpt.force,
+                 dOpt.language,
+                 dOpt.dxApi)
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
@@ -671,7 +667,7 @@ object Main extends App {
 
   private def dxniApps(dOpt: DxniBaseOptions): Termination = {
     try {
-      compiler.DxNI.applyApps(dOpt.outputFile, dOpt.force, dOpt.language, dOpt.verbose)
+      DxNI.applyApps(dOpt.outputFile, dOpt.force, dOpt.language, dOpt.dxApi)
       SuccessfulTermination("")
     } catch {
       case e: Throwable =>
@@ -710,20 +706,19 @@ object Main extends App {
                          dxIoFunctions: DxFileAccessProtocol,
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
-                         rtDebugLvl: Int): Termination = {
+                         dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val verbose = rtDebugLvl > 0
     val inputLines: String = SysUtils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases, document) = ParseSource(verbose).parseWdlTask(taskSourceCode)
+    val (task, typeAliases, document) = ParseSource(dxApi.logger).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
 
     val jobInputOutput =
-      JobInputOutput(dxIoFunctions, typeAliases, document.version.value, rtDebugLvl)
+      JobInputOutput(dxIoFunctions, typeAliases, document.version.value, dxApi)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     System.err.println(s"""|Main processing inputs in taskAction
                            |originalInputs:
@@ -732,7 +727,7 @@ object Main extends App {
                            |processed inputs:
                            |${inputs.mkString("\n")}
                            |""".stripMargin)
-    val taskRunner = exec.TaskRunner(
+    val taskRunner = dx.exec.TaskRunner(
         task,
         document,
         typeAliases,
@@ -742,7 +737,7 @@ object Main extends App {
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
-        rtDebugLvl
+        dxApi
     )
 
     // Running tasks
@@ -801,10 +796,8 @@ object Main extends App {
                                  dxIoFunctions: DxFileAccessProtocol,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
-                                 rtDebugLvl: Int): Termination = {
-    val dxProject = DxUtils.dxCrntProject
-    //val dxProject = DxUtils.dxEnv.getProjectContext()
-    val verbose = rtDebugLvl > 0
+                                 dxApi: DxApi): Termination = {
+    val dxProject = dxApi.currentProject
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
@@ -812,11 +805,11 @@ object Main extends App {
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
-      ParseSource(verbose).parseWdlWorkflow(wdlSourceCode)
+      ParseSource(dxApi.logger).parseWdlWorkflow(wdlSourceCode)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      WfFragInputOutput(dxIoFunctions, dxProject, typeAliases, document.version.value, rtDebugLvl)
+      WfFragInputOutput(dxIoFunctions, dxProject, typeAliases, document.version.value, dxApi)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -836,7 +829,7 @@ object Main extends App {
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
-              rtDebugLvl
+              dxApi
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
         case InternalOp.Collect =>
@@ -853,16 +846,16 @@ object Main extends App {
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
-              rtDebugLvl
+              dxApi
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case InternalOp.WfInputs =>
           val wfInputs =
-            exec.WfInputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
+            exec.WfInputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
           wfInputs.apply(fragInputs.env)
         case InternalOp.WfOutputs =>
           val wfOutputs =
-            exec.WfOutputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl)
+            exec.WfOutputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
           wfOutputs.apply(fragInputs.env)
 
         case InternalOp.WfCustomReorgOutputs =>
@@ -872,18 +865,14 @@ object Main extends App {
               typeAliases,
               dxPathConfig,
               dxIoFunctions,
-              rtDebugLvl
+              dxApi
           )
           // add ___reconf_status as output.
           wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
         case InternalOp.WorkflowOutputReorg =>
-          val wfReorg = exec.WorkflowOutputReorg(wf,
-                                                 document,
-                                                 typeAliases,
-                                                 dxPathConfig,
-                                                 dxIoFunctions,
-                                                 rtDebugLvl)
+          val wfReorg =
+            exec.WorkflowOutputReorg(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
 
@@ -909,21 +898,22 @@ object Main extends App {
   // Get the WDL source code, and the instance type database from the
   // details field stored on the platform
   private def retrieveFromDetails(
+      dxApi: DxApi,
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = SysUtils.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
-        Logger.trace(
-            verbose = true,
+        dxApi.logger.trace(
             s"""|applet field not found locally, performing
                 |an API call.
-                |""".stripMargin
+                |""".stripMargin,
+            minLevel = TraceLevel.None
         )
-        val dxJob = DxJob(DxUtils.dxEnv.getJob)
+        val dxJob = dxApi.currentJob
         dxJob.describe().applet
       case Some(JsString(x)) =>
-        DxApplet(x, None)
+        dxApi.applet(x)
       case Some(other) =>
         throw new Exception(s"malformed applet field ${other} in job info")
     }
@@ -953,20 +943,18 @@ object Main extends App {
 
   // Make a list of all the files cloned for access by this applet.
   // Bulk describe all the them.
-  private def runtimeBulkFileDescribe(jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
+  private def runtimeBulkFileDescribe(dxApi: DxApi,
+                                      jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
     val inputs: JsValue = SysUtils.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
-      case (_, jsElem) => DxUtils.findDxFiles(jsElem)
+      case (_, jsElem) => dxApi.findFiles(jsElem)
     }.toVector
 
     // Describe all the files, in one go
-    val descAll = DxFile.bulkDescribe(allFilesReferenced)
+    val descAll = dxApi.fileBulkDescribe(allFilesReferenced)
     descAll.map {
-      case (DxFile(fid, proj), desc) =>
-        fid -> (DxFile(fid, proj), desc)
-      case (other, _) =>
-        throw new Exception(s"wrong object type ${other} (should be a file)")
+      case (file, desc) => file.id -> (file, desc)
     }
   }
 
@@ -977,12 +965,13 @@ object Main extends App {
         UnsuccessfulTermination(s"unknown internal action ${args.head}")
       case Some(op) if args.length == 4 =>
         val homeDir = Paths.get(args(1))
-        val rtDebugLvl = parseRuntimeDebugLevel(args(2))
+        val logger = Logger(quiet = false, traceLevel = getTraceLevel(Some(args(2))))
+        val dxApi = DxApi(logger)
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
-        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
-        val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
-        val dxIoFunctions = DxFileAccessProtocol(fileInfoDir, dxPathConfig, rtDebugLvl)
+        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
+        val fileInfoDir = runtimeBulkFileDescribe(dxApi, jobInputPath)
+        val dxIoFunctions = DxFileAccessProtocol(dxApi, fileInfoDir, dxPathConfig)
 
         // Get the WDL source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WDL values.
@@ -991,7 +980,7 @@ object Main extends App {
              metaInfo,
              defaultRuntimeAttrs,
              delayWorkspaceDestruction) =
-          retrieveFromDetails(jobInfoPath)
+          retrieveFromDetails(dxApi, jobInfoPath)
 
         try {
           op match {
@@ -1009,7 +998,7 @@ object Main extends App {
                   dxIoFunctions,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
-                  rtDebugLvl
+                  dxApi
               )
             case InternalOp.TaskCheckInstanceType | InternalOp.TaskProlog |
                 InternalOp.TaskInstantiateCommand | InternalOp.TaskEpilog |
@@ -1023,7 +1012,7 @@ object Main extends App {
                          dxIoFunctions,
                          defaultRuntimeAttrs,
                          delayWorkspaceDestruction,
-                         rtDebugLvl)
+                         dxApi)
           }
         } catch {
           case e: Throwable =>
@@ -1040,8 +1029,9 @@ object Main extends App {
   }
 
   def dispatchCommand(args: Seq[String]): Termination = {
-    if (args.isEmpty)
+    if (args.isEmpty) {
       return BadUsageTermination("")
+    }
     val action = Actions.values find (x => normKey(x.toString) == normKey(args.head))
     action match {
       case None => BadUsageTermination("")

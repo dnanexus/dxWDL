@@ -499,7 +499,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
       locked: Boolean
   ): (Vector[(IR.Stage, Vector[IR.Callable])], CallEnv) = {
     logger.trace(s"Assembling workflow backbone $wfName")
-    val logger2 = logger.withIncTraceIndent
+    val logger2 = logger.withIncTraceIndent()
     val inputNamesDbg = wfInputs.map { case (cVar, _) => cVar.name }
     logger2.trace(s"inputs= $inputNamesDbg")
 

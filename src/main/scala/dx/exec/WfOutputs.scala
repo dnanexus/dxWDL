@@ -1,28 +1,28 @@
 package dx.exec
 
+import dx.api.DxApi
+import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.{
+  Block,
   DxFileAccessProtocol,
   Evaluator,
   PrettyPrintApprox,
   WdlVarLinksConverter
 }
-import dx.util.{Logger, Verbose}
+import dx.util.getVersion
 import spray.json.{JsString, JsValue}
-import wdlTools.eval.WdlValues
-import wdlTools.types.WdlTypes
+import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
                      typeAliases: Map[String, WdlTypes.T],
                      dxPathConfig: DxPathConfig,
                      dxIoFunctions: DxFileAccessProtocol,
-                     runtimeDebugLevel: Int) {
-  private val verbose = runtimeDebugLevel >= 1
-  //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val utlVerbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
+                     dxApi: DxApi) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
+    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
 
   private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
 
@@ -34,10 +34,9 @@ case class WfOutputs(wf: TAT.Workflow,
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             addStatus: Boolean = false): Map[String, JsValue] = {
-    Logger.appletLog(verbose, s"dxWDL version: ${getVersion}")
-    Logger.appletLog(verbose, s"Environment: ${envInitial}")
-    Logger.appletLog(
-        verbose,
+    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
+    dxApi.logger.appletLog(s"Environment: ${envInitial}")
+    dxApi.logger.appletLog(
         s"""|Evaluating workflow outputs
             |${PrettyPrintApprox.graphOutputs(wf.outputs)}
             |""".stripMargin
@@ -54,7 +53,7 @@ case class WfOutputs(wf: TAT.Workflow,
             Some(name -> WdlValues.V_Null)
           case (None, _) =>
             // input is missing, and there is no default at the callee,
-            Logger.warning(utlVerbose, s"value is missing for ${name}")
+            dxApi.logger.warning(s"value is missing for ${name}")
             None
           case (Some((_, v)), _) =>
             Some(name -> v)

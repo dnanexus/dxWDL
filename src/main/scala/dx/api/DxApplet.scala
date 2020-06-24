@@ -70,7 +70,7 @@ case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject]) extend
         throw new Exception(s"Malformed JSON ${descJs}")
     }
 
-    val descFields: Map[String, JsValue] = descJs.asJsObject.fields
+    val descFields: Map[String, JsValue] = descJs.fields
     val details = descFields.get("details")
     val props = descFields.get("properties").map(DxObject.parseJsonProperties)
     val description = descFields.get("description").flatMap(unwrapString)
@@ -150,7 +150,7 @@ case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject]) extend
       case _          => Map.empty
     }
     val info = dxApi.appletRun(id, fields ++ instanceFields ++ props ++ dwd)
-    val jobId: String = info.asJsObject.fields.get("id") match {
+    val jobId: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
         throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")

@@ -62,7 +62,12 @@ object WdlValueAnalysis {
         })
       case TAT.ExprObject(m, wdlType, _) =>
         val m2 = m.map {
-          case (k, v) => k -> evalConst(v)
+          case (k, v) =>
+            val key = evalConst(k) match {
+              case WdlValues.V_String(s) => s
+              case _                     => throw new RuntimeException(s"Invalid object key ${k}")
+            }
+            key -> evalConst(v)
         }
         wdlType match {
           case WdlTypes.T_Struct(name, _) => WdlValues.V_Struct(name, m2)

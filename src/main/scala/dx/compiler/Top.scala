@@ -1,7 +1,46 @@
 package dx.compiler
 
+import java.nio.file.{Path, Paths}
+
+import com.typesafe.config.{Config, ConfigFactory}
+import dx.api.{DxApi, DxFile, DxFileDescribe, DxPath, DxProject, DxRecord, InstanceTypeDbQuery}
+import dx.core.io.DxPathConfig
+import dx.core.languages.wdl.ParseSource
+import dx.core.util.SysUtils
+import spray.json.JsValue
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+
+import scala.jdk.CollectionConverters._
+
+object CompilerFlag extends Enumeration {
+  type CompilerFlag = Value
+  val All, IR, NativeWithoutRuntimeAsset = Value
+}
+
+// Tree printer types for the execTree option
+sealed trait TreePrinter
+case object JsonTreePrinter extends TreePrinter
+case object PrettyTreePrinter extends TreePrinter
+
+// Packing of all compiler flags in an easy to digest format
+case class CompilerOptions(archive: Boolean,
+                           compileMode: CompilerFlag.Value,
+                           defaults: Option[Path],
+                           extras: Option[Extras],
+                           fatalValidationWarnings: Boolean,
+                           force: Boolean,
+                           importDirs: List[Path],
+                           inputs: List[Path],
+                           leaveWorkflowsOpen: Boolean,
+                           locked: Boolean,
+                           projectWideReuse: Boolean,
+                           reorg: Boolean,
+                           streamAllFiles: Boolean,
+                           execTree: Option[TreePrinter],
+                           dxApi: DxApi)
+
 case class Top(cOpt: CompilerOptions) {
-  private val verbose = cOpt.verbose
+  private val dxApi = cOpt.dxApi
 
   // The mapping from region to project name is list of (region, proj-name) pairs.
   // Get the project for this region.
@@ -23,16 +62,28 @@ case class Top(cOpt: CompilerOptions) {
     }
   }
 
+  // the regions live in dxWDL.conf
+  def getRegions: Map[String, String] = {
+    val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
+    val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+    val region2project: Map[String, String] = l.map { pair =>
+      val r = pair.getString("region")
+      val projName = pair.getString("path")
+      r -> projName
+    }.toMap
+    region2project
+  }
+
   // Find the runtime dxWDL asset with the correct version. Look inside the
   // project configured for this region.
   private def getAssetId(region: String): String = {
     val region2project = getRegions
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
-    val dxProjRt = DxPath.resolveProject(projNameRt)
-    Logger.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
+    val dxProjRt = dxApi.resolveProject(projNameRt)
+    dxApi.logger.trace(s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-    val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
-    val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
+    val assetDxPath = s"${DxPath.DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
+    val dxObj = dxApi.resolveOnePath(assetDxPath, dxProjRt)
     if (!dxObj.isInstanceOf[DxRecord])
       throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
     dxObj.getId
@@ -45,8 +96,8 @@ case class Top(cOpt: CompilerOptions) {
                                       dxProject: DxProject): Unit = {
     val region2project = getRegions
     val (projNameRt, _) = getProjectWithRuntimeLibrary(region2project, region)
-    val dxProjRt = DxPath.resolveProject(projNameRt)
-    DxUtils.cloneAsset(DxRecord.getInstance(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt, verbose)
+    val dxProjRt = dxApi.resolveProject(projNameRt)
+    dxApi.cloneAsset(dxApi.record(dxWDLrtId), dxProject, DX_WDL_ASSET, dxProjRt)
   }
 
   // Backend compiler pass
@@ -67,17 +118,20 @@ case class Top(cOpt: CompilerOptions) {
       case CompilerFlag.All =>
         // get billTo and region from the project, then find the runtime asset
         // in the current region.
-        val (_, region) = DxUtils.projectDescribeExtraInfo(dxProject)
+        val region = dxProject.describe().region match {
+          case Some(s) => s
+          case None    => throw new Exception(s"Cannot get region for project ${dxProject}")
+        }
         val lrtId = getAssetId(region)
         cloneRtLibraryToProject(region, lrtId, dxProject)
         Some(lrtId)
     }
     // get list of available instance types
-    val instanceTypeDB = InstanceTypeDB.query(dxProject, verbose)
+    val instanceTypeDB = InstanceTypeDbQuery(dxApi).query(dxProject)
 
     // Efficiently build a directory of the currently existing applets.
     // We don't want to build them if we don't have to.
-    val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse, verbose)
+    val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse, dxApi)
 
     // Generate dx:applets and dx:workflow from the IR
     new Native(dxWDLrtId,
@@ -89,12 +143,11 @@ case class Top(cOpt: CompilerOptions) {
                fileInfoDir,
                bundle.typeAliases,
                cOpt.extras,
-               cOpt.runtimeDebugLevel,
                cOpt.leaveWorkflowsOpen,
                cOpt.force,
                cOpt.archive,
                cOpt.locked,
-               cOpt.verbose).apply(bundle)
+               cOpt.dxApi).apply(bundle)
   }
 
   // check the declarations in [graph], and make sure they
@@ -109,8 +162,9 @@ case class Top(cOpt: CompilerOptions) {
   private def validate(callable: TAT.Callable): Unit = {
     callable match {
       case wf: TAT.Workflow =>
-        if (wf.parameterMeta.isDefined)
-          Logger.warning(verbose, "dxWDL workflows ignore their parameter meta section")
+        if (wf.parameterMeta.isDefined) {
+          dxApi.logger.warning("dxWDL workflows ignore their parameter meta section")
+        }
         checkDeclarations(wf.inputs.map(_.name))
         checkDeclarations(wf.outputs.map(_.name))
         val allDeclarations: Vector[TAT.Declaration] = wf.body.collect {
@@ -133,16 +187,16 @@ case class Top(cOpt: CompilerOptions) {
     val defResults: InputFileScanResults = cOpt.defaults match {
       case None => InputFileScanResults(Map.empty, Vector.empty)
       case Some(path) =>
-        InputFileScan(bundle, dxProject, verbose).apply(path)
+        InputFileScan(bundle, dxProject, dxApi).apply(path)
     }
 
     val allResults: InputFileScanResults = cOpt.inputs.foldLeft(defResults) {
       case (accu: InputFileScanResults, inputFilePath) =>
-        val res = InputFileScan(bundle, dxProject, verbose).apply(inputFilePath)
+        val res = InputFileScan(bundle, dxProject, dxApi).apply(inputFilePath)
         InputFileScanResults(accu.path2file ++ res.path2file, accu.dxFiles ++ res.dxFiles)
     }
 
-    val allDescribe = DxFile.bulkDescribe(allResults.dxFiles)
+    val allDescribe = dxApi.fileBulkDescribe(allResults.dxFiles)
     val allFiles: Map[String, (DxFile, DxFileDescribe)] = allDescribe.map {
       case (f: DxFile, desc) => f.id -> (f, desc)
       case _                 => throw new Exception("has to be all files")
@@ -152,7 +206,7 @@ case class Top(cOpt: CompilerOptions) {
 
   private def wdlToIR(source: Path): IR.Bundle = {
     val (language, everythingBundle, allSources, adjunctFiles) =
-      WdlParseSource(verbose.on).apply(source, cOpt.importDirs)
+      ParseSource(dxApi.logger).apply(source, cOpt.importDirs)
 
     // validate
     everythingBundle.allCallables.foreach { case (_, c) => validate(c) }
@@ -181,7 +235,7 @@ case class Top(cOpt: CompilerOptions) {
 
     // TODO: load default hints from attrs
     val defaultHintAttrs = WdlHintAttrs(Map.empty)
-    GenerateIR(cOpt.verbose, defaultRuntimeAttrs, defaultHintAttrs)
+    GenerateIR(dxApi, defaultRuntimeAttrs, defaultHintAttrs)
       .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 
@@ -192,13 +246,13 @@ case class Top(cOpt: CompilerOptions) {
     val bundle2: IR.Bundle = cOpt.defaults match {
       case None => bundle
       case Some(path) =>
-        InputFile(fileInfoDir, path2file, bundle.typeAliases, cOpt.verbose)
+        InputFile(fileInfoDir, path2file, bundle.typeAliases, dxApi)
           .embedDefaults(bundle, path)
     }
 
     // generate dx inputs from the Cromwell-style input specification.
     cOpt.inputs.foreach { path =>
-      val dxInputs = InputFile(fileInfoDir, path2file, bundle.typeAliases, cOpt.verbose)
+      val dxInputs = InputFile(fileInfoDir, path2file, bundle.typeAliases, dxApi)
         .dxFromCromwell(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = SysUtils.replaceFileSuffix(path, ".dx.json")
@@ -207,7 +261,7 @@ case class Top(cOpt: CompilerOptions) {
         if (parent != null) parent.resolve(filename)
         else Paths.get(filename)
       SysUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-      Logger.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+      dxApi.logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
     }
     bundle2
   }

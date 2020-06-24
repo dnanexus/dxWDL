@@ -1,15 +1,16 @@
 package dx.compiler
 
+import dx.api.DxApi
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Block, Bundle => WdlBundle}
 import dx.core.util.Adjuncts
 import dx.util.Logger
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
-case class GenerateIR(logger: Logger,
+case class GenerateIR(dxApi: DxApi,
                       defaultRuntimeAttrs: WdlRuntimeAttrs,
                       defaultHintAttrs: WdlHintAttrs) {
-  val logger2: Logger = logger.withTraceIfContainsKey("GenerateIR")
+  val logger2: Logger = dxApi.logger.withTraceIfContainsKey("GenerateIR")
 
   // Convert a fully qualified name to a local name.
   // Examples:
@@ -107,14 +108,14 @@ case class GenerateIR(logger: Logger,
         }
 
     val standAloneWorkflow =
-      WdlCodeGen(logger, typeAliases, language)
+      WdlCodeGen(dxApi.logger, typeAliases, language)
         .standAloneWorkflow(wf, callablesUsedInWorkflow)
 
     val gir = GenerateIRWorkflow(wf,
                                  standAloneWorkflow,
                                  callables,
                                  language,
-                                 logger,
+                                 dxApi.logger,
                                  locked,
                                  reorg,
                                  adjunctFiles)
@@ -132,7 +133,7 @@ case class GenerateIR(logger: Logger,
       adjunctFiles: Option[Vector[Adjuncts.AdjunctFile]]
   ): (IR.Callable, Vector[IR.Callable]) = {
     def compileTask2(task: TAT.Task): IR.Applet = {
-      GenerateIRTask(logger, typeAliases, language, defaultRuntimeAttrs, defaultHintAttrs)
+      GenerateIRTask(dxApi, typeAliases, language, defaultRuntimeAttrs, defaultHintAttrs)
         .apply(task, adjunctFiles)
     }
     callable match {
@@ -154,8 +155,8 @@ case class GenerateIR(logger: Logger,
             locked: Boolean,
             reorg: Either[Boolean, ReorgAttrs],
             adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]]): IR.Bundle = {
-    logger.trace(s"IR pass")
-    val logger2 = logger.withIncTraceIndent
+    dxApi.logger.trace(s"IR pass")
+    val logger2 = dxApi.logger.withIncTraceIndent()
 
     val taskDir = allSources.foldLeft(Map.empty[String, TAT.Task]) {
       case (accu, (_, doc)) =>
@@ -165,7 +166,7 @@ case class GenerateIR(logger: Logger,
     }
     logger2.trace(s"tasks=${taskDir.keys}")
     logger2.trace(s"sortByDependencies ${wdlBundle.allCallables.values.map { _.name }}")
-    val logger3 = logger.withIncTraceIndent
+    val logger3 = dxApi.logger.withIncTraceIndent()
 
     val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle.allCallables.values.toVector)
     logger3.trace(s"depOrder =${depOrder.map { _.name }}")

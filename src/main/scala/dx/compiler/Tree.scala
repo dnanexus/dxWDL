@@ -7,6 +7,7 @@ import Native.ExecRecord
 import IR._
 import dx.core.util.SysUtils
 import dx.api.DxWorkflow
+import dx.api.Field
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 

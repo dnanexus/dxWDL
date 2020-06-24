@@ -29,14 +29,14 @@ case class DxFindExecutions(dxApi: DxApi) {
     }
     val repJs = dxApi.findExecutions(parentField ++ cursorField ++ limitField)
 
-    val next: Option[JsValue] = repJs.asJsObject.fields.get("next") match {
+    val next: Option[JsValue] = repJs.fields.get("next") match {
       case None                  => None
       case Some(JsNull)          => None
       case Some(JsString(jobId)) => Some(JsString(jobId))
       case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
     }
     val results: Vector[DxExecution] =
-      repJs.asJsObject.fields.get("results") match {
+      repJs.fields.get("results") match {
         case None                   => throw new Exception(s"missing results field ${repJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
         case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")

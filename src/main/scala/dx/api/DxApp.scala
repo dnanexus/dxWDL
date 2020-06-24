@@ -38,8 +38,8 @@ case class DxApp(dxApi: DxApi, id: String) extends DxExecutable {
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
       }
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
     desc.copy(details = details, properties = props)
   }
 

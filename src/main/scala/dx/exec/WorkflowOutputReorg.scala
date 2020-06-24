@@ -5,19 +5,17 @@ import com.fasterxml.jackson.databind.JsonNode
 import dx.api._
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.DxFileAccessProtocol
-import dx.core.util.SysUtils
-import dx.util.{JsUtils, Logger}
+import dx.exec
+import dx.util.{JsUtils, getVersion}
 import spray.json.{JsBoolean, JsObject, JsValue}
-import wdlTools.types.WdlTypes
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
 case class WorkflowOutputReorg(wf: TAT.Workflow,
                                document: TAT.Document,
                                typeAliases: Map[String, WdlTypes.T],
                                dxPathConfig: DxPathConfig,
                                dxIoFunctions: DxFileAccessProtocol,
-                               runtimeDebugLevel: Int) {
-  private val verbose = runtimeDebugLevel >= 1
-
+                               dxApi: DxApi) {
   // Efficiently get the names of many files. We
   // don't want to do a `describe` each one of them, instead,
   // we do a bulk-describe.
@@ -25,7 +23,7 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
   private def bulkGetFilenames(files: Seq[DxFile]): Vector[String] = {
-    val info: Map[DxFile, DxFileDescribe] = DxFile.bulkDescribe(files.toVector)
+    val info: Map[DxFile, DxFileDescribe] = dxApi.fileBulkDescribe(files.toVector)
     info.values.map(_.name).toVector
   }
 
@@ -54,23 +52,22 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
       case Some(x) => x
     }
 
-    val fileOutputs: Set[DxFile] = DxUtils.findDxFiles(outputs).toSet
-    val fileInputs: Set[DxFile] = DxUtils.findDxFiles(inputs).toSet
+    val fileOutputs: Set[DxFile] = dxApi.findFiles(outputs).toSet
+    val fileInputs: Set[DxFile] = dxApi.findFiles(inputs).toSet
     val realOutputs: Set[DxFile] = fileOutputs -- fileInputs
-    Logger.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
-    Logger.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
-    Logger.appletLog(verbose, s"analysis has ${realOutputs.size} real outputs")
+    dxApi.logger.appletLog(s"analysis has ${fileOutputs.size} output files")
+    dxApi.logger.appletLog(s"analysis has ${fileInputs.size} input files")
+    dxApi.logger.appletLog(s"analysis has ${realOutputs.size} real outputs")
 
-    Logger.appletLog(verbose, "Checking timestamps")
-    if (realOutputs.size > MAX_NUM_FILES_MOVE_LIMIT) {
-      Logger.appletLog(
-          verbose,
+    dxApi.logger.appletLog("Checking timestamps")
+    if (realOutputs.size > exec.MAX_NUM_FILES_MOVE_LIMIT) {
+      dxApi.logger.appletLog(
           s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects"
       )
       return Vector.empty
     }
     val realFreshOutputs: Map[DxFile, DxFileDescribe] =
-      DxFile.bulkDescribe(realOutputs.toVector)
+      dxApi.fileBulkDescribe(realOutputs.toVector)
 
     // Retain only files that were created AFTER the analysis started
     val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
@@ -82,20 +79,19 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
         else
           None
     }.toVector
-    Logger.appletLog(verbose, s"analysis has ${outputFiles.length} verified output files")
+    dxApi.logger.appletLog(s"analysis has ${outputFiles.length} verified output files")
 
     outputFiles
   }
 
   // Move all intermediate results to a sub-folder
   def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
-    val dxEnv = DxUtils.dxEnv
-    val dxProject = DxProject(dxEnv.getProjectContext)
+    val dxProject = dxApi.currentProject
     val dxProjDesc = dxProject.describe()
-    val dxAnalysis = DxJob(dxEnv.getJob).describe().analysis.get
+    val dxAnalysis = dxApi.currentJob.describe().analysis.get
     val outFolder = dxAnalysis.describe().folder
-    val intermFolder = outFolder + "/" + SysUtils.INTERMEDIATE_RESULTS_FOLDER
-    Logger.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
+    val intermFolder = outFolder + "/" + exec.INTERMEDIATE_RESULTS_FOLDER
+    dxApi.logger.appletLog(s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
     // find all analysis output files
     val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxAnalysis)
@@ -104,30 +100,30 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
 
     val exportIds: Set[String] = exportFiles.map(_.id).toSet
     val exportNames: Seq[String] = bulkGetFilenames(exportFiles)
-    Logger.appletLog(verbose, s"exportFiles=${exportNames}")
+    dxApi.logger.appletLog(s"exportFiles=${exportNames}")
 
     // Figure out which of the files should be kept
     val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
     val iNames: Seq[String] = bulkGetFilenames(intermediateFiles)
-    Logger.appletLog(verbose, s"intermediate files=${iNames}")
+    dxApi.logger.appletLog(s"intermediate files=${iNames}")
     if (intermediateFiles.isEmpty)
       return
 
     // Move all non exported results to the subdir. Do this in
     // a single API call, to improve performance.
     val folderContents: FolderContents = dxProject.listFolder(outFolder)
-    Logger.appletLog(verbose, s"subfolders=${folderContents.subFolders}")
+    dxApi.logger.appletLog(s"subfolders=${folderContents.subFolders}")
     if (!(folderContents.subFolders contains intermFolder)) {
-      Logger.appletLog(verbose, s"Creating intermediate results sub-folder ${intermFolder}")
+      dxApi.logger.appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
       dxProject.newFolder(intermFolder, parents = true)
     } else {
-      Logger.appletLog(verbose, s"Intermediate results sub-folder ${intermFolder} already exists")
+      dxApi.logger.appletLog(s"Intermediate results sub-folder ${intermFolder} already exists")
     }
     dxProject.moveObjects(intermediateFiles, intermFolder)
   }
 
   def apply(wfOutputFiles: Vector[DxFile]): Map[String, JsValue] = {
-    Logger.appletLog(verbose, s"dxWDL version: ${getVersion}")
+    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
 
     // Reorganize directory structure
     moveIntermediateResultFiles(wfOutputFiles)

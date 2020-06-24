@@ -23,6 +23,7 @@ import java.nio.file.{Files, Path, Paths}
 import dx.AppInternalException
 import dx.api.{DxApi, DxJob, DxPath, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
+import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
 import dx.core.languages.wdl._
 import dx.core.util.SysUtils

@@ -6,27 +6,7 @@ import java.io.EOFException
 import java.nio.file.{Path, Paths}
 import java.security.MessageDigest
 
-import dx.api.{
-  ConstraintOper,
-  DxAccessLevel,
-  DxApi,
-  DxAppDescribe,
-  DxApplet,
-  DxAppletDescribe,
-  DxConstraint,
-  DxDataObject,
-  DxExecutable,
-  DxFile,
-  DxFileDescribe,
-  DxIOSpec,
-  DxPath,
-  DxProject,
-  DxWorkflow,
-  DxWorkflowDescribe,
-  Field,
-  InstanceTypeDB,
-  InstanceTypeReq
-}
+import dx.api._
 import dx.compiler.IR.{CVar, SArg}
 import dx.core.languages.IORef
 import dx.core.languages.wdl.{
@@ -38,7 +18,7 @@ import dx.core.languages.wdl.{
 }
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.util.SysUtils
-import dx.util.{JsUtils, Logger, getVersion}
+import dx.util.{JsUtils, Logger, TraceLevel, getVersion}
 import wdlTools.generators.code.WdlV1Generator
 
 import scala.collection.immutable.TreeMap
@@ -64,14 +44,12 @@ case class Native(dxWDLrtId: Option[String],
                   fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
-                  runtimeDebugLevel: Option[Int],
                   leaveWorkflowsOpen: Boolean,
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
                   dxApi: DxApi) {
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
-  private val rtDebugLvl = runtimeDebugLevel.getOrElse(DEFAULT_RUNTIME_DEBUG_LEVEL)
   private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {
@@ -407,7 +385,7 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptTaskBody(): String = {
     s"""|    # evaluate input arguments, and download input files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |
         |    echo "Using dxda version: $$(dx-download-agent version)"
         |    echo "Using dxfuse version: $$(dxfuse -version)"
@@ -477,7 +455,7 @@ case class Native(dxWDLrtId: Option[String],
         |    fi
         |
         |    # construct the bash command and write it to a file
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |
         |    echo "bash command encapsulation script:"
         |    cat ${dxPathConfig.script.toString}
@@ -504,7 +482,7 @@ case class Native(dxWDLrtId: Option[String],
         |    fi
         |
         |    # evaluate applet outputs, and upload result files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |
         |    # unmount dxfuse
         |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
@@ -516,17 +494,17 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptWfFragment(): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |}
         |
         |collect() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |}""".stripMargin.trim
   }
 
   private def genBashScriptCmd(cmd: String): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
         |}""".stripMargin.trim
   }
 
@@ -561,12 +539,12 @@ case class Native(dxWDLrtId: Option[String],
                 |set -e -o pipefail
                 |main() {
                 |    # check if this is the correct instance type
-                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
+                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}`
                 |    if [[ $$correctInstanceType == "true" ]]; then
                 |        body
                 |    else
                 |       # evaluate the instance type, and launch a sub job on it
-                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
                 |    fi
                 |}
                 |
@@ -709,7 +687,7 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   private def apiParseReplyID(repJs: JsObject): String = {
-    repJs.asJsObject.fields.get("id") match {
+    repJs.fields.get("id") match {
       case None              => throw new Exception("API call did not returnd an ID")
       case Some(JsString(x)) => x
       case other             => throw new Exception(s"API call returned invalid ID ${other}")
@@ -1106,7 +1084,7 @@ case class Native(dxWDLrtId: Option[String],
     val generator = WdlV1Generator()
     val sourceLines = generator.generateDocument(applet.document)
     val sourceCode = SysUtils.gzipAndBase64Encode(sourceLines.mkString("\n"))
-    val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+    val dbOpaque = InstanceTypeDbQuery(dxApi).opaquePrices(instanceTypeDB)
     val dbOpaqueInstance = SysUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
@@ -1221,7 +1199,7 @@ case class Native(dxWDLrtId: Option[String],
     // Calculate a checksum of the inputs that went into the
     // making of the applet.
     val (digest, appletApiRequest) = appletNewReq(applet, bashScript, aplLinks)
-    if (logger2.verbose) {
+    if (logger2.traceLevel >= TraceLevel.Verbose) {
       val fName = s"${applet.name}_req.json"
       val trgPath = appCompileDirPath.resolve(fName)
       SysUtils.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)

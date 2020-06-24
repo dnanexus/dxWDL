@@ -37,12 +37,11 @@ package dx.exec
 
 import java.nio.file.Paths
 
-import dx.AppInternalException
+import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
-import dx.exec.exec.RunnerWfFragmentMode
 import dx.util.{TraceLevel, getVersion}
 import spray.json._
 import wdlTools.eval.{WdlValues, Context => EvalContext}
@@ -749,7 +748,6 @@ case class WfFragRunner(wf: TAT.Workflow,
     // Find the fragment block to execute
     val block = Block.getSubBlock(blockPath, wf.body)
     dxApi.logger.appletLog(
-        verbose,
         s"""|Block ${blockPath} to execute:
             |${PrettyPrintApprox.block(block)}
             |

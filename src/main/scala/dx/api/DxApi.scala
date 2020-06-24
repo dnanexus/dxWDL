@@ -180,14 +180,14 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     }
   }
 
-  private def call(fn: (JsonNode, Class[JsonNode], DXEnvironment) => JsonNode,
+  private def call(fn: (Any, Class[JsonNode], DXEnvironment) => JsonNode,
                    fields: Map[String, JsValue]): JsObject = {
     val request = objMapper.readTree(JsObject(fields).prettyPrint)
     val response = fn(request, classOf[JsonNode], dxEnv)
     response.toString.parseJson.asJsObject
   }
 
-  private def callObject(fn: (String, JsonNode, Class[JsonNode], DXEnvironment) => JsonNode,
+  private def callObject(fn: (String, Any, Class[JsonNode], DXEnvironment) => JsonNode,
                          objectId: String,
                          fields: Map[String, JsValue] = Map.empty): JsObject = {
     val request = objMapper.readTree(JsObject(fields).prettyPrint)
@@ -196,63 +196,63 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   }
 
   def analysisDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.analysisDescribe, id, fields)
+    callObject(DXAPI.analysisDescribe[JsonNode], id, fields)
   }
 
   def analysisSetProperties(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.analysisSetProperties, id, fields)
+    val result = callObject(DXAPI.analysisSetProperties[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def appDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.appDescribe, id, fields)
+    callObject(DXAPI.appDescribe[JsonNode], id, fields)
   }
 
   def appRun(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.appRun, id, fields)
+    callObject(DXAPI.appRun[JsonNode], id, fields)
   }
 
   def appletDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.appletDescribe, id, fields)
+    callObject(DXAPI.appletDescribe[JsonNode], id, fields)
   }
 
   def appletNew(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.appletNew, fields)
+    call(DXAPI.appletNew[JsonNode], fields)
   }
 
   def appletRename(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.appletRename, id, fields)
+    callObject(DXAPI.appletRename[JsonNode], id, fields)
   }
 
   def appletRun(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.appletRun, id, fields)
+    callObject(DXAPI.appletRun[JsonNode], id, fields)
   }
 
   def containerDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.containerDescribe, id, fields)
+    callObject(DXAPI.containerDescribe[JsonNode], id, fields)
   }
 
   def containerListFolder(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.containerListFolder, id, fields)
+    callObject(DXAPI.containerListFolder[JsonNode], id, fields)
   }
 
   def containerMove(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.containerMove, id, fields)
+    val result = callObject(DXAPI.containerMove[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def containerNewFolder(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.containerNewFolder, id, fields)
+    val result = callObject(DXAPI.containerNewFolder[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def containerRemoveObjects(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.containerRemoveObjects, id, fields)
+    val result = callObject(DXAPI.containerRemoveObjects[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def fileDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.fileDescribe, id, fields)
+    callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }
 
   // Describe the names of all the files in one batch. This is much more efficient
@@ -301,28 +301,43 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   }
 
   def findApps(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindApps, fields)
+    call(DXAPI.systemFindApps[JsonNode], fields)
   }
 
   def findDataObjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindDataObjects, fields)
+    call(DXAPI.systemFindDataObjects[JsonNode], fields)
   }
 
   def findExecutions(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindExecutions, fields)
+    call(DXAPI.systemFindExecutions[JsonNode], fields)
+  }
+
+  // Search through a JSON value for all the dx:file links inside it. Returns
+  // those as a vector.
+  def findFiles(jsValue: JsValue): Vector[DxFile] = {
+    jsValue match {
+      case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
+        Vector.empty[DxFile]
+      case JsObject(_) if DxFile.isDxFile(jsValue) =>
+        Vector(DxFile.fromJsValue(this, jsValue))
+      case JsObject(fields) =>
+        fields.map { case (_, v) => findFiles(v) }.toVector.flatten
+      case JsArray(elems) =>
+        elems.flatMap(e => findFiles(e))
+    }
   }
 
   def findProjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindProjects, fields)
+    call(DXAPI.systemFindProjects[JsonNode], fields)
   }
 
   def jobDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
-    callObject(DXAPI.jobDescribe, id, fields)
+    callObject(DXAPI.jobDescribe[JsonNode], id, fields)
   }
 
   def orgDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     try {
-      callObject(DXAPI.orgDescribe, id, fields)
+      callObject(DXAPI.orgDescribe[JsonNode], id, fields)
     } catch {
       case cause: com.dnanexus.exceptions.PermissionDeniedException =>
         throw new dx.PermissionDeniedException(
@@ -333,39 +348,39 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   }
 
   def projectDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
-    callObject(DXAPI.projectDescribe, id, fields)
+    callObject(DXAPI.projectDescribe[JsonNode], id, fields)
   }
 
   def projectListFolder(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.projectListFolder, id, fields)
+    callObject(DXAPI.projectListFolder[JsonNode], id, fields)
   }
 
   def projectMove(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.projectMove, id, fields)
+    val result = callObject(DXAPI.projectMove[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def projectNewFolder(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.projectNewFolder, id, fields)
+    val result = callObject(DXAPI.projectNewFolder[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def projectRemoveObjects(id: String, fields: Map[String, JsValue]): Unit = {
-    val result = callObject(DXAPI.projectRemoveObjects, id, fields)
+    val result = callObject(DXAPI.projectRemoveObjects[JsonNode], id, fields)
     logger.ignore(result)
   }
 
   def recordDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.recordDescribe, id, fields)
+    callObject(DXAPI.recordDescribe[JsonNode], id, fields)
   }
 
   def resolveDataObjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemResolveDataObjects, fields)
+    call(DXAPI.systemResolveDataObjects[JsonNode], fields)
   }
 
   def userDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     try {
-      callObject(DXAPI.userDescribe, id, fields)
+      callObject(DXAPI.userDescribe[JsonNode], id, fields)
     } catch {
       case cause: com.dnanexus.exceptions.PermissionDeniedException =>
         throw new dx.PermissionDeniedException(
@@ -376,23 +391,23 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   }
 
   def workflowClose(id: String): Unit = {
-    callObject(DXAPI.workflowClose, id)
+    callObject(DXAPI.workflowClose[JsonNode], id)
   }
 
   def workflowDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.workflowDescribe, id, fields)
+    callObject(DXAPI.workflowDescribe[JsonNode], id, fields)
   }
 
   def workflowNew(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.workflowNew, fields)
+    call(DXAPI.workflowNew[JsonNode], fields)
   }
 
   def workflowRename(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.workflowRename, id, fields)
+    callObject(DXAPI.workflowRename[JsonNode], id, fields)
   }
 
   def workflowRun(id: String, fields: Map[String, JsValue]): JsObject = {
-    callObject(DXAPI.workflowRun, id, fields)
+    callObject(DXAPI.workflowRun[JsonNode], id, fields)
   }
 
   def runSubJob(entryPoint: String,
@@ -454,7 +469,8 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     val req = JsObject("objects" -> JsArray(JsString(assetRecord.id)),
                        "project" -> JsString(dxProject.id),
                        "destination" -> JsString("/"))
-    val rep = DXAPI.projectClone(rmtProject.id, JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
+    val rep =
+      DXAPI.projectClone(rmtProject.id, JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val repJs: JsValue = JsUtils.jsValueOfJsonNode(rep)
 
     val exists = repJs.asJsObject.fields.get("exists") match {
@@ -713,15 +729,17 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   // More accurate types
   def resolveDxURLRecord(buf: String): DxRecord = {
     val dxObj = resolveDxPath(buf)
-    if (!dxObj.isInstanceOf[DxRecord])
+    if (!dxObj.isInstanceOf[DxRecord]) {
       throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+    }
     dxObj.asInstanceOf[DxRecord]
   }
 
   def resolveDxUrlFile(buf: String): DxFile = {
     val dxObj = resolveDxPath(buf)
-    if (!dxObj.isInstanceOf[DxFile])
+    if (!dxObj.isInstanceOf[DxFile]) {
       throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+    }
     dxObj.asInstanceOf[DxFile]
   }
 }

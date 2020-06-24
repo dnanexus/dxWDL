@@ -7,7 +7,7 @@ class AppInternalException(message: String) extends RuntimeException(message)
 class AppException(message: String) extends RuntimeException(message)
 
 class PermissionDeniedException(message: String) extends Exception(message) {
-  def this(message: String, cause: Throwable) {
+  def this(message: String, cause: Throwable) = {
     this(message)
     initCause(cause)
   }

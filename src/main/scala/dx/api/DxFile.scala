@@ -55,9 +55,9 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject]) extends 
     val desc = DxFile.parseJsonFileDesribe(descJs)
 
     // populate optional fields
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    val parts = descJs.asJsObject.fields.get("parts").map(DxFile.parseFileParts)
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val parts = descJs.fields.get("parts").map(DxFile.parseFileParts)
     desc.copy(details = details, properties = props, parts = parts)
   }
 
@@ -105,7 +105,7 @@ object DxFile {
 
     // populate the size field. It is missing from files that are in the open or closing
     // states.
-    val sizeRaw = descJs.asJsObject.fields.getOrElse("size", JsNumber(0))
+    val sizeRaw = descJs.fields.getOrElse("size", JsNumber(0))
     val size = sizeRaw match {
       case JsNumber(x) => x.toLong
       case other       => throw new Exception(s"size ${other} is not a number")
@@ -185,7 +185,7 @@ object DxFile {
     dxFile.getLinkAsJson
   }
 
-  private def isDxFile(jsValue: JsValue): Boolean = {
+  def isDxFile(jsValue: JsValue): Boolean = {
     jsValue match {
       case JsObject(fields) =>
         fields.get("$dnanexus_link") match {
@@ -198,21 +198,6 @@ object DxFile {
           case _ => false
         }
       case _ => false
-    }
-  }
-
-  // Search through a JSON value for all the dx:file links inside it. Returns
-  // those as a vector.
-  def findDxFiles(dxApi: DxApi, jsValue: JsValue): Vector[DxFile] = {
-    jsValue match {
-      case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
-        Vector.empty[DxFile]
-      case JsObject(_) if isDxFile(jsValue) =>
-        Vector(DxFile.fromJsValue(dxApi, jsValue))
-      case JsObject(fields) =>
-        fields.map { case (_, v) => findDxFiles(dxApi, v) }.toVector.flatten
-      case JsArray(elems) =>
-        elems.flatMap(e => findDxFiles(dxApi, e))
     }
   }
 }

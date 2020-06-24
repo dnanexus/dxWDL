@@ -74,7 +74,9 @@ case class WdlCodeGen(logger: Logger,
 
       case WdlTypes.T_Struct(_, typeMap) =>
         val members = typeMap.map {
-          case (fieldName, t) => fieldName -> genDefaultValueOfType(t)
+          case (fieldName, t) =>
+            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, dummyTextSource)
+            key -> genDefaultValueOfType(t)
         }
         TAT.ExprObject(members, wdlType, dummyTextSource)
 
@@ -128,7 +130,9 @@ case class WdlCodeGen(logger: Logger,
 
       case WdlValues.V_Object(members) =>
         val memberExprs = members.map {
-          case (name, value) => name -> wdlValueToExpr(value)
+          case (name, value) =>
+            val key: TAT.Expr = TAT.ValueString(name, WdlTypes.T_String, dummyTextSource)
+            key -> wdlValueToExpr(value)
         }
         TAT.ExprObject(memberExprs, WdlTypes.T_Object, dummyTextSource)
 

@@ -24,6 +24,8 @@ case class Logger(quiet: Boolean,
   private val APPLET_LOG_MSG_LIMIT = 1000
   private lazy val keywordsLower: Set[String] = keywords.map(_.toLowerCase)
 
+  lazy val isVerbose: Boolean = traceLevel >= TraceLevel.Verbose
+
   // check in a case insensitive fashion
   def containsKey(word: String): Boolean = {
     keywordsLower.contains(word.toLowerCase)
@@ -59,11 +61,10 @@ case class Logger(quiet: Boolean,
 
   // print an error message in red
   def error(msg: String): Unit = {
-    System.err.println(Console.RED + msg + Console.RESET)
+    Logger.error(msg)
   }
 
-  private def traceEnabledFor(minLevel: Int = TraceLevel.Verbose,
-                              requiredKey: Option[String] = None): Boolean = {
+  private def traceEnabledFor(minLevel: Int, requiredKey: Option[String]): Boolean = {
     minLevel >= traceLevel && requiredKey.forall(containsKey)
   }
 
@@ -117,4 +118,9 @@ case class Logger(quiet: Boolean,
 object Logger {
   lazy val Quiet: Logger = Logger(quiet = true, traceLevel = TraceLevel.Verbose)
   lazy val Verbose: Logger = Logger(quiet = false, traceLevel = TraceLevel.None)
+
+  // print an error message in red
+  def error(msg: String): Unit = {
+    System.err.println(Console.RED + msg + Console.RESET)
+  }
 }

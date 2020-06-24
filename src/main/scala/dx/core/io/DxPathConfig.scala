@@ -69,7 +69,7 @@ case class DxPathConfig(homeDir: Path,
 }
 
 object DxPathConfig {
-  def apply(homeDir: Path, streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
+  def apply(homeDir: Path, streamAllFiles: Boolean, logger: Logger): DxPathConfig = {
     val metaDir: Path = homeDir.resolve("meta")
     val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")
@@ -87,7 +87,6 @@ object DxPathConfig {
     val rcPath = metaDir.resolve("rc")
     val dockerCid = metaDir.resolve("dockerCid")
     val runnerTaskEnv = metaDir.resolve("taskEnv.json")
-    val logger = if (verbose) Logger.Verbose else Logger.Quiet
     DxPathConfig(
         homeDir,
         metaDir,
