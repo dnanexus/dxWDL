@@ -126,7 +126,8 @@ single_tasks_list = [
 # because we don't want to give permissions for creating platform apps.
 ci_test_list = [
     "advanced",
-    "call_native",
+    # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
+    # "call_native",
     "call_with_defaults1",
     "trains",
     "files"
