@@ -119,5 +119,4 @@ object InstanceTypes {
 
     InstanceTypeReq(None, memoryMB, diskGB, cpu, gpu)
   }
-
 }

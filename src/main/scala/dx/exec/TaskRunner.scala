@@ -169,7 +169,6 @@ case class TaskRunner(task: TAT.Task,
   }
 
   private def pullImage(dImg: String): Option[String] = {
-
     var retry_count = 5
     while (retry_count > 0) {
       try {
