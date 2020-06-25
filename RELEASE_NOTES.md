@@ -1,10 +1,9 @@
 # Release Notes
 
-## 2.0.0-rc (upcoming release, in development)
+## 2.0.0-rc 25-Jun-2020
 
-- Replaced WOM with wdlTools
+- Replaced WOM with `wdlTools`
 - TODO:
-    - Update Dockerfile
     - Publish wdlTools to MavenCentral and update `build.sbt`
     - Map `parameter_meta` output parameters, remove note in ExpertOptions
     - Update `Internals.md`
