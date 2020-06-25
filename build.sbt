@@ -48,8 +48,6 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-//resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-
 libraryDependencies ++= Seq(
     "com.dnanexus" % "wdltools" % "v0.1.0",
     // antlr4 lexer + parser
