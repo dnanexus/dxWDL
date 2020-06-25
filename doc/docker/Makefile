@@ -1,7 +1,7 @@
 all : thinkbox
 
 thinkbox:
-	docker build -t dxwdl_workbench development/docker/
+	docker build -t dxwdl_workbench .
 	docker run \
            --name dxwdl_thinkbox \
            --privileged \

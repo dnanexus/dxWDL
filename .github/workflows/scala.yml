@@ -34,6 +34,7 @@ jobs:
           git clone https://github.com/dnanexus-rnd/wdlTools.git
           # compile antlr4 sources
           cd wdlTools
+          git checkout 1aee3df7b35297de8dc7e2d81f3273123dc9405f
           make
           sbt compile && sbt publishLocal
           pwd
