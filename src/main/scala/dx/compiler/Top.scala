@@ -3,7 +3,16 @@ package dx.compiler
 import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
-import dx.api.{DxApi, DxFile, DxFileDescribe, DxPath, DxProject, DxRecord, InstanceTypeDbQuery}
+import dx.api.{
+  DxApi,
+  DxFile,
+  DxFileDescribe,
+  DxPath,
+  DxProject,
+  DxRecord,
+  Field,
+  InstanceTypeDbQuery
+}
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.ParseSource
 import dx.core.util.SysUtils
@@ -118,7 +127,7 @@ case class Top(cOpt: CompilerOptions) {
       case CompilerFlag.All =>
         // get billTo and region from the project, then find the runtime asset
         // in the current region.
-        val region = dxProject.describe().region match {
+        val region = dxProject.describe(Set(Field.Region)).region match {
           case Some(s) => s
           case None    => throw new Exception(s"Cannot get region for project ${dxProject}")
         }

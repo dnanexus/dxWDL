@@ -14,6 +14,7 @@ import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Util
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -184,7 +185,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      val (_, _) = SysUtils.execCommand(script.toString, None)
+      val (_, _) = Util.execCommand(script.toString, None)
     }
 
     // epilog
@@ -265,7 +266,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
                  |}
                  |]""".stripMargin.trim
 
-    val repo = TaskRunnerUtils.readManifestGetDockerImageName(buf)
+    val repo = TaskRunner.readManifestGetDockerImageName(buf)
     repo should equal("ubuntu_18_04_minimal:latest")
   }
 

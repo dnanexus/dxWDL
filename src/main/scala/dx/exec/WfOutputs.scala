@@ -34,9 +34,9 @@ case class WfOutputs(wf: TAT.Workflow,
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             addStatus: Boolean = false): Map[String, JsValue] = {
-    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
-    dxApi.logger.appletLog(s"Environment: ${envInitial}")
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
+    dxApi.logger.traceLimited(s"Environment: ${envInitial}")
+    dxApi.logger.traceLimited(
         s"""|Evaluating workflow outputs
             |${PrettyPrintApprox.graphOutputs(wf.outputs)}
             |""".stripMargin

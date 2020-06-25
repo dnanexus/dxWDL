@@ -95,6 +95,15 @@ case class Logger(quiet: Boolean,
     }
   }
 
+  // Logging output for applets at runtime. Shortcut for `trace()` with a message `maxLength`
+  // (defaults to `APPLET_LOG_MSG_LIMIT`)
+  def traceLimited(msg: String,
+                   limit: Int = APPLET_LOG_MSG_LIMIT,
+                   minLevel: Int = TraceLevel.Verbose,
+                   requiredKey: Option[String] = None): Unit = {
+    trace(msg, Some(limit), minLevel, requiredKey)
+  }
+
   // Ignore a value and print a trace message. This is useful for avoiding warnings/errors
   // on unused variables.
   def ignore[A](value: A,
@@ -103,15 +112,6 @@ case class Logger(quiet: Boolean,
     if (traceEnabledFor(minLevel, requiredKey)) {
       printTrace(s"ignoring ${value}")
     }
-  }
-
-  // Logging output for applets at runtime. Shortcut for `trace()` with a message `maxLength`
-  // (defaults to `APPLET_LOG_MSG_LIMIT`)
-  def appletLog(msg: String,
-                limit: Int = APPLET_LOG_MSG_LIMIT,
-                minLevel: Int = TraceLevel.Verbose,
-                requiredKey: Option[String] = None): Unit = {
-    trace(msg, Some(limit), minLevel, requiredKey)
   }
 }
 

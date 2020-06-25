@@ -10,13 +10,14 @@ import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.eval.WdlValues
+import wdlTools.util.Util
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
   private val DX_API_QUIET = DxApi(Logger.Quiet)
   private val DX_API_LOUD = DxApi(Logger.Verbose)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, _) = SysUtils.execCommand(s"dx describe ${name} --json")
+    val (stdout, _) = Util.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }

@@ -18,9 +18,9 @@ case class WfInputs(wf: TAT.Workflow,
     WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
 
   def apply(inputs: Map[String, (WdlTypes.T, WdlValues.V)]): Map[String, JsValue] = {
-    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
-    dxApi.logger.appletLog(s"Environment: ${inputs}")
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
+    dxApi.logger.traceLimited(s"Environment: ${inputs}")
+    dxApi.logger.traceLimited(
         s"""|Artificial applet for unlocked workflow inputs
             |${PrettyPrintApprox.graphInputs(wf.inputs)}
             |""".stripMargin

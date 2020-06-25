@@ -388,7 +388,7 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
     val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
     // get billTo and region from the project
-    val desc = dxProject.describe()
+    val desc = dxProject.describe(Set(Field.Region, Field.BillTo))
     val billTo = desc.billTo match {
       case Some(s) => s
       case None    => throw new Exception(s"Failed to get billTo from project ${dxProject.id}")

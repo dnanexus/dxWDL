@@ -31,50 +31,8 @@ import dx.util.{TraceLevel, getVersion}
 import spray.json._
 import wdlTools.eval.{WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Util
 
-// This object is used to allow easy testing of complex
-// methods internal to the TaskRunner.
-object TaskRunnerUtils {
-  // Read the manifest file from a docker tarball, and get the repository name.
-  //
-  // A manifest could look like this:
-  // [
-  //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
-  //     "RepoTags":["ubuntu_18_04_minimal:latest"],
-  //     "Layers":[
-  //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
-  //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
-  //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
-  //          ]}
-  // ]
-  def readManifestGetDockerImageName(buf: String): String = {
-    val jso = buf.parseJson
-    val elem = jso match {
-      case JsArray(elements) if elements.nonEmpty => elements.head
-      case other =>
-        throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
-    }
-    val repo: String = elem.asJsObject.fields.get("RepoTags") match {
-      case None =>
-        throw new Exception("The repository is not specified for the image")
-      case Some(JsString(repo)) =>
-        repo
-      case Some(JsArray(elements)) =>
-        if (elements.isEmpty)
-          throw new Exception("RepoTags has an empty array")
-        elements.head match {
-          case JsString(repo) => repo
-          case other          => throw new Exception(s"bad value ${other} in RepoTags manifest field")
-        }
-      case other =>
-        throw new Exception(s"bad value ${other} in RepoTags manifest field")
-    }
-    repo
-  }
-}
-
-// We can't use the name Task, because that would confuse it with the
-// WDL language definition.
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
                       typeAliases: Map[String, WdlTypes.T],
@@ -139,9 +97,9 @@ case class TaskRunner(task: TAT.Task,
   }
 
   private def printDirStruct(): Unit = {
-    dxApi.logger.appletLog("Directory structure:", minLevel = TraceLevel.VVerbose)
-    val (stdout, _) = SysUtils.execCommand("ls -lR", None)
-    dxApi.logger.appletLog(stdout + "\n", 10000, minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited("Directory structure:", minLevel = TraceLevel.VVerbose)
+    val (stdout, _) = Util.execCommand("ls -lR", None)
+    dxApi.logger.traceLimited(stdout + "\n", 10000, minLevel = TraceLevel.VVerbose)
   }
 
   // Figure out if a docker image is specified. If so, return it as a string.
@@ -172,9 +130,9 @@ case class TaskRunner(task: TAT.Task,
     var retry_count = 5
     while (retry_count > 0) {
       try {
-        val (outstr, errstr) = SysUtils.execCommand(s"docker pull ${dImg}")
+        val (outstr, errstr) = Util.execCommand(s"docker pull ${dImg}")
 
-        dxApi.logger.appletLog(
+        dxApi.logger.traceLimited(
             s"""|output:
                 |${outstr}
                 |stderr:
@@ -185,7 +143,7 @@ case class TaskRunner(task: TAT.Task,
         // ideally should catch specific exception.
         case _: Throwable =>
           retry_count = retry_count - 1
-          dxApi.logger.appletLog(
+          dxApi.logger.traceLimited(
               s"""Failed to pull docker image:
                  |${dImg}. Retrying... ${5 - retry_count}
                     """.stripMargin
@@ -205,29 +163,29 @@ case class TaskRunner(task: TAT.Task,
         // 2. open the tar archive
         // 2. load into the local docker cache
         // 3. figure out the image name
-        dxApi.logger.appletLog(s"looking up dx:url ${url}")
+        dxApi.logger.traceLimited(s"looking up dx:url ${url}")
         val dxFile = dxApi.resolveDxUrlFile(url)
         val fileName = dxFile.describe().name
         val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
         SysUtils.safeMkdir(tarballDir)
         val localTar: Path = tarballDir.resolve(fileName)
 
-        dxApi.logger.appletLog(s"downloading docker tarball to ${localTar}")
+        dxApi.logger.traceLimited(s"downloading docker tarball to ${localTar}")
         dxApi.downloadFile(localTar, dxFile)
 
-        dxApi.logger.appletLog("figuring out the image name")
-        val (mContent, _) = SysUtils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-        dxApi.logger.appletLog(
+        dxApi.logger.traceLimited("figuring out the image name")
+        val (mContent, _) = Util.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
+        dxApi.logger.traceLimited(
             s"""|manifest content:
                 |${mContent}
                 |""".stripMargin
         )
-        val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
-        dxApi.logger.appletLog(s"repository is ${repo}")
+        val repo = TaskRunner.readManifestGetDockerImageName(mContent)
+        dxApi.logger.traceLimited(s"repository is ${repo}")
 
-        dxApi.logger.appletLog(s"load tarball ${localTar} to docker", minLevel = TraceLevel.None)
-        val (outstr, errstr) = SysUtils.execCommand(s"docker load --input ${localTar}")
-        dxApi.logger.appletLog(
+        dxApi.logger.traceLimited(s"load tarball ${localTar} to docker", minLevel = TraceLevel.None)
+        val (outstr, errstr) = Util.execCommand(s"docker load --input ${localTar}")
+        dxApi.logger.traceLimited(
             s"""|output:
                 |${outstr}
                 |stderr:
@@ -299,7 +257,7 @@ case class TaskRunner(task: TAT.Task,
               |""".stripMargin
         List(part1, command, part2).mkString("\n")
       }
-    dxApi.logger.appletLog(s"writing bash script to ${dxPathConfig.script}")
+    dxApi.logger.traceLimited(s"writing bash script to ${dxPathConfig.script}")
     SysUtils.writeFileContent(dxPathConfig.script, script)
     dxPathConfig.script.toFile.setExecutable(true)
   }
@@ -358,7 +316,7 @@ case class TaskRunner(task: TAT.Task,
 
     //  -v ${dxPathConfig.dxfuseMountpoint}:${dxPathConfig.dxfuseMountpoint}
 
-    dxApi.logger.appletLog(s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
+    dxApi.logger.traceLimited(s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
     SysUtils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
@@ -399,14 +357,14 @@ case class TaskRunner(task: TAT.Task,
   def prolog(
       taskInputs: Map[TAT.InputDefinition, WdlValues.V]
   ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
-    dxApi.logger.appletLog(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
-    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
+    dxApi.logger.traceLimited(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
+    dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
     if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
       printDirStruct()
     }
-    dxApi.logger.appletLog(s"Task source code:")
-    dxApi.logger.appletLog(document.sourceCode, 10000)
-    dxApi.logger.appletLog(s"inputs: ${inputsDbg(taskInputs)}")
+    dxApi.logger.traceLimited(s"Task source code:")
+    dxApi.logger.traceLimited(document.sourceCode, 10000)
+    dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}")
 
     val parameterMeta: Map[String, TAT.MetaValue] = task.parameterMeta match {
       case None                                   => Map.empty
@@ -438,7 +396,7 @@ case class TaskRunner(task: TAT.Task,
           inpDfn.name -> (inpDfn.wdlType, value)
       }
 
-    dxApi.logger.appletLog(s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
+    dxApi.logger.traceLimited(s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
     (inputsWithTypes, dxUrl2path)
   }
 
@@ -448,7 +406,7 @@ case class TaskRunner(task: TAT.Task,
   def instantiateCommand(
       localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)]
   ): Map[String, (WdlTypes.T, WdlValues.V)] = {
-    dxApi.logger.appletLog(s"InstantiateCommand, env = ${localizedInputs}")
+    dxApi.logger.traceLimited(s"InstantiateCommand, env = ${localizedInputs}")
 
     val env = evalInputsAndDeclarations(localizedInputs)
     val docker = dockerImage(stripTypesFromEnv(env))
@@ -473,7 +431,7 @@ case class TaskRunner(task: TAT.Task,
 
   def epilog(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
              dxUrl2path: Map[Furl, Path]): Map[String, JsValue] = {
-    dxApi.logger.appletLog(s"Epilog debugLevel=${dxApi.logger.traceLevel}")
+    dxApi.logger.traceLimited(s"Epilog debugLevel=${dxApi.logger.traceLevel}")
     if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
       printDirStruct()
     }
@@ -517,8 +475,8 @@ case class TaskRunner(task: TAT.Task,
   // calculating the instance type in the workflow runner, outside
   // the task.
   def calcInstanceType(taskInputs: Map[TAT.InputDefinition, WdlValues.V]): String = {
-    dxApi.logger.appletLog("calcInstanceType", minLevel = TraceLevel.VVerbose)
-    dxApi.logger.appletLog(s"inputs: ${inputsDbg(taskInputs)}", minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited("calcInstanceType", minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}", minLevel = TraceLevel.VVerbose)
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
       taskInputs.map {
@@ -554,7 +512,7 @@ case class TaskRunner(task: TAT.Task,
     val gpu = evalAttr("gpu")
     val iTypeRaw = InstanceTypes.parse(dxInstanceType, memory, diskSpace, cores, gpu)
     val iType = instanceTypeDB.apply(iTypeRaw)
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(
         s"""|calcInstanceType memory=${memory} disk=${diskSpace}
             |cores=${cores} instancetype=${iType}""".stripMargin
           .replaceAll("\n", " ")
@@ -568,10 +526,10 @@ case class TaskRunner(task: TAT.Task,
   def checkInstanceType(inputs: Map[TAT.InputDefinition, WdlValues.V]): Boolean = {
     // evaluate the runtime attributes
     // determine the instance type
-    dxApi.logger.appletLog(s"inputs: ${inputsDbg(inputs)}")
+    dxApi.logger.traceLimited(s"inputs: ${inputsDbg(inputs)}")
 
     val requiredInstanceType: String = calcInstanceType(inputs)
-    dxApi.logger.appletLog(s"required instance type: ${requiredInstanceType}")
+    dxApi.logger.traceLimited(s"required instance type: ${requiredInstanceType}")
 
     // Figure out which instance we are on right now
     val dxJob = dxApi.currentJob
@@ -581,10 +539,10 @@ case class TaskRunner(task: TAT.Task,
       case Some(JsString(x)) => x
       case _                 => throw new Exception(s"wrong type for instanceType ${retval}")
     }
-    dxApi.logger.appletLog(s"current instance type: ${crntInstanceType}")
+    dxApi.logger.traceLimited(s"current instance type: ${crntInstanceType}")
 
     val isSufficient = instanceTypeDB.lteqByResources(requiredInstanceType, crntInstanceType)
-    dxApi.logger.appletLog(s"isSufficient? ${isSufficient}")
+    dxApi.logger.traceLimited(s"isSufficient? ${isSufficient}")
     isSufficient
   }
 
@@ -593,7 +551,7 @@ case class TaskRunner(task: TAT.Task,
     */
   def relaunch(inputs: Map[TAT.InputDefinition, WdlValues.V],
                originalInputs: JsValue): Map[String, JsValue] = {
-    dxApi.logger.appletLog(s"inputs: ${inputsDbg(inputs)}")
+    dxApi.logger.traceLimited(s"inputs: ${inputsDbg(inputs)}")
 
     // evaluate the runtime attributes
     // determine the instance type
@@ -614,5 +572,46 @@ case class TaskRunner(task: TAT.Task,
       wdlVarLinksConverter.genFields(wvl, outDef.name)
     }.toMap
     outputs
+  }
+}
+
+// This object is used to allow easy testing of complex
+// methods internal to the TaskRunner.
+object TaskRunner {
+  // Read the manifest file from a docker tarball, and get the repository name.
+  //
+  // A manifest could look like this:
+  // [
+  //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
+  //     "RepoTags":["ubuntu_18_04_minimal:latest"],
+  //     "Layers":[
+  //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
+  //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
+  //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
+  //          ]}
+  // ]
+  def readManifestGetDockerImageName(buf: String): String = {
+    val jso = buf.parseJson
+    val elem = jso match {
+      case JsArray(elements) if elements.nonEmpty => elements.head
+      case other =>
+        throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
+    }
+    val repo: String = elem.asJsObject.fields.get("RepoTags") match {
+      case None =>
+        throw new Exception("The repository is not specified for the image")
+      case Some(JsString(repo)) =>
+        repo
+      case Some(JsArray(elements)) =>
+        if (elements.isEmpty)
+          throw new Exception("RepoTags has an empty array")
+        elements.head match {
+          case JsString(repo) => repo
+          case other          => throw new Exception(s"bad value ${other} in RepoTags manifest field")
+        }
+      case other =>
+        throw new Exception(s"bad value ${other} in RepoTags manifest field")
+    }
+    repo
   }
 }

@@ -5,10 +5,10 @@ import spray.json._
 // Extra fields for describe
 object Field extends Enumeration {
   type Field = Value
-  val Access, Analysis, Applet, ArchivalState, AvailableInstanceTypes, Categories, Created,
+  val Access, Analysis, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories, Created,
       Description, Details, DeveloperNotes, Folder, Id, IgnoreReuse, Inputs, InputSpec, Modified,
-      Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, RunSpec, Size, Stages,
-      Summary, Tags, Title, Types, Version = Value
+      Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, Region, RunSpec, Size,
+      Stages, Summary, Tags, Title, Types, Version = Value
 }
 
 trait DxObjectDescribe {
@@ -57,6 +57,7 @@ object DxObject {
       case Field.Applet                 => "applet"
       case Field.ArchivalState          => "archivalState"
       case Field.AvailableInstanceTypes => "availableInstanceTypes"
+      case Field.BillTo                 => "billTo"
       case Field.Categories             => "categories"
       case Field.Created                => "created"
       case Field.Description            => "description"
@@ -75,6 +76,7 @@ object DxObject {
       case Field.Parts                  => "parts"
       case Field.Project                => "project"
       case Field.Properties             => "properties"
+      case Field.Region                 => "region"
       case Field.RunSpec                => "runSpec"
       case Field.Size                   => "size"
       case Field.Stages                 => "stages"

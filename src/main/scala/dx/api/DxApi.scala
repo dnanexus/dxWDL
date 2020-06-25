@@ -9,6 +9,7 @@ import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
 import dx.util.{JsUtils, Logger}
 import spray.json._
+import wdlTools.util.Util
 
 // wrapper around Java API
 case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) {
@@ -442,7 +443,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
       case _          => Map.empty
     }
     val req = JsObject(fields ++ instanceFields ++ dependsFields ++ dwd)
-    logger.appletLog(s"subjob request=${req.prettyPrint}")
+    logger.traceLimited(s"subjob request=${req.prettyPrint}")
 
     val retval: JsonNode = DXAPI.jobNew(JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
     val info: JsValue = JsUtils.jsValueOfJsonNode(retval)
@@ -504,7 +505,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
       try {
         // Use dx download. Quote the path, because it may contains spaces.
         val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString}" """
-        val (_, _) = SysUtils.execCommand(dxDownloadCmd, None)
+        val (_, _) = Util.execCommand(dxDownloadCmd, None)
         true
       } catch {
         case e: Throwable =>
@@ -522,7 +523,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     var rc = false
     var counter = 0
     while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-      logger.appletLog(s"downloading file ${path.toString} (try=${counter})")
+      logger.traceLimited(s"downloading file ${path.toString} (try=${counter})")
       rc = downloadOneFile(path, dxfile, counter)
       counter = counter + 1
     }
@@ -542,8 +543,8 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
         // shell out to dx upload. We need to quote the path, because it may contain
         // spaces
         val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
-        logger.appletLog(s"--  ${dxUploadCmd}")
-        val (outmsg, _) = SysUtils.execCommand(dxUploadCmd, None)
+        logger.traceLimited(s"--  ${dxUploadCmd}")
+        val (outmsg, _) = Util.execCommand(dxUploadCmd, None)
         if (!outmsg.startsWith("file-"))
           return None
         Some(outmsg.trim())
@@ -557,7 +558,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
 
     var counter = 0
     while (counter < UPLOAD_RETRY_LIMIT) {
-      logger.appletLog(s"upload file ${path.toString} (try=${counter})")
+      logger.traceLimited(s"upload file ${path.toString} (try=${counter})")
       uploadOneFile(path, counter) match {
         case Some(fid) => return file(fid, None)
         case None      => ()

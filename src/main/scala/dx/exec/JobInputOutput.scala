@@ -309,7 +309,7 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
   ): (Map[TAT.InputDefinition, WdlValues.V], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
     val fileURLs: Vector[Furl] = inputs.values.flatMap(findFiles).toVector
     val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
-    dxApi.logger.appletLog(s"streaming files = ${streamingFiles}")
+    dxApi.logger.traceLimited(s"streaming files = ${streamingFiles}")
 
     // remove duplicates; we want to download each file just once
     val filesToDownload: Set[Furl] = fileURLs.toSet

@@ -12,7 +12,7 @@ import dx.core.util.SysUtils
 import dx.util.{JsUtils, Logger, TraceLevel}
 import spray.json._
 
-object Main extends App {
+object Main {
   object ExecAction extends Enumeration {
     type ExecAction = Value
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
@@ -397,5 +397,7 @@ object Main extends App {
     }
   }
 
-  terminate(dispatchCommand(args.toSeq))
+  def main(args: Seq[String]): Unit = {
+    terminate(dispatchCommand(args))
+  }
 }

@@ -188,7 +188,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def processOutputs(env: Map[String, (WdlTypes.T, WdlValues.V)],
                              fragResults: Map[String, WdlVarLinks],
                              exportedVars: Set[String]): Map[String, JsValue] = {
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(
         s"""|processOutputs
             |  env = ${env.keys}
             |  fragResults = ${fragResults.keys}
@@ -271,7 +271,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def buildCallInputs(callName: String,
                               linkInfo: ExecLinkInfo,
                               env: Map[String, (WdlTypes.T, WdlValues.V)]): JsValue = {
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(
         s"""|buildCallInputs (${callName})
             |env:
             |${env.mkString("\n")}
@@ -284,8 +284,8 @@ case class WfFragRunner(wf: TAT.Workflow,
     val inputs: Map[String, WdlValues.V] = linkInfo.inputs.flatMap {
       case (varName, _) =>
         val retval = lookupInEnv(varName, env)
-        dxApi.logger.appletLog(s"lookupInEnv(${varName} = ${retval})",
-                               minLevel = TraceLevel.VVerbose)
+        dxApi.logger.traceLimited(s"lookupInEnv(${varName} = ${retval})",
+                                  minLevel = TraceLevel.VVerbose)
         retval match {
           case None =>
             // No binding for this input. It might be optional,
@@ -302,15 +302,15 @@ case class WfFragRunner(wf: TAT.Workflow,
         val wdlType = linkInfo.inputs(name)
         name -> wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
     }
-    dxApi.logger.appletLog(s"wvlInputs = ${wvlInputs}", minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited(s"wvlInputs = ${wvlInputs}", minLevel = TraceLevel.VVerbose)
 
     val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
         val fields = wdlVarLinksConverter.genFields(wvl, varName)
         accu ++ fields.toMap
     }
-    dxApi.logger.appletLog(s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}",
-                           minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited(s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}",
+                              minLevel = TraceLevel.VVerbose)
     JsObject(m)
   }
 
@@ -350,11 +350,11 @@ case class WfFragRunner(wf: TAT.Workflow,
     )
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
-      dxApi.logger.appletLog(s"Precalculated instance type for ${task.name}: ${iType}")
+      dxApi.logger.traceLimited(s"Precalculated instance type for ${task.name}: ${iType}")
       Some(iType)
     } catch {
       case e: Throwable =>
-        dxApi.logger.appletLog(
+        dxApi.logger.traceLimited(
             s"""|Failed to precalculate the instance type for
                 |task ${task.name}.
                 |
@@ -369,7 +369,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                                  dbgName: String,
                                  callInputs: JsValue,
                                  instanceType: Option[String]): (Int, DxExecution) = {
-    dxApi.logger.appletLog(s"execDNAx ${callInputs.prettyPrint}", minLevel = TraceLevel.VVerbose)
+    dxApi.logger.traceLimited(s"execDNAx ${callInputs.prettyPrint}", minLevel = TraceLevel.VVerbose)
 
     // Last check that we have all the compulsory arguments.
     //
@@ -435,7 +435,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def execCall(call: TAT.Call,
                        callInputs: Map[String, (WdlTypes.T, WdlValues.V)],
                        callNameHint: Option[String]): (Int, DxExecution) = {
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(
         s"""|call = ${call}
             |callInputs = ${callInputs}
             |""".stripMargin,
@@ -453,7 +453,8 @@ case class WfFragRunner(wf: TAT.Workflow,
     }
     val callInputsJSON = JsObject(callInputsJs)
     dxApi.logger
-      .appletLog(s"callInputsJSON = ${callInputsJSON.prettyPrint}", minLevel = TraceLevel.VVerbose)
+      .traceLimited(s"callInputsJSON = ${callInputsJSON.prettyPrint}",
+                    minLevel = TraceLevel.VVerbose)
 
     // This is presented in the UI, to inform the user
     val dbgName = callNameHint match {
@@ -684,8 +685,8 @@ case class WfFragRunner(wf: TAT.Workflow,
     val promises = collectSubJobs.launch(childJobs, resultArrayTypes)
     val promisesStr = promises.mkString("\n")
 
-    dxApi.logger.appletLog(s"resultTypes=${resultArrayTypes}")
-    dxApi.logger.appletLog(s"promises=${promisesStr}")
+    dxApi.logger.traceLimited(s"resultTypes=${resultArrayTypes}")
+    dxApi.logger.traceLimited(s"promises=${promisesStr}")
     promises
   }
 
@@ -741,13 +742,13 @@ case class WfFragRunner(wf: TAT.Workflow,
   def apply(blockPath: Vector[Int],
             envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
             runMode: RunnerWfFragmentMode.Value): Map[String, JsValue] = {
-    dxApi.logger.appletLog(s"dxWDL version: ${getVersion}")
-    dxApi.logger.appletLog(s"link info=${execLinkInfo}")
-    dxApi.logger.appletLog(s"Environment: ${envInitial}")
+    dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
+    dxApi.logger.traceLimited(s"link info=${execLinkInfo}")
+    dxApi.logger.traceLimited(s"Environment: ${envInitial}")
 
     // Find the fragment block to execute
     val block = Block.getSubBlock(blockPath, wf.body)
-    dxApi.logger.appletLog(
+    dxApi.logger.traceLimited(
         s"""|Block ${blockPath} to execute:
             |${PrettyPrintApprox.block(block)}
             |
@@ -840,8 +841,8 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     val jsOutputs: Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
     val jsOutputsDbgStr = jsOutputs.mkString("\n")
-    dxApi.logger.appletLog(s"""|JSON outputs:
-                               |${jsOutputsDbgStr}""".stripMargin)
+    dxApi.logger.traceLimited(s"""|JSON outputs:
+                                  |${jsOutputsDbgStr}""".stripMargin)
     jsOutputs
   }
 }

@@ -51,7 +51,7 @@ assemblyMergeStrategy in assembly := customMergeStrategy.value
 //resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
 
 libraryDependencies ++= Seq(
-    "com.dnanexus" %% "wdltools" % "0.1.0-SNAPSHOT",
+    "com.dnanexus" % "wdltools" % "v0.1.0",
     // antlr4 lexer + parser
     "org.antlr" % "antlr4" % "4.8",
     // JSON jackson parser

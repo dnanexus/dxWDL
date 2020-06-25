@@ -40,7 +40,7 @@ case class DxFileAccessProtocol(dxApi: DxApi,
   // Get the size of the file in bytes
   def size(uri: URI): Long = {
     val path = uri.toString
-    dxApi.logger.appletLog(s"DxIoFunctions size(${path})")
+    dxApi.logger.traceLimited(s"DxIoFunctions size(${path})")
     val (_, dxDesc) = getDxFile(path, describe = true)
     dxDesc.size
   }
@@ -48,7 +48,7 @@ case class DxFileAccessProtocol(dxApi: DxApi,
   // Read the entire file into a string
   def readFile(uri: URI): String = {
     val path = uri.toString
-    dxApi.logger.appletLog(s"DxIoFunctions readFile(${path})")
+    dxApi.logger.traceLimited(s"DxIoFunctions readFile(${path})")
     val (dxFile, _) = getDxFile(path)
     dxApi.downloadString(dxFile)
   }

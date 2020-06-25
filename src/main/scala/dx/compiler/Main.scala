@@ -16,7 +16,7 @@ import scala.collection.mutable
 //import org.rogach.scallop.ScallopConf
 
 //class CompilerConf(args: Seq[String]) extends ScallopConf(args) {}
-object Main extends App {
+object Main {
   case class SuccessTree(pretty: Either[String, JsValue]) extends SuccessfulTermination {
     lazy val message: String = {
       pretty match {
@@ -559,7 +559,7 @@ object Main extends App {
                       dOpt.dxApi)
   }
 
-  private def dispatchCommand(args: Seq[String]): Termination = {
+  def dispatchCommand(args: Seq[String]): Termination = {
     if (args.isEmpty) {
       return BadUsageTermination()
     }
@@ -633,5 +633,7 @@ object Main extends App {
         |    -verboseKey [module]     Detailed information for a specific module
         |""".stripMargin
 
-  terminate(dispatchCommand(args.toSeq), Some(usageMessage))
+  def main(args: Seq[String]): Unit = {
+    terminate(dispatchCommand(args), Some(usageMessage))
+  }
 }
