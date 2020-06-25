@@ -6,11 +6,11 @@ import dx.api._
 import dx.compiler.Main.SuccessTree
 import dx.core.util.MainUtils.Success
 import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
+import wdlTools.util.Logger
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.

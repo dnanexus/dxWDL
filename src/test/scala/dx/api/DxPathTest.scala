@@ -1,11 +1,9 @@
 package dx.api
 
-import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.Util
+import wdlTools.util.{Logger, Util}
 
 class DxPathTest extends AnyFlatSpec with Matchers {
   val DX_API: DxApi = DxApi(Logger.Quiet)

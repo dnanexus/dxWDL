@@ -6,10 +6,7 @@ import java.nio.file.{Files, Path}
 import java.util.Base64
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import scala.concurrent._
-import scala.concurrent.ExecutionContext.Implicits._
 import scala.jdk.CollectionConverters._
-import scala.sys.process.{Process, ProcessLogger}
 
 object SysUtils {
   // Create a file from a string

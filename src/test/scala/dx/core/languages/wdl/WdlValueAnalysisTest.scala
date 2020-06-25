@@ -1,10 +1,10 @@
 package dx.core.languages.wdl
 
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 class WdlValueAnalysisTest extends AnyFlatSpec with Matchers {
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {

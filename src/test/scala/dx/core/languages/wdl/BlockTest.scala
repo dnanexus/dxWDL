@@ -4,10 +4,10 @@ import java.nio.file.{Path, Paths}
 
 import dx.core.languages.wdl.{Bundle => WdlBundle}
 import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 class BlockTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet

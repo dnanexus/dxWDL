@@ -4,10 +4,10 @@ import java.nio.file.{Path, Paths}
 
 import dx.core.languages.wdl
 import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
+import wdlTools.util.Logger
 
 class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {

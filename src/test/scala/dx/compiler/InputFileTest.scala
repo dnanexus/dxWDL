@@ -4,11 +4,11 @@ import java.nio.file.{Path, Paths}
 
 import dx.api._
 import dx.compiler.Main.SuccessIR
-import dx.core.util.MainUtils.{Failure}
-import dx.util.Logger
+import dx.core.util.MainUtils.Failure
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
 //

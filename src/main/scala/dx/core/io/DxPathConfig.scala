@@ -3,7 +3,7 @@ package dx.core.io
 import java.nio.file.Path
 
 import dx.core.util.SysUtils
-import dx.util.Logger
+import wdlTools.util.Logger
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:

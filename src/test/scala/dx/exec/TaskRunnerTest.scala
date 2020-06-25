@@ -8,13 +8,12 @@ import dx.core.io.DxPathConfig
 import dx.core.languages.{Language, wdl}
 import dx.core.languages.wdl.{Bundle => WdlBundle}
 import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.Util
+import wdlTools.util.{Logger, Util}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.

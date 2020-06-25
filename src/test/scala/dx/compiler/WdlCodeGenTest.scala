@@ -1,11 +1,11 @@
 package dx.compiler
 
 import dx.core.languages.Language
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.Util
 import wdlTools.types.WdlTypes._
+import wdlTools.util.Logger
 
 class WdlCodeGenTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet

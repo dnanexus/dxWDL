@@ -7,9 +7,9 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.core.util.SysUtils
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
-import dx.util.{JsUtils, Logger}
+import dx.util.JsUtils
 import spray.json._
-import wdlTools.util.Util
+import wdlTools.util.{Logger, Util}
 
 // wrapper around Java API
 case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) {

@@ -1,7 +1,7 @@
 package dx.compiler
 
-import dx.util.Logger
 import wdlTools.types.WdlTypes
+import wdlTools.util.Logger
 
 // sort the definitions by dependencies
 case class SortTypeAliases(logger: Logger) {

@@ -4,11 +4,11 @@ package dx.compiler
 // Also, allows dnanexus specific configuration per task.
 
 import dx.api.{DxAccessLevel, DxApi, DxFile}
-import dx.util.Logger
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
   def toJson: Map[String, JsValue] = {
@@ -64,11 +64,11 @@ case class DxAccess(network: Option[Vector[String]],
     }
     val projectField: Map[String, JsValue] = project match {
       case None    => Map.empty
-      case Some(x) => Map("project" -> JsString(x.toString))
+      case Some(x) => Map("project" -> JsString(x.name))
     }
     val allProjectsField: Map[String, JsValue] = allProjects match {
       case None    => Map.empty
-      case Some(x) => Map("allProjects" -> JsString(x.toString))
+      case Some(x) => Map("allProjects" -> JsString(x.name))
     }
     val developerField: Map[String, JsValue] = developer match {
       case None    => Map.empty

@@ -42,10 +42,11 @@ import dx.api._
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
-import dx.util.{TraceLevel, getVersion}
+import dx.util.getVersion
 import spray.json._
 import wdlTools.eval.{WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.TraceLevel
 
 case class WfFragRunner(wf: TAT.Workflow,
                         taskDir: Map[String, TAT.Task],

@@ -18,13 +18,14 @@ import dx.core.languages.wdl.{
 }
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.util.SysUtils
-import dx.util.{JsUtils, Logger, TraceLevel, getVersion}
+import dx.util.{JsUtils, getVersion}
 import wdlTools.generators.code.WdlV1Generator
 
 import scala.collection.immutable.TreeMap
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
+import wdlTools.util.{Logger, TraceLevel}
 
 // The end result of the compiler
 object Native {

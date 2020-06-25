@@ -3,14 +3,12 @@ package dx.compiler
 import com.dnanexus.exceptions.ResourceNotFoundException
 import dx.PermissionDeniedException
 import dx.api.{DxAccessLevel, DxApi}
-import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.eval.WdlValues
-import wdlTools.util.Util
+import wdlTools.util.{Logger, Util}
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
   private val DX_API_QUIET = DxApi(Logger.Quiet)

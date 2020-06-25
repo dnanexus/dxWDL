@@ -1,12 +1,12 @@
 package dx.core.languages.wdl
 
 import dx.api.DxApi
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
+import wdlTools.util.Logger
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   private val DX_API = DxApi(Logger.Quiet)

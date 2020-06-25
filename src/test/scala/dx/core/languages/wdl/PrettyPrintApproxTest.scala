@@ -2,9 +2,9 @@ package dx.core.languages.wdl
 
 import java.io.File
 
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import wdlTools.util.Logger
 
 class PrettyPrintApproxTest extends AnyFlatSpec with Matchers {
 

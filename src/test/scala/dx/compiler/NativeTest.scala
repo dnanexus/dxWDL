@@ -8,13 +8,11 @@ import dx.compiler.Main.SuccessIR
 import dx.core
 import dx.core.languages.wdl.ParseSource
 import dx.core.util.MainUtils.Success
-import dx.core.util.SysUtils
-import dx.util.Logger
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.Util
+import wdlTools.util.{Logger, Util}
 
 import scala.io.Source
 

@@ -9,8 +9,9 @@ import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
 import dx.core.util.MainUtils._
 import dx.core.util.SysUtils
-import dx.util.{JsUtils, Logger, TraceLevel}
+import dx.util.JsUtils
 import spray.json._
+import wdlTools.util.{Logger, TraceLevel}
 
 object Main {
   object ExecAction extends Enumeration {

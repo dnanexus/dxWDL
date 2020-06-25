@@ -1,9 +1,9 @@
 package dx.core.languages.wdl
 
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
 //

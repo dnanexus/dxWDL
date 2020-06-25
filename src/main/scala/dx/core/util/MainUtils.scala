@@ -2,7 +2,7 @@ package dx.core.util
 
 import java.nio.file.{Path, Paths}
 
-import dx.util.{Logger, TraceLevel}
+import wdlTools.util.{Logger, TraceLevel}
 
 object MainUtils {
   def exceptionToString(e: Throwable): String = {

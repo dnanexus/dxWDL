@@ -3,10 +3,10 @@ package dx.core.io
 import java.nio.file.{Path, Paths}
 
 import dx.api.{DxApi, DxDataObject, DxFile, DxProject}
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
+import wdlTools.util.Logger
 
 class DxdaManifestTest extends AnyFlatSpec with Matchers {
   val DX_API: DxApi = DxApi(Logger.Quiet)

@@ -1,12 +1,12 @@
 package dx.compiler
 
 import dx.core.languages.Language
-import dx.util.Logger
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, TextSource, WdlVersion}
 import wdlTools.types.WdlTypes.T_Task
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 case class WdlCodeGen(logger: Logger,
                       typeAliases: Map[String, WdlTypes.T],

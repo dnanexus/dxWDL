@@ -28,10 +28,10 @@ import dx.compiler.IR._
 import dx.core.io.{Furl, FurlDx}
 import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import dx.core.util.SysUtils
-import dx.util.Logger
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
+import wdlTools.util.Logger
 
 import scala.collection.mutable
 

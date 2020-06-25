@@ -6,13 +6,13 @@ import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
 import dx.core.util.MainUtils.{Failure, UnsuccessfulTermination}
-import dx.util.Logger
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
 //

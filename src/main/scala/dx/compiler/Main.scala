@@ -7,10 +7,11 @@ import dx.InvalidInputException
 import dx.api.{DxApi, DxProject}
 import dx.core.io.DxPathConfig
 import dx.core.languages.Language
-import dx.util.{Logger, TraceLevel, getVersion}
+import dx.util.getVersion
 import dx.core.util.MainUtils._
 import dx.core.util.SysUtils
 import spray.json._
+import wdlTools.util.{Logger, TraceLevel}
 
 import scala.collection.mutable
 //import org.rogach.scallop.ScallopConf

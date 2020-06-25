@@ -4,9 +4,9 @@ import java.nio.file.{Path, Paths}
 
 import dx.api.{DxApi, DxDataObject, DxFile, DxProject}
 import dx.core.languages.wdl.DxFileAccessProtocol
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import wdlTools.util.Logger
 
 class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   private val DX_API: DxApi = DxApi(Logger.Quiet)

@@ -1,11 +1,11 @@
 package dx.core.languages.wdl
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB, InstanceTypeDbQuery, InstanceTypeReq}
-import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues.{V_Boolean, V_Float, V_Int, V_String}
+import wdlTools.util.Logger
 
 class InstanceTypesTest extends AnyFlatSpec with Matchers {
   // The original list is at:

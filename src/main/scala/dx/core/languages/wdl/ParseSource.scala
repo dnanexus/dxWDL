@@ -2,20 +2,19 @@ package dx.core.languages.wdl
 
 import java.nio.file.Path
 
-import dx.util.Logger
 import dx.core.languages.Language
 import dx.core.util.Adjuncts
 import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.types.{
   Context,
-  TypeCheckingRegime => WdlTypeCheckingRegime,
   TypeException,
   TypeInfer,
   TypeOptions,
   WdlTypes,
+  TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{SourceCode => WdlSourceCode, Util => WdlUtil, Verbosity => WdlVerbosity}
+import wdlTools.util.{Logger, SourceCode => WdlSourceCode, Util => WdlUtil}
 
 import scala.io.Source
 
@@ -79,7 +78,7 @@ case class ParseSource(logger: Logger) {
     TypeOptions(
         antlr4Trace = false,
         localDirectories = imports,
-        verbosity = if (logger.isVerbose) WdlVerbosity.Verbose else WdlVerbosity.Quiet,
+        logger = logger,
         followImports = true,
         typeChecking = WdlTypeCheckingRegime.Strict
     )
