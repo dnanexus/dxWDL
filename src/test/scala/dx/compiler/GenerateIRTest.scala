@@ -2,9 +2,10 @@ package dx.compiler
 
 import java.nio.file.{Path, Paths}
 
-import dx.api
-import dx.api.{DxApi, DxProject, DxUtils}
+import dx.api._
+import dx.compiler.Main.SuccessIR
 import dx.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
+import dx.core.util.MainUtils.{Failure, UnsuccessfulTermination}
 import dx.util.Logger
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -56,49 +57,49 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "IR compile a single WDL task" in {
     val path = pathFromBasename("compiler", "add.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a task with docker" in {
     val path = pathFromBasename("compiler", "BroadGenomicsDocker.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
   }
 
   // workflow compilation
   it should "IR compile a linear WDL workflow without expressions" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a linear WDL workflow" in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "IR compile unlocked workflow" in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
     Main.compile(
         path.toString :: cFlagsUnlocked
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a non trivial linear workflow with variable coercions" in {
     val path = pathFromBasename("compiler", "cast.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a workflow with two consecutive calls" in {
     val path = pathFromBasename("compiler", "strings.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[Main.SuccessfulTerminationIR]
+    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a workflow with a scatter without a call" in {
     val path = pathFromBasename("compiler", "scatter_no_call.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "IR compile optionals" in {
@@ -108,14 +109,14 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 //                :: "--verbose"
 //                :: "--verboseKey" :: "GenerateIR"
           :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "support imports" in {
     val path = pathFromBasename("compiler", "check_imports.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a draft2 workflow" in {
@@ -123,28 +124,28 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "expressions in an output block" in {
     val path = pathFromBasename("compiler", "expr_output_block.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   /*  ignore should "scatters over maps" in {
     val path = pathFromBasename("compiler", "dict2.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }*/
 
   it should "skip missing optional arguments" in {
     val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "handle calling subworkflows" in {
@@ -152,10 +153,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val irwf = retval match {
-      case Main.SuccessfulTerminationIR(irwf) => irwf
-      case _                                  => throw new Exception("sanity")
+      case SuccessIR(irwf, _) => irwf
+      case _                  => throw new Exception("sanity")
     }
     val primaryWf: IR.Workflow = irwf.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
@@ -168,14 +169,14 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("compiler", "subblock_several_calls.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "missing workflow inputs" in {
     val path = pathFromBasename("input_file", "missing_args.wdl")
     Main.compile(
         path.toString :: List("--compileMode", "ir", "--quiet", "--project", dxProject.id)
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   // Nested blocks
@@ -183,20 +184,20 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("nested", "two_levels.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "handle passing closure arguments to nested blocks" in {
     val path = pathFromBasename("nested", "param_passing.wdl")
     Main.compile(
         path.toString :: cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "compile a workflow calling a subworkflow as a direct call" in {
     val path = pathFromBasename("draft2", "movies.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
-      case Main.SuccessfulTerminationIR(bundle) => bundle
+      case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
@@ -213,7 +214,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "compile a workflow calling a subworkflow as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "movies.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
-      case Main.SuccessfulTerminationIR(bundle) => bundle
+      case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
@@ -230,7 +231,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "call_dnanexus_applet.wdl")
     val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
-      case Main.SuccessfulTerminationIR(bundle) => bundle
+      case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
@@ -250,10 +251,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
     val primary: IR.Callable = bundle.primaryCallable.get
     val wf = primary match {
@@ -278,7 +279,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
  }*/
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   private def getAppletByName(name: String, bundle: IR.Bundle): IR.Applet =
@@ -305,10 +306,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("pattern_params_cgrep", bundle)
@@ -356,10 +357,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("pattern_params_obj_cgrep", bundle)
@@ -413,10 +414,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
@@ -496,10 +497,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
@@ -589,10 +590,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
@@ -642,10 +643,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
@@ -695,7 +696,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.UnsuccessfulTermination]
+    retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
@@ -705,10 +706,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
@@ -762,10 +763,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
@@ -819,7 +820,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.UnsuccessfulTermination]
+    retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
@@ -829,7 +830,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.UnsuccessfulTermination]
+    retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
@@ -839,10 +840,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("add_dx_type", bundle)
@@ -890,7 +891,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.UnsuccessfulTermination]
+    retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
@@ -900,10 +901,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("add_default", bundle)
@@ -929,7 +930,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.UnsuccessfulTermination]
+    retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
@@ -938,10 +939,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
@@ -1013,10 +1014,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
@@ -1066,10 +1067,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("help_output_params_cgrep", bundle)
@@ -1088,10 +1089,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("add", bundle)
@@ -1154,10 +1155,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepApplet = getAppletByName("add_runtime_hints", bundle)
@@ -1180,10 +1181,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
   }
 
@@ -1192,10 +1193,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
@@ -1226,10 +1227,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
@@ -1268,10 +1269,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
@@ -1286,7 +1287,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "handle structs" in {
@@ -1294,13 +1295,13 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "recognize that an argument with a default can be omitted at the call site" in {
     val path = pathFromBasename("compiler", "call_level2.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "check for reserved symbols" in {
@@ -1308,53 +1309,53 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(path.toString :: cFlags)
 
     inside(retval) {
-      case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("reserved substring ___")
+      case Failure(_, Some(e)) =>
+        e.getMessage should include("reserved substring ___")
     }
   }
 
   it should "do nested scatters" in {
     val path = pathFromBasename("compiler", "nested_scatter.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "handle struct imported several times" in {
     val path = pathFromBasename("struct/struct_imported_twice", "file3.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "handle file constants in a workflow" in {
     val path = pathFromBasename("compiler", "wf_constants.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "respect import flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
     val retval = Main.compile(path.toString :: "--imports" :: libraryPath.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "respect import -p flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
     val retval = Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "pass environment between deep stages" in {
     val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "handle multiple struct definitions" in {
     val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order", "file3.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "retain all characters in a WDL task" in {
@@ -1365,7 +1366,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 //                                      :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
 
     val commandSection =
       """|  command <<<
@@ -1380,7 +1381,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     inside(retval) {
-      case Main.SuccessfulTerminationIR(bundle) =>
+      case SuccessIR(bundle, _) =>
         bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
@@ -1394,7 +1395,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "correctly flatten a workflow with imports" in {
     val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "detect a request for GPU" in {
@@ -1405,10 +1406,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
         //                                      :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
 
     inside(retval) {
-      case Main.SuccessfulTerminationIR(bundle) =>
+      case SuccessIR(bundle, _) =>
         bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[IR.Applet]
@@ -1429,11 +1430,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 //                                      :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
 
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(bundle) => bundle
-      case _                                    => throw new Exception("sanity")
+      case SuccessIR(bundle, _) => bundle
+      case _                    => throw new Exception("sanity")
     }
 
     val wfs: Vector[IR.Workflow] = bundle.allCallables.flatMap {
@@ -1458,7 +1459,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
         //                                      :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "pass as subworkflows do not have expression statement in output block" in {
@@ -1467,7 +1468,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   // this is currently failing.
@@ -1485,7 +1486,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 //          :: "--verboseKey" :: "GenerateIR"
           :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   ignore should "recognize workflow metadata" in {
@@ -1493,10 +1494,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
@@ -1523,10 +1524,10 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
@@ -1565,11 +1566,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   ignore should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
 
     val bundle = retval match {
-      case Main.SuccessfulTerminationIR(ir) => ir
-      case _                                => throw new Exception("sanity")
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("sanity")
     }
 
     val workflow = bundle.primaryCallable match {
@@ -1631,6 +1632,6 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 //          :: "--verboseKey" :: "GenerateIR"
           :: cFlagsNotQuiet
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 }

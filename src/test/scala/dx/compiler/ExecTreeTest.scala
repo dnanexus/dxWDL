@@ -2,8 +2,9 @@ package dx.compiler
 
 import java.nio.file.{Path, Paths}
 
-import dx.api
-import dx.api.{DxApi, DxPath, DxWorkflow}
+import dx.api._
+import dx.compiler.Main.SuccessTree
+import dx.core.util.MainUtils.Success
 import dx.core.util.SysUtils
 import dx.util.Logger
 import org.scalatest.Inside._
@@ -22,8 +23,8 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  val DX_API = DxApi(Logger.Quiet)
-  val TEST_PROJECT = "dxWDL_playground"
+  private val DX_API = DxApi(Logger.Quiet)
+  private val TEST_PROJECT = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
@@ -52,10 +53,10 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   it should "Native compile a linear WDL workflow without expressions" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: "--execTree" :: "json" :: cFlags)
-    retval shouldBe a[Main.SuccessfulTerminationTree]
+    retval shouldBe a[SuccessTree]
 
     inside(retval) {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Left(_) => false // should not be the pretty string version
           case Right(treeJs) => {
@@ -76,11 +77,11 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   it should "Native compile a linear WDL workflow with execTree in details" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Main.SuccessfulTermination(id) => DxWorkflow(id, Some(dxTestProject))
-      case _                              => throw new Exception("sanity")
+      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case _           => throw new Exception("sanity")
     }
 
     val description = wf.describe(Set(Field.Details))
@@ -116,11 +117,11 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   it should "Get execTree from a compiled workflow" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
     val retval = Main.compile(path.toString :: cFlags)
-    retval shouldBe a[Main.SuccessfulTermination]
+    retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Main.SuccessfulTermination(id) => api.DxWorkflow(id, Some(dxTestProject))
-      case _                              => throw new Exception("sanity")
+      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case _           => throw new Exception("sanity")
     }
 
     val treeJs = Tree.formDXworkflow(wf)
@@ -140,10 +141,10 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationTree]
+    retval shouldBe a[SuccessTree]
 
     inside(retval) {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
@@ -170,9 +171,9 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
           :: "--verbose" :: "--verboseKey" :: "GenerateIR"
           :: nonLocked
     )
-    retval shouldBe a[Main.SuccessfulTerminationTree]
+    retval shouldBe a[SuccessTree]
     val treeJs: JsValue = retval match {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Left(str) =>
             throw new Exception(s"tree representation is wrong ${str}") // should not produce a pretty string
@@ -213,15 +214,15 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         path.toString :: "--force" :: nonLocked
     )
     val wfID = retval match {
-      case Main.SuccessfulTermination(wfID) => wfID
-      case _                                => throw new Exception("Unable to compile workflow.")
+      case Success(wfID) => wfID
+      case _             => throw new Exception("Unable to compile workflow.")
     }
 
     val describeRet = Main.describe(Seq(wfID))
-    describeRet shouldBe a[Main.SuccessfulTerminationTree]
+    describeRet shouldBe a[SuccessTree]
 
     inside(describeRet) {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Left(_) => false // should not produce a pretty string
           case Right(treeJs) => {
@@ -248,15 +249,15 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         path.toString :: "--force" :: nonLocked
     )
     val wfID = retval match {
-      case Main.SuccessfulTermination(wfID) => wfID
-      case _                                => throw new Exception("Unable to compile workflow.")
+      case Success(wfID) => wfID
+      case _             => throw new Exception("Unable to compile workflow.")
     }
 
     val describeRet = Main.describe(Seq(wfID, "-pretty"))
-    describeRet shouldBe a[Main.SuccessfulTerminationTree]
+    describeRet shouldBe a[SuccessTree]
 
     inside(describeRet) {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Right(_)  => false
           case Left(str) =>
@@ -286,10 +287,10 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     val retval = Main.compile(
         path.toString :: "--force" :: "--execTree" :: "pretty" :: nonLocked
     )
-    retval shouldBe a[Main.SuccessfulTerminationTree]
+    retval shouldBe a[SuccessTree]
 
     inside(retval) {
-      case Main.SuccessfulTerminationTree(pretty) =>
+      case SuccessTree(pretty) =>
         pretty match {
           case Left(str) =>
             // remove colours

@@ -2,8 +2,10 @@ package dx.compiler
 
 import java.nio.file.{Path, Paths}
 
-import dx.api
-import dx.api.{DxProject, DxUtils}
+import dx.api._
+import dx.compiler.Main.SuccessIR
+import dx.core.util.MainUtils.{Failure}
+import dx.util.Logger
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,16 +13,18 @@ import org.scalatest.matchers.should.Matchers
 // These tests involve compilation -without- access to the platform.
 //
 class InputFileTest extends AnyFlatSpec with Matchers {
+  private val DX_API = DxApi(Logger.Quiet)
+
   private def pathFromBasename(dirname: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dirname}/${basename}").getPath
     Paths.get(p)
   }
 
   private val dxProject = {
-    val p = DxUtils.dxEnv.getProjectContext
+    val p = DX_API.currentProject
     if (p == null)
       throw new Exception("Must be logged in to run this test")
-    api.DxProject(p)
+    p
   }
 
   val cFlags = List("--compileMode", "ir", "-quiet", "--project", dxProject.id)
@@ -33,7 +37,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "deal with a locked workflow" in {
@@ -46,7 +50,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
              "--locked"
              //, "--verbose", "--verboseKey", "GenerateIR"
         ) ++ cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "not compile for several applets without a workflow" in {
@@ -57,8 +61,8 @@ class InputFileTest extends AnyFlatSpec with Matchers {
           ++ cFlags
     )
     inside(retval) {
-      case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("Cannot generate one input file for 2 tasks")
+      case Failure(_, Some(e)) =>
+        e.getMessage should include("Cannot generate one input file for 2 tasks")
     }
   }
 
@@ -70,8 +74,8 @@ class InputFileTest extends AnyFlatSpec with Matchers {
           ++ cFlags
     )
     inside(retval) {
-      case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("Could not map all input fields")
+      case Failure(_, Some(e)) =>
+        e.getMessage should include("Could not map all input fields")
     }
   }
 
@@ -82,7 +86,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-defaults", defaults.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "handle inputs specified in the json file, but missing in the workflow" in {
@@ -92,13 +96,13 @@ class InputFileTest extends AnyFlatSpec with Matchers {
     Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
 
     // inputs as defaults
     Main.compile(
         List(wdlCode.toString, "-defaults", inputs.toString)
           ++ cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
 
     // Input to an applet.
     // Missing argument in a locked workflow should throw an exception.
@@ -107,15 +111,15 @@ class InputFileTest extends AnyFlatSpec with Matchers {
           ++ cFlags
     )
     inside(retval) {
-      case Main.UnsuccessfulTermination(errMsg) =>
-        errMsg should include("Could not map all input fields")
+      case Failure(_, Some(e)) =>
+        e.getMessage should include("Could not map all input fields")
     }
 
     // Missing arguments are legal in an unlocked workflow
     Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
-    ) shouldBe a[Main.SuccessfulTerminationIR]
+    ) shouldBe a[SuccessIR]
   }
 
   it should "support struct inputs" in {
@@ -126,7 +130,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "support array of pairs" taggedAs EdgeTest in {
@@ -138,7 +142,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
 //        ++ List("--verbose", "--verboseKey", "GenerateIR")
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "array of structs" in {
@@ -149,7 +153,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "override default values in input file" in {
@@ -160,7 +164,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "WDL map input" in {
@@ -171,7 +175,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
   it should "allow file as WDL map key" in {
@@ -182,7 +186,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
-    retval shouldBe a[Main.SuccessfulTerminationIR]
+    retval shouldBe a[SuccessIR]
   }
 
 }

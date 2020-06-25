@@ -216,20 +216,6 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "handles draft2" in {
-    val path = pathFromBasename("draft2", "conditionals2.wdl")
-    val wfSourceCode = SysUtils.readFileContent(path)
-
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, _) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-    val subBlocks = Block.splitWorkflow(wf)
-    /*
-        val results = fragRunner.evalExpressions(subBlocks(0).nodes,
-                                                 Map.empty[String, WdlValue])
- Utils.ignore(results)*/
-    logger.ignore(subBlocks)
-  }
-
   it should "evaluate expressions that define variables" in {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = SysUtils.readFileContent(path)

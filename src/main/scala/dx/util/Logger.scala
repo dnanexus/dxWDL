@@ -65,7 +65,7 @@ case class Logger(quiet: Boolean,
   }
 
   private def traceEnabledFor(minLevel: Int, requiredKey: Option[String]): Boolean = {
-    minLevel >= traceLevel && requiredKey.forall(containsKey)
+    traceLevel >= minLevel && requiredKey.forall(containsKey)
   }
 
   private def printTrace(msg: String): Unit = {
@@ -116,8 +116,8 @@ case class Logger(quiet: Boolean,
 }
 
 object Logger {
-  lazy val Quiet: Logger = Logger(quiet = true, traceLevel = TraceLevel.Verbose)
-  lazy val Verbose: Logger = Logger(quiet = false, traceLevel = TraceLevel.None)
+  lazy val Quiet: Logger = Logger(quiet = true, traceLevel = TraceLevel.None)
+  lazy val Verbose: Logger = Logger(quiet = false, traceLevel = TraceLevel.Verbose)
 
   // print an error message in red
   def error(msg: String): Unit = {

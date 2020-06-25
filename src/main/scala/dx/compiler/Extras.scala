@@ -677,7 +677,7 @@ object Extras {
     }
 
     // Guardrail, check the fields are actually supported
-    for (k <- fields.keys) {
+    fields.keys.foreach { k =>
       if (!(EXTRA_ATTRS contains k))
         throw new Exception(s"""|Unsupported special option ${k},
                                 |we currently support ${EXTRA_ATTRS}

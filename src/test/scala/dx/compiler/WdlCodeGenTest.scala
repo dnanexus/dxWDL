@@ -1,14 +1,15 @@
 package dx.compiler
 
 import dx.core.languages.Language
+import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.Util
 import wdlTools.types.WdlTypes._
 
 class WdlCodeGenTest extends AnyFlatSpec with Matchers {
-  private val verbose = Verbose(on = false, quiet = true, Set.empty)
-  private val wdlCodeGen = WdlCodeGen(verbose, Map.empty, Language.WDLv1_0)
+  private val logger = Logger.Quiet
+  private val wdlCodeGen = WdlCodeGen(logger, Map.empty, Language.WDLv1_0)
 
   private def genDefaultValue(t: T): String = {
     val defVal = wdlCodeGen.genDefaultValueOfType(t)

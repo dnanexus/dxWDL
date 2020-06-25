@@ -249,7 +249,7 @@ object Main extends App {
     options.toMap
   }
 
-  private def compile(args: Seq[String]): Termination = {
+  def compile(args: Seq[String]): Termination = {
     if (args.isEmpty)
       return BadUsageTermination("WDL file to compile is missing")
     val sourceFile = Paths.get(args.head)
@@ -313,7 +313,7 @@ object Main extends App {
     }
   }
 
-  private def dxni(args: Seq[String]): Termination = {
+  def dxni(args: Seq[String]): Termination = {
     try {
       val options = parseCmdlineOptions(args.toList)
       if (options contains "help")
@@ -365,7 +365,7 @@ object Main extends App {
     options.toMap
   }
 
-  private def describe(args: Seq[String]): Termination = {
+  def describe(args: Seq[String]): Termination = {
     if (args.isEmpty) {
       return BadUsageTermination("Workflow ID is not provided")
     }

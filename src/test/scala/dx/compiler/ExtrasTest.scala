@@ -1,8 +1,10 @@
 package dx.compiler
 
-import com.dnanexus.AccessLevel
 import com.dnanexus.exceptions.ResourceNotFoundException
+import dx.PermissionDeniedException
+import dx.api.{DxAccessLevel, DxApi}
 import dx.core.util.SysUtils
+import dx.util.Logger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
@@ -10,6 +12,9 @@ import spray.json._
 import wdlTools.eval.WdlValues
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
+  private val DX_API_QUIET = DxApi(Logger.Quiet)
+  private val DX_API_LOUD = DxApi(Logger.Verbose)
+
   private def getIdFromName(name: String): String = {
     val (stdout, _) = SysUtils.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
@@ -27,7 +32,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |  }
          |}""".stripMargin.parseJson
 
-    val extras = Extras.parse(runtimeAttrs, verbose)
+    val extras = Extras.parse(runtimeAttrs, DX_API_LOUD)
     extras.defaultTaskDxAttributes should be(
         Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None))
     )
@@ -47,7 +52,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     assertThrows[Exception] {
-      Extras.parse(ex1.parseJson, verbose)
+      Extras.parse(ex1.parseJson, DX_API_LOUD)
     }
   }
 
@@ -67,7 +72,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     assertThrows[Exception] {
-      Extras.parse(ex2.parseJson, verbose)
+      Extras.parse(ex2.parseJson, DX_API_LOUD)
     }
   }
 
@@ -87,7 +92,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     assertThrows[Exception] {
-      Extras.parse(ex3.parseJson, verbose)
+      Extras.parse(ex3.parseJson, DX_API_LOUD)
     }
   }
 
@@ -120,7 +125,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val js = runSpecValid.parseJson
-    val extras = Extras.parse(js, verbose)
+    val extras = Extras.parse(js, DX_API_LOUD)
     extras.defaultTaskDxAttributes should be(
         Some(
             DxAttrs(
@@ -128,8 +133,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
                     DxRunSpec(
                         Some(
                             DxAccess(Some(Vector("*")),
-                                     Some(AccessLevel.CONTRIBUTE),
-                                     Some(AccessLevel.VIEW),
+                                     Some(DxAccessLevel.Contribute),
+                                     Some(DxAccessLevel.View),
                                      Some(true),
                                      None)
                         ),
@@ -163,7 +168,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val js = runSpec.parseJson
-    val extras = Extras.parse(js, verbose)
+    val extras = Extras.parse(js, DX_API_LOUD)
 
     val restartPolicy =
       Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
@@ -196,7 +201,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
     val js = runSpec.parseJson
     assertThrows[Exception] {
-      Extras.parse(js, verbose2)
+      Extras.parse(js, DX_API_QUIET)
     }
   }
 
@@ -217,7 +222,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val extras = Extras.parse(reorg, verbose2)
+    val extras = Extras.parse(reorg, DX_API_QUIET)
     extras.customReorgAttributes should be(
         Some(ReorgAttrs(appId, fileId))
     )
@@ -234,8 +239,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[util.IllegalArgumentException] {
-      Extras.parse(reorg, verbose2)
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     thrown.getMessage should be("app_id must be specified in the custom_reorg section.")
@@ -253,8 +258,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[util.IllegalArgumentException] {
-      Extras.parse(reorg, verbose2)
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
@@ -276,7 +281,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val extras = Extras.parse(reorg, verbose2)
+    val extras = Extras.parse(reorg, DX_API_QUIET)
     extras.customReorgAttributes should be(
         Some(ReorgAttrs(appId, ""))
     )
@@ -295,8 +300,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[util.IllegalArgumentException] {
-      Extras.parse(reorg, verbose2)
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     thrown.getMessage should be(
@@ -318,7 +323,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val thrown = intercept[Exception] {
-      Extras.parse(reorg, verbose2)
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     thrown.getMessage should be(
@@ -340,8 +345,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[java.lang.IllegalArgumentException] {
-      Extras.parse(reorg, verbose2)
+    val thrown = intercept[dx.IllegalArgumentException] {
+      Extras.parse(reorg, DX_API_QUIET)
     }
     thrown.getMessage should include(
         "does not match [A-Za-z0-9]{24}"
@@ -363,7 +368,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val thrown = intercept[ResourceNotFoundException] {
-      Extras.parse(reorg, verbose2)
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     val fileId: String = inputs.replace("dx://", "")
@@ -385,7 +390,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val thrown = intercept[PermissionDeniedException] {
-      Extras.parse(reorg, verbose2)
+      Extras.parse(reorg, DX_API_QUIET)
     }
 
     thrown.getMessage should be(
@@ -406,7 +411,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val extras = Extras.parse(reorg, verbose2)
+    val extras = Extras.parse(reorg, DX_API_QUIET)
     extras.customReorgAttributes should be(
         Some(ReorgAttrs(appId, ""))
     )
@@ -458,7 +463,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          | }
          |}""".stripMargin.parseJson
 
-    val extras = Extras.parse(runtimeAttrs, verbose)
+    val extras = Extras.parse(runtimeAttrs, DX_API_LOUD)
     val dockerOpt: Option[WdlValues.V] = extras.defaultRuntimeAttributes.m.get("docker")
     dockerOpt match {
       case None =>
@@ -477,7 +482,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          | }
          |}""".stripMargin.parseJson
 
-    val extrasEmpty = Extras.parse(rtEmpty, verbose)
+    val extrasEmpty = Extras.parse(rtEmpty, DX_API_LOUD)
     extrasEmpty.defaultRuntimeAttributes should equal(WdlRuntimeAttrs(Map.empty))
   }
 
@@ -519,7 +524,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
 
-    val extras = Extras.parse(runSpec, verbose)
+    val extras = Extras.parse(runSpec, DX_API_LOUD)
     extras.defaultTaskDxAttributes should be(
         Some(
             DxAttrs(Some(
@@ -537,7 +542,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
         Map(
             "Multiply" -> DxAttrs(
                 Some(
-                    DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                    DxRunSpec(Some(DxAccess(None, Some(DxAccessLevel.Upload), None, None, None)),
                               None,
                               None,
                               Some(DxTimeout(None, None, Some(30))))
@@ -602,7 +607,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
 
-    val extras = Extras.parse(runSpec, verbose)
+    val extras = Extras.parse(runSpec, DX_API_LOUD)
     extras.defaultTaskDxAttributes should be(
         Some(
             DxAttrs(Some(
@@ -638,7 +643,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
             ),
             "Multiply" -> DxAttrs(
                 Some(
-                    DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                    DxRunSpec(Some(DxAccess(None, Some(DxAccessLevel.Upload), None, None, None)),
                               None,
                               None,
                               Some(DxTimeout(None, None, Some(30))))
@@ -680,7 +685,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
 
-    val extras = Extras.parse(runSpec, verbose)
+    val extras = Extras.parse(runSpec, DX_API_LOUD)
     extras.defaultTaskDxAttributes should be(
         Some(
             DxAttrs(
@@ -723,7 +728,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
 
-    val extras = Extras.parse(data, verbose)
+    val extras = Extras.parse(data, DX_API_LOUD)
     extras.dockerRegistry should be(
         Some(DockerRegistry("foo.bar.dnanexus.com", "perkins", "The Bandersnatch has gotten loose"))
     )
@@ -740,7 +745,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
     assertThrows[Exception] {
-      Extras.parse(data, verbose)
+      Extras.parse(data, DX_API_LOUD)
     }
   }
 
@@ -754,7 +759,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
     assertThrows[Exception] {
-      Extras.parse(data, verbose)
+      Extras.parse(data, DX_API_LOUD)
     }
   }
 
@@ -767,7 +772,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin.parseJson
     assertThrows[Exception] {
-      Extras.parse(data, verbose)
+      Extras.parse(data, DX_API_LOUD)
     }
   }
 
