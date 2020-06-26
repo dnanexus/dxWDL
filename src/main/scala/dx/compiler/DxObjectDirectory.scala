@@ -8,8 +8,6 @@ import java.time.{LocalDateTime, ZoneId}
 import dx.api._
 import spray.json._
 
-import scala.collection.mutable
-
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name: String,
                         crDate: LocalDateTime,

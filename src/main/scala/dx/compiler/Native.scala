@@ -27,8 +27,6 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 import wdlTools.util.{Logger, TraceLevel}
 
-import wdlTools.generators.code.WdlV1Generator
-
 // The end result of the compiler
 object Native {
   case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
