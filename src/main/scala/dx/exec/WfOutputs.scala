@@ -10,7 +10,7 @@ import dx.core.languages.wdl.{
   PrettyPrintApprox,
   WdlVarLinksConverter
 }
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json.{JsString, JsValue}
 import wdlTools.eval.{WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

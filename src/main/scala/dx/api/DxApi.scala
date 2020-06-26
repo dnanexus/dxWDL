@@ -4,10 +4,8 @@ import java.nio.file.{Files, Path}
 
 import com.dnanexus.{DXAPI, DXEnvironment}
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
-import dx.core.util.SysUtils
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
-import dx.util.JsUtils
 import spray.json._
 import wdlTools.util.{Logger, Util}
 
@@ -252,6 +250,10 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     logger.ignore(result)
   }
 
+  def executionsDescribe(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemDescribeExecutions[JsonNode], fields)
+  }
+
   def fileDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }
@@ -336,6 +338,10 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     callObject(DXAPI.jobDescribe[JsonNode], id, fields)
   }
 
+  def jobNew(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.jobNew[JsonNode], fields)
+  }
+
   def orgDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     try {
       callObject(DXAPI.orgDescribe[JsonNode], id, fields)
@@ -346,6 +352,10 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
             cause
         )
     }
+  }
+
+  def projectClone(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
+    callObject(DXAPI.projectClone[JsonNode], id, fields)
   }
 
   def projectDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
@@ -442,12 +452,11 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val req = JsObject(fields ++ instanceFields ++ dependsFields ++ dwd)
-    logger.traceLimited(s"subjob request=${req.prettyPrint}")
+    val req = fields ++ instanceFields ++ dependsFields ++ dwd
+    logger.traceLimited(s"subjob request=${JsObject(req).prettyPrint}")
 
-    val retval: JsonNode = DXAPI.jobNew(JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-    val info: JsValue = JsUtils.jsValueOfJsonNode(retval)
-    val id: String = info.asJsObject.fields.get("id") match {
+    val info = jobNew(req)
+    val id: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
         throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
@@ -467,14 +476,12 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     logger.trace(s"The asset ${pkgName} is from a different project ${rmtProject.id}")
 
     // clone
-    val req = JsObject("objects" -> JsArray(JsString(assetRecord.id)),
-                       "project" -> JsString(dxProject.id),
-                       "destination" -> JsString("/"))
-    val rep =
-      DXAPI.projectClone(rmtProject.id, JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-    val repJs: JsValue = JsUtils.jsValueOfJsonNode(rep)
+    val req = Map("objects" -> JsArray(JsString(assetRecord.id)),
+                  "project" -> JsString(dxProject.id),
+                  "destination" -> JsString("/"))
+    val repJs = projectClone(rmtProject.id, req)
 
-    val exists = repJs.asJsObject.fields.get("exists") match {
+    val exists = repJs.fields.get("exists") match {
       case None => throw new Exception("API call did not returnd an exists field")
       case Some(JsArray(x)) =>
         x.map {
@@ -590,7 +597,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
     silentFileDelete(tempFi)
     downloadFile(tempFi, dxFile)
-    val content = SysUtils.readFileContent(tempFi)
+    val content = Util.readFileContent(tempFi)
     silentFileDelete(tempFi)
     content
   }

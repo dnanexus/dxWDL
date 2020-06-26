@@ -8,10 +8,8 @@ import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
 import dx.core.util.MainUtils._
-import dx.core.util.SysUtils
-import dx.util.JsUtils
 import spray.json._
-import wdlTools.util.{Logger, TraceLevel}
+import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
 
 object Main {
   object ExecAction extends Enumeration {
@@ -40,7 +38,7 @@ object Main {
                          dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = SysUtils.readFileContent(jobInputPath)
+    val inputLines: String = Util.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
     val (task, typeAliases, document) = ParseSource(dxApi.logger).parseWdlTask(taskSourceCode)
@@ -99,7 +97,7 @@ object Main {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        SysUtils.writeFileContent(jobOutputPath, ast_pp)
+        Util.writeFileContent(jobOutputPath, ast_pp)
         Success(s"success ${op}")
 
       case ExecAction.TaskRelaunch =>
@@ -108,7 +106,7 @@ object Main {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
         val ast_pp = json.prettyPrint
-        SysUtils.writeFileContent(jobOutputPath, ast_pp)
+        Util.writeFileContent(jobOutputPath, ast_pp)
         Success(s"success ${op}")
 
       case _ =>
@@ -132,7 +130,7 @@ object Main {
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = SysUtils.readFileContent(jobInputPath)
+    val inputLines: String = Util.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
@@ -215,7 +213,7 @@ object Main {
     // values that were not specified.
     val json = JsObject(outputFields)
     val ast_pp = json.prettyPrint
-    SysUtils.writeFileContent(jobOutputPath, ast_pp)
+    Util.writeFileContent(jobOutputPath, ast_pp)
 
     Success(s"success ${op}")
   }
@@ -237,7 +235,7 @@ object Main {
   // Bulk describe all the them.
   private def runtimeBulkFileDescribe(dxApi: DxApi,
                                       jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
-    val inputs: JsValue = SysUtils.readFileContent(jobInputPath).parseJson
+    val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
       case (_, jsElem) => dxApi.findFiles(jsElem)
@@ -262,7 +260,7 @@ object Main {
       dxApi: DxApi,
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
-    val jobInfo = SysUtils.readFileContent(jobInfoPath).parseJson
+    val jobInfo = Util.readFileContent(jobInfoPath).parseJson
     val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
         dxApi.logger.trace(
@@ -281,10 +279,10 @@ object Main {
 
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
-    val wdlSourceCode = SysUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
+    val wdlSourceCode = Util.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw = SysUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+    val dbRaw = Util.base64DecodeAndGunzip(instanceTypeDBEncoded)
     val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
     val runtimeAttrs: Option[WdlRuntimeAttrs] =
@@ -319,10 +317,10 @@ object Main {
     val errMsg = JsObject(
         "error" -> JsObject(
             "type" -> JsString(errType),
-            "message" -> JsString(JsUtils.sanitize(e.getMessage))
+            "message" -> JsUtils.sanitizedString(e.getMessage)
         )
     ).prettyPrint
-    SysUtils.writeFileContent(jobErrorPath, errMsg)
+    Util.writeFileContent(jobErrorPath, errMsg)
 
     // Write out a full stack trace to standard error.
     System.err.println(exceptionToString(e))

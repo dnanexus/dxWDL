@@ -17,15 +17,14 @@ import dx.core.languages.wdl.{
   WdlVarLinksConverter
 }
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
-import dx.core.util.SysUtils
-import dx.util.{JsUtils, getVersion}
-import wdlTools.generators.code.WdlV1Generator
+import dx.core.getVersion
 
 import scala.collection.immutable.TreeMap
 import spray.json._
 import wdlTools.eval.WdlValues
+import wdlTools.generators.code.WdlV1Generator
 import wdlTools.types.WdlTypes
-import wdlTools.util.{Logger, TraceLevel}
+import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
 
 // The end result of the compiler
 object Native {
@@ -54,9 +53,10 @@ case class Native(dxWDLrtId: Option[String],
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
   private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
+  // TODO: use tempdir rather than /tmp
   private lazy val appCompileDirPath: Path = {
     val p = Paths.get("/tmp/dxWDL_Compile")
-    SysUtils.safeMkdir(p)
+    Util.createDirectories(p)
     p
   }
 
@@ -1085,9 +1085,9 @@ case class Native(dxWDLrtId: Option[String],
     // Add the pricing model, and make the prices opaque.
     val generator = WdlV1Generator()
     val sourceLines = generator.generateDocument(applet.document)
-    val sourceCode = SysUtils.gzipAndBase64Encode(sourceLines.mkString("\n"))
+    val sourceCode = Util.gzipAndBase64Encode(sourceLines.mkString("\n"))
     val dbOpaque = InstanceTypeDbQuery(dxApi).opaquePrices(instanceTypeDB)
-    val dbOpaqueInstance = SysUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+    val dbOpaqueInstance = Util.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
@@ -1204,7 +1204,7 @@ case class Native(dxWDLrtId: Option[String],
     if (logger2.traceLevel >= TraceLevel.Verbose) {
       val fName = s"${applet.name}_req.json"
       val trgPath = appCompileDirPath.resolve(fName)
-      SysUtils.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
+      Util.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
     }
 
     val buildRequired = isBuildRequired(applet.name, digest)
@@ -1427,7 +1427,7 @@ case class Native(dxWDLrtId: Option[String],
     // It could be quite large, so we use compression.
     val generator = WdlV1Generator()
     val sourceLines = generator.generateElement(wf.document)
-    val sourceCode = SysUtils.gzipAndBase64Encode(sourceLines.mkString("\n"))
+    val sourceCode = Util.gzipAndBase64Encode(sourceLines.mkString("\n"))
     val sourceCodeField: Map[String, JsValue] = Map("wdlSourceCode" -> JsString(sourceCode))
 
     // link to applets used by the fragments. This notifies the platform that they
@@ -1524,7 +1524,7 @@ case class Native(dxWDLrtId: Option[String],
       execDict: Map[String, Native.ExecRecord]
   ): Map[String, JsString] = {
     val jsonTreeString = Tree(execDict).fromWorkflowIR(wf).toString
-    val compressedTree = SysUtils.gzipAndBase64Encode(jsonTreeString)
+    val compressedTree = Util.gzipAndBase64Encode(jsonTreeString)
     Map("execTree" -> JsString(compressedTree))
   }
 

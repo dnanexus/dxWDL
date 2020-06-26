@@ -15,9 +15,9 @@ import dx.api.{
 }
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.ParseSource
-import dx.core.util.SysUtils
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Util
 
 import scala.jdk.CollectionConverters._
 
@@ -268,12 +268,12 @@ case class Top(cOpt: CompilerOptions) {
       val dxInputs = InputFile(fileInfoDir, path2file, bundle.typeAliases, dxApi)
         .dxFromCromwell(bundle2, path)
       // write back out as xxxx.dx.json
-      val filename = SysUtils.replaceFileSuffix(path, ".dx.json")
+      val filename = Util.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
       val dxInputFile =
         if (parent != null) parent.resolve(filename)
         else Paths.get(filename)
-      SysUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+      Util.writeFileContent(dxInputFile, dxInputs.prettyPrint)
       dxApi.logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
     }
     bundle2

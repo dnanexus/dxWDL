@@ -26,7 +26,7 @@ price       comparative price
   */
 package dx.api
 
-import dx.util.JsUtils
+import wdlTools.util.JsUtils
 import spray.json._
 
 // Instance Type on the platform. For example:
@@ -280,8 +280,8 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
         case _                => throw new Exception(s"Missing field os in JSON ${js.prettyPrint}")
       }
       osSupported.map { elem =>
-        val distribution = JsUtils.getJsStringField(elem, "distribution")
-        val release = JsUtils.getJsStringField(elem, "release")
+        val distribution = JsUtils.getString(elem, Some("distribution"))
+        val release = JsUtils.getString(elem, Some("release"))
         distribution -> release
       }
     }
@@ -290,9 +290,9 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
     // convert to a list of DxInstanceTypes, with prices set to zero
     availableInstanceTypes.fields.map {
       case (iName, jsValue) =>
-        val numCores = JsUtils.getJsIntField(jsValue, "numCores")
-        val memoryMB = JsUtils.getJsIntField(jsValue, "totalMemoryMB")
-        val diskSpaceGB = JsUtils.getJsIntField(jsValue, "ephemeralStorageGB")
+        val numCores = JsUtils.getInt(jsValue, Some("numCores"))
+        val memoryMB = JsUtils.getInt(jsValue, Some("totalMemoryMB"))
+        val diskSpaceGB = JsUtils.getInt(jsValue, Some("ephemeralStorageGB"))
         val os = getSupportedOSes(jsValue)
         val gpu = iName contains "_gpu"
         val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
@@ -313,12 +313,12 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
         dxApi.userDescribe(billTo, request)
       case _ => throw new Exception(s"Invalid billTo ${billTo}")
     }
-    val pricingModelsByRegion = JsUtils.getJsField(response, "pricingModelsByRegion")
-    val pricingModel = JsUtils.getJsField(pricingModelsByRegion, region)
-    val computeRatesPerHour = JsUtils.getJsField(pricingModel, "computeRatesPerHour")
+    val pricingModelsByRegion = JsUtils.getFields(response, Some("pricingModelsByRegion"))
+    val computeRatesPerHour =
+      JsUtils.getFields(pricingModelsByRegion(region), Some("computeRatesPerHour"))
 
     // convert from JsValue to a Map
-    computeRatesPerHour.asJsObject.fields.map {
+    computeRatesPerHour.map {
       case (key, jsValue) =>
         val hourlyRate: Float = jsValue match {
           case JsNumber(x) => x.toFloat

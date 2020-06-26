@@ -42,7 +42,7 @@ import dx.api._
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

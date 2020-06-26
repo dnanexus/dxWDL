@@ -3,7 +3,6 @@ package dx.core.languages.wdl
 import java.nio.file.Path
 
 import dx.core.languages.Language
-import dx.core.util.Adjuncts
 import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.types.{
   Context,
@@ -14,7 +13,7 @@ import wdlTools.types.{
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{Logger, SourceCode => WdlSourceCode, Util => WdlUtil}
+import wdlTools.util.{Adjuncts, Logger, SourceCode => WdlSourceCode, Util => WdlUtil}
 
 import scala.io.Source
 

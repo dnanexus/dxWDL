@@ -5,12 +5,11 @@ import java.nio.file.{Path, Paths}
 import dx.api._
 import dx.compiler.Main.SuccessTree
 import dx.core.util.MainUtils.Success
-import dx.core.util.SysUtils
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.Logger
+import wdlTools.util.{Logger, Util}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -101,7 +100,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         )
     }
 
-    val treeJs = SysUtils.base64DecodeAndGunzip(execString).parseJson
+    val treeJs = Util.base64DecodeAndGunzip(execString).parseJson
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>

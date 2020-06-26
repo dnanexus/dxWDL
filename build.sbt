@@ -49,7 +49,7 @@ assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 libraryDependencies ++= Seq(
-    "com.dnanexus" % "wdltools" % "v0.1.0",
+    "com.dnanexus" % "wdltools" % "v0.2.0",
     // antlr4 lexer + parser
     "org.antlr" % "antlr4" % "4.8",
     // JSON jackson parser

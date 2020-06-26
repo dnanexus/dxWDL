@@ -1,14 +1,12 @@
 package dx.exec
 
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 import dx.api._
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.DxFileAccessProtocol
 import dx.exec
-import dx.util.{JsUtils, getVersion}
+import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class WorkflowOutputReorg(wf: TAT.Workflow,
                                document: TAT.Document,
@@ -38,16 +36,15 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
   // file. Instead, we find all the output files that do not also
   // appear in the input.
   private def analysisFileOutputs(dxAnalysis: DxAnalysis): Vector[DxFile] = {
-    val req = JsObject(
+    val req = Map(
         "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
     )
-    val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
-    val repJs: JsValue = JsUtils.jsValueOfJsonNode(rep)
-    val outputs = repJs.asJsObject.fields.get("output") match {
+    val repJs = dxApi.analysisDescribe(dxAnalysis.id, req)
+    val outputs = repJs.fields.get("output") match {
       case None    => throw new Exception("Failed to get analysis outputs")
       case Some(x) => x
     }
-    val inputs = repJs.asJsObject.fields.get("input") match {
+    val inputs = repJs.fields.get("input") match {
       case None    => throw new Exception("Failed to get analysis inputs")
       case Some(x) => x
     }
