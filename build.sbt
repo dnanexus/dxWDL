@@ -48,10 +48,8 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-//resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
-
 libraryDependencies ++= Seq(
-    "com.dnanexus" %% "wdltools" % "0.1.0-SNAPSHOT",
+    "com.dnanexus" % "wdltools" % "v0.1.0",
     // antlr4 lexer + parser
     "org.antlr" % "antlr4" % "4.8",
     // JSON jackson parser
@@ -61,9 +59,8 @@ libraryDependencies ++= Seq(
     // http support and libraries used in what remains of dxjava
     "com.google.guava" % "guava" % "18.0",
     "org.apache.httpcomponents" % "httpclient" % "4.5",
-
-  //"org.slf4j" % "slf4j-nop" % "1.7.30",
-//  "org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
+    //"org.slf4j" % "slf4j-nop" % "1.7.30",
+    //"org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
 
     //---------- Test libraries -------------------//
     "org.scalactic" % "scalactic_2.13" % "3.1.1",
