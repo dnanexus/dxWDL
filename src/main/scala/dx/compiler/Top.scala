@@ -144,21 +144,23 @@ case class Top(cOpt: CompilerOptions) {
     val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse, dxApi)
 
     // Generate dx:applets and dx:workflow from the IR
-    new Native(dxWDLrtId,
-               folder,
-               dxProject,
-               dxObjDir,
-               instanceTypeDB,
-               runtimePathConfig,
-               fileInfoDir,
-               bundle.typeAliases,
-               cOpt.extras,
-               cOpt.runtimeTraceLevel,
-               cOpt.leaveWorkflowsOpen,
-               cOpt.force,
-               cOpt.archive,
-               cOpt.locked,
-               cOpt.dxApi).apply(bundle)
+    Native(
+        dxWDLrtId,
+        folder,
+        dxProject,
+        dxObjDir,
+        instanceTypeDB,
+        runtimePathConfig,
+        fileInfoDir,
+        bundle.typeAliases,
+        cOpt.extras,
+        cOpt.runtimeTraceLevel,
+        cOpt.leaveWorkflowsOpen,
+        cOpt.force,
+        cOpt.archive,
+        cOpt.locked,
+        cOpt.dxApi
+    ).apply(bundle)
   }
 
   // check the declarations in [graph], and make sure they

@@ -12,6 +12,7 @@ import subprocess
 from typing import Callable, Iterator, Union, Optional, List
 from termcolor import colored, cprint
 import time
+import traceback
 from dxpy.exceptions import DXJobFailureError
 
 import util
@@ -112,6 +113,8 @@ draft2_test_list = [
     # calling native dx applets/apps
     # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
     #"call_native"
+
+    "write_lines_bug",
 ]
 
 single_tasks_list = [
@@ -298,7 +301,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
         if str(result).strip() != str(expected_val).strip():
             cprint("Analysis {} gave unexpected results".format(tname),
                    "red")
-            cprint("Field {} should be ({}), actual = ({})".format(field_name, expected_val, result),
+            cprint("Field {} should be ({}), actual = ({})".format(field_name1, expected_val, result),
                    "red")
             return False
         return True
@@ -332,6 +335,7 @@ def build_test(tname, project, folder, version_id, compiler_flags):
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
+                "-force",
                 "-folder", folder,
                 "-project", project.get_id() ]
     cmdline += compiler_flags
@@ -400,7 +404,7 @@ def run_executable(project, test_folder, tname, oid, debug_flag, delay_workspace
                                 instance_type="mem1_ssd1_x4",
                                 **run_kwargs)
         except Exception as e:
-            print("exception message={}".format(e))
+            print("exception message={}".format(e)
             return None
 
     for i in range(1,5):
