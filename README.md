@@ -137,7 +137,7 @@ task foo {
 
 ## Contributing to dxWDL
 
-See [development](development/) for more information on how to set up your development environment to contribute to dxWDL and how to test your updates.
+See the [development guide](doc/Developing.md#/) for more information on how to set up your development environment to contribute to dxWDL and how to test your updates.
 
 ## Contributions
 

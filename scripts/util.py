@@ -92,7 +92,7 @@ def make_asset_file(version_id, top_dir):
             { "name": "jq" }
         ],
         "instanceType": "mem1_ssd1_v2_x4",
-        "description": "Prerequisits for running WDL workflows compiled to the platform"
+        "description": "Prerequisites for running WDL workflows compiled to the platform"
     }
     with open(os.path.join(top_dir, "applet_resources/dxasset.json"), 'w') as fd:
         fd.write(json.dumps(asset_spec, indent=4))
