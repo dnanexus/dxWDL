@@ -1,10 +1,9 @@
-package dxWDL.util
+package dx.core.languages.wdl
 
+import dx.api.DxPath
 import wdlTools.eval.WdlValues
-import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil, WdlTypes}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Util => TUtil}
 import wdlTools.eval.Coercion
-
-import dxWDL.base.Utils
 
 object WdlValueAnalysis {
 
@@ -12,7 +11,7 @@ object WdlValueAnalysis {
 
   def isMutableFile(constantFileStr: String): Boolean = {
     constantFileStr match {
-      case path if path.startsWith(Utils.DX_URL_PREFIX) =>
+      case path if path.startsWith(DxPath.DX_URL_PREFIX) =>
         // platform files are immutable
         false
       case path if path contains "://" =>
@@ -64,7 +63,7 @@ object WdlValueAnalysis {
           case (k, v) => evalConst(k) -> evalConst(v)
         })
       case TAT.ExprObject(m, wdlType, _) =>
-        val m2 = m.map {
+        val m2: Map[String, WdlValues.V] = m.map {
           case (k, v) => k -> evalConst(v)
         }
         wdlType match {
