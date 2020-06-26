@@ -14,10 +14,10 @@ import spray.json._
 import wdlTools.util.{Logger, TraceLevel}
 
 import scala.collection.mutable
-//import org.rogach.scallop.ScallopConf
 
-//class CompilerConf(args: Seq[String]) extends ScallopConf(args) {}
 object Main {
+  private val DEFAULT_RUNTIME_TRACE_LEVEL: Int = TraceLevel.Verbose
+
   case class SuccessTree(pretty: Either[String, JsValue]) extends SuccessfulTermination {
     lazy val message: String = {
       pretty match {
@@ -440,6 +440,8 @@ object Main {
       case Some(treeType) =>
         Some(parseExecTree(treeType.head)) // take first element and drop the rest?
     }
+    val runtimeTraceLevel =
+      getTraceLevel(options.get("runtimeDebugLevel"), DEFAULT_RUNTIME_TRACE_LEVEL)
     if (extras.isDefined) {
       if (extras.contains("reorg") && (options contains "reorg")) {
         throw new InvalidInputException(
@@ -468,6 +470,7 @@ object Main {
         options contains "streamAllFiles",
         // options contains "execTree",
         treePrinter,
+        runtimeTraceLevel,
         dxApi
     )
   }

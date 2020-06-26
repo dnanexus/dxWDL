@@ -46,6 +46,7 @@ case class CompilerOptions(archive: Boolean,
                            reorg: Boolean,
                            streamAllFiles: Boolean,
                            execTree: Option[TreePrinter],
+                           runtimeTraceLevel: Int,
                            dxApi: DxApi)
 
 case class Top(cOpt: CompilerOptions) {
@@ -152,6 +153,7 @@ case class Top(cOpt: CompilerOptions) {
                fileInfoDir,
                bundle.typeAliases,
                cOpt.extras,
+               cOpt.runtimeTraceLevel,
                cOpt.leaveWorkflowsOpen,
                cOpt.force,
                cOpt.archive,

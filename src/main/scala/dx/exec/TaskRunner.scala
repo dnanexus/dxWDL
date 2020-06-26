@@ -357,14 +357,16 @@ case class TaskRunner(task: TAT.Task,
   def prolog(
       taskInputs: Map[TAT.InputDefinition, WdlValues.V]
   ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
-    dxApi.logger.traceLimited(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
-    dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
-    if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
-      printDirStruct()
+    if (dxApi.logger.isVerbose) {
+      dxApi.logger.traceLimited(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
+      dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
+      if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
+        printDirStruct()
+      }
+      dxApi.logger.traceLimited(s"Task source code:")
+      dxApi.logger.traceLimited(document.sourceCode, 10000)
+      dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}")
     }
-    dxApi.logger.traceLimited(s"Task source code:")
-    dxApi.logger.traceLimited(document.sourceCode, 10000)
-    dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}")
 
     val parameterMeta: Map[String, TAT.MetaValue] = task.parameterMeta match {
       case None                                   => Map.empty

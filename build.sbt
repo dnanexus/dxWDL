@@ -59,8 +59,6 @@ libraryDependencies ++= Seq(
     // http support and libraries used in what remains of dxjava
     "com.google.guava" % "guava" % "18.0",
     "org.apache.httpcomponents" % "httpclient" % "4.5",
-    // command line parser
-    "org.rogach" %% "scallop" % "3.4.0",
     //"org.slf4j" % "slf4j-nop" % "1.7.30",
     //"org.slf4j" % "slf4j-api" % "2.0.0-alpha1",
 

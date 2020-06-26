@@ -45,6 +45,7 @@ case class Native(dxWDLrtId: Option[String],
                   fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
+                  rtTraceLevel: Int,
                   leaveWorkflowsOpen: Boolean,
                   force: Boolean,
                   archive: Boolean,
@@ -386,7 +387,7 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptTaskBody(): String = {
     s"""|    # evaluate input arguments, and download input files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |
         |    echo "Using dxda version: $$(dx-download-agent version)"
         |    echo "Using dxfuse version: $$(dxfuse -version)"
@@ -432,7 +433,7 @@ case class Native(dxWDLrtId: Option[String],
         |       source environment >& /dev/null
         |
         |       dxfuse_version=$$(dxfuse -version)
-        |       echo "dxfuse version $${dxfuse_version}}"
+        |       echo "dxfuse version $${dxfuse_version}"
         |
         |       # run dxfuse so that it will not exit after the bash script exists.
         |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
@@ -456,7 +457,7 @@ case class Native(dxWDLrtId: Option[String],
         |    fi
         |
         |    # construct the bash command and write it to a file
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |
         |    echo "bash command encapsulation script:"
         |    cat ${dxPathConfig.script.toString}
@@ -483,7 +484,7 @@ case class Native(dxWDLrtId: Option[String],
         |    fi
         |
         |    # evaluate applet outputs, and upload result files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |
         |    # unmount dxfuse
         |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
@@ -495,17 +496,17 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptWfFragment(): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |}
         |
         |collect() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |}""".stripMargin.trim
   }
 
   private def genBashScriptCmd(cmd: String): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
         |}""".stripMargin.trim
   }
 
@@ -540,12 +541,12 @@ case class Native(dxWDLrtId: Option[String],
                 |set -e -o pipefail
                 |main() {
                 |    # check if this is the correct instance type
-                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}`
+                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}`
                 |    if [[ $$correctInstanceType == "true" ]]; then
                 |        body
                 |    else
                 |       # evaluate the instance type, and launch a sub job on it
-                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${dxApi.logger.traceLevel} ${streamAllFiles.toString}
+                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtTraceLevel} ${streamAllFiles.toString}
                 |    fi
                 |}
                 |
