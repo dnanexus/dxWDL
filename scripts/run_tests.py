@@ -404,7 +404,7 @@ def run_executable(project, test_folder, tname, oid, debug_flag, delay_workspace
                                 instance_type="mem1_ssd1_x4",
                                 **run_kwargs)
         except Exception as e:
-            print("exception message={}".format(e)
+            print("exception message={}".format(e))
             return None
 
     for i in range(1,5):
