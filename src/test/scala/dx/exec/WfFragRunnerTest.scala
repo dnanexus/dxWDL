@@ -1,6 +1,6 @@
 package dx.exec
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
@@ -27,9 +27,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   private def setup(): (DxPathConfig, DxFileAccessProtocol) = {
     // Create a clean directory in "/tmp" for the task to use
-    val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
-    Util.deleteRecursive(jobHomeDir)
-    Util.createDirectories(jobHomeDir)
+    val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     val dxPathConfig =
       DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()

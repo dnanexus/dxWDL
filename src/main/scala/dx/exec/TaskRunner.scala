@@ -44,7 +44,13 @@ case class TaskRunner(task: TAT.Task,
                       dxApi: DxApi) {
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
-  private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
+  private lazy val DOCKER_TARBALLS_DIR = {
+    val p = Files.createTempDirectory("docker-tarballs")
+    sys.addShutdownHook({
+      Util.deleteRecursive(p)
+    })
+    p
+  }
 
   // build an object capable of evaluating WDL expressions
   private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
@@ -165,9 +171,7 @@ case class TaskRunner(task: TAT.Task,
         dxApi.logger.traceLimited(s"looking up dx:url ${url}")
         val dxFile = dxApi.resolveDxUrlFile(url)
         val fileName = dxFile.describe().name
-        val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-        Util.createDirectories(tarballDir)
-        val localTar: Path = tarballDir.resolve(fileName)
+        val localTar: Path = DOCKER_TARBALLS_DIR.resolve(fileName)
 
         dxApi.logger.traceLimited(s"downloading docker tarball to ${localTar}")
         dxApi.downloadFile(localTar, dxFile)
