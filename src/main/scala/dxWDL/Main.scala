@@ -891,7 +891,7 @@ object Main extends App {
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-    val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+    val applet: DxExecutable = jobInfo.asJsObject.fields.get("applet") match {
       case None =>
         Utils.trace(
             verbose = true,
@@ -901,8 +901,10 @@ object Main extends App {
         )
         val dxJob = DxJob(DxUtils.dxEnv.getJob)
         dxJob.describe().applet
-      case Some(JsString(x)) =>
+      case Some(JsString(x)) if x.startsWith("applet-")=>
         DxApplet(x, None)
+      case Some(JsString(x)) if x.startsWith("app-")=>
+        DxApp(x)
       case Some(other) =>
         throw new Exception(s"malformed applet field ${other} in job info")
     }

@@ -11,7 +11,7 @@ case class DxJobDescribe(project: String,
                          modified: Long,
                          properties: Option[Map[String, String]],
                          details: Option[JsValue],
-                         applet: DxApplet,
+                         applet: DxExecutable,
                          parentJob: Option[DxJob],
                          analysis: Option[DxAnalysis])
     extends DxObjectDescribe
@@ -24,7 +24,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                             Field.Name,
                             Field.Created,
                             Field.Modified,
-                            Field.Applet,
+                            Field.App,
                             Field.ParentJob,
                             Field.Analysis)
     val allFields = fields ++ defaultFields
@@ -35,13 +35,14 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                                           DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "created", "modified", "applet") match {
+      descJs.asJsObject
+        .getFields("project", "id", "name", "created", "modified", "applet", "app") match {
         case Seq(JsString(project),
                  JsString(id),
                  JsString(name),
                  JsNumber(created),
                  JsNumber(modified),
-                 JsString(applet)) =>
+                 JsString(applet)) if applet.startsWith("applet-") =>
           DxJobDescribe(project,
                         id,
                         name,
@@ -50,6 +51,22 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                         None,
                         None,
                         DxApplet.getInstance(applet),
+                        None,
+                        None)
+        case Seq(JsString(project),
+                 JsString(id),
+                 JsString(name),
+                 JsNumber(created),
+                 JsNumber(modified),
+                 JsString(app)) if app.startsWith("app-") =>
+          DxJobDescribe(project,
+                        id,
+                        name,
+                        created.toLong,
+                        modified.toLong,
+                        None,
+                        None,
+                        DxApp.getInstance(app),
                         None,
                         None)
         case _ =>

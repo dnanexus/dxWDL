@@ -116,7 +116,7 @@ object Field extends Enumeration {
   val Access, Analysis, Applet, ArchivalState, Categories, Created, Description, Details,
       DeveloperNotes, Folder, Id, IgnoreReuse, Inputs, InputSpec, Modified, Name, Outputs,
       OutputSpec, ParentJob, Parts, Project, Properties, RunSpec, Size, Stages, Summary, Tags,
-      Title, Types, Version = Value
+      Title, Types, Version, App = Value
 }
 
 trait DxObjectDescribe {
@@ -361,6 +361,7 @@ object DxObject {
       case Field.Title          => "title"
       case Field.Types          => "types"
       case Field.Version        => "version"
+      case Field.App            => "app"
     }.toVector
     val m: Map[String, JsValue] = fieldStrings.map { x =>
       x -> JsTrue
