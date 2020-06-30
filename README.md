@@ -132,7 +132,7 @@ task foo {
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) describes current compiler structure (_work in progress_)
-- [Internals v0.81](doc/Internals_v_081.md) describes design for version 0.81 and prior.
+- [Internals v0.81](doc/Internals_v0_81.md) describes design for version 0.81 and prior.
 - [Tips](doc/Tips.md) examples for how to write good WDL code
 
 ## Contributing to dxWDL
