@@ -5,7 +5,6 @@ import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
 import spray.json._
 import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
@@ -400,7 +399,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
   it should "take app id as well as applet id for custom reorg" taggedAs EdgeTest in {
 
-    val appId: String = getIdFromName("cloud_workstation")
+    val appId: String = getIdFromName("app-cloud_workstation")
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {
