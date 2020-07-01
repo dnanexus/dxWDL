@@ -15,20 +15,9 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
   private val dxApi_LOUD = DxApi(Logger.Verbose)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, _) = Util.execCommand(s"dx describe ${name} --json --multi")
-    stdout.parseJson match {
-      case JsObject(fields) => fields("id").convertTo[String]
-      case JsArray(values) if values.isEmpty =>
-        throw new Exception(s"Did not find any apps with name ${name}")
-      case JsArray(values) =>
-        if (values.size > 1) {
-          println(s"Warning: got multiple results for app with name ${name}")
-        }
-        values(0) match {
-          case JsObject(fields) => fields("id").convertTo[String]
-          case other            => throw new Exception(s"Invalid result ${other}")
-        }
-      case other => throw new Exception(s"Invalid result ${other}")
+    val (stdout, _) = Util.execCommand(s"dx describe ${name} --json")
+    stdout.parseJson.asJsObject match {
+      case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
   }
 
@@ -411,7 +400,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
   it should "take app id as well as applet id for custom reorg" taggedAs EdgeTest in {
 
-    val appId: String = getIdFromName("cloud_workstation")
+    val appId: String = getIdFromName("app-cloud_workstation")
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {

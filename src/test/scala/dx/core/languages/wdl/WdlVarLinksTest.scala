@@ -15,8 +15,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
   case class Element(name: String, wdlType: WdlTypes.T, wdlValue: WdlValues.V)
 
-  def makeElement(t: WdlTypes.T, v: WdlValues.V): Element =
-    Element("A", t, v)
+  def makeElement(t: WdlTypes.T, v: WdlValues.V): Element = Element("A", t, v)
 
   def check(elem: Element, wvlConverter: WdlVarLinksConverter): Unit = {
     val prefix = "XXX_"
