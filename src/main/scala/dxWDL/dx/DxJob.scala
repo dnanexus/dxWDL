@@ -24,8 +24,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                             Field.Name,
                             Field.Created,
                             Field.Modified,
-                            Field.App,
-                            Field.Applet,
+                            Field.Executable,
                             Field.ParentJob,
                             Field.Analysis)
     val allFields = fields ++ defaultFields
@@ -36,7 +35,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                                           DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
     val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "created", "modified", "applet", "app") match {
+      descJs.asJsObject.getFields("project", "id", "name", "created", "modified", "executable") match {
         case Seq(JsString(project),
                  JsString(id),
                  JsString(name),
