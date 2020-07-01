@@ -6,12 +6,12 @@ import spray.json._
 import wdlTools.util.{Logger, Util}
 
 class DxPathTest extends AnyFlatSpec with Matchers {
-  val DX_API: DxApi = DxApi(Logger.Quiet)
+  val dxApi: DxApi = DxApi(Logger.Quiet)
   val TEST_PROJECT = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
-      DX_API.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(TEST_PROJECT)
     } catch {
       case _: Exception =>
         throw new Exception(
@@ -33,20 +33,20 @@ class DxPathTest extends AnyFlatSpec with Matchers {
   it should "handle files in a root directory" in {
     val path = s"${TEST_PROJECT}:/Readme.md"
     val expectedId = describeDxFilePath(path)
-    val dxFile: DxFile = DX_API.resolveDxUrlFile(s"dx://${path}")
+    val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files in a subdirectory directory" in {
     val path = s"${TEST_PROJECT}:/test_data/fileA"
     val expectedId = describeDxFilePath(path)
-    val dxFile: DxFile = DX_API.resolveDxUrlFile(s"dx://${path}")
+    val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files with a colon" in {
     val expectedId = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
-    val dxFile: DxFile = DX_API.resolveDxUrlFile(s"dx://${TEST_PROJECT}:/x:x.txt")
+    val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${TEST_PROJECT}:/x:x.txt")
     dxFile.getId shouldBe expectedId
   }
 }

@@ -51,9 +51,9 @@ import dx.core.languages.wdl.ParseSource
 import dx.core.getVersion
 import spray.json._
 import wdlTools.generators.code.WdlV1Generator
-import wdlTools.syntax.{CommentMap, TextSource}
+import wdlTools.syntax.{CommentMap, SourceLocation}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.Util
+import wdlTools.util.{StringFileSource, Util}
 
 import scala.util.matching.Regex
 
@@ -147,12 +147,11 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
   private def documentFromTasks(tasks: Vector[TAT.Task]): TAT.Document = {
     def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
       TAT.Document(
-          None,
-          "",
-          TAT.Version(codeGen.wdlVersion, TextSource.empty),
+          StringFileSource.empty,
+          TAT.Version(codeGen.wdlVersion, SourceLocation.empty),
           docTasks,
           None,
-          TextSource.empty,
+          SourceLocation.empty,
           CommentMap.empty
       )
     }
@@ -161,7 +160,7 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
     val sortedUniqueTasks =
       tasks.map(t => t.name -> t).toMap.values.toVector.sortWith(_.name < _.name)
     // validate each task and warn if it doesn't generate valid WDL
-    val parser = ParseSource(dxApi.logger)
+    val parser = ParseSource(dxApi)
     val validTasks = sortedUniqueTasks.flatMap { task =>
       try {
         // TODO: currently we always generate WDL 1.0 - other versions of the code generator
@@ -244,7 +243,7 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
       case id if id.startsWith("applet-") => dxApi.applet(id)
       case _ =>
         val fullPath = s"${DxPath.DX_URL_PREFIX}/${path}"
-        dxApi.resolveOnePath(fullPath, dxProject)
+        dxApi.resolveOnePath(fullPath, Some(dxProject))
     }
     val task: Option[TAT.Task] = dxObj match {
       // an applet

@@ -9,12 +9,12 @@ import spray.json._
 import wdlTools.util.Logger
 
 class DxdaManifestTest extends AnyFlatSpec with Matchers {
-  val DX_API: DxApi = DxApi(Logger.Quiet)
+  val dxApi: DxApi = DxApi(Logger.Quiet)
   val TEST_PROJECT = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
-      DX_API.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(TEST_PROJECT)
     } catch {
       case _: Exception =>
         throw new Exception(
@@ -35,7 +35,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
     // resolve the paths
     val resolvedObjects: Map[String, DxDataObject] =
-      DX_API.resolveBulk(fileDir.keys.toVector, dxTestProject)
+      dxApi.resolveBulk(fileDir.keys.toVector, dxTestProject)
     val filesInManifest: Map[String, (DxFile, Path)] = resolvedObjects.map {
       case (dxPath, dataObj) =>
         val dxFile = dataObj.asInstanceOf[DxFile]
@@ -44,7 +44,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
     }
 
     // create a manifest
-    val manifest: DxdaManifest = DxdaManifestBuilder(DX_API).apply(filesInManifest)
+    val manifest: DxdaManifest = DxdaManifestBuilder(dxApi).apply(filesInManifest)
 
     // compare to data obtained with dx-toolkit
     val expected: Vector[JsValue] = resolvedObjects
@@ -71,7 +71,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
   it should "detect and provide legible error for archived files" in {
     val ARCHIVED_PROJ = "ArchivedStuff"
-    val dxArchivedProj: DxProject = DX_API.resolveProject(ARCHIVED_PROJ)
+    val dxArchivedProj: DxProject = dxApi.resolveProject(ARCHIVED_PROJ)
 
     val fileDir: Map[String, Path] = Map(
         s"dx://${ARCHIVED_PROJ}:/Catch22.txt" -> Paths.get("inputs/A"),
@@ -81,7 +81,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
     // resolve the paths
     val resolvedObjects: Map[String, DxDataObject] =
-      DX_API.resolveBulk(fileDir.keys.toVector, dxArchivedProj)
+      dxApi.resolveBulk(fileDir.keys.toVector, dxArchivedProj)
     val filesInManifest: Map[String, (DxFile, Path)] = resolvedObjects.map {
       case (dxPath, dataObj) =>
         val dxFile = dataObj.asInstanceOf[DxFile]
@@ -91,7 +91,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {
-      DxdaManifestBuilder(DX_API).apply(filesInManifest)
+      DxdaManifestBuilder(dxApi).apply(filesInManifest)
     }
   }
 }

@@ -1,26 +1,27 @@
 package dx.core.languages.wdl
 
+import dx.core.io.DxPathConfig
 import wdlTools.eval.{Eval, EvalConfig}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{TypeCheckingRegime, TypeOptions}
-import wdlTools.util.Logger
+import wdlTools.util.{FileSourceResolver, Logger}
 
 object Evaluator {
-  def make(dxIoFunctions: DxFileAccessProtocol, wdlVersion: WdlVersion): Eval = {
-    val evalOpts = TypeOptions(typeChecking = TypeCheckingRegime.Strict,
+  def make(dxPathConfig: DxPathConfig,
+           fileResolver: FileSourceResolver,
+           wdlVersion: WdlVersion): Eval = {
+    val evalOpts = TypeOptions(fileResolver,
+                               typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
-                               localDirectories = Vector.empty,
                                logger = Logger.Quiet)
 
     val evalCfg = EvalConfig.make(
-        dxIoFunctions.config.homeDir,
-        dxIoFunctions.config.tmpDir,
-        dxIoFunctions.config.stdout,
-        dxIoFunctions.config.stderr,
-        // Add support for the dx cloud file access protocols
-        Vector(dxIoFunctions)
+        dxPathConfig.homeDir,
+        dxPathConfig.tmpDir,
+        dxPathConfig.stdout,
+        dxPathConfig.stderr
     )
 
-    Eval(evalOpts, evalCfg, wdlVersion, None)
+    Eval(evalOpts, evalCfg, wdlVersion)
   }
 }

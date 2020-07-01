@@ -1,30 +1,26 @@
 package dx.exec
 
-import dx.api.DxApi
+import dx.api.{DxApi, DxFile}
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.{
-  Block,
-  DxFileAccessProtocol,
-  Evaluator,
-  PrettyPrintApprox,
-  WdlVarLinksConverter
-}
+import dx.core.languages.wdl.{Block, PrettyPrintApprox}
 import dx.core.getVersion
+import dx.core.languages.wdl
 import spray.json.{JsString, JsValue}
-import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.FileSourceResolver
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
                      typeAliases: Map[String, WdlTypes.T],
                      dxPathConfig: DxPathConfig,
-                     dxIoFunctions: DxFileAccessProtocol,
-                     dxApi: DxApi) {
+                     fileResolver: FileSourceResolver,
+                     dxFileCache: Map[String, DxFile],
+                     dxApi: DxApi,
+                     evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
-
-  private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
+    wdl.WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
 
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,

@@ -2,17 +2,18 @@ package dx.exec
 
 import dx.api._
 import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.DxFileAccessProtocol
 import dx.exec
 import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.FileSourceResolver
 
 case class WorkflowOutputReorg(wf: TAT.Workflow,
                                document: TAT.Document,
                                typeAliases: Map[String, WdlTypes.T],
                                dxPathConfig: DxPathConfig,
-                               dxIoFunctions: DxFileAccessProtocol,
+                               fileResolver: FileSourceResolver,
+                               dxFileCache: Map[String, DxFile],
                                dxApi: DxApi) {
   // Efficiently get the names of many files. We
   // don't want to do a `describe` each one of them, instead,
@@ -21,8 +22,8 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
   private def bulkGetFilenames(files: Seq[DxFile]): Vector[String] = {
-    val info: Map[DxFile, DxFileDescribe] = dxApi.fileBulkDescribe(files.toVector)
-    info.values.map(_.name).toVector
+    val info: Map[String, DxFile] = dxApi.fileBulkDescribe(files.toVector)
+    info.values.map(_.describe().name).toVector
   }
 
   // find all output files from the analysis
@@ -63,21 +64,20 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
       )
       return Vector.empty
     }
-    val realFreshOutputs: Map[DxFile, DxFileDescribe] =
+    val realFreshOutputs: Map[String, DxFile] =
       dxApi.fileBulkDescribe(realOutputs.toVector)
 
     // Retain only files that were created AFTER the analysis started
     val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
-    val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap {
-      case (dxFile, desc) =>
-        val creationDate = new java.util.Date(desc.created)
-        if (creationDate.compareTo(anlCreateTs) >= 0)
-          Some(dxFile)
-        else
-          None
+    val outputFiles: Vector[DxFile] = realFreshOutputs.values.flatMap { dxFile =>
+      val creationDate = new java.util.Date(dxFile.describe().created)
+      if (creationDate.compareTo(anlCreateTs) >= 0) {
+        Some(dxFile)
+      } else {
+        None
+      }
     }.toVector
     dxApi.logger.traceLimited(s"analysis has ${outputFiles.length} verified output files")
-
     outputFiles
   }
 

@@ -1,5 +1,6 @@
 package dx.core.languages.wdl
 
+import dx.api.DxApi
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.WdlValues
@@ -7,8 +8,10 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.Logger
 
 class WdlValueAnalysisTest extends AnyFlatSpec with Matchers {
+  private val dxApi = DxApi(Logger.Quiet)
+
   def parseExpressions(wdlCode: String): Vector[TAT.Declaration] = {
-    val (wf: TAT.Workflow, _, _, _) = ParseSource(Logger.Quiet).parseWdlWorkflow(wdlCode)
+    val (wf: TAT.Workflow, _, _, _) = ParseSource(dxApi).parseWdlWorkflow(wdlCode)
     wf.body.collect {
       case d: TAT.Declaration => d
     }

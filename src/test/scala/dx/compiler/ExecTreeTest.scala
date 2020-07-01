@@ -22,12 +22,12 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  private val DX_API = DxApi(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
   private val TEST_PROJECT = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
-      DX_API.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(TEST_PROJECT)
     } catch {
       case _: Exception =>
         throw new Exception(
@@ -79,7 +79,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
       case _           => throw new Exception("sanity")
     }
 
@@ -119,7 +119,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
       case _           => throw new Exception("sanity")
     }
 

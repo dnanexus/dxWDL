@@ -3,13 +3,13 @@ package dx.exec
 import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxApplet, DxFile, DxFileDescribe, Field, InstanceTypeDB}
+import dx.api.{DxApi, DxApplet, DxFile, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
+import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, ParseSource}
 import dx.core.util.MainUtils._
 import spray.json._
-import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
+import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
 
 object Main {
   object ExecAction extends Enumeration {
@@ -32,7 +32,8 @@ object Main {
                          jobInputPath: Path,
                          jobOutputPath: Path,
                          dxPathConfig: DxPathConfig,
-                         dxIoFunctions: DxFileAccessProtocol,
+                         fileResolver: FileSourceResolver,
+                         dxFileCache: Map[String, DxFile],
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
                          dxApi: DxApi): Termination = {
@@ -41,13 +42,20 @@ object Main {
     val inputLines: String = Util.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
-    val (task, typeAliases, document) = ParseSource(dxApi.logger).parseWdlTask(taskSourceCode)
+    val (task, typeAliases, document) = ParseSource(dxApi).parseWdlTask(taskSourceCode)
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
-
+    // build an object capable of evaluating WDL expressions
+    val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput =
-      JobInputOutput(dxIoFunctions, typeAliases, document.version.value, dxApi)
+      JobInputOutput(dxPathConfig,
+                     fileResolver,
+                     dxFileCache,
+                     typeAliases,
+                     document.version.value,
+                     dxApi,
+                     evaluator)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     System.err.println(s"""|Main processing inputs in taskAction
                            |originalInputs:
@@ -62,11 +70,13 @@ object Main {
         typeAliases,
         instanceTypeDB,
         dxPathConfig,
-        dxIoFunctions,
+        fileResolver,
+        dxFileCache,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
-        dxApi
+        dxApi,
+        evaluator
     )
 
     // Running tasks
@@ -122,7 +132,8 @@ object Main {
                                  jobInputPath: Path,
                                  jobOutputPath: Path,
                                  dxPathConfig: DxPathConfig,
-                                 dxIoFunctions: DxFileAccessProtocol,
+                                 fileResolver: FileSourceResolver,
+                                 dxFileCache: Map[String, DxFile],
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  dxApi: DxApi): Termination = {
@@ -134,11 +145,19 @@ object Main {
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
-      ParseSource(dxApi.logger).parseWdlWorkflow(wdlSourceCode)
+      ParseSource(dxApi).parseWdlWorkflow(wdlSourceCode)
+    val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
 
     // setup the utility directories that the frag-runner employs
     val fragInputOutput =
-      WfFragInputOutput(dxIoFunctions, dxProject, typeAliases, document.version.value, dxApi)
+      WfFragInputOutput(dxPathConfig,
+                        fileResolver,
+                        dxFileCache,
+                        dxProject,
+                        typeAliases,
+                        document.version.value,
+                        dxApi,
+                        evaluator)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -153,12 +172,14 @@ object Main {
               instanceTypeDB,
               fragInputs.execLinkInfo,
               dxPathConfig,
-              dxIoFunctions,
+              fileResolver,
+              dxFileCache,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
-              dxApi
+              dxApi,
+              evaluator
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
         case ExecAction.Collect =>
@@ -170,21 +191,30 @@ object Main {
               instanceTypeDB,
               fragInputs.execLinkInfo,
               dxPathConfig,
-              dxIoFunctions,
+              fileResolver,
+              dxFileCache,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
-              dxApi
+              dxApi,
+              evaluator
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case ExecAction.WfInputs =>
           val wfInputs =
-            WfInputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
+            WfInputs(wf, document, typeAliases, dxPathConfig, fileResolver, dxFileCache, dxApi)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
           val wfOutputs =
-            WfOutputs(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
+            WfOutputs(wf,
+                      document,
+                      typeAliases,
+                      dxPathConfig,
+                      fileResolver,
+                      dxFileCache,
+                      dxApi,
+                      evaluator)
           wfOutputs.apply(fragInputs.env)
 
         case ExecAction.WfCustomReorgOutputs =>
@@ -193,15 +223,23 @@ object Main {
               document,
               typeAliases,
               dxPathConfig,
-              dxIoFunctions,
-              dxApi
+              fileResolver,
+              dxFileCache,
+              dxApi,
+              evaluator
           )
           // add ___reconf_status as output.
           wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
         case ExecAction.WorkflowOutputReorg =>
           val wfReorg =
-            WorkflowOutputReorg(wf, document, typeAliases, dxPathConfig, dxIoFunctions, dxApi)
+            WorkflowOutputReorg(wf,
+                                document,
+                                typeAliases,
+                                dxPathConfig,
+                                fileResolver,
+                                dxFileCache,
+                                dxApi)
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
 
@@ -233,8 +271,7 @@ object Main {
 
   // Make a list of all the files cloned for access by this applet.
   // Bulk describe all the them.
-  private def runtimeBulkFileDescribe(dxApi: DxApi,
-                                      jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
+  private def runtimeBulkFileDescribe(dxApi: DxApi, jobInputPath: Path): Map[String, DxFile] = {
     val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
 
     val allFilesReferenced = inputs.asJsObject.fields.flatMap {
@@ -242,10 +279,7 @@ object Main {
     }.toVector
 
     // Describe all the files, in one go
-    val descAll = dxApi.fileBulkDescribe(allFilesReferenced)
-    descAll.map {
-      case (file, desc) => file.id -> (file, desc)
-    }
+    dxApi.fileBulkDescribe(allFilesReferenced)
   }
 
   private def getWdlSourceCodeFromDetails(details: JsValue): String = {
@@ -338,8 +372,10 @@ object Main {
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
-        val fileInfoDir = runtimeBulkFileDescribe(dxApi, jobInputPath)
-        val dxIoFunctions = DxFileAccessProtocol(dxApi, fileInfoDir, dxPathConfig)
+        val dxFileCache = runtimeBulkFileDescribe(dxApi, jobInputPath)
+        val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
+        val fileResolver =
+          FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
 
         // Get the WDL source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WDL values.
@@ -363,7 +399,8 @@ object Main {
                   jobInputPath,
                   jobOutputPath,
                   dxPathConfig,
-                  dxIoFunctions,
+                  fileResolver,
+                  dxFileCache,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
                   dxApi
@@ -377,7 +414,8 @@ object Main {
                          jobInputPath,
                          jobOutputPath,
                          dxPathConfig,
-                         dxIoFunctions,
+                         fileResolver,
+                         dxFileCache,
                          defaultRuntimeAttrs,
                          delayWorkspaceDestruction,
                          dxApi)

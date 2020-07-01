@@ -25,12 +25,11 @@ import java.nio.file.Path
 import dx.AppInternalException
 import dx.api._
 import dx.compiler.IR._
-import dx.core.io.{Furl, FurlDx}
 import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileSourceResolver, Logger, Util}
 
 import scala.collection.mutable
 
@@ -167,12 +166,14 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
   }
 }
 
-case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                     path2file: Map[String, DxFile],
+case class InputFile(fileResolver: FileSourceResolver,
+                     dxFileCache: Map[String, DxFile],
+                     pathToFile: Map[String, DxFile],
                      typeAliases: Map[String, WdlTypes.T],
                      dxApi: DxApi) {
   private lazy val logger2: Logger = dxApi.logger.withTraceIfContainsKey("InputFile")
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
 
   // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -189,8 +190,12 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxFile.fromJsValue(dxApi, jsValue)
-        val FurlDx(s, _, _) = Furl.fromDxFile(dxFile, fileInfoDir)
-        WdlValues.V_File(s)
+        // use the cached file to save an API call if possible
+        val uri = dxFileCache.get(dxFile.id) match {
+          case Some(cached) => cached.asUri
+          case None         => dxFile.asUri
+        }
+        WdlValues.V_File(uri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.

@@ -261,7 +261,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   // Describe the names of all the files in one batch. This is much more efficient
   // than submitting file describes one-by-one.
   def fileBulkDescribe(files: Vector[DxFile],
-                       extraFields: Set[Field.Value] = Set.empty): Map[DxFile, DxFileDescribe] = {
+                       extraFields: Set[Field.Value] = Set.empty): Map[String, DxFile] = {
     if (files.isEmpty) {
       // avoid an unnessary API call; this is important for unit tests
       // that do not have a network connection.
@@ -271,9 +271,11 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     val dxFindDataObjects = DxFindDataObjects(this, None)
 
     // Describe a large number of platform objects in bulk.
+    // DxFindDataObjects caches the desc on the DxFile object, so we only
+    // need to return the DxFile.
     def submitRequest(objs: Vector[DxFile],
                       extraFields: Set[Field.Value],
-                      project: Option[DxProject]): Map[DxFile, DxFileDescribe] = {
+                      project: Option[DxProject]): Map[String, DxFile] = {
       val ids = objs.map(file => file.getId)
       dxFindDataObjects
         .apply(
@@ -288,15 +290,18 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
             extrafields = extraFields
         )
         .asInstanceOf[Map[DxFile, DxFileDescribe]]
+        .keys
+        .map(file => file.id -> file)
+        .toMap
     }
 
     // group files by projects, in order to avoid searching in all projects (unless project is not specified)
-    files.groupBy(file => file.project).foldLeft(Map.empty[DxFile, DxFileDescribe]) {
+    files.groupBy(file => file.project).foldLeft(Map.empty[String, DxFile]) {
       case (accuOuter, (proj, files)) =>
         // Limit on number of objects in one API request
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
         // iterate on the ranges
-        accuOuter ++ slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
+        accuOuter ++ slices.foldLeft(Map.empty[String, DxFile]) {
           case (accu, objRange) =>
             accu ++ submitRequest(objRange, extraFields, proj)
         }
@@ -602,6 +607,21 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     content
   }
 
+  private def triageOne(components: DxPathComponents): Either[DxDataObject, DxPathComponents] = {
+    if (isDataObjectId(components.name)) {
+      val dxDataObj = dataObject(components.name)
+      val dxObjWithProj = components.projName match {
+        case None => dxDataObj
+        case Some(pid) =>
+          val dxProj = resolveProject(pid)
+          dataObject(dxDataObj.getId, Some(dxProj))
+      }
+      Left(dxObjWithProj)
+    } else {
+      Right(components)
+    }
+  }
+
   // split between files that have already been resolved (we have their file-id), and
   // those that require lookup.
   private def triage(
@@ -610,19 +630,10 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     var alreadyResolved = Map.empty[String, DxDataObject]
     var rest = Vector.empty[DxPathComponents]
 
-    for (p <- allDxPaths) {
-      val components = DxPath.parse(p)
-      if (isDataObjectId(components.name)) {
-        val dxDataObj = dataObject(components.name)
-        val dxobjWithProj = components.projName match {
-          case None => dxDataObj
-          case Some(pid) =>
-            val dxProj = resolveProject(pid)
-            dataObject(dxDataObj.getId, Some(dxProj))
-        }
-        alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
-      } else {
-        rest = rest :+ components
+    allDxPaths.foreach { p =>
+      triageOne(DxPath.parse(p)) match {
+        case Left(dxObjWithProj) => alreadyResolved += (p -> dxObjWithProj)
+        case Right(components)   => rest :+= components
       }
     }
     (alreadyResolved, rest)
@@ -711,32 +722,35 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     alreadyResolved ++ resolved
   }
 
-  def resolveOnePath(dxPath: String, dxProject: DxProject): DxDataObject = {
-    val found: Map[String, DxDataObject] = resolveBulk(Vector(dxPath), dxProject)
+  def resolveOnePath(dxPath: String,
+                     dxProject: Option[DxProject] = None,
+                     dxPathComponents: Option[DxPathComponents] = None): DxDataObject = {
+    val components = dxPathComponents.getOrElse(DxPath.parse(dxPath))
+    val proj = dxProject.getOrElse(components.projName match {
+      case Some(projName) => resolveProject(projName)
+      case None           => currentProject
+    })
+    // peel off objects that have already been resolved
+    val found = triageOne(components) match {
+      case Left(alreadyResolved) => Vector(alreadyResolved)
+      case Right(dxPathsToResolve) =>
+        submitRequest(Vector(dxPathsToResolve), proj).values.toVector
+    }
+
     found.size match {
       case 0 =>
-        throw new Exception(s"Could not find ${dxPath} in project ${dxProject.getId}")
-      case 1 => found.values.head
+        throw new Exception(s"Could not find ${dxPath} in project ${proj.getId}")
+      case 1 => found.head
       case _ =>
         throw new Exception(
-            s"Found more than one dx:object in path ${dxPath}, project=${dxProject.getId}"
+            s"Found more than one dx:object in path ${dxPath}, project=${proj.getId}"
         )
     }
   }
 
-  def resolveDxPath(dxPath: String): DxDataObject = {
-    val components = DxPath.parse(dxPath)
-    components.projName match {
-      case None =>
-        resolveOnePath(dxPath, currentProject)
-      case Some(pName) =>
-        resolveOnePath(dxPath, resolveProject(pName))
-    }
-  }
-
   // More accurate types
-  def resolveDxURLRecord(buf: String): DxRecord = {
-    val dxObj = resolveDxPath(buf)
+  def resolveDxUrlRecord(buf: String): DxRecord = {
+    val dxObj = resolveOnePath(buf)
     if (!dxObj.isInstanceOf[DxRecord]) {
       throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
     }
@@ -744,7 +758,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   }
 
   def resolveDxUrlFile(buf: String): DxFile = {
-    val dxObj = resolveDxPath(buf)
+    val dxObj = resolveOnePath(buf)
     if (!dxObj.isInstanceOf[DxFile]) {
       throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
     }

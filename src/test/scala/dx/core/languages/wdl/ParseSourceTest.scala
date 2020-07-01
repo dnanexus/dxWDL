@@ -1,5 +1,6 @@
 package dx.core.languages.wdl
 
+import dx.api.DxApi
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -8,7 +9,8 @@ import wdlTools.util.Logger
 // These tests involve compilation -without- access to the platform.
 //
 class ParseSourceTest extends AnyFlatSpec with Matchers {
-  private val parseWdlSourceFile = ParseSource(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
+  private val parseWdlSourceFile = ParseSource(dxApi)
 
   private def validateTaskMeta(task: TAT.Task): Unit = {
     val kvs = task.meta match {

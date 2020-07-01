@@ -21,43 +21,38 @@ import java.lang.management._
 import java.nio.file.{Files, Path, Paths}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxJob, DxPath, InstanceTypeDB}
+import dx.api.{DxApi, DxFile, DxJob, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.exec
-import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
+import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
-import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.exec.DockerUtils
+import wdlTools.syntax.SourceLocation
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{TraceLevel, Util}
+import wdlTools.util.{FileSource, FileSourceResolver, TraceLevel, Util}
 
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
                       typeAliases: Map[String, WdlTypes.T],
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
-                      dxIoFunctions: DxFileAccessProtocol,
+                      fileResolver: FileSourceResolver,
+                      dxFileCache: Map[String, DxFile] = Map.empty,
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
-                      dxApi: DxApi) {
+                      dxApi: DxApi,
+                      evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
-  private lazy val DOCKER_TARBALLS_DIR = {
-    val p = Files.createTempDirectory("docker-tarballs")
-    sys.addShutdownHook({
-      Util.deleteRecursive(p)
-    })
-    p
-  }
-
-  // build an object capable of evaluating WDL expressions
-  private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
+  private val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
-                     dxUrl2path: Map[Furl, Path]): Unit = {
+                     dxUrl2path: Map[FileSource, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
         val wdlTypeRepr = TypeSerialization(typeAliases).toString(t)
@@ -65,7 +60,7 @@ case class TaskRunner(task: TAT.Task,
         (name, JsArray(JsString(wdlTypeRepr), value))
     }
     val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
-      case (furl, path) => furl.toString -> JsString(path.toString)
+      case (fileSource, path) => fileSource.toString -> JsString(path.toString)
     }
 
     // marshal into json, and then to a string
@@ -73,10 +68,10 @@ case class TaskRunner(task: TAT.Task,
     Util.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
-  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
+  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[FileSource, Path]) = {
     val buf = Util.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
-    val (locInputsM, dxUrlM) = json match {
+    val (localPathToJs, dxUriToJs) = json match {
       case JsObject(m) =>
         (m.get("localizedInputs"), m.get("dxUrl2path")) match {
           case (Some(JsObject(env_m)), Some(JsObject(path_m))) =>
@@ -86,7 +81,7 @@ case class TaskRunner(task: TAT.Task,
         }
       case _ => throw new Exception("Malformed environment serialized to disk")
     }
-    val localizedInputs = locInputsM.map {
+    val localizedInputs = localPathToJs.map {
       case (key, JsArray(Vector(JsString(wdlTypeRepr), jsVal))) =>
         val t = TypeSerialization(typeAliases).fromString(wdlTypeRepr)
         val value = WdlValueSerialization(typeAliases).fromJSON(jsVal)
@@ -94,11 +89,11 @@ case class TaskRunner(task: TAT.Task,
       case (_, other) =>
         throw new Exception(s"sanity: bad deserialization value ${other}")
     }
-    val dxUrl2path = dxUrlM.map {
-      case (key, JsString(path)) => Furl.fromUrl(key, dxApi) -> Paths.get(path)
+    val dxFsToPath = dxUriToJs.map {
+      case (uri, JsString(path)) => fileResolver.resolve(uri) -> Paths.get(path)
       case (_, _)                => throw new Exception("Sanity")
     }
-    (localizedInputs, dxUrl2path)
+    (localizedInputs, dxFsToPath)
   }
 
   private def printDirStruct(): Unit = {
@@ -131,76 +126,10 @@ case class TaskRunner(task: TAT.Task,
     }
   }
 
-  private def pullImage(dImg: String): Option[String] = {
-    var retry_count = 5
-    while (retry_count > 0) {
-      try {
-        val (outstr, errstr) = Util.execCommand(s"docker pull ${dImg}")
-
-        dxApi.logger.traceLimited(
-            s"""|output:
-                |${outstr}
-                |stderr:
-                |${errstr}""".stripMargin
-        )
-        return Some(dImg)
-      } catch {
-        // ideally should catch specific exception.
-        case _: Throwable =>
-          retry_count = retry_count - 1
-          dxApi.logger.traceLimited(
-              s"""Failed to pull docker image:
-                 |${dImg}. Retrying... ${5 - retry_count}
-                    """.stripMargin
-          )
-          Thread.sleep(1000)
-      }
-    }
-    throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
-  }
-
-  private def dockerImage(env: Map[String, WdlValues.V]): Option[String] = {
-    val dImg = dockerImageEval(env)
-    dImg match {
-      case Some(url) if url.startsWith(DxPath.DX_URL_PREFIX) =>
-        // a tarball created with "docker save".
-        // 1. download it
-        // 2. open the tar archive
-        // 2. load into the local docker cache
-        // 3. figure out the image name
-        dxApi.logger.traceLimited(s"looking up dx:url ${url}")
-        val dxFile = dxApi.resolveDxUrlFile(url)
-        val fileName = dxFile.describe().name
-        val localTar: Path = DOCKER_TARBALLS_DIR.resolve(fileName)
-
-        dxApi.logger.traceLimited(s"downloading docker tarball to ${localTar}")
-        dxApi.downloadFile(localTar, dxFile)
-
-        dxApi.logger.traceLimited("figuring out the image name")
-        val (mContent, _) = Util.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-        dxApi.logger.traceLimited(
-            s"""|manifest content:
-                |${mContent}
-                |""".stripMargin
-        )
-        val repo = TaskRunner.readManifestGetDockerImageName(mContent)
-        dxApi.logger.traceLimited(s"repository is ${repo}")
-
-        dxApi.logger.traceLimited(s"load tarball ${localTar} to docker", minLevel = TraceLevel.None)
-        val (outstr, errstr) = Util.execCommand(s"docker load --input ${localTar}")
-        dxApi.logger.traceLimited(
-            s"""|output:
-                |${outstr}
-                |stderr:
-                |${errstr}""".stripMargin
-        )
-        Some(repo)
-
-      case Some(dImg) =>
-        pullImage(dImg)
-
-      case _ =>
-        dImg
+  private def dockerImage(env: Map[String, WdlValues.V], loc: SourceLocation): Option[String] = {
+    dockerImageEval(env) match {
+      case Some(nameOrUrl) => Some(dockerUtils.getImage(nameOrUrl, loc))
+      case other           => other
     }
   }
 
@@ -359,7 +288,7 @@ case class TaskRunner(task: TAT.Task,
   // and build a shell script to run the command.
   def prolog(
       taskInputs: Map[TAT.InputDefinition, WdlValues.V]
-  ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
+  ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[FileSource, Path]) = {
     if (dxApi.logger.isVerbose) {
       dxApi.logger.traceLimited(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
       dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
@@ -367,7 +296,7 @@ case class TaskRunner(task: TAT.Task,
         printDirStruct()
       }
       dxApi.logger.traceLimited(s"Task source code:")
-      dxApi.logger.traceLimited(document.sourceCode, 10000)
+      dxApi.logger.traceLimited(document.source.readString, 10000)
       dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}")
     }
 
@@ -380,7 +309,7 @@ case class TaskRunner(task: TAT.Task,
     //
     // Note: this may be overly conservative,
     // because some of the files may not actually be accessed.
-    val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
+    val (localizedInputs, dxUriToPath, dxdaManifest, dxfuseManifest) =
       jobInputOutput.localizeFiles(parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
     // build a manifest for dxda, if there are files to download
@@ -402,7 +331,7 @@ case class TaskRunner(task: TAT.Task,
       }
 
     dxApi.logger.traceLimited(s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
-    (inputsWithTypes, dxUrl2path)
+    (inputsWithTypes, dxUriToPath)
   }
 
   // HERE we download all the inputs, or mount them with dxfuse
@@ -414,7 +343,7 @@ case class TaskRunner(task: TAT.Task,
     dxApi.logger.traceLimited(s"InstantiateCommand, env = ${localizedInputs}")
 
     val env = evalInputsAndDeclarations(localizedInputs)
-    val docker = dockerImage(stripTypesFromEnv(env))
+    val docker = dockerImage(stripTypesFromEnv(env), task.command.loc)
 
     // instantiate the command
     val command = evaluator.applyCommand(task.command, EvalContext(stripTypesFromEnv(env)))
@@ -435,7 +364,7 @@ case class TaskRunner(task: TAT.Task,
   // HERE we run docker and/or the bash script
 
   def epilog(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
-             dxUrl2path: Map[Furl, Path]): Map[String, JsValue] = {
+             fileSourceToPath: Map[FileSource, Path]): Map[String, JsValue] = {
     dxApi.logger.traceLimited(s"Epilog debugLevel=${dxApi.logger.traceLevel}")
     if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
       printDirStruct()
@@ -458,7 +387,7 @@ case class TaskRunner(task: TAT.Task,
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
       // Upload output files to the platform.
-      jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
+      jobInputOutput.delocalizeFiles(outputsLocal, fileSourceToPath)
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs
@@ -577,46 +506,5 @@ case class TaskRunner(task: TAT.Task,
       wdlVarLinksConverter.genFields(wvl, outDef.name)
     }.toMap
     outputs
-  }
-}
-
-// This object is used to allow easy testing of complex
-// methods internal to the TaskRunner.
-object TaskRunner {
-  // Read the manifest file from a docker tarball, and get the repository name.
-  //
-  // A manifest could look like this:
-  // [
-  //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
-  //     "RepoTags":["ubuntu_18_04_minimal:latest"],
-  //     "Layers":[
-  //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
-  //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
-  //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
-  //          ]}
-  // ]
-  def readManifestGetDockerImageName(buf: String): String = {
-    val jso = buf.parseJson
-    val elem = jso match {
-      case JsArray(elements) if elements.nonEmpty => elements.head
-      case other =>
-        throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
-    }
-    val repo: String = elem.asJsObject.fields.get("RepoTags") match {
-      case None =>
-        throw new Exception("The repository is not specified for the image")
-      case Some(JsString(repo)) =>
-        repo
-      case Some(JsArray(elements)) =>
-        if (elements.isEmpty)
-          throw new Exception("RepoTags has an empty array")
-        elements.head match {
-          case JsString(repo) => repo
-          case other          => throw new Exception(s"bad value ${other} in RepoTags manifest field")
-        }
-      case other =>
-        throw new Exception(s"bad value ${other} in RepoTags manifest field")
-    }
-    repo
   }
 }

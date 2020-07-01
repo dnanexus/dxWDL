@@ -23,7 +23,7 @@ import scala.io.Source
 
 class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private val logger = Logger.Quiet
-  private val DX_API = DxApi(logger)
+  private val dxApi = DxApi(logger)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
@@ -34,7 +34,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private lazy val dxTestProject =
     try {
-      DX_API.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(TEST_PROJECT)
     } catch {
       case _: Exception =>
         throw new Exception(
@@ -90,7 +90,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private def getAppletId(path: String): String = {
     val folder = Paths.get(path).getParent.toAbsolutePath.toString
     val basename = Paths.get(path).getFileName.toString
-    val results = DxFindDataObjects(DX_API, Some(10)).apply(
+    val results = DxFindDataObjects(dxApi, Some(10)).apply(
         Some(dxTestProject),
         Some(folder),
         recurse = false,
@@ -176,7 +176,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(logger).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set(
         "native_sum",
@@ -214,13 +214,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(logger).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
 
   it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
-    val dxObj = DX_API.resolveDxPath(
+    val dxObj = dxApi.resolveOnePath(
         s"${DxPath.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
     dxObj shouldBe a[DxApplet]
@@ -249,7 +249,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(logger).parseWdlTasks(content)
+    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -265,7 +265,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -295,7 +295,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -329,7 +329,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -345,11 +345,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         Vector(
             IOParameterChoiceFile(
                 name = None,
-                value = DX_API.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+                value = dxApi.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")
             ),
             IOParameterChoiceFile(
                 name = None,
-                value = DX_API.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+                value = dxApi.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
             )
         )
     )
@@ -365,7 +365,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -381,11 +381,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         Vector(
             IOParameterChoiceFile(
                 name = Some("file1"),
-                value = DX_API.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")
+                value = dxApi.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")
             ),
             IOParameterChoiceFile(
                 name = Some("file2"),
-                value = DX_API.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
+                value = dxApi.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")
             )
         )
     )
@@ -402,7 +402,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -418,13 +418,13 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         Vector(
             IOParameterSuggestionFile(
                 name = None,
-                value = Some(DX_API.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
+                value = Some(dxApi.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
                 project = None,
                 path = None
             ),
             IOParameterSuggestionFile(
                 name = None,
-                value = Some(DX_API.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")),
+                value = Some(dxApi.file("file-Fg5PgBj0ffPP0Jjv3zfv0yxq")),
                 project = None,
                 path = None
             )
@@ -442,7 +442,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (in_file, pattern) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -458,14 +458,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         Vector(
             IOParameterSuggestionFile(
                 name = Some("file1"),
-                value = Some(DX_API.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
+                value = Some(dxApi.file("file-Fg5PgBQ0ffP7B8bg3xqB115G")),
                 project = None,
                 path = None
             ),
             IOParameterSuggestionFile(
                 name = Some("file2"),
                 value = None,
-                project = Some(DX_API.project("project-FGpfqjQ0ffPF1Q106JYP2j3v")),
+                project = Some(dxApi.project("project-FGpfqjQ0ffPF1Q106JYP2j3v")),
                 path = Some("/test_data/f2.txt.gz")
             )
         )
@@ -482,7 +482,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (file_a, file_b) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -516,7 +516,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (int_a, int_b) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -537,7 +537,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (a, b, c, d, e) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1), x(2), x(3), x(4))
@@ -561,7 +561,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (a, b) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -582,7 +582,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val inputSpec = dxApplet.describe(Set(Field.InputSpec))
     val (a, b) = inputSpec.inputSpec match {
       case Some(x) => (x(0), x(1))
@@ -627,7 +627,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val desc = dxApplet.describe(
         Set(
             Field.Description,
@@ -685,7 +685,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val desc = dxApplet.describe(
         Set(
             Field.Access,
@@ -745,7 +745,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val desc = dxApplet.describe(
         Set(
             Field.RunSpec
@@ -782,7 +782,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxApplet = DX_API.applet(appId)
+    val dxApplet = dxApi.applet(appId)
     val desc = dxApplet.describe(
         Set(
             Field.RunSpec
@@ -833,7 +833,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxWorkflow = DX_API.workflow(wfId)
+    val dxWorkflow = dxApi.workflow(wfId)
     val desc = dxWorkflow.describe(
         Set(
             Field.Description,
@@ -882,7 +882,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case other      => throw new Exception(s"Unexpected result ${other}")
     }
 
-    val dxWorkflow = DX_API.workflow(wfId)
+    val dxWorkflow = dxApi.workflow(wfId)
     val desc = dxWorkflow.describe(Set(Field.Inputs))
     val (x, y) = desc.inputs match {
       case Some(s) => (s(0), s(1))
@@ -1002,7 +1002,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _           => throw new Exception("sanity")
     }
 
-    val wf = DX_API.workflow(wfId)
+    val wf = dxApi.workflow(wfId)
     val wfDesc = wf.describe(Set(Field.Stages))
     val wfStages = wfDesc.stages.get
 
@@ -1055,7 +1055,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _             => throw new Exception("sanity")
     }
 
-    val wf = DX_API.workflow(wfId)
+    val wf = dxApi.workflow(wfId)
     val wfDesc = wf.describe(Set(Field.Stages))
     val wfStages = wfDesc.stages.get
     val reorgStage = wfStages.last

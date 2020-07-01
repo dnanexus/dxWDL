@@ -24,7 +24,7 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.types.WdlTypes
-import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
+import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
 
 // The end result of the compiler
 object Native {
@@ -41,7 +41,8 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                  fileResolver: FileSourceResolver,
+                  dxFileCache: Map[String, DxFile],
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   rtTraceLevel: Int,
@@ -51,7 +52,8 @@ case class Native(dxWDLrtId: Option[String],
                   locked: Boolean,
                   dxApi: DxApi) {
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")
@@ -952,7 +954,7 @@ case class Native(dxWDLrtId: Option[String],
 
     val details: Map[String, JsValue] = dockerFile match {
       case None         => Map.empty
-      case Some(dxfile) => Map("docker-image" -> DxFile.toJsValue(dxfile))
+      case Some(dxfile) => Map("docker-image" -> dxfile.getLinkAsJson)
     }
 
     (runSpecEverything, details)

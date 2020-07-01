@@ -137,7 +137,7 @@ case class Block(inputs: Vector[Block.InputDefinition],
 
 object Block {
   // These are the same definitions as in TypedAbstractSyntax,
-  // with the TextSource field stripped out. This is because the inputs
+  // with the SourceLocation field stripped out. This is because the inputs
   // and outputs here are compiler constructs, they have not been defined by the user.
   // They are computed by the algorithm and assigned to blocks of
   // statements.
@@ -391,7 +391,7 @@ object Block {
             val callOutputs = call.callee.output.map {
               case (name, wdlType) =>
                 val fqn = call.actualName + "." + name
-                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.text))
+                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.loc))
             }.toVector
             ctx
               .addInputs(callInputs(call))

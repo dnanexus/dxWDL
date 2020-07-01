@@ -40,7 +40,7 @@ object MainUtils {
                                  override val exception: Option[Throwable] = None)
       extends UnsuccessfulTermination
 
-  type OptionsMap = Map[String, List[String]]
+  type OptionsMap = Map[String, Vector[String]]
 
   // This directory exists only at runtime in the cloud. Beware of using
   // it in code paths that run at compile time.

@@ -63,6 +63,7 @@ import dx.core.languages.wdl.{DxlExec, WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.FileSourceResolver
 
 case class ChildExecDesc(execName: String,
                          seqNum: Int,
@@ -74,8 +75,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
+                          fileResolver: FileSourceResolver,
                           typeAliases: Map[String, WdlTypes.T]) {
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, Map.empty, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],

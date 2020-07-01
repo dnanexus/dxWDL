@@ -5,19 +5,22 @@ import java.nio.file.{Files, Path}
 import dx.AppInternalException
 import dx.api.{DxApi, DxFile}
 import dx.core.io._
-import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, WdlVarLinksConverter}
+import dx.core.languages.wdl.{DxFileAccessProtocol, DxFileSource, WdlVarLinksConverter}
 import spray.json.{JsNull, JsValue}
-import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource}
 
-case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
+case class JobInputOutput(dxPathConfig: DxPathConfig,
+                          fileResolver: FileSourceResolver,
+                          dxFileCache: Map[String, DxFile],
                           structDefs: Map[String, WdlTypes.T],
                           wdlVersion: WdlVersion,
-                          dxApi: DxApi) {
+                          dxApi: DxApi,
+                          evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, structDefs)
-  private val evaluator = Evaluator.make(dxIoFunctions, wdlVersion)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, structDefs)
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
@@ -100,11 +103,11 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
   }
 
   // find all file URLs in a WDL value
-  private def findFiles(v: WdlValues.V): Vector[Furl] = {
+  private def findFiles(v: WdlValues.V): Vector[FileSource] = {
     v match {
-      case WdlValues.V_File(s) => Vector(Furl.fromUrl(s, dxApi))
+      case WdlValues.V_File(s) => Vector(fileResolver.resolve(s))
       case WdlValues.V_Map(m) =>
-        m.foldLeft(Vector.empty[Furl]) {
+        m.foldLeft(Vector.empty[FileSource]) {
           case (accu, (k, v)) =>
             findFiles(k) ++ findFiles(v) ++ accu
         }
@@ -233,11 +236,14 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
 
   // Recursively go into a wdlValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceFURLsWithLocalPaths(wdlValue: WdlValues.V,
-                                         localizationPlan: Map[Furl, Path]): WdlValues.V = {
+  private def replaceUrisWithLocalPaths(
+      wdlValue: WdlValues.V,
+      localizationPlan: Map[FileSource, Path]
+  ): WdlValues.V = {
     val translation: Map[String, String] = localizationPlan.map {
-      case (FurlDx(value, _, _), path) => value -> path.toString
-      case (FurlLocal(p1), p2)         => p1.toString -> p2.toString
+      case (dxFs: DxFileSource, path)     => dxFs.value -> path.toString
+      case (localFs: LocalFileSource, p2) => localFs.toString -> p2.toString
+      case other                          => throw new RuntimeException(s"unsupported file source ${other}")
     }
     translateFiles(wdlValue, translation)
   }
@@ -245,9 +251,9 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
   // Recursively go into a wdlValue, and replace cloud URLs with the
   // equivalent local path.
   private def replaceLocalPathsWithURLs(wdlValue: WdlValues.V,
-                                        path2furl: Map[Path, Furl]): WdlValues.V = {
-    val translation: Map[String, String] = path2furl.map {
-      case (path, furl) => path.toString -> furl.toString
+                                        pathToFileSource: Map[Path, FileSource]): WdlValues.V = {
+    val translation: Map[String, String] = pathToFileSource.map {
+      case (path, fs) => path.toString -> fs.toString
     }
     translateFiles(wdlValue, translation)
   }
@@ -258,10 +264,10 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
 
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, TAT.MetaValue],
-                           inputs: Map[TAT.InputDefinition, WdlValues.V]): Set[Furl] = {
+                           inputs: Map[TAT.InputDefinition, WdlValues.V]): Set[FileSource] = {
     inputs.flatMap {
       case (iDef, wdlValue) =>
-        if (dxIoFunctions.config.streamAllFiles) {
+        if (dxPathConfig.streamAllFiles) {
           findFiles(wdlValue)
         } else {
           // This is better than "iDef.parameterMeta", but it does not
@@ -306,41 +312,41 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
       parameterMeta: Map[String, TAT.MetaValue],
       inputs: Map[TAT.InputDefinition, WdlValues.V],
       inputsDir: Path
-  ): (Map[TAT.InputDefinition, WdlValues.V], Map[Furl, Path], DxdaManifest, DxfuseManifest) = {
-    val fileURLs: Vector[Furl] = inputs.values.flatMap(findFiles).toVector
-    val streamingFiles: Set[Furl] = areStreaming(parameterMeta, inputs)
+  ): (Map[TAT.InputDefinition, WdlValues.V], Map[FileSource, Path], DxdaManifest, DxfuseManifest) = {
+    val fileURLs: Vector[FileSource] = inputs.values.flatMap(findFiles).toVector
+    val streamingFiles: Set[FileSource] = areStreaming(parameterMeta, inputs)
     dxApi.logger.traceLimited(s"streaming files = ${streamingFiles}")
 
     // remove duplicates; we want to download each file just once
-    val filesToDownload: Set[Furl] = fileURLs.toSet
+    val filesToDownload: Set[FileSource] = fileURLs.toSet
 
     // Choose a local path for each cloud file
-    val furl2path: Map[Furl, Path] =
-      filesToDownload.foldLeft(Map.empty[Furl, Path]) {
-        case (accu, furl) =>
-          furl match {
-            case local: FurlLocal =>
+    val fileSourceToPath: Map[FileSource, Path] =
+      filesToDownload.foldLeft(Map.empty[FileSource, Path]) {
+        case (accu, fileSource) =>
+          fileSource match {
+            case local: LocalFileSource =>
               // The file is already on the local disk, there
               // is no need to download it.
               //
               // TODO: make sure this file is NOT in the applet input/output
               // directories.
-              accu + (local -> local.path)
+              accu + (local -> local.localPath)
 
-            case dxUrl: FurlDx if streamingFiles contains dxUrl =>
+            case dxFs: DxFileSource if streamingFiles contains dxFs =>
               // file should be streamed
               val existingFiles = accu.values.toSet
-              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val desc = dxFileCache(dxFs.dxFile.id).describe()
               val path = createUniqueDownloadPath(desc.name,
-                                                  dxUrl.dxFile,
+                                                  dxFs.dxFile,
                                                   existingFiles,
-                                                  dxIoFunctions.config.dxfuseMountpoint)
-              accu + (dxUrl -> path)
+                                                  dxPathConfig.dxfuseMountpoint)
+              accu + (dxFs -> path)
 
-            case dxUrl: FurlDx =>
+            case dxUrl: DxFileSource =>
               // The file needs to be localized
               val existingFiles = accu.values.toSet
-              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val desc = dxFileCache(dxUrl.dxFile.id).describe()
               val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
               accu + (dxUrl -> path)
           }
@@ -348,28 +354,28 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
 
     // Create a manifest for all the streaming files; we'll use dxfuse to handle them.
     val filesToMount: Map[DxFile, Path] =
-      furl2path.collect {
-        case (dxUrl: FurlDx, localPath) if streamingFiles contains dxUrl =>
-          dxUrl.dxFile -> localPath
+      fileSourceToPath.collect {
+        case (dxFs: DxFileSource, localPath) if streamingFiles contains dxFs =>
+          dxFs.dxFile -> localPath
       }
-    val dxfuseManifest = DxfuseManifestBuilder(dxApi).apply(filesToMount, dxIoFunctions)
+    val dxfuseManifest = DxfuseManifestBuilder(dxApi).apply(filesToMount, dxFileCache, dxPathConfig)
 
     // Create a manifest for the download agent (dxda)
     val filesToDownloadWithDxda: Map[String, (DxFile, Path)] =
-      furl2path.collect {
-        case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
-          dxUrl.dxFile.id -> (dxUrl.dxFile, localPath)
+      fileSourceToPath.collect {
+        case (dxFs: DxFileSource, localPath) if !(streamingFiles contains dxFs) =>
+          dxFs.dxFile.id -> (dxFs.dxFile, localPath)
       }
     val dxdaManifest = DxdaManifestBuilder(dxApi).apply(filesToDownloadWithDxda)
 
     // Replace the dxURLs with local file paths
     val localizedInputs = inputs.map {
       case (inpDef, wdlValue) =>
-        val v1 = replaceFURLsWithLocalPaths(wdlValue, furl2path)
+        val v1 = replaceUrisWithLocalPaths(wdlValue, fileSourceToPath)
         inpDef -> v1
     }
 
-    (localizedInputs, furl2path, dxdaManifest, dxfuseManifest)
+    (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest)
   }
 
   // We have task outputs, where files are stored locally. Upload the files to
@@ -379,20 +385,22 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
   // 1) If a file is already on the cloud, do not re-upload it. The content has not
   // changed because files are immutable.
   // 2) A file that was initially local, does not need to be uploaded.
-  def delocalizeFiles(outputs: Map[String, (WdlTypes.T, WdlValues.V)],
-                      furl2path: Map[Furl, Path]): Map[String, (WdlTypes.T, WdlValues.V)] = {
+  def delocalizeFiles(
+      outputs: Map[String, (WdlTypes.T, WdlValues.V)],
+      fileSourceToPath: Map[FileSource, Path]
+  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
     // Files that were local to begin with
-    val localInputFiles: Set[Path] = furl2path.collect {
-      case (FurlLocal(_), path) => path
+    val localInputFiles: Set[Path] = fileSourceToPath.collect {
+      case (_: LocalFileSource, path) => path
     }.toSet
 
     val localOutputFilesAll: Vector[Path] = outputs.values
       .flatMap { case (_, v) => findFiles(v) }
       .toVector
       .map {
-        case FurlLocal(p) => p
-        case dxUrl: FurlDx =>
-          throw new Exception(s"Should not find cloud file on local machine (${dxUrl})")
+        case localFs: LocalFileSource => localFs.localPath
+        case dxFs: DxFileSource =>
+          throw new Exception(s"Should not find cloud file on local machine (${dxFs})")
       }
 
     // Remove files that were local to begin with, and do not need to be uploaded to the cloud.
@@ -403,15 +411,15 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
     // 1) A path can appear multiple times, make paths unique
     //    so we don't upload the same file twice.
     // 2) Filter out files that are already on the cloud.
-    val filesOnCloud: Set[Path] = furl2path.values.toSet
+    val filesOnCloud: Set[Path] = fileSourceToPath.values.toSet
     val pathsToUpload: Set[Path] =
       localOutputFiles.filter(path => !(filesOnCloud contains path)).toSet
 
     // upload the files; this could be in parallel in the future.
-    val uploaded_path2furl: Map[Path, Furl] = pathsToUpload.flatMap { path =>
+    val uploadedPathToFileSource: Map[Path, FileSource] = pathsToUpload.flatMap { path =>
       if (Files.exists(path)) {
         val dxFile = dxApi.uploadFile(path)
-        Some(path -> Furl.fromDxFile(dxFile, Map.empty)) // no cache
+        Some(path -> DxFileAccessProtocol.fromDxFile(dxFile, fileResolver.protocols))
       } else {
         // The file does not exist on the local machine. This is
         // legal if it is optional.
@@ -419,17 +427,18 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
       }
     }.toMap
 
-    // invert the furl2path map
-    val alreadyOnCloud_path2furl: Map[Path, Furl] = furl2path.foldLeft(Map.empty[Path, Furl]) {
-      case (accu, (furl, path)) =>
-        accu + (path -> furl)
-    }
-    val path2furl = alreadyOnCloud_path2furl ++ uploaded_path2furl
+    // invert the fileSourceToPath map
+    val alreadyOnCloudPathToFs: Map[Path, FileSource] =
+      fileSourceToPath.foldLeft(Map.empty[Path, FileSource]) {
+        case (accu, (fileSource, path)) =>
+          accu + (path -> fileSource)
+      }
+    val pathToFs = alreadyOnCloudPathToFs ++ uploadedPathToFileSource
 
-    // Replace the files that need to be uploaded, file paths with FURLs
+    // Replace the files that need to be uploaded, file paths with URIs
     outputs.map {
       case (outputName, (wdlType, wdlValue)) =>
-        val v1 = replaceLocalPathsWithURLs(wdlValue, path2furl)
+        val v1 = replaceLocalPathsWithURLs(wdlValue, pathToFs)
         outputName -> (wdlType, v1)
     }
   }

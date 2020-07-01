@@ -114,7 +114,13 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
       case Seq(JsString(projectId), JsString(dxid), desc) =>
         val dxProj = dxApi.project(projectId)
         val dxDataObj = dxApi.dataObject(dxid, Some(dxProj))
-        (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
+        val dxDesc = parseDescribe(desc, dxDataObj, dxProj)
+        dxDataObj match {
+          case dataObject: CachingDxDataObject[_] =>
+            dataObject.cacheDescribe(dxDesc)
+          case _ => throw new RuntimeException("sanity")
+        }
+        (dxDataObj, dxDesc)
       case _ =>
         throw new Exception(s"""|malformed result: expecting {project, id, describe} fields, got:
                                 |${jsv.prettyPrint}

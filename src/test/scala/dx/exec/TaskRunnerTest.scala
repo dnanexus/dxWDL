@@ -2,17 +2,17 @@ package dx.exec
 
 import java.nio.file.{Files, Path, Paths}
 
-import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
+import dx.api.{DxApi, DxFile, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
 import dx.core.io.DxPathConfig
-import dx.core.languages.{Language, wdl}
-import dx.core.languages.wdl.{Bundle => WdlBundle}
+import dx.core.languages.Language
+import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, ParseSource, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileSourceResolver, Logger, Util}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -139,9 +139,9 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
 
-    val (language, wdlBundle: WdlBundle, allSources, _) =
-      wdl.ParseSource(logger).apply(wdlCode, List.empty)
-    val task: TAT.Task = wdl.ParseSource(logger).getMainTask(wdlBundle)
+    val (_, language, wdlBundle: WdlBundle, allSources, _) =
+      ParseSource(dxApi).apply(wdlCode)
+    val task: TAT.Task = ParseSource(dxApi).getMainTask(wdlBundle)
     assert(allSources.size == 1)
     val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
@@ -149,24 +149,39 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val dxIoFunctions = wdl.DxFileAccessProtocol(dxApi, Map.empty, dxPathConfig)
+    val dxProtocol = DxFileAccessProtocol(dxApi)
+    val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
+    val evaluator =
+      Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
+
+    val dxFileCache = Map.empty[String, DxFile]
     val jobInputOutput =
-      JobInputOutput(dxIoFunctions, wdlBundle.typeAliases, Language.toWdlVersion(language), dxApi)
+      JobInputOutput(dxPathConfig,
+                     fileResolver,
+                     dxFileCache,
+                     wdlBundle.typeAliases,
+                     Language.toWdlVersion(language),
+                     dxApi,
+                     evaluator)
 
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
     val wdlCodeGen = WdlCodeGen(logger, wdlBundle.typeAliases, language)
     val taskDocument = wdlCodeGen.standAloneTask(taskSourceCode)
-    val taskRunner = TaskRunner(task,
-                                taskDocument,
-                                wdlBundle.typeAliases,
-                                instanceTypeDB,
-                                dxPathConfig,
-                                dxIoFunctions,
-                                jobInputOutput,
-                                Some(WdlRuntimeAttrs(Map.empty)),
-                                Some(false),
-                                dxApi)
+    val taskRunner = TaskRunner(
+        task,
+        taskDocument,
+        wdlBundle.typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        fileResolver,
+        dxFileCache,
+        jobInputOutput,
+        Some(WdlRuntimeAttrs(Map.empty)),
+        Some(false),
+        dxApi,
+        evaluator
+    )
     val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {
       case (inpDef, value) => (inpDef, addBaseDir(value))
@@ -245,27 +260,6 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
   it should "optimize task with an empty command section" in {
     val _ = runTask("empty_command_section")
     //task.commandSectionEmpty should be(true)
-  }
-
-  it should "read a docker manifest file" in {
-    val buf = """|[
-                 |{"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
-                 |"RepoTags":["ubuntu_18_04_minimal:latest"],
-                 |"Layers":[
-                 |  "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
-                 |  "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
-                 |  "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
-                 |  "386aac21291d1f58297bc7951ce00b4ff7485414d6a8e146d9fedb73e0ebfa5b/layer.tar",
-                 |  "10d19fb34e1db6a5abf4a3c138dc21f67ef94c272cf359349da18ffa973b7246/layer.tar",
-                 |  "c791705472caccd6c011326648cc9748bd1465451cd1cd28a809b0a7f4e8b671/layer.tar",
-                 |  "d6cc894526fdfac9112633719d63806117b44cc7302f2a7ed6599b1a32f7c43a/layer.tar",
-                 |  "3fbb031ee57d2a8b4b6615e540f55f9af88e88cdbceeffdac7033ec5c8ee327d/layer.tar"
-                 |  ]
-                 |}
-                 |]""".stripMargin.trim
-
-    val repo = TaskRunner.readManifestGetDockerImageName(buf)
-    repo should equal("ubuntu_18_04_minimal:latest")
   }
 
   it should "handle structs" taggedAs EdgeTest in {

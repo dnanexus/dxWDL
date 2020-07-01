@@ -2,6 +2,7 @@ package dx.core.languages.wdl
 
 import java.nio.file.Path
 
+import dx.api.DxApi
 import dx.core.languages.Language
 import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.types.{
@@ -13,12 +14,11 @@ import wdlTools.types.{
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{Adjuncts, Logger, SourceCode => WdlSourceCode, Util => WdlUtil}
-
-import scala.io.Source
+import wdlTools.util.{Adjuncts, FileSource, FileSourceResolver, LocalFileSource, StringFileSource}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
-case class ParseSource(logger: Logger) {
+case class ParseSource(dxApi: DxApi) {
+  private val logger = dxApi.logger
   private case class BInfo(callables: Map[String, TAT.Callable],
                            sources: Map[String, TAT.Document],
                            adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
@@ -52,15 +52,14 @@ case class ParseSource(logger: Logger) {
 
   private def bInfoFromDoc(doc: TAT.Document): BInfo = {
     // Add source and adjuncts for main file
-    val (sources, adjunctFiles) = doc.sourceUrl match {
-      case None => throw new RuntimeException("Document URL required")
-      case Some(url) if url.getProtocol == "file" =>
-        val absPath: Path = WdlUtil.getLocalPath(url)
+    val (sources, adjunctFiles) = doc.source match {
+      case localFs: LocalFileSource =>
+        val absPath: Path = localFs.localPath
         val sources = Map(absPath.toString -> doc)
         val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
         (sources, adjunctFiles)
-      case Some(url) =>
-        val sources = Map(url.toString -> doc)
+      case fs =>
+        val sources = Map(fs.toString -> doc)
         (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
     }
     val tasks: Vector[TAT.Task] = doc.elements.collect {
@@ -73,10 +72,12 @@ case class ParseSource(logger: Logger) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(imports: Vector[Path]): TypeOptions = {
+  private def makeOptions(importDirs: Vector[Path]): TypeOptions = {
+    val dxProtocol = DxFileAccessProtocol(dxApi)
+    val fileResolver = FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
     TypeOptions(
+        fileResolver = fileResolver,
         antlr4Trace = false,
-        localDirectories = imports,
         logger = logger,
         followImports = true,
         typeChecking = WdlTypeCheckingRegime.Strict
@@ -112,24 +113,28 @@ case class ParseSource(logger: Logger) {
     val srcDir = path.getParent
     val opts = makeOptions(importDirs :+ srcDir)
     val parsers = Parsers(opts)
-    val doc = parsers.parseDocument(WdlUtil.pathToUrl(path))
+    val doc = parsers.parseDocument(opts.fileResolver.fromPath(path))
     TypeInfer(opts).apply(doc)
   }
 
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source documents; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
-  def apply(mainFile: Path, imports: List[Path]): (Language.Value,
-                                                   Bundle,
-                                                   Map[String, TAT.Document],
-                                                   Map[String, Vector[Adjuncts.AdjunctFile]]) = {
+  def apply(
+      mainFile: Path,
+      importDirs: Vector[Path] = Vector.empty
+  ): (FileSource,
+      Language.Value,
+      Bundle,
+      Map[String, TAT.Document],
+      Map[String, Vector[Adjuncts.AdjunctFile]]) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
-    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, imports.toVector)
+    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, importDirs)
 
     val primaryCallable =
       tMainDoc.workflow match {
@@ -152,7 +157,8 @@ case class ParseSource(logger: Logger) {
     // merge everything into one bundle.
     val flatInfo: BInfo = dfsFlatten(tMainDoc)
 
-    (Language.fromWdlVersion(tMainDoc.version.value),
+    (tMainDoc.source,
+     Language.fromWdlVersion(tMainDoc.version.value),
      Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      flatInfo.sources,
      flatInfo.adjunctFiles)
@@ -162,8 +168,7 @@ case class ParseSource(logger: Logger) {
       src: String,
       opts: TypeOptions = makeOptions(Vector.empty)
   ): (TAT.Document, Context) = {
-    val lines = Source.fromString(src).getLines.toVector
-    val sourceCode = WdlSourceCode(None, lines)
+    val sourceCode = StringFileSource(src)
     try {
       val parser = Parsers(opts).getParser(sourceCode)
       val doc = parser.parseDocument(sourceCode)

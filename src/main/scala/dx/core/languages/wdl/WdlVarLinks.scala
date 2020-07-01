@@ -9,12 +9,12 @@ file type is very different between WDL and DNAx.
 package dx.core.languages.wdl
 
 import dx.AppInternalException
-import dx.core.io.{Furl, FurlDx, FurlLocal}
-import dx.api.{DxApi, DxExecution, DxFile, DxFileDescribe, DxUtils, DxWorkflowStage}
+import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
 import dx.core.languages.IORef
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
+import wdlTools.util.{FileSourceResolver, LocalFileSource}
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -35,7 +35,8 @@ case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 
 case class WdlVarLinksConverter(dxApi: DxApi,
-                                fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                                fileResolver: FileSourceResolver,
+                                dxFileCache: Map[String, DxFile],
                                 typeAliases: Map[String, WdlTypes.T]) {
 
   private val MAX_STRING_LEN: Int = 32 * 1024 // Long strings cause problems with bash and the UI
@@ -64,12 +65,10 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       throw new Exception("a double optional type/value")
     }
     def handleFile(path: String): JsValue = {
-      Furl.fromUrl(path, dxApi) match {
-        case FurlDx(_, _, dxFile) =>
-          DxFile.toJsValue(dxFile)
-        case FurlLocal(path) =>
-          // A local file.
-          JsString(path.toString)
+      fileResolver.resolve(path) match {
+        case dxFile: DxFileSource       => dxFile.dxFile.getLinkAsJson
+        case localFile: LocalFileSource => JsString(localFile.toString)
+        case other                      => throw new RuntimeException(s"Unsupported file source ${other}")
       }
     }
     (wdlType, wdlValue) match {
@@ -187,8 +186,8 @@ case class WdlVarLinksConverter(dxApi: DxApi,
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxFile.fromJsValue(dxApi, jsValue)
-        val FurlDx(s, _, _) = Furl.fromDxFile(dxFile, fileInfoDir)
-        WdlValues.V_File(s)
+        // use the cache value if there is one to save the API call
+        WdlValues.V_File(dxFileCache.getOrElse(dxFile.id, dxFile).asUri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.

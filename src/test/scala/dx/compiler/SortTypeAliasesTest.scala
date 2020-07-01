@@ -2,6 +2,7 @@ package dx.compiler
 
 import java.nio.file.{Path, Paths}
 
+import dx.api.DxApi
 import dx.core.languages.wdl
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,12 +16,13 @@ class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
   }
 
   private val logger = Logger.Quiet
+  private val dxApi = DxApi(logger)
 
   it should "sort type aliases properly" in {
     val path = pathFromBasename("struct", "many_structs.wdl")
     val wfSourceCode = Util.readFileContent(path)
     val (_, _, typeAliases: Map[String, WdlTypes.T], _) =
-      wdl.ParseSource(logger).parseWdlWorkflow(wfSourceCode)
+      wdl.ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
 
     val defs: Vector[(String, WdlTypes.T)] = SortTypeAliases(logger).apply(typeAliases.toVector)
     val defNames = defs.map { case (name, _) => name }

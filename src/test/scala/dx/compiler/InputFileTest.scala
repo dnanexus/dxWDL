@@ -13,7 +13,7 @@ import wdlTools.util.Logger
 // These tests involve compilation -without- access to the platform.
 //
 class InputFileTest extends AnyFlatSpec with Matchers {
-  private val DX_API = DxApi(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
 
   private def pathFromBasename(dirname: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dirname}/${basename}").getPath
@@ -21,7 +21,7 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   }
 
   private val dxProject = {
-    val p = DX_API.currentProject
+    val p = dxApi.currentProject
     if (p == null)
       throw new Exception("Must be logged in to run this test")
     p

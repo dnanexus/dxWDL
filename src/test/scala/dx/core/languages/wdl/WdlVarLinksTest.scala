@@ -6,10 +6,12 @@ import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.Logger
+import wdlTools.util.{FileSourceResolver, Logger}
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
-  private val DX_API = DxApi(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
+  private val dxProtocol = DxFileAccessProtocol(dxApi)
+  private val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
 
   case class Element(name: String, wdlType: WdlTypes.T, wdlValue: WdlValues.V)
 
@@ -32,7 +34,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle primitive WDL elements" in {
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, Map.empty)
 
     val testCases = List(
         // primitives
@@ -49,7 +51,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle compound WDL types" in {
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, Map.empty)
 
     def makePair(x: Double, s: String): WdlValues.V = {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))
@@ -114,7 +116,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 //        }
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType)
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }
@@ -152,9 +154,8 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
                              "type" -> WdlValues.V_String("town house")))
 
     val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
-
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }

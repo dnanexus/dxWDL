@@ -5,28 +5,27 @@ package dx.core.io
 
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxArchivalState, DxFile, DxFileDescribe}
-import dx.core.languages.wdl.DxFileAccessProtocol
+import dx.api.{DxApi, DxArchivalState, DxFile}
 import spray.json._
 
 case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[DxFile, Path],
-            dxIoFunctions: DxFileAccessProtocol): DxfuseManifest = {
+            dxFileCache: Map[String, DxFile],
+            dxPathConfig: DxPathConfig): DxfuseManifest = {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
     }
 
     // Check that the files are not archived
     val dxFiles = file2LocalMapping.keys.toVector
-    val fileDescs: Map[DxFile, DxFileDescribe] = dxApi.fileBulkDescribe(dxFiles)
-    fileDescs.foreach {
-      case (dxFile, desc) =>
-        if (desc.archivalState != DxArchivalState.LIVE)
-          throw new Exception(
-              s"file ${dxFile.id} is not live, it is in ${desc.archivalState} state"
-          )
+    val fileDescs: Map[String, DxFile] = dxApi.fileBulkDescribe(dxFiles)
+    fileDescs.values.map(_.describe()).foreach { desc =>
+      if (desc.archivalState != DxArchivalState.LIVE)
+        throw new Exception(
+            s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
+        )
     }
 
     val files = file2LocalMapping.map {
@@ -35,11 +34,11 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
 
         // remove the mountpoint from the directory. We need
         // paths that are relative to the mount point.
-        val mountDir = dxIoFunctions.config.dxfuseMountpoint.toString
+        val mountDir = dxPathConfig.dxfuseMountpoint.toString
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
-        val (_, fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
+        val fDesc = dxFileCache(dxFile.id).describe()
         JsObject(
             "proj_id" -> JsString(fDesc.project),
             "file_id" -> JsString(dxFile.id),
