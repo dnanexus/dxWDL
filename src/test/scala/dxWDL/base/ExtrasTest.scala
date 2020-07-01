@@ -5,19 +5,30 @@ import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
 import spray.json._
 import wdlTools.eval.WdlValues
 import DefaultJsonProtocol._
+import wdlTools.util.Util
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
   val verbose: Verbose = Verbose(on = true, quiet = true, Set.empty)
   val verbose2: Verbose = Verbose(on = false, quiet = true, Set.empty)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json")
-    stdout.parseJson.asJsObject match {
-      case JsObject(x) => JsObject(x).fields("id").convertTo[String]
+    val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json --multi")
+    stdout.parseJson match {
+      case JsObject(fields) => fields("id").convertTo[String]
+      case JsArray(values) if values.isEmpty =>
+        throw new Exception(s"Did not find any apps with name ${name}")
+      case JsArray(values) =>
+        if (values.size > 1) {
+          println(s"Warning: got multiple results for app with name ${name}")
+        }
+        values(0) match {
+          case JsObject(fields) => fields("id").convertTo[String]
+          case other            => throw new Exception(s"Invalid result ${other}")
+        }
+      case other => throw new Exception(s"Invalid result ${other}")
     }
   }
 
