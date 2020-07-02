@@ -3,6 +3,7 @@ package dx.core.languages.wdl
 import java.nio.file.Path
 
 import dx.api.DxApi
+import dx.core.io.DxFileAccessProtocol
 import dx.core.languages.Language
 import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.types.{

@@ -22,8 +22,8 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
   private def bulkGetFilenames(files: Seq[DxFile]): Vector[String] = {
-    val info: Map[String, DxFile] = dxApi.fileBulkDescribe(files.toVector)
-    info.values.map(_.describe().name).toVector
+    val info = dxApi.fileBulkDescribe(files.toVector)
+    info.map(_.describe().name)
   }
 
   // find all output files from the analysis
@@ -64,19 +64,18 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
       )
       return Vector.empty
     }
-    val realFreshOutputs: Map[String, DxFile] =
-      dxApi.fileBulkDescribe(realOutputs.toVector)
+    val realFreshOutputs = dxApi.fileBulkDescribe(realOutputs.toVector)
 
     // Retain only files that were created AFTER the analysis started
     val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
-    val outputFiles: Vector[DxFile] = realFreshOutputs.values.flatMap { dxFile =>
+    val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap { dxFile =>
       val creationDate = new java.util.Date(dxFile.describe().created)
       if (creationDate.compareTo(anlCreateTs) >= 0) {
         Some(dxFile)
       } else {
         None
       }
-    }.toVector
+    }
     dxApi.logger.traceLimited(s"analysis has ${outputFiles.length} verified output files")
     outputFiles
   }
@@ -96,12 +95,12 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
       return
 
     val exportIds: Set[String] = exportFiles.map(_.id).toSet
-    val exportNames: Seq[String] = bulkGetFilenames(exportFiles)
+    val exportNames: Vector[String] = bulkGetFilenames(exportFiles)
     dxApi.logger.traceLimited(s"exportFiles=${exportNames}")
 
     // Figure out which of the files should be kept
     val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
-    val iNames: Seq[String] = bulkGetFilenames(intermediateFiles)
+    val iNames: Vector[String] = bulkGetFilenames(intermediateFiles)
     dxApi.logger.traceLimited(s"intermediate files=${iNames}")
     if (intermediateFiles.isEmpty)
       return

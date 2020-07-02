@@ -118,7 +118,9 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
         dxDataObj match {
           case dataObject: CachingDxDataObject[_] =>
             dataObject.cacheDescribe(dxDesc)
-          case _ => throw new RuntimeException("sanity")
+          case _ =>
+            // TODO: make all data objects caching, and throw exception here
+            ()
         }
         (dxDataObj, dxDesc)
       case _ =>

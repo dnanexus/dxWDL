@@ -32,10 +32,14 @@ object MainUtils {
   trait UnsuccessfulTermination extends Termination {
     val message: String
     val exception: Option[Throwable] = None
+
+    override def toString: String = failureMessage(message, exception)
   }
+
   case class Failure(override val message: String = "",
                      override val exception: Option[Throwable] = None)
       extends UnsuccessfulTermination
+
   case class BadUsageTermination(override val message: String = "",
                                  override val exception: Option[Throwable] = None)
       extends UnsuccessfulTermination

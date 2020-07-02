@@ -64,9 +64,12 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
       .toVector
       .reverse
 
-    manifest shouldBe DxdaManifest(
-        JsObject(dxTestProject.getId -> JsArray(expected))
-    )
+    val manifestValue = manifest.value.asJsObject.fields
+    manifestValue.size shouldBe 1
+    manifestValue.get(dxTestProject.getId) match {
+      case Some(JsArray(array)) => array should contain theSameElementsAs expected
+      case _                    => throw new Exception("expected array")
+    }
   }
 
   it should "detect and provide legible error for archived files" in {

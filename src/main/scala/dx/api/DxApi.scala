@@ -260,12 +260,14 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
 
   // Describe the names of all the files in one batch. This is much more efficient
   // than submitting file describes one-by-one.
-  def fileBulkDescribe(files: Vector[DxFile],
-                       extraFields: Set[Field.Value] = Set.empty): Map[String, DxFile] = {
+  def fileBulkDescribe(
+      files: Vector[DxFile],
+      extraFields: Set[Field.Value] = Set.empty
+  ): Vector[DxFile] = {
     if (files.isEmpty) {
       // avoid an unnessary API call; this is important for unit tests
       // that do not have a network connection.
-      return Map.empty
+      return Vector.empty
     }
 
     val dxFindDataObjects = DxFindDataObjects(this, None)
@@ -275,7 +277,7 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
     // need to return the DxFile.
     def submitRequest(objs: Vector[DxFile],
                       extraFields: Set[Field.Value],
-                      project: Option[DxProject]): Map[String, DxFile] = {
+                      project: Option[DxProject]): Vector[DxFile] = {
       val ids = objs.map(file => file.getId)
       dxFindDataObjects
         .apply(
@@ -291,17 +293,16 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
         )
         .asInstanceOf[Map[DxFile, DxFileDescribe]]
         .keys
-        .map(file => file.id -> file)
-        .toMap
+        .toVector
     }
 
     // group files by projects, in order to avoid searching in all projects (unless project is not specified)
-    files.groupBy(file => file.project).foldLeft(Map.empty[String, DxFile]) {
+    files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
       case (accuOuter, (proj, files)) =>
         // Limit on number of objects in one API request
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
         // iterate on the ranges
-        accuOuter ++ slices.foldLeft(Map.empty[String, DxFile]) {
+        accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
           case (accu, objRange) =>
             accu ++ submitRequest(objRange, extraFields, proj)
         }

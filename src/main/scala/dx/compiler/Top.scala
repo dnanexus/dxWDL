@@ -4,8 +4,8 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
 import dx.api.{DxApi, DxFile, DxPath, DxProject, DxRecord, Field, InstanceTypeDbQuery}
-import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
+import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.languages.wdl.ParseSource
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, Util}
@@ -190,7 +190,7 @@ case class Top(cOpt: CompilerOptions) {
   private def bulkFileDescribe(
       bundle: IR.Bundle,
       dxProject: DxProject
-  ): (Map[String, DxFile], Map[String, DxFile]) = {
+  ): (Map[String, DxFile], Vector[DxFile]) = {
     val defResults: InputFileScanResults = cOpt.defaults match {
       case None => InputFileScanResults(Map.empty, Vector.empty)
       case Some(path) =>
@@ -285,7 +285,8 @@ case class Top(cOpt: CompilerOptions) {
 
     // handle changes resulting from setting defaults, and
     // generate DNAx input files.
-    handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileCache)
+    val idToFileMap = dxFileCache.map(f => f.id -> f).toMap
+    handleInputFiles(bundle, fileResolver, pathToDxFile, idToFileMap)
   }
 
   // Compile up to native dx applets and workflows
@@ -302,8 +303,8 @@ case class Top(cOpt: CompilerOptions) {
     val fileResolver =
       FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
     // generate IR
-    val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileCache)
-
+    val idToFileMap = dxFileCache.map(f => f.id -> f).toMap
+    val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, idToFileMap)
     // Up to this point, compilation does not require
     // the dx:project. This allows unit testing without
     // being logged in to the platform. For the native
@@ -311,7 +312,7 @@ case class Top(cOpt: CompilerOptions) {
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
     val cResults =
-      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileResolver, dxFileCache)
+      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileResolver, idToFileMap)
     cResults.primaryCallable match {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")

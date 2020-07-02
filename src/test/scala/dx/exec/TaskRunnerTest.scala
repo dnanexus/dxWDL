@@ -4,9 +4,9 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxFile, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
-import dx.core.io.DxPathConfig
+import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, ParseSource, Bundle => WdlBundle}
+import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._

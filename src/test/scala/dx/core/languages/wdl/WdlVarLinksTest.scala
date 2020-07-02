@@ -1,12 +1,13 @@
 package dx.core.languages.wdl
 
 import dx.api.DxApi
+import dx.core.io.DxFileAccessProtocol
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{FileSourceResolver, Logger}
+import wdlTools.util.{FileSourceResolver, Logger, Util}
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   private val dxApi = DxApi(Logger.Quiet)
@@ -64,8 +65,10 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
             WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false),
             WdlValues.V_Array(Vector(WdlValues.V_Boolean(true), WdlValues.V_Boolean(false)))
         ),
-        makeElement(WdlTypes.T_Optional(WdlTypes.T_File),
-                    WdlValues.V_Optional(WdlValues.V_File("ddd"))),
+        makeElement(
+            WdlTypes.T_Optional(WdlTypes.T_File),
+            WdlValues.V_Optional(WdlValues.V_File(Util.absolutePath(Util.getPath("ddd")).toString))
+        ),
         // maps
         makeElement(
             WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Boolean),

@@ -17,17 +17,15 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
     }
-
     // Check that the files are not archived
     val dxFiles = file2LocalMapping.keys.toVector
-    val fileDescs: Map[String, DxFile] = dxApi.fileBulkDescribe(dxFiles)
-    fileDescs.values.map(_.describe()).foreach { desc =>
+    val fileDescs = dxApi.fileBulkDescribe(dxFiles)
+    fileDescs.map(_.describe()).foreach { desc =>
       if (desc.archivalState != DxArchivalState.LIVE)
         throw new Exception(
             s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
         )
     }
-
     val files = file2LocalMapping.map {
       case (dxFile, path) =>
         val parentDir = path.getParent.toString
@@ -37,7 +35,6 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
         val mountDir = dxPathConfig.dxfuseMountpoint.toString
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
-
         val fDesc = dxFileCache(dxFile.id).describe()
         JsObject(
             "proj_id" -> JsString(fDesc.project),

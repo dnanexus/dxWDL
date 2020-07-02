@@ -5,8 +5,8 @@ import java.nio.file.{Path, Paths}
 import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxApplet, DxFile, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, ParseSource}
+import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.languages.wdl.{Evaluator, ParseSource}
 import dx.core.util.MainUtils._
 import spray.json._
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
@@ -269,19 +269,6 @@ object Main {
     }
   }
 
-  // Make a list of all the files cloned for access by this applet.
-  // Bulk describe all the them.
-  private def runtimeBulkFileDescribe(dxApi: DxApi, jobInputPath: Path): Map[String, DxFile] = {
-    val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
-
-    val allFilesReferenced = inputs.asJsObject.fields.flatMap {
-      case (_, jsElem) => dxApi.findFiles(jsElem)
-    }.toVector
-
-    // Describe all the files, in one go
-    dxApi.fileBulkDescribe(allFilesReferenced)
-  }
-
   private def getWdlSourceCodeFromDetails(details: JsValue): String = {
     val fields = details.asJsObject.fields
     val JsString(wdlSourceCode) = fields.getOrElse("wdlSourceCode", fields("womSourceCode"))
@@ -372,7 +359,13 @@ object Main {
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
-        val dxFileCache = runtimeBulkFileDescribe(dxApi, jobInputPath)
+        val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
+        val allFilesReferenced = inputs.asJsObject.fields.flatMap {
+          case (_, jsElem) => dxApi.findFiles(jsElem)
+        }.toVector
+        // Describe all the files, in one go
+        val dxFileCache = dxApi.fileBulkDescribe(allFilesReferenced)
+        val dxFileCacheMap = dxFileCache.map(f => f.id -> f).toMap
         val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
         val fileResolver =
           FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
@@ -400,7 +393,7 @@ object Main {
                   jobOutputPath,
                   dxPathConfig,
                   fileResolver,
-                  dxFileCache,
+                  dxFileCacheMap,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
                   dxApi
@@ -408,17 +401,19 @@ object Main {
             case ExecAction.TaskCheckInstanceType | ExecAction.TaskProlog |
                 ExecAction.TaskInstantiateCommand | ExecAction.TaskEpilog |
                 ExecAction.TaskRelaunch =>
-              taskAction(op,
-                         wdlSourceCode,
-                         instanceTypeDB,
-                         jobInputPath,
-                         jobOutputPath,
-                         dxPathConfig,
-                         fileResolver,
-                         dxFileCache,
-                         defaultRuntimeAttrs,
-                         delayWorkspaceDestruction,
-                         dxApi)
+              taskAction(
+                  op,
+                  wdlSourceCode,
+                  instanceTypeDB,
+                  jobInputPath,
+                  jobOutputPath,
+                  dxPathConfig,
+                  fileResolver,
+                  dxFileCacheMap,
+                  defaultRuntimeAttrs,
+                  delayWorkspaceDestruction,
+                  dxApi
+              )
           }
         } catch {
           case e: Throwable =>

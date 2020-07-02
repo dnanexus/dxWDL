@@ -40,10 +40,9 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[String, (DxFile, Path)]): DxdaManifest = {
     // collect all the information per file
     val files: Vector[DxFile] = file2LocalMapping.values.map(_._1).toVector
-    val fileDescs: Map[String, DxFile] = dxApi.fileBulkDescribe(files)
 
     // Make sure they are all in the live state. Archived files cannot be accessed.
-    fileDescs.values.map(_.describe()).foreach { desc =>
+    files.map(_.describe()).foreach { desc =>
       if (desc.archivalState != DxArchivalState.LIVE)
         throw new Exception(
             s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
@@ -51,17 +50,16 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
     }
 
     // create a sub-map per container
-    val fileDescsByContainer: Map[DxProject, Map[String, DxFile]] =
-      fileDescs.groupBy(x => dxApi.project(x._2.describe().project))
+    val fileDescsByContainer: Map[DxProject, Vector[DxFile]] =
+      files.groupBy(x => dxApi.project(x.describe().project))
 
     val m: Map[String, JsValue] = fileDescsByContainer.map {
-      case (dxContainer, fileDescs) =>
+      case (dxContainer, containerFiles) =>
         val projectFilesToLocalPath: Vector[JsValue] =
-          fileDescs.map {
-            case (fid, dxFile) =>
-              val (_, local: Path) = file2LocalMapping(fid)
-              processFile(dxFile, local)
-          }.toVector
+          containerFiles.map { dxFile =>
+            val (_, local: Path) = file2LocalMapping(dxFile.id)
+            processFile(dxFile, local)
+          }
         dxContainer.getId -> JsArray(projectFilesToLocalPath)
     }
     DxdaManifest(JsObject(m))
