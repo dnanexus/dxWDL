@@ -372,9 +372,8 @@ case class TaskRunner(task: TAT.Task,
       printDirStruct()
     }
 
-    // Evaluate the output declarations. Add outputs evaluated to
-    // the environment, so they can be referenced by expressions in the next
-    // lines.
+    // Evaluate the output declarations. Add outputs evaluated to the environment,
+    // so they can be referenced by expressions in the next lines.
     val outputsLocal: Map[String, (WdlTypes.T, WdlValues.V)] =
       task.outputs
         .foldLeft(Map.empty[String, (WdlTypes.T, WdlValues.V)]) {

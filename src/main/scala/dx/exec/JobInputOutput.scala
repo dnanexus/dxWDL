@@ -10,7 +10,7 @@ import spray.json.{JsNull, JsValue}
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource}
+import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource, RealFileSource}
 
 case class JobInputOutput(dxPathConfig: DxPathConfig,
                           fileResolver: FileSourceResolver,
@@ -175,12 +175,12 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
         wdlValue
 
       // single file
-      case WdlValues.V_File(s) =>
-        translation.get(s) match {
+      case WdlValues.V_File(localPath) =>
+        translation.get(localPath) match {
           case None =>
-            throw new Exception(s"Did not localize file ${s}")
-          case Some(s2) =>
-            WdlValues.V_File(s2)
+            throw new Exception(s"Did not localize file ${localPath}")
+          case Some(s) =>
+            WdlValues.V_File(s)
         }
 
       // Maps
@@ -250,10 +250,11 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
 
   // Recursively go into a wdlValue, and replace cloud URLs with the
   // equivalent local path.
-  private def replaceLocalPathsWithURLs(wdlValue: WdlValues.V,
+  private def replaceLocalPathsWithUris(wdlValue: WdlValues.V,
                                         pathToFileSource: Map[Path, FileSource]): WdlValues.V = {
     val translation: Map[String, String] = pathToFileSource.map {
-      case (path, fs) => path.toString -> fs.toString
+      case (path, fs: RealFileSource) => path.toString -> fs.value
+      case (_, other)                 => throw new RuntimeException(s"Cannot translate ${other}")
     }
     translateFiles(wdlValue, translation)
   }
@@ -328,9 +329,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
             case local: LocalFileSource =>
               // The file is already on the local disk, there
               // is no need to download it.
-              //
-              // TODO: make sure this file is NOT in the applet input/output
-              // directories.
+              // TODO: make sure this file is NOT in the applet input/output directories.
               accu + (local -> local.localPath)
 
             case dxFs: DxFileSource if streamingFiles contains dxFs =>
@@ -368,7 +367,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
       }
     val dxdaManifest = DxdaManifestBuilder(dxApi).apply(filesToDownloadWithDxda)
 
-    // Replace the dxURLs with local file paths
+    // Replace the URIs with local file paths
     val localizedInputs = inputs.map {
       case (inpDef, wdlValue) =>
         val v1 = replaceUrisWithLocalPaths(wdlValue, fileSourceToPath)
@@ -398,22 +397,23 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
       .flatMap { case (_, v) => findFiles(v) }
       .toVector
       .map {
-        case localFs: LocalFileSource => localFs.localPath
-        case dxFs: DxFileSource =>
-          throw new Exception(s"Should not find cloud file on local machine (${dxFs})")
+        case localFs: LocalFileSource =>
+          // use valuePath rather than localPath - the former will match the original path
+          // while the latter will have been cannonicalized
+          localFs.valuePath
+        case other =>
+          throw new RuntimeException(s"Non-local file: ${other}")
       }
 
     // Remove files that were local to begin with, and do not need to be uploaded to the cloud.
-    val localOutputFiles: Vector[Path] = localOutputFilesAll.filter { path =>
-      !(localInputFiles contains path)
-    }
+    val localOutputFiles: Vector[Path] =
+      localOutputFilesAll.filter(path => !localInputFiles.contains(path))
 
-    // 1) A path can appear multiple times, make paths unique
-    //    so we don't upload the same file twice.
+    // 1) A path can appear multiple times, make paths unique so we don't upload the same file twice.
     // 2) Filter out files that are already on the cloud.
     val filesOnCloud: Set[Path] = fileSourceToPath.values.toSet
     val pathsToUpload: Set[Path] =
-      localOutputFiles.filter(path => !(filesOnCloud contains path)).toSet
+      localOutputFiles.filter(path => !filesOnCloud.contains(path)).toSet
 
     // upload the files; this could be in parallel in the future.
     val uploadedPathToFileSource: Map[Path, FileSource] = pathsToUpload.flatMap { path =>
@@ -433,12 +433,12 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
         case (accu, (fileSource, path)) =>
           accu + (path -> fileSource)
       }
-    val pathToFs = alreadyOnCloudPathToFs ++ uploadedPathToFileSource
+    val pathToFileSource = alreadyOnCloudPathToFs ++ uploadedPathToFileSource
 
     // Replace the files that need to be uploaded, file paths with URIs
     outputs.map {
       case (outputName, (wdlType, wdlValue)) =>
-        val v1 = replaceLocalPathsWithURLs(wdlValue, pathToFs)
+        val v1 = replaceLocalPathsWithUris(wdlValue, pathToFileSource)
         outputName -> (wdlType, v1)
     }
   }
