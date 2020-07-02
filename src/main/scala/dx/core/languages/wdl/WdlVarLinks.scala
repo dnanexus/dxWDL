@@ -42,7 +42,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
 
   private val MAX_STRING_LEN: Int = 32 * 1024 // Long strings cause problems with bash and the UI
 
-  private def isDoubleOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
+  private def isNestedOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
     t match {
       case WdlTypes.T_Optional(WdlTypes.T_Optional(_)) => return true
       case _                                           => ()
@@ -58,12 +58,12 @@ case class WdlVarLinksConverter(dxApi: DxApi,
   // to many files. The assumption is that files are already in the format of dxWDLs,
   // requiring not upload/download or any special conversion.
   private def jsFromWdlValue(wdlType: WdlTypes.T, wdlValue: WdlValues.V): JsValue = {
-    if (isDoubleOptional(wdlType, wdlValue)) {
+    if (isNestedOptional(wdlType, wdlValue)) {
       System.err.println(s"""|jsFromWdlValue
                              |    type=${wdlType}
                              |    val=${wdlValue}
                              |""".stripMargin)
-      throw new Exception("a double optional type/value")
+      throw new Exception("a nested optional type/value")
     }
     def handleFile(path: String): JsValue = {
       fileResolver.resolve(path) match {
