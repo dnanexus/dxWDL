@@ -32,7 +32,7 @@ import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.exec.DockerUtils
 import wdlTools.syntax.SourceLocation
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSource, FileSourceResolver, TraceLevel, Util}
+import wdlTools.util.{FileSource, FileSourceResolver, RealFileSource, TraceLevel, Util}
 
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
@@ -52,15 +52,17 @@ case class TaskRunner(task: TAT.Task,
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
-                     dxUrl2path: Map[FileSource, Path]): Unit = {
+                     fileSourceToPath: Map[FileSource, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
         val wdlTypeRepr = TypeSerialization(typeAliases).toString(t)
         val value = WdlValueSerialization(typeAliases).toJSON(t, v)
         (name, JsArray(JsString(wdlTypeRepr), value))
     }
-    val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
-      case (fileSource, path) => fileSource.toString -> JsString(path.toString)
+    val dxUrlM: Map[String, JsValue] = fileSourceToPath.map {
+      case (fileSource: RealFileSource, path) => fileSource.value -> JsString(path.toString)
+      case (other, _) =>
+        throw new RuntimeException(s"Can only serialize a RealFileSource, not ${other}")
     }
 
     // marshal into json, and then to a string
@@ -89,11 +91,11 @@ case class TaskRunner(task: TAT.Task,
       case (_, other) =>
         throw new Exception(s"sanity: bad deserialization value ${other}")
     }
-    val dxFsToPath = dxUriToJs.map {
+    val fileSourceToPath = dxUriToJs.map {
       case (uri, JsString(path)) => fileResolver.resolve(uri) -> Paths.get(path)
       case (_, _)                => throw new Exception("Sanity")
     }
-    (localizedInputs, dxFsToPath)
+    (localizedInputs, fileSourceToPath)
   }
 
   private def printDirStruct(): Unit = {
@@ -309,7 +311,7 @@ case class TaskRunner(task: TAT.Task,
     //
     // Note: this may be overly conservative,
     // because some of the files may not actually be accessed.
-    val (localizedInputs, dxUriToPath, dxdaManifest, dxfuseManifest) =
+    val (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest) =
       jobInputOutput.localizeFiles(parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
     // build a manifest for dxda, if there are files to download
@@ -331,7 +333,7 @@ case class TaskRunner(task: TAT.Task,
       }
 
     dxApi.logger.traceLimited(s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
-    (inputsWithTypes, dxUriToPath)
+    (inputsWithTypes, fileSourceToPath)
   }
 
   // HERE we download all the inputs, or mount them with dxfuse

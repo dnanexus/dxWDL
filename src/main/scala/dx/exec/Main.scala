@@ -87,8 +87,8 @@ object Main {
         Success(correctInstanceType.toString)
 
       case ExecAction.TaskProlog =>
-        val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
-        taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
+        val (localizedInputs, fileSourceToPath) = taskRunner.prolog(inputs)
+        taskRunner.writeEnvToDisk(localizedInputs, fileSourceToPath)
         Success(s"success ${op}")
 
       case ExecAction.TaskInstantiateCommand =>

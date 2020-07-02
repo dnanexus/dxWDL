@@ -313,12 +313,12 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
       inputs: Map[TAT.InputDefinition, WdlValues.V],
       inputsDir: Path
   ): (Map[TAT.InputDefinition, WdlValues.V], Map[FileSource, Path], DxdaManifest, DxfuseManifest) = {
-    val fileURLs: Vector[FileSource] = inputs.values.flatMap(findFiles).toVector
+    val fileSource: Vector[FileSource] = inputs.values.flatMap(findFiles).toVector
     val streamingFiles: Set[FileSource] = areStreaming(parameterMeta, inputs)
     dxApi.logger.traceLimited(s"streaming files = ${streamingFiles}")
 
     // remove duplicates; we want to download each file just once
-    val filesToDownload: Set[FileSource] = fileURLs.toSet
+    val filesToDownload: Set[FileSource] = fileSource.toSet
 
     // Choose a local path for each cloud file
     val fileSourceToPath: Map[FileSource, Path] =

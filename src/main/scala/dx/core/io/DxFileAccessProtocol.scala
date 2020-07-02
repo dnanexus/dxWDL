@@ -4,7 +4,7 @@ import java.nio.charset.Charset
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import wdlTools.util.{AbstractFileSource, FileAccessProtocol, FileSource, Util}
+import wdlTools.util.{AbstractFileSource, FileAccessProtocol, FileSource, RealFileSource, Util}
 
 import scala.io.Source
 
@@ -13,9 +13,8 @@ case class DxFileSource(value: String,
                         dxProject: Option[DxProject],
                         dxApi: DxApi,
                         override val encoding: Charset)
-    extends AbstractFileSource(encoding) {
-  override def toString: String = dxFile.asUri
-
+    extends AbstractFileSource(encoding)
+    with RealFileSource {
   override lazy val localPath: Path = Util.getPath(dxFile.describe().name)
 
   override lazy val size: Long = dxFile.describe().size
