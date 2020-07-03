@@ -891,23 +891,19 @@ object Main extends App {
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-    val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+    val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
       case None =>
-        Utils.trace(
-            verbose = true,
-            s"""|applet field not found locally, performing
-                |an API call.
-                |""".stripMargin
-        )
         val dxJob = DxJob(DxUtils.dxEnv.getJob)
-        dxJob.describe().applet
-      case Some(JsString(x)) =>
+        dxJob.describe().executable
+      case Some(JsString(x)) if x.startsWith("app-") =>
+        DxApp(x)
+      case Some(JsString(x)) if x.startsWith("applet-") =>
         DxApplet(x, None)
       case Some(other) =>
-        throw new Exception(s"malformed applet field ${other} in job info")
+        throw new Exception(s"Malformed executable field ${other} in job info")
     }
 
-    val details: JsValue = applet.describe(Set(Field.Details)).details.get
+    val details: JsValue = executable.describe(Set(Field.Details)).details.get
     val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
     val wdlSourceCode = Utils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 
