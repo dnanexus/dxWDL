@@ -3,9 +3,9 @@ package dx.exec
 import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxApplet, DxFile, Field, InstanceTypeDB}
+import dx.api.{DxApi, DxApplet, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource}
 import dx.core.util.MainUtils._
 import spray.json._
@@ -33,7 +33,7 @@ object Main {
                          jobOutputPath: Path,
                          dxPathConfig: DxPathConfig,
                          fileResolver: FileSourceResolver,
-                         dxFileCache: Map[String, DxFile],
+                         dxFileDescCache: DxFileDescCache,
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
                          dxApi: DxApi): Termination = {
@@ -51,7 +51,7 @@ object Main {
     val jobInputOutput =
       JobInputOutput(dxPathConfig,
                      fileResolver,
-                     dxFileCache,
+                     dxFileDescCache,
                      typeAliases,
                      document.version.value,
                      dxApi,
@@ -71,7 +71,7 @@ object Main {
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileCache,
+        dxFileDescCache,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
@@ -132,7 +132,7 @@ object Main {
                                  jobOutputPath: Path,
                                  dxPathConfig: DxPathConfig,
                                  fileResolver: FileSourceResolver,
-                                 dxFileCache: Map[String, DxFile],
+                                 dxFileDescCache: DxFileDescCache,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  dxApi: DxApi): Termination = {
@@ -151,7 +151,7 @@ object Main {
     val fragInputOutput =
       WfFragInputOutput(dxPathConfig,
                         fileResolver,
-                        dxFileCache,
+                        dxFileDescCache,
                         dxProject,
                         typeAliases,
                         document.version.value,
@@ -172,7 +172,7 @@ object Main {
               fragInputs.execLinkInfo,
               dxPathConfig,
               fileResolver,
-              dxFileCache,
+              dxFileDescCache,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -191,7 +191,7 @@ object Main {
               fragInputs.execLinkInfo,
               dxPathConfig,
               fileResolver,
-              dxFileCache,
+              dxFileDescCache,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -202,7 +202,7 @@ object Main {
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case ExecAction.WfInputs =>
           val wfInputs =
-            WfInputs(wf, document, typeAliases, dxPathConfig, fileResolver, dxFileCache, dxApi)
+            WfInputs(wf, document, typeAliases, dxPathConfig, fileResolver, dxFileDescCache, dxApi)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
           val wfOutputs =
@@ -211,7 +211,7 @@ object Main {
                       typeAliases,
                       dxPathConfig,
                       fileResolver,
-                      dxFileCache,
+                      dxFileDescCache,
                       dxApi,
                       evaluator)
           wfOutputs.apply(fragInputs.env)
@@ -223,7 +223,7 @@ object Main {
               typeAliases,
               dxPathConfig,
               fileResolver,
-              dxFileCache,
+              dxFileDescCache,
               dxApi,
               evaluator
           )
@@ -237,7 +237,7 @@ object Main {
                                 typeAliases,
                                 dxPathConfig,
                                 fileResolver,
-                                dxFileCache,
+                                dxFileDescCache,
                                 dxApi)
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
@@ -359,21 +359,12 @@ object Main {
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
         val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
-        dxApi.logger.error("inputs:")
-        dxApi.logger.error(inputs.toString)
         val allFilesReferenced = inputs.asJsObject.fields.flatMap {
           case (_, jsElem) => dxApi.findFiles(jsElem)
         }.toVector
-        dxApi.logger.error("allFilesReferenced:")
-        dxApi.logger.error(allFilesReferenced.toString)
         // Describe all the files, in one go
-        val dxFileCache = dxApi.fileBulkDescribe(allFilesReferenced)
-        dxApi.logger.error("dxFileCache:")
-        dxApi.logger.error(dxFileCache.toString)
-        val dxFileCacheMap = dxFileCache.map(f => f.id -> f).toMap
-        dxApi.logger.error("dxFileCacheMap:")
-        dxApi.logger.error(dxFileCacheMap.toString)
-        val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
+        val dxFileDescCache = DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
+        val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
         val fileResolver =
           FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
 
@@ -400,7 +391,7 @@ object Main {
                   jobOutputPath,
                   dxPathConfig,
                   fileResolver,
-                  dxFileCacheMap,
+                  dxFileDescCache,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
                   dxApi
@@ -416,7 +407,7 @@ object Main {
                   jobOutputPath,
                   dxPathConfig,
                   fileResolver,
-                  dxFileCacheMap,
+                  dxFileDescCache,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
                   dxApi

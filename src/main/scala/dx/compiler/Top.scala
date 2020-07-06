@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
 import dx.api.{DxApi, DxFile, DxPath, DxProject, DxRecord, Field, InstanceTypeDbQuery}
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.ParseSource
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -109,7 +109,7 @@ case class Top(cOpt: CompilerOptions) {
       dxProject: DxProject,
       runtimePathConfig: DxPathConfig,
       fileResolver: FileSourceResolver,
-      dxFileCache: Map[String, DxFile]
+      dxFileDescCache: DxFileDescCache
   ): Native.Results = {
     val dxWDLrtId: Option[String] = cOpt.compileMode match {
       case CompilerFlag.IR =>
@@ -145,7 +145,7 @@ case class Top(cOpt: CompilerOptions) {
         instanceTypeDB,
         runtimePathConfig,
         fileResolver,
-        dxFileCache,
+        dxFileDescCache,
         bundle.typeAliases,
         cOpt.extras,
         cOpt.runtimeTraceLevel,
@@ -190,7 +190,7 @@ case class Top(cOpt: CompilerOptions) {
   private def bulkFileDescribe(
       bundle: IR.Bundle,
       dxProject: DxProject
-  ): (Map[String, DxFile], Vector[DxFile]) = {
+  ): (Map[String, DxFile], DxFileDescCache) = {
     val defResults: InputFileScanResults = cOpt.defaults match {
       case None => InputFileScanResults(Map.empty, Vector.empty)
       case Some(path) =>
@@ -204,7 +204,7 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     val allFiles = dxApi.fileBulkDescribe(allResults.dxFiles)
-    (allResults.path2file, allFiles)
+    (allResults.path2file, DxFileDescCache(allFiles))
   }
 
   private def wdlToIR(source: Path): IR.Bundle = {
@@ -245,18 +245,19 @@ case class Top(cOpt: CompilerOptions) {
   private def handleInputFiles(bundle: IR.Bundle,
                                fileResolver: FileSourceResolver,
                                pathToDxFile: Map[String, DxFile],
-                               dxFileCache: Map[String, DxFile]): IR.Bundle = {
+                               dxFileDescCache: DxFileDescCache): IR.Bundle = {
     val bundle2: IR.Bundle = cOpt.defaults match {
       case None => bundle
       case Some(path) =>
-        InputFile(fileResolver, dxFileCache, pathToDxFile, bundle.typeAliases, dxApi)
+        InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
           .embedDefaults(bundle, path)
     }
 
     // generate dx inputs from the Cromwell-style input specification.
     cOpt.inputs.foreach { path =>
-      val dxInputs = InputFile(fileResolver, dxFileCache, pathToDxFile, bundle.typeAliases, dxApi)
-        .dxFromCromwell(bundle2, path)
+      val dxInputs =
+        InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
+          .dxFromCromwell(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = Util.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
@@ -278,15 +279,14 @@ case class Top(cOpt: CompilerOptions) {
     val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
-    val (pathToDxFile, dxFileCache) = bulkFileDescribe(bundle, dxProject)
-    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
+    val (pathToDxFile, dxFileDescCache) = bulkFileDescribe(bundle, dxProject)
+    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
     val fileResolver =
       FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
 
     // handle changes resulting from setting defaults, and
     // generate DNAx input files.
-    val idToFileMap = dxFileCache.map(f => f.id -> f).toMap
-    handleInputFiles(bundle, fileResolver, pathToDxFile, idToFileMap)
+    handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
   }
 
   // Compile up to native dx applets and workflows
@@ -298,13 +298,12 @@ case class Top(cOpt: CompilerOptions) {
     val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
-    val (pathToDxFile, dxFileCache) = bulkFileDescribe(bundle, dxProject)
-    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
+    val (pathToDxFile, dxFileDescCache) = bulkFileDescribe(bundle, dxProject)
+    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
     val fileResolver =
       FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
     // generate IR
-    val idToFileMap = dxFileCache.map(f => f.id -> f).toMap
-    val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, idToFileMap)
+    val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
     // Up to this point, compilation does not require
     // the dx:project. This allows unit testing without
     // being logged in to the platform. For the native
@@ -312,7 +311,7 @@ case class Top(cOpt: CompilerOptions) {
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
     val cResults =
-      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileResolver, idToFileMap)
+      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileResolver, dxFileDescCache)
     cResults.primaryCallable match {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")

@@ -1,7 +1,7 @@
 package dx.exec
 
 import dx.api._
-import dx.core.io.DxPathConfig
+import dx.core.io.{DxFileDescCache, DxPathConfig}
 import dx.exec
 import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
@@ -13,7 +13,7 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
                                typeAliases: Map[String, WdlTypes.T],
                                dxPathConfig: DxPathConfig,
                                fileResolver: FileSourceResolver,
-                               dxFileCache: Map[String, DxFile],
+                               dxFileDescCache: DxFileDescCache,
                                dxApi: DxApi) {
   // Efficiently get the names of many files. We
   // don't want to do a `describe` each one of them, instead,

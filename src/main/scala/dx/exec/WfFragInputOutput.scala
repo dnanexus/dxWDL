@@ -1,7 +1,7 @@
 package dx.exec
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl.{TypeSerialization, WdlVarLinksConverter}
 import dx.exec
 import spray.json._
@@ -16,7 +16,7 @@ case class WfFragInput(blockPath: Vector[Int],
 
 case class WfFragInputOutput(dxPathConfig: DxPathConfig,
                              fileResolver: FileSourceResolver,
-                             dxFileCache: Map[String, DxFile],
+                             dxFileDescCache: DxFileDescCache,
                              dxProject: DxProject,
                              typeAliases: Map[String, WdlTypes.T],
                              wdlVersion: WdlVersion,
@@ -25,7 +25,7 @@ case class WfFragInputOutput(dxPathConfig: DxPathConfig,
   val jobInputOutput: JobInputOutput =
     exec.JobInputOutput(dxPathConfig,
                         fileResolver,
-                        dxFileCache,
+                        dxFileDescCache,
                         typeAliases,
                         wdlVersion,
                         dxApi,
@@ -93,6 +93,7 @@ case class WfFragInputOutput(dxPathConfig: DxPathConfig,
           case Some(x) => x
         }
         val value = jobInputOutput.unpackJobInput(fqn, wdlType, jsValue)
+        System.err.println(s"${fqn} before ${jsValue} after ${value}")
         fqn -> (wdlType, value)
     }
 

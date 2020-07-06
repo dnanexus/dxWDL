@@ -10,7 +10,7 @@ package dx.core.languages.wdl
 
 import dx.AppInternalException
 import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
-import dx.core.io.DxFileSource
+import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.languages.IORef
 import spray.json._
 import wdlTools.eval.WdlValues
@@ -37,7 +37,7 @@ case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 
 case class WdlVarLinksConverter(dxApi: DxApi,
                                 fileResolver: FileSourceResolver,
-                                dxFileCache: Map[String, DxFile],
+                                dxFileDescCache: DxFileDescCache,
                                 typeAliases: Map[String, WdlTypes.T]) {
 
   private val MAX_STRING_LEN: Int = 32 * 1024 // Long strings cause problems with bash and the UI
@@ -186,9 +186,9 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       case (WdlTypes.T_File, JsObject(_)) =>
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
-        val dxFile = DxFile.fromJsValue(dxApi, jsValue)
         // use the cache value if there is one to save the API call
-        WdlValues.V_File(dxFileCache.getOrElse(dxFile.id, dxFile).asUri)
+        val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJsValue(dxApi, jsValue))
+        WdlValues.V_File(dxFile.asUri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.

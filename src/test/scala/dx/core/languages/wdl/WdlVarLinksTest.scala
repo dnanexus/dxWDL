@@ -1,7 +1,7 @@
 package dx.core.languages.wdl
 
 import dx.api.DxApi
-import dx.core.io.DxFileAccessProtocol
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -34,7 +34,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle primitive WDL elements" in {
-    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     val testCases = List(
         // primitives
@@ -51,7 +51,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle compound WDL types" in {
-    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     def makePair(x: Double, s: String): WdlValues.V = {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))
@@ -118,7 +118,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 //        }
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType)
-    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }
@@ -157,7 +157,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 
     val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }

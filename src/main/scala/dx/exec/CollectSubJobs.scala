@@ -58,7 +58,7 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dx.exec
 
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.io.ExecLinkInfo
+import dx.core.io.{DxFileDescCache, ExecLinkInfo}
 import dx.core.languages.wdl.{DxlExec, WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
@@ -78,7 +78,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           fileResolver: FileSourceResolver,
                           typeAliases: Map[String, WdlTypes.T]) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, Map.empty, typeAliases)
+    WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],

@@ -25,6 +25,7 @@ import java.nio.file.Path
 import dx.AppInternalException
 import dx.api._
 import dx.compiler.IR._
+import dx.core.io.DxFileDescCache
 import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
@@ -167,13 +168,13 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
 }
 
 case class InputFile(fileResolver: FileSourceResolver,
-                     dxFileCache: Map[String, DxFile],
+                     dxFileDescCache: DxFileDescCache,
                      pathToFile: Map[String, DxFile],
                      typeAliases: Map[String, WdlTypes.T],
                      dxApi: DxApi) {
   private lazy val logger2: Logger = dxApi.logger.withTraceIfContainsKey("InputFile")
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
 
   // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -191,10 +192,7 @@ case class InputFile(fileResolver: FileSourceResolver,
         // decide if we want to download it or not
         val dxFile = DxFile.fromJsValue(dxApi, jsValue)
         // use the cached file to save an API call if possible
-        val uri = dxFileCache.get(dxFile.id) match {
-          case Some(cached) => cached.asUri
-          case None         => dxFile.asUri
-        }
+        val uri = dxFileDescCache.updateFileFromCache(dxFile).asUri
         WdlValues.V_File(uri)
 
       // Maps. These are serialized as an object with a keys array and

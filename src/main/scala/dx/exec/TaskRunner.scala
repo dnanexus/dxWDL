@@ -21,10 +21,10 @@ import java.lang.management._
 import java.nio.file.{Files, Path, Paths}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxFile, DxJob, InstanceTypeDB}
+import dx.api.{DxApi, DxJob, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.exec
-import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest}
+import dx.core.io.{DxFileDescCache, DxPathConfig, DxdaManifest, DxfuseManifest}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
@@ -40,14 +40,14 @@ case class TaskRunner(task: TAT.Task,
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
                       fileResolver: FileSourceResolver,
-                      dxFileCache: Map[String, DxFile] = Map.empty,
+                      dxFileDescCache: DxFileDescCache = DxFileDescCache.empty,
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
                       dxApi: DxApi,
                       evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
   private val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)
 
   // serialize the task inputs to json, and then write to a file.

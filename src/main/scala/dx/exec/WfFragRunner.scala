@@ -40,7 +40,7 @@ import java.nio.file.Paths
 import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
@@ -56,7 +56,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
                         fileResolver: FileSourceResolver,
-                        dxFileCache: Map[String, DxFile] = Map.empty,
+                        dxFileDescCache: DxFileDescCache = DxFileDescCache.empty,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
@@ -65,7 +65,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                         evaluator: Eval) {
   private val MAX_JOB_NAME = 50
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, fragInputOutput.typeAliases)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, fragInputOutput.typeAliases)
   private val jobInputOutput = fragInputOutput.jobInputOutput
   private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                               inputsRaw,
@@ -345,7 +345,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileCache,
+        dxFileDescCache,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,

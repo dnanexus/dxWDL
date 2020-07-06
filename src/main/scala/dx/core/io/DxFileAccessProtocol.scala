@@ -67,6 +67,7 @@ case class DxFileDescCache(files: Vector[DxFile] = Vector.empty) {
       val cachedDesc = getCached(file)
       if (cachedDesc.isDefined) {
         file.cacheDescribe(cachedDesc.get)
+        // make sure the DxFile and DxFileDescribe project IDs are in sync
         return file.project match {
           case Some(DxProject(_, id)) if id == cachedDesc.get.project =>
             file
@@ -79,6 +80,10 @@ case class DxFileDescCache(files: Vector[DxFile] = Vector.empty) {
   }
 }
 
+object DxFileDescCache {
+  lazy val empty: DxFileDescCache = DxFileDescCache()
+}
+
 /**
   * Implementation of FileAccessProtocol for dx:// URIs
   * @param dxApi DxApi instance.
@@ -86,12 +91,11 @@ case class DxFileDescCache(files: Vector[DxFile] = Vector.empty) {
   * @param encoding character encoding, for resolving binary data.
   */
 case class DxFileAccessProtocol(dxApi: DxApi,
-                                dxFileCache: Vector[DxFile] = Vector.empty,
+                                dxFileCache: DxFileDescCache = DxFileDescCache.empty,
                                 encoding: Charset = Util.DefaultEncoding)
     extends FileAccessProtocol {
   val prefixes = Vector(DxFileAccessProtocol.DX_URI_PREFIX)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
-  private val fileCache = DxFileDescCache(dxFileCache)
 
   private def resolveFileUri(uri: String): DxFile = {
     dxApi.resolveDxUrlFile(uri.split("::")(0))
@@ -102,7 +106,7 @@ case class DxFileAccessProtocol(dxApi: DxApi,
     uriToFileSource.get(uri) match {
       case Some(src) => src
       case None =>
-        val dxFile = fileCache.updateFileFromCache(resolveFileUri(uri))
+        val dxFile = dxFileCache.updateFileFromCache(resolveFileUri(uri))
         val src = DxFileSource(uri, dxFile, dxApi, encoding)
         uriToFileSource += (uri -> src)
         src

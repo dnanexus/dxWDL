@@ -2,9 +2,9 @@ package dx.exec
 
 import java.nio.file.{Files, Path, Paths}
 
-import dx.api.{DxApi, DxFile, DxInstanceType, InstanceTypeDB}
+import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -154,11 +154,11 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val evaluator =
       Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
 
-    val dxFileCache = Map.empty[String, DxFile]
+    val dxFileDescCache = DxFileDescCache.empty
     val jobInputOutput =
       JobInputOutput(dxPathConfig,
                      fileResolver,
-                     dxFileCache,
+                     dxFileDescCache,
                      wdlBundle.typeAliases,
                      Language.toWdlVersion(language),
                      dxApi,
@@ -175,7 +175,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileCache,
+        dxFileDescCache,
         jobInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),

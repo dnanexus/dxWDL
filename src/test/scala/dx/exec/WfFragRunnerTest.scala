@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Block, Evaluator, ParseSource}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,7 +47,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val fragInputOutput =
       WfFragInputOutput(dxPathConfig,
                         fileResolver,
-                        Map.empty,
+                        DxFileDescCache.empty,
                         null,
                         typeAliases,
                         document.version.value,
@@ -62,7 +62,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         Map.empty[String, ExecLinkInfo],
         dxPathConfig,
         fileResolver,
-        Map.empty,
+        DxFileDescCache.empty,
         JsNull,
         fragInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),

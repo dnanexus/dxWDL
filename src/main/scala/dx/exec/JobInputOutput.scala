@@ -14,13 +14,13 @@ import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource, RealFileS
 
 case class JobInputOutput(dxPathConfig: DxPathConfig,
                           fileResolver: FileSourceResolver,
-                          dxFileCache: Map[String, DxFile],
+                          dxFileDescCache: DxFileDescCache,
                           structDefs: Map[String, WdlTypes.T],
                           wdlVersion: WdlVersion,
                           dxApi: DxApi,
                           evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, structDefs)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, structDefs)
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
@@ -335,8 +335,9 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
             case dxFs: DxFileSource if streamingFiles contains dxFs =>
               // file should be streamed
               val existingFiles = accu.values.toSet
-              val desc = dxFileCache(dxFs.dxFile.id).describe()
-              val path = createUniqueDownloadPath(desc.name,
+              // TODO: I think this is unnecessary - the DxFileSource should already have the cached desc
+              val fileWithDesc = dxFileDescCache.updateFileFromCache(dxFs.dxFile)
+              val path = createUniqueDownloadPath(fileWithDesc.describe().name,
                                                   dxFs.dxFile,
                                                   existingFiles,
                                                   dxPathConfig.dxfuseMountpoint)
@@ -345,8 +346,12 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
             case dxUrl: DxFileSource =>
               // The file needs to be localized
               val existingFiles = accu.values.toSet
-              val desc = dxFileCache(dxUrl.dxFile.id).describe()
-              val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
+              // TODO: I think this is unnecessary - the DxFileSource should already have the cached desc
+              val fileWithDesc = dxFileDescCache.updateFileFromCache(dxUrl.dxFile)
+              val path = createUniqueDownloadPath(fileWithDesc.describe().name,
+                                                  dxUrl.dxFile,
+                                                  existingFiles,
+                                                  inputsDir)
               accu + (dxUrl -> path)
           }
       }
@@ -357,7 +362,8 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
         case (dxFs: DxFileSource, localPath) if streamingFiles contains dxFs =>
           dxFs.dxFile -> localPath
       }
-    val dxfuseManifest = DxfuseManifestBuilder(dxApi).apply(filesToMount, dxFileCache, dxPathConfig)
+    val dxfuseManifest =
+      DxfuseManifestBuilder(dxApi).apply(filesToMount, dxFileDescCache, dxPathConfig)
 
     // Create a manifest for the download agent (dxda)
     val filesToDownloadWithDxda: Map[String, (DxFile, Path)] =

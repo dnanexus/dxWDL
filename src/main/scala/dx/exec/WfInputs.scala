@@ -1,7 +1,7 @@
 package dx.exec
 
-import dx.api.{DxApi, DxFile}
-import dx.core.io.DxPathConfig
+import dx.api.DxApi
+import dx.core.io.{DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
 import spray.json.JsValue
@@ -14,10 +14,10 @@ case class WfInputs(wf: TAT.Workflow,
                     typeAliases: Map[String, WdlTypes.T],
                     dxPathConfig: DxPathConfig,
                     fileResolver: FileSourceResolver,
-                    dxFileCache: Map[String, DxFile],
+                    dxFileDescCache: DxFileDescCache,
                     dxApi: DxApi) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileCache, typeAliases)
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
 
   def apply(inputs: Map[String, (WdlTypes.T, WdlValues.V)]): Map[String, JsValue] = {
     dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")

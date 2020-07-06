@@ -35,7 +35,7 @@ class DxfuseManifestTest extends AnyFlatSpec with Matchers {
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {
-      DxfuseManifestBuilder(dxApi).apply(filesInManifest, Map.empty, dxPathConfig)
+      DxfuseManifestBuilder(dxApi).apply(filesInManifest, DxFileDescCache.empty, dxPathConfig)
     }
   }
 }

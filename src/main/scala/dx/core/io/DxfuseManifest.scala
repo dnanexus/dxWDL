@@ -12,7 +12,7 @@ case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[DxFile, Path],
-            dxFileCache: Map[String, DxFile],
+            dxFileDescCache: DxFileDescCache,
             dxPathConfig: DxPathConfig): DxfuseManifest = {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
@@ -35,7 +35,7 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
         val mountDir = dxPathConfig.dxfuseMountpoint.toString
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
-        val fDesc = dxFileCache(dxFile.id).describe()
+        val fDesc = dxFileDescCache.updateFileFromCache(dxFile).describe()
         JsObject(
             "proj_id" -> JsString(fDesc.project),
             "file_id" -> JsString(dxFile.id),
