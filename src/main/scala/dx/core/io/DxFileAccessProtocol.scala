@@ -3,16 +3,12 @@ package dx.core.io
 import java.nio.charset.Charset
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxFile, DxProject}
+import dx.api.{DxApi, DxFile, DxFileDescribe, DxProject}
 import wdlTools.util.{AbstractFileSource, FileAccessProtocol, FileSource, RealFileSource, Util}
 
 import scala.io.Source
 
-case class DxFileSource(value: String,
-                        dxFile: DxFile,
-                        dxProject: Option[DxProject],
-                        dxApi: DxApi,
-                        override val encoding: Charset)
+case class DxFileSource(value: String, dxFile: DxFile, dxApi: DxApi, override val encoding: Charset)
     extends AbstractFileSource(encoding)
     with RealFileSource {
   override lazy val localPath: Path = Util.getPath(dxFile.describe().name)
@@ -32,36 +28,54 @@ case class DxFileSource(value: String,
   }
 }
 
-case class DxFileCache(files: Vector[DxFile] = Vector.empty) {
-  private lazy val fileAndProjectIdToFileCache =
-    files.filter(_.project.isDefined).map(f => (f.id, f.project.get.id) -> f).toMap
-  private lazy val fileIdToFileCache = files.groupBy(_.id).flatMap {
-    case (id, files) if files.size == 1 => Some(id -> files.head)
-    case (id, files) if files.size == 2 =>
-      val filesWithProj = files.filter(_.project.isDefined)
-      if (filesWithProj.size == 1) {
-        Some(id -> filesWithProj.head)
-      } else {
-        None
-      }
-    case _ => None
-  }
+case class DxFileDescCache(files: Vector[DxFile] = Vector.empty) {
+  private lazy val fileAndProjectIdToDescCache: Map[(String, String), DxFileDescribe] =
+    files
+      .filter(f => f.hasCachedDesc && f.project.isDefined)
+      .map(f => (f.id, f.project.get.id) -> f.describe())
+      .toMap
+  private lazy val fileIdToDescCache: Map[String, DxFileDescribe] =
+    files.filter(_.hasCachedDesc).groupBy(_.id).flatMap {
+      case (id, files) if files.size == 1 => Some(id -> files.head.describe())
+      case (id, files) if files.size > 1 =>
+        var filesWithProj = files.filter(_.project.isDefined)
+        if (filesWithProj.size > 1) {
+          filesWithProj = filesWithProj.filter(_.project.get.id.startsWith("project-"))
+        }
+        if (filesWithProj.size == 1) {
+          Some(id -> filesWithProj.head.describe())
+        } else {
+          None
+        }
+      case _ => None
+    }
 
-  def get(fileId: String, projectId: Option[String] = None): Option[DxFile] = {
+  def get(fileId: String, projectId: Option[String] = None): Option[DxFileDescribe] = {
     projectId
-      .flatMap(projId => fileAndProjectIdToFileCache.get(fileId, projId))
-      .orElse(fileIdToFileCache.get(fileId))
+      .flatMap(projId => fileAndProjectIdToDescCache.get(fileId, projId))
+      .orElse(fileIdToDescCache.get(fileId))
   }
 
-  def get(file: DxFile): DxFile = {
-    // next check to see if the file is in either cache
-    getCached(file).getOrElse(file)
-  }
-
-  def getCached(file: DxFile): Option[DxFile] = {
+  def getCached(file: DxFile): Option[DxFileDescribe] = {
     file.project
-      .flatMap(proj => fileAndProjectIdToFileCache.get((file.id, proj.id)))
-      .orElse(fileIdToFileCache.get(file.id))
+      .flatMap(proj => fileAndProjectIdToDescCache.get((file.id, proj.id)))
+      .orElse(fileIdToDescCache.get(file.id))
+  }
+
+  def updateFileFromCache(file: DxFile): DxFile = {
+    if (!file.hasCachedDesc) {
+      val cachedDesc = getCached(file)
+      if (cachedDesc.isDefined) {
+        file.cacheDescribe(cachedDesc.get)
+        return file.project match {
+          case Some(DxProject(_, id)) if id == cachedDesc.get.project =>
+            file
+          case _ =>
+            DxFile(file.dxApi, file.id, Some(DxProject(file.dxApi, cachedDesc.get.project)))
+        }
+      }
+    }
+    file
   }
 }
 
@@ -77,44 +91,30 @@ case class DxFileAccessProtocol(dxApi: DxApi,
     extends FileAccessProtocol {
   val prefixes = Vector(DxFileAccessProtocol.DX_URI_PREFIX)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
-  private val fileCache = DxFileCache(dxFileCache)
+  private val fileCache = DxFileDescCache(dxFileCache)
 
   private def resolveFileUri(uri: String): DxFile = {
     dxApi.resolveDxUrlFile(uri.split("::")(0))
   }
 
-  private def getDxProject(dxFile: DxFile): Option[DxProject] = {
-    if (dxFile.project.forall(_.id.startsWith("project-"))) {
-      dxFile.project
-    } else {
-      None
-    }
-  }
-
   override def resolve(uri: String): DxFileSource = {
-    // First search in the fileInfoList. This may save us an API call
-    // ignore the`exists` parameter because it doesn't make sense to have
-    // a
+    // First search in the fileInfoList. This may save us an API call.
     uriToFileSource.get(uri) match {
       case Some(src) => src
       case None =>
-        val dxFile = fileCache.get(resolveFileUri(uri))
-        val dxProj = getDxProject(dxFile)
-        val src = DxFileSource(uri, dxFile, dxProj, dxApi, encoding)
+        val dxFile = fileCache.updateFileFromCache(resolveFileUri(uri))
+        val src = DxFileSource(uri, dxFile, dxApi, encoding)
         uriToFileSource += (uri -> src)
         src
     }
   }
 
   def resolveNoCache(uri: String): FileSource = {
-    val dxFile = resolveFileUri(uri)
-    val dxProj = getDxProject(dxFile)
-    DxFileSource(uri, dxFile, dxProj, dxApi, encoding)
+    DxFileSource(uri, resolveFileUri(uri), dxApi, encoding)
   }
 
   def fromDxFile(dxFile: DxFile): DxFileSource = {
-    val dxProj = getDxProject(dxFile)
-    DxFileSource(dxFile.asUri, dxFile, dxProj, dxApi, encoding)
+    DxFileSource(dxFile.asUri, dxFile, dxApi, encoding)
   }
 }
 

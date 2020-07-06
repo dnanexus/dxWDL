@@ -1,6 +1,6 @@
 package dx.api
 
-import dx.core.io.DxFileCache
+import dx.core.io.DxFileDescCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -32,14 +32,14 @@ class DxFileTest extends AnyFlatSpec with Matchers {
     val result = dxApi.fileBulkDescribe(query, extraArgs)
     result.size shouldBe expectedSize.getOrElse(expected.size)
     result.forall(_.hasCachedDesc) shouldBe true
-    val lookup = DxFileCache(expected)
+    val lookup = DxFileDescCache(expected)
     result.foreach { r =>
-      val e = lookup.getCached(r)
+      val e: Option[DxFileDescribe] = lookup.getCached(r)
       e shouldBe defined
-      r.describe().name shouldBe e.get.describe().name
-      r.project shouldBe e.get.project
+      r.describe().name shouldBe e.get.name
+      r.project.get.id shouldBe e.get.project
       if (compareDetails) {
-        r.describe().details shouldBe e.get.describe().details
+        r.describe().details shouldBe e.get.details
       }
     }
   }

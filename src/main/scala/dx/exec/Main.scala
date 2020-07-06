@@ -359,12 +359,20 @@ object Main {
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
         val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
+        dxApi.logger.error("inputs:")
+        dxApi.logger.error(inputs.toString)
         val allFilesReferenced = inputs.asJsObject.fields.flatMap {
           case (_, jsElem) => dxApi.findFiles(jsElem)
         }.toVector
+        dxApi.logger.error("allFilesReferenced:")
+        dxApi.logger.error(allFilesReferenced.toString)
         // Describe all the files, in one go
         val dxFileCache = dxApi.fileBulkDescribe(allFilesReferenced)
+        dxApi.logger.error("dxFileCache:")
+        dxApi.logger.error(dxFileCache.toString)
         val dxFileCacheMap = dxFileCache.map(f => f.id -> f).toMap
+        dxApi.logger.error("dxFileCacheMap:")
+        dxApi.logger.error(dxFileCacheMap.toString)
         val dxProtocol = DxFileAccessProtocol(dxApi, dxFileCache)
         val fileResolver =
           FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
