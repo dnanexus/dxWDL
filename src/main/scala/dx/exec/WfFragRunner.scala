@@ -445,6 +445,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             |""".stripMargin,
         minLevel = TraceLevel.VVerbose
     )
+
     val wvlInputs = callInputs.map {
       case (name, (wdlType, wdlValue)) =>
         name -> wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
