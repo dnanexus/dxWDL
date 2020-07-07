@@ -11,8 +11,8 @@ import dx.util.JsUtils
 import spray.json._
 import wdlTools.util.{Logger, Util}
 
-// wrapper around Java API
-case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) {
+// wrapper around DNAnexus Java API
+case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnvironment.create()) {
   lazy val currentProject: DxProject = DxProject(this, dxEnv.getProjectContext)
   lazy val currentJob: DxJob = DxJob(this, dxEnv.getJob)
   // Convert from spray-json to jackson JsonNode
@@ -27,31 +27,20 @@ case class DxApi(logger: Logger, dxEnv: DXEnvironment = DXEnvironment.create()) 
   //    file-FV5fqXj0ffPB9bKP986j5kVQ
   //
   def getObject(id: String, container: Option[DxProject] = None): DxObject = {
-    val parts = id.split("-")
-    if (parts.length != 2) {
-      throw new IllegalArgumentException(
-          s"${id} is not of the form class-alphnumeric{24}"
-      )
-    }
-    if (!parts(1).matches("[A-Za-z0-9]{24}")) {
-      throw new IllegalArgumentException(
-          s"${parts(1)} does not match [A-Za-z0-9]{24}"
-      )
-    }
-
-    parts(0) match {
-      case "project"   => DxProject(this, id)
-      case "container" => DxProject(this, id)
-      case "file"      => DxFile(this, id, container)
-      case "record"    => DxRecord(this, id, container)
+    val (objType, _) = DxUtils.parseObjectId(id)
+    objType match {
+      case "analysis"  => DxAnalysis(this, id, container)
       case "app"       => DxApp(this, id)
       case "applet"    => DxApplet(this, id, container)
-      case "workflow"  => DxWorkflow(this, id, container)
+      case "container" => DxProject(this, id)
+      case "file"      => DxFile(this, id, container)
       case "job"       => DxJob(this, id, container)
-      case "analysis"  => DxAnalysis(this, id, container)
+      case "project"   => DxProject(this, id)
+      case "record"    => DxRecord(this, id, container)
+      case "workflow"  => DxWorkflow(this, id, container)
       case _ =>
         throw new IllegalArgumentException(
-            s"${id} does not belong to a know class"
+            s"${id} does not belong to a know DNAnexus object class"
         )
     }
   }

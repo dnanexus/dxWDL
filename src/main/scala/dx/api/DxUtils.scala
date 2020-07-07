@@ -3,25 +3,45 @@ package dx.api
 import spray.json._
 
 object DxUtils {
-  private val dxObjectIdRegexp = "^(applet|database|dbcluster|file|record|workflow)-(\\w{24})$".r
+  private val dataObjectClasses =
+    Set("applet", "database", "dbcluster", "file", "record", "workflow")
+  private val containerClasses = Set("container", "project")
+  private val executableClasses = Set("applet", "app", "globalworkflow", "workflow")
+  private val executionClasses = Set("analysis", "job")
+  private val allClasses = dataObjectClasses | containerClasses | executableClasses | executionClasses
+  private val dataObjectIdRegexp =
+    s"^(${dataObjectClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
+  private val objectIdRegexp =
+    s"^(${allClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
   // Other entity ID regexps if/when needed:
-  //  private val dxContainerIdRegexp = "^(container|project)-(\\w{24})$".r
-  //  private val dxExecutableIdRegexp = "^(applet|app|globalworkflow|workflow)-(\\w{24})$".r
-  //  private val dxExecutionIdRegexp = "^(analysis|job)-(\\w{24})$".r
+  //  private val containerIdRegexp = s"^(${containerClasses.mkString("|")})-(\\w{24})$$".r
+  //  private val executableIdRegexp = s"^(${executableClasses.mkString("|")})-(\\w{24})$$".r
+  //  private val executionIdRegexp = s"^(${executionClasses.mkString("|")})-(\\w{24})$$".r
 
-  def parseDxObjectId(dxId: String): (String, String) = {
+  def parseObjectId(dxId: String): (String, String) = {
     dxId match {
-      case dxObjectIdRegexp(idType, idHash) => (idType, idHash)
-      case _                                => throw new RuntimeException(s"${dxId} is not a valid object ID")
+      case objectIdRegexp(idType, idHash) =>
+        (idType, idHash)
+      case _ =>
+        throw new dx.IllegalArgumentException(s"${dxId} is not a valid object ID")
+    }
+  }
+
+  def parseDataObjectId(dxId: String): (String, String) = {
+    dxId match {
+      case dataObjectIdRegexp(idType, idHash) =>
+        (idType, idHash)
+      case _ =>
+        throw new dx.IllegalArgumentException(s"${dxId} is not a valid data object ID")
     }
   }
 
   def isDataObjectId(objName: String): Boolean = {
     try {
-      parseDxObjectId(objName)
+      parseDataObjectId(objName)
       true
     } catch {
-      case _: Throwable => false
+      case _: dx.IllegalArgumentException => false
     }
   }
 

@@ -3,7 +3,7 @@ package dx.exec
 import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxApplet, DxFile, DxFileDescribe, Field, InstanceTypeDB}
+import dx.api.{DxApi, DxExecutable, DxFile, DxFileDescribe, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.DxPathConfig
 import dx.core.languages.wdl.{DxFileAccessProtocol, ParseSource}
@@ -263,23 +263,25 @@ object Main {
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = SysUtils.readFileContent(jobInfoPath).parseJson
-    val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+    val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
       case None =>
         dxApi.logger.trace(
-            s"""|applet field not found locally, performing
+            s"""|executable field not found locally, performing
                 |an API call.
                 |""".stripMargin,
             minLevel = TraceLevel.None
         )
         val dxJob = dxApi.currentJob
-        dxJob.describe().applet
-      case Some(JsString(x)) =>
+        dxJob.describe().executable
+      case Some(JsString(x)) if x.startsWith("app-") =>
+        dxApi.app(x)
+      case Some(JsString(x)) if x.startsWith("applet-") =>
         dxApi.applet(x)
       case Some(other) =>
-        throw new Exception(s"malformed applet field ${other} in job info")
+        throw new Exception(s"Malformed executable field ${other} in job info")
     }
 
-    val details: JsValue = applet.describe(Set(Field.Details)).details.get
+    val details: JsValue = executable.describe(Set(Field.Details)).details.get
     val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
     val wdlSourceCode = SysUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 

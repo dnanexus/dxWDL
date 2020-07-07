@@ -348,7 +348,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
       Extras.parse(reorg, DX_API_QUIET)
     }
     thrown.getMessage should include(
-        "does not match [A-Za-z0-9]{24}"
+        "is not a valid object ID"
     )
   }
   it should "throw ResourceNotFoundException due to non-existant file" in {

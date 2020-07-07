@@ -29,7 +29,7 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None) ex
     val descJs =
       dxApi.analysisDescribe(id, projSpec + ("fields" -> DxObject.requestFields(allFields)))
     val desc =
-      descJs.getFields("project", "id", "name", "created", "modified", "applet") match {
+      descJs.getFields("project", "id", "name", "created", "modified", "executable") match {
         case Seq(JsString(project),
                  JsString(id),
                  JsString(name),
@@ -43,7 +43,7 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None) ex
                         modified.toLong,
                         None,
                         None,
-                        dxApi.applet(applet),
+                        dxApi.executable(executable),
                         None,
                         None)
         case _ =>
