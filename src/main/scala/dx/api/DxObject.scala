@@ -35,7 +35,7 @@ object DxObject {
     props.asJsObject.fields.map {
       case (k, JsString(v)) => k -> v
       case (_, _) =>
-        throw new Exception(s"malform JSON properties ${props}")
+        throw new Exception(s"malformed JSON properties ${props}")
     }
   }
 
