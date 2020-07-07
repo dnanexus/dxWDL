@@ -34,4 +34,6 @@ A: The intermediate output files can be moved to a specified folder by using the
 
 > Q: What does dxFUSE do if you try to randomly access parts of files that are streamed? As far as I know, you can do this with the regular FUSE package.
 
-A: dxFUSE random access performance is good enough if you are accessing a small part of a file. Otherwise you are better off downloading the file to the local storage instead of streaming. dxFUSE supports mounting Dx containers to access its contents.
+A: dxFUSE random access performance is good enough if you are accessing a small part of a file. Otherwise you are better off downloading the file to the local storage instead of streaming. dxFUSE supports mounting Dx containers to access its contents so it converts DNAnexus objects context into file filesystem context.
+
+If you wish to use scatter - gather to process a large BAM file, but the streaming via dxFuse is too slow even for parts of the file, you may find it helpful to split input bam into smaller parts (e.g. by chromosome or region) and stream them into local files to the worker and process them locally, especially if the tool reads the data in non-sequential fashion.
