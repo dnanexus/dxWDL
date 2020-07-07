@@ -8,30 +8,19 @@ import dx.core.io._
 import dx.core.languages.wdl.WdlVarLinksConverter
 import spray.json.{JsNull, JsValue}
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
-import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource, RealFileSource}
 
 case class JobInputOutput(dxPathConfig: DxPathConfig,
                           fileResolver: FileSourceResolver,
                           dxFileDescCache: DxFileDescCache,
-                          structDefs: Map[String, WdlTypes.T],
-                          wdlVersion: WdlVersion,
+                          wdlVarLinksConverter: WdlVarLinksConverter,
                           dxApi: DxApi,
                           evaluator: Eval) {
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, structDefs)
-
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
   def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlValues.V = {
-    val (wdlValue, _) = wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
-    wdlValue
-  }
-
-  def unpackJobInputFindRefFiles(wdlType: WdlTypes.T, jsv: JsValue): Vector[DxFile] = {
-    val (_, dxFiles) = wdlVarLinksConverter.unpackJobInput("", wdlType, jsv)
-    dxFiles
+    wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
   }
 
   private def evaluateWdlExpression(expr: TAT.Expr,
@@ -63,7 +52,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
                 throw new Exception(s"Input ${iName} is required but not provided")
               case Some(x: JsValue) =>
                 // Conversion from JSON to WdlValues.V
-                unpackJobInput(iName, wdlType, x)
+                wdlVarLinksConverter.unpackJobInput(iName, wdlType, x)
             }
 
           // An input definition that has a default value supplied.
@@ -74,7 +63,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
                 // use the default expression
                 evaluateWdlExpression(defaultExpr, wdlType, accuValues)
               case Some(x: JsValue) =>
-                unpackJobInput(iName, wdlType, x)
+                wdlVarLinksConverter.unpackJobInput(iName, wdlType, x)
             }
 
           // There are several distinct cases
@@ -94,7 +83,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
                 // the input is null
                 WdlValues.V_Null
               case Some(x) =>
-                val value: WdlValues.V = unpackJobInput(iName, wdlType, x)
+                val value: WdlValues.V = wdlVarLinksConverter.unpackJobInput(iName, wdlType, x)
                 WdlValues.V_Optional(value)
             }
         }

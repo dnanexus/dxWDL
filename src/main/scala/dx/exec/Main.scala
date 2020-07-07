@@ -6,7 +6,7 @@ import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxApplet, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.{Evaluator, ParseSource}
+import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
 import dx.core.util.MainUtils._
 import spray.json._
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
@@ -46,14 +46,16 @@ object Main {
 
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
+
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
     // build an object capable of evaluating WDL expressions
     val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput =
       JobInputOutput(dxPathConfig,
                      fileResolver,
                      dxFileDescCache,
-                     typeAliases,
-                     document.version.value,
+                     wdlVarLinksConverter,
                      dxApi,
                      evaluator)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
@@ -71,7 +73,7 @@ object Main {
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileDescCache,
+        wdlVarLinksConverter,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
@@ -136,8 +138,6 @@ object Main {
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  dxApi: DxApi): Termination = {
-    val dxProject = dxApi.currentProject
-
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
     val inputLines: String = Util.readFileContent(jobInputPath)
@@ -145,18 +145,18 @@ object Main {
 
     val (wf, taskDir, typeAliases, document) =
       ParseSource(dxApi).parseWdlWorkflow(wdlSourceCode)
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
     val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+    val jobInputOutput = JobInputOutput(dxPathConfig,
+                                        fileResolver,
+                                        dxFileDescCache,
+                                        wdlVarLinksConverter,
+                                        dxApi,
+                                        evaluator)
 
     // setup the utility directories that the frag-runner employs
-    val fragInputOutput =
-      WfFragInputOutput(dxPathConfig,
-                        fileResolver,
-                        dxFileDescCache,
-                        dxProject,
-                        typeAliases,
-                        document.version.value,
-                        dxApi,
-                        evaluator)
+    val fragInputOutput = WfFragInputOutput(typeAliases, wdlVarLinksConverter, dxApi)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -172,7 +172,8 @@ object Main {
               fragInputs.execLinkInfo,
               dxPathConfig,
               fileResolver,
-              dxFileDescCache,
+              wdlVarLinksConverter,
+              jobInputOutput,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -191,7 +192,8 @@ object Main {
               fragInputs.execLinkInfo,
               dxPathConfig,
               fileResolver,
-              dxFileDescCache,
+              wdlVarLinksConverter,
+              jobInputOutput,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -201,29 +203,18 @@ object Main {
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case ExecAction.WfInputs =>
-          val wfInputs =
-            WfInputs(wf, document, typeAliases, dxPathConfig, fileResolver, dxFileDescCache, dxApi)
+          val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
           val wfOutputs =
-            WfOutputs(wf,
-                      document,
-                      typeAliases,
-                      dxPathConfig,
-                      fileResolver,
-                      dxFileDescCache,
-                      dxApi,
-                      evaluator)
+            WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
           wfOutputs.apply(fragInputs.env)
 
         case ExecAction.WfCustomReorgOutputs =>
           val wfCustomReorgOutputs = WfOutputs(
               wf,
               document,
-              typeAliases,
-              dxPathConfig,
-              fileResolver,
-              dxFileDescCache,
+              wdlVarLinksConverter,
               dxApi,
               evaluator
           )
@@ -366,7 +357,9 @@ object Main {
         val dxFileDescCache = DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
         val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
         val fileResolver =
-          FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
+          FileSourceResolver.create(localDirectories = Vector(dxPathConfig.homeDir),
+                                    userProtocols = Vector(dxProtocol),
+                                    logger = logger)
 
         // Get the WDL source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WDL values.

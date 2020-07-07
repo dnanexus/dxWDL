@@ -6,7 +6,7 @@ import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
+import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -151,16 +151,16 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // from the platform, we may not need to access them.
     val dxProtocol = DxFileAccessProtocol(dxApi)
     val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, wdlBundle.typeAliases)
     val evaluator =
       Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
 
-    val dxFileDescCache = DxFileDescCache.empty
     val jobInputOutput =
       JobInputOutput(dxPathConfig,
                      fileResolver,
-                     dxFileDescCache,
-                     wdlBundle.typeAliases,
-                     Language.toWdlVersion(language),
+                     DxFileDescCache.empty,
+                     wdlVarLinksConverter,
                      dxApi,
                      evaluator)
 
@@ -175,7 +175,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileDescCache,
+        wdlVarLinksConverter,
         jobInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),

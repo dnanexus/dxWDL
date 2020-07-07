@@ -15,11 +15,12 @@ object Evaluator {
                                antlr4Trace = false,
                                logger = Logger.Quiet)
 
-    val evalCfg = EvalConfig.make(
+    val evalCfg = EvalConfig(
         dxPathConfig.homeDir,
         dxPathConfig.tmpDir,
         dxPathConfig.stdout,
-        dxPathConfig.stderr
+        dxPathConfig.stderr,
+        fileResolver
     )
 
     Eval(evalOpts, evalCfg, wdlVersion)

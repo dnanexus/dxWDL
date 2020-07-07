@@ -29,7 +29,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
     val (name2, jsv) = allDxFields2.head
 
     name2 should be(prefix + elem.name)
-    val (wdlValue2, _) = wvlConverter.unpackJobInput(elem.name, elem.wdlType, jsv)
+    val wdlValue2 = wvlConverter.unpackJobInput(elem.name, elem.wdlType, jsv)
     wdlValue2 should be(elem.wdlValue)
   }
 

@@ -5,7 +5,7 @@ import java.nio.file.{Path, Paths}
 import com.typesafe.config.{Config, ConfigFactory}
 import dx.api.{DxApi, DxFile, DxPath, DxProject, DxRecord, Field, InstanceTypeDbQuery}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.ParseSource
+import dx.core.languages.wdl.{ParseSource, WdlVarLinksConverter}
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, Util}
@@ -108,8 +108,7 @@ case class Top(cOpt: CompilerOptions) {
       folder: String,
       dxProject: DxProject,
       runtimePathConfig: DxPathConfig,
-      fileResolver: FileSourceResolver,
-      dxFileDescCache: DxFileDescCache
+      wdlVarLinksConverter: WdlVarLinksConverter
   ): Native.Results = {
     val dxWDLrtId: Option[String] = cOpt.compileMode match {
       case CompilerFlag.IR =>
@@ -144,8 +143,7 @@ case class Top(cOpt: CompilerOptions) {
         dxObjDir,
         instanceTypeDB,
         runtimePathConfig,
-        fileResolver,
-        dxFileDescCache,
+        wdlVarLinksConverter,
         bundle.typeAliases,
         cOpt.extras,
         cOpt.runtimeTraceLevel,
@@ -310,8 +308,10 @@ case class Top(cOpt: CompilerOptions) {
     // pass the dx:project is required to establish
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
     val cResults =
-      compileNative(bundle2, folder, dxProject, runtimePathConfig, fileResolver, dxFileDescCache)
+      compileNative(bundle2, folder, dxProject, runtimePathConfig, wdlVarLinksConverter)
     cResults.primaryCallable match {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")

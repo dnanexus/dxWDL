@@ -58,12 +58,11 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dx.exec
 
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.io.{DxFileDescCache, ExecLinkInfo}
+import dx.core.io.ExecLinkInfo
 import dx.core.languages.wdl.{DxlExec, WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.FileSourceResolver
 
 case class ChildExecDesc(execName: String,
                          seqNum: Int,
@@ -75,11 +74,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
-                          fileResolver: FileSourceResolver,
-                          typeAliases: Map[String, WdlTypes.T]) {
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
-
+                          wdlVarLinksConverter: WdlVarLinksConverter) {
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
              exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {
@@ -189,12 +184,12 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
             // Optional field that has not been returned
             None
           case (WdlTypes.T_Optional(_), Some(jsv)) =>
-            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+            Some(wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv))
           case (_, None) =>
             // Required output that is missing
             throw new Exception(s"Could not find compulsory field <${name}> in results")
           case (_, Some(jsv)) =>
-            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+            Some(wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv))
         }
       }
     WdlValues.V_Array(vec)

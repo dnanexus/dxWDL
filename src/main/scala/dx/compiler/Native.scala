@@ -16,7 +16,7 @@ import dx.core.languages.wdl.{
   WdlVarLinks,
   WdlVarLinksConverter
 }
-import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.getVersion
 
 import scala.collection.immutable.TreeMap
@@ -24,7 +24,7 @@ import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.types.WdlTypes
-import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
+import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
 
 // The end result of the compiler
 object Native {
@@ -41,8 +41,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileResolver: FileSourceResolver,
-                  dxFileDescCache: DxFileDescCache,
+                  wdlVarLinksConverter: WdlVarLinksConverter,
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   rtTraceLevel: Int,
@@ -52,8 +51,6 @@ case class Native(dxWDLrtId: Option[String],
                   locked: Boolean,
                   dxApi: DxApi) {
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")

@@ -63,20 +63,25 @@ case class DxFileDescCache(files: Vector[DxFile] = Vector.empty) {
   }
 
   def updateFileFromCache(file: DxFile): DxFile = {
-    if (!file.hasCachedDesc) {
-      val cachedDesc = getCached(file)
-      if (cachedDesc.isDefined) {
-        file.cacheDescribe(cachedDesc.get)
-        // make sure the DxFile and DxFileDescribe project IDs are in sync
-        return file.project match {
-          case Some(DxProject(_, id)) if id == cachedDesc.get.project =>
-            file
-          case _ =>
-            DxFile(file.dxApi, file.id, Some(DxProject(file.dxApi, cachedDesc.get.project)))
+    if (file.hasCachedDesc) {
+      file
+    } else {
+      getCached(file)
+        .map { desc =>
+          file.cacheDescribe(desc)
+          // make sure the DxFile and DxFileDescribe project IDs are in sync,
+          // or leave DxFile.project as None if it's not a 'project-XXX' ID
+          file.project match {
+            case Some(DxProject(_, id)) if id == desc.project =>
+              file
+            case None if !desc.project.startsWith("project-") =>
+              file
+            case _ =>
+              DxFile(file.dxApi, file.id, Some(DxProject(file.dxApi, desc.project)))
+          }
         }
-      }
+        .getOrElse(file)
     }
-    file
   }
 }
 

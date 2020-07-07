@@ -188,7 +188,9 @@ case class WdlVarLinksConverter(dxApi: DxApi,
         // decide if we want to download it or not
         // use the cache value if there is one to save the API call
         val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJsValue(dxApi, jsValue))
-        WdlValues.V_File(dxFile.asUri)
+        val uri = dxFile.asUri
+        System.err.println(s"jobInputToWdlValue ${name} before ${jsValue} after ${uri}")
+        WdlValues.V_File(uri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
@@ -265,9 +267,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
     }
   }
 
-  def unpackJobInput(name: String,
-                     wdlType: WdlTypes.T,
-                     jsv: JsValue): (WdlValues.V, Vector[DxFile]) = {
+  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlValues.V = {
     val jsv1 =
       jsv match {
         case JsObject(fields) if fields contains "___" =>
@@ -276,9 +276,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
           fields("___")
         case _ => jsv
       }
-    val wdlValue = jobInputToWdlValue(name, wdlType, jsv1)
-    val dxFiles = dxApi.findFiles(jsv)
-    (wdlValue, dxFiles)
+    jobInputToWdlValue(name, wdlType, jsv1)
   }
 
   // Is this a WDL type that maps to a native DX type?

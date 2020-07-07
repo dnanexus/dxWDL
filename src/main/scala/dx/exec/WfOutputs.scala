@@ -2,26 +2,17 @@ package dx.exec
 
 import dx.api.DxApi
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
-import dx.core.io.{DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.{Block, PrettyPrintApprox}
+import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
-import dx.core.languages.wdl
 import spray.json.{JsString, JsValue}
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.FileSourceResolver
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
-                     typeAliases: Map[String, WdlTypes.T],
-                     dxPathConfig: DxPathConfig,
-                     fileResolver: FileSourceResolver,
-                     dxFileDescCache: DxFileDescCache,
+                     wdlVarLinksConverter: WdlVarLinksConverter,
                      dxApi: DxApi,
                      evaluator: Eval) {
-  private val wdlVarLinksConverter =
-    wdl.WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
-
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {

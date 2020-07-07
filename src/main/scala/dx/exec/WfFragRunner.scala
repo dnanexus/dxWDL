@@ -56,7 +56,8 @@ case class WfFragRunner(wf: TAT.Workflow,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
                         fileResolver: FileSourceResolver,
-                        dxFileDescCache: DxFileDescCache = DxFileDescCache.empty,
+                        wdlVarLinksConverter: WdlVarLinksConverter,
+                        jobInputOutput: JobInputOutput,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
@@ -64,16 +65,15 @@ case class WfFragRunner(wf: TAT.Workflow,
                         dxApi: DxApi,
                         evaluator: Eval) {
   private val MAX_JOB_NAME = 50
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, fragInputOutput.typeAliases)
-  private val jobInputOutput = fragInputOutput.jobInputOutput
-  private val collectSubJobs = CollectSubJobs(jobInputOutput,
-                                              inputsRaw,
-                                              instanceTypeDB,
-                                              delayWorkspaceDestruction,
-                                              dxApi,
-                                              fileResolver,
-                                              fragInputOutput.typeAliases)
+  private val collectSubJobs = CollectSubJobs(
+      jobInputOutput,
+      inputsRaw,
+      instanceTypeDB,
+      delayWorkspaceDestruction,
+      dxApi,
+      // TODO: to we really need to provide an empty cache?
+      wdlVarLinksConverter.copy(dxFileDescCache = DxFileDescCache.empty)
+  )
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {
@@ -345,7 +345,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         instanceTypeDB,
         dxPathConfig,
         fileResolver,
-        dxFileDescCache,
+        wdlVarLinksConverter,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
