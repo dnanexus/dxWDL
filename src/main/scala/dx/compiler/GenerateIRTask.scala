@@ -383,7 +383,7 @@ case class GenerateIRTask(dxApi: DxApi,
         // lookup. For example:
         //
         //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
-        val dxURL = DxUtils.dxDataObjectToURL(dxFile)
+        val dxURL = DxUtils.dxDataObjectToUri(dxFile)
         task.copy(runtime = task.runtime.map(rt => replaceContainer(rt, dxURL)))
       case _ => task
     }

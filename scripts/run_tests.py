@@ -291,7 +291,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
         elif field_name2 in exec_outputs:
             result = exec_outputs[field_name2]
         else:
-            cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
+            cprint("field {} missing from executable results {}".format(field_name1, exec_outputs),
                    "red")
             return False
         if ((type(result) is list) and

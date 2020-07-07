@@ -6,16 +6,16 @@ import spray.json._
 import wdlTools.util.{Logger, Util}
 
 class DxPathTest extends AnyFlatSpec with Matchers {
-  val dxApi: DxApi = DxApi(Logger.Quiet)
-  val TEST_PROJECT = "dxWDL_playground"
+  private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
         )
     }
@@ -31,22 +31,22 @@ class DxPathTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle files in a root directory" in {
-    val path = s"${TEST_PROJECT}:/Readme.md"
+    val path = s"${testProject}:/Readme.md"
     val expectedId = describeDxFilePath(path)
     val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files in a subdirectory directory" in {
-    val path = s"${TEST_PROJECT}:/test_data/fileA"
+    val path = s"${testProject}:/test_data/fileA"
     val expectedId = describeDxFilePath(path)
     val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files with a colon" in {
-    val expectedId = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
-    val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${TEST_PROJECT}:/x:x.txt")
+    val expectedId = describeDxFilePath(s"${testProject}:/x*.txt")
+    val dxFile: DxFile = dxApi.resolveDxUrlFile(s"dx://${testProject}:/x:x.txt")
     dxFile.getId shouldBe expectedId
   }
 }

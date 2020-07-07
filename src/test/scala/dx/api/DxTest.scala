@@ -5,16 +5,16 @@ import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
 
 class DxTest extends AnyFlatSpec with Matchers {
-  val dxApi: DxApi = DxApi(Logger.Quiet)
-  val TEST_PROJECT = "dxWDL_playground"
+  private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
         )
     }

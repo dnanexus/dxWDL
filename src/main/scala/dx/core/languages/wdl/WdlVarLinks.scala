@@ -1,10 +1,8 @@
 /**
-
-Conversions from WDL types and data structures to DNAx JSON
-representations. There are two difficulties this module needs to deal
-with: (1) WDL has high order types which DNAx does not, and (2) the
-file type is very different between WDL and DNAx.
-
+  * Conversions from WDL types and data structures to DNAx JSON
+  * representations. There are two difficulties this module needs to deal
+  * with: (1) WDL has high order types which DNAx does not, and (2) the
+  * file type is very different between WDL and DNAx.
   */
 package dx.core.languages.wdl
 
@@ -350,7 +348,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
               "$dnanexus_link" -> JsObject("workflowInputField" -> JsString(nodots(varEncName)))
           )
         case DxlExec(dxJob, varEncName) =>
-          DxUtils.makeEBOR(dxJob, nodots(varEncName))
+          DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName))
       }
       (bindEncName, jsv)
     }
@@ -393,8 +391,8 @@ case class WdlVarLinksConverter(dxApi: DxApi,
           )
         case DxlExec(dxJob, varEncName) =>
           val varEncName_F = varEncName + WdlVarLinksConverter.FLAT_FILES_SUFFIX
-          Map(bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
-              bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F)))
+          Map(bindEncName -> DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName)),
+              bindEncName_F -> DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName_F)))
       }
     }
 

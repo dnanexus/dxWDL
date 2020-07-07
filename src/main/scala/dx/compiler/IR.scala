@@ -5,6 +5,12 @@ import dx.core.languages.wdl.WdlVarLinksConverter
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
+/**
+  * Intermediate Representation (IR)
+  *
+  * Representation the compiler front end generates from a WDL workflow. The compiler back end uses it to generate
+  * DNAnexus native applet(s), and ususally also workflow(s) except in the case of stand-alone tasks.
+  */
 object IR {
   // stages that the compiler uses in generated DNAx workflows
   val COMMON = "common"

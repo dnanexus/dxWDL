@@ -5,10 +5,10 @@ import spray.json._
 // Extra fields for describe
 object Field extends Enumeration {
   type Field = Value
-  val Access, Analysis, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories, Created,
-      Description, Details, DeveloperNotes, Folder, Id, IgnoreReuse, Inputs, InputSpec, Modified,
-      Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, Region, RunSpec, Size,
-      Stages, Summary, Tags, Title, Types, Version = Value
+  val Access, Analysis, App, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories,
+      Created, Description, Details, DeveloperNotes, Executable, Folder, Id, IgnoreReuse, Inputs,
+      InputSpec, Modified, Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, Region,
+      RunSpec, Size, Stages, Summary, Tags, Title, Types, Version = Value
 }
 
 trait DxObjectDescribe {
@@ -35,7 +35,7 @@ object DxObject {
     props.asJsObject.fields.map {
       case (k, JsString(v)) => k -> v
       case (_, _) =>
-        throw new Exception(s"malform JSON properties ${props}")
+        throw new Exception(s"malformed JSON properties ${props}")
     }
   }
 
@@ -54,6 +54,7 @@ object DxObject {
     val fieldStrings = fields.map {
       case Field.Access                 => "access"
       case Field.Analysis               => "analysis"
+      case Field.App                    => "app"
       case Field.Applet                 => "applet"
       case Field.ArchivalState          => "archivalState"
       case Field.AvailableInstanceTypes => "availableInstanceTypes"
@@ -63,6 +64,7 @@ object DxObject {
       case Field.Description            => "description"
       case Field.DeveloperNotes         => "developerNotes"
       case Field.Details                => "details"
+      case Field.Executable             => "executable"
       case Field.Folder                 => "folder"
       case Field.Id                     => "id"
       case Field.IgnoreReuse            => "ignoreReuse"

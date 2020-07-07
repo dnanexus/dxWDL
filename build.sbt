@@ -48,20 +48,26 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
+val wdlToolsVersion = "0.3.0"
+val typesafeVersion = "1.3.3"
+val sprayVersion = "1.3.5"
+val jacksonVersion = "2.11.0"
+val guavaVersion = "18.0"
+val httpClientVersion = "4.5"
+//val scalacticVersion = "3.1.1"
+val scalatestVersion = "3.1.1"
+
 libraryDependencies ++= Seq(
-    "com.dnanexus" % "wdltools" % "0.3.0",
-    // antlr4 lexer + parser
-    "org.antlr" % "antlr4" % "4.8",
-    // JSON jackson parser
-    "com.fasterxml.jackson.core" % "jackson-databind" % "2.11.0",
-    "io.spray" %% "spray-json" % "1.3.5",
-    "com.typesafe" % "config" % "1.3.3",
-    // http support and libraries used in what remains of dxjava
-    "com.google.guava" % "guava" % "18.0",
-    "org.apache.httpcomponents" % "httpclient" % "4.5",
+    "com.dnanexus" % "wdltools" % wdlToolsVersion,
+    "io.spray" %% "spray-json" % sprayVersion,
+    "com.typesafe" % "config" % typesafeVersion,
+    // libraries used in what remains of dxjava
+    "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
+    "com.google.guava" % "guava" % guavaVersion,
+    "org.apache.httpcomponents" % "httpclient" % httpClientVersion,
     //---------- Test libraries -------------------//
-    "org.scalactic" % "scalactic_2.13" % "3.1.1",
-    "org.scalatest" % "scalatest_2.13" % "3.1.1" % "test"
+    //"org.scalactic" % "scalactic_2.13" % scalacticVersion,
+    "org.scalatest" % "scalatest_2.13" % scalatestVersion % "test"
 )
 
 // If an exception is thrown during tests, show the full
