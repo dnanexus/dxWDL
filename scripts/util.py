@@ -134,7 +134,7 @@ def _download_dxda_into_resources(top_dir):
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         text = p.stdout.read()
         retcode = p.wait()
-        print("downloading dxda{} {}", retcode, text)
+        print("downloading dxda{} {}".format(retcode, text))
 
     subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
     os.rename("resources/dx-download-agent-linux/dx-download-agent",
@@ -148,6 +148,7 @@ def _download_dxda_into_resources(top_dir):
 def _add_dxfuse_to_resources(top_dir):
     p = os.path.join(top_dir, "applet_resources/resources/usr/bin/dxfuse")
     if not os.path.exists(p):
+        print("downloading dxfuse {} to {}".format(dxfuse_version, p))
         subprocess.check_call([
             "wget",
             "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),

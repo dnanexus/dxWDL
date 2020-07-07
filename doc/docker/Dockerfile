@@ -77,13 +77,6 @@ RUN mkdir -p devel && cd devel && \
 RUN mv /devel/dxfuse /go/src/github.com/dnanexus && \
     go build -o /go/bin/dxfuse /go/src/github.com/dnanexus/dxfuse/cli/main.go
 
-# download and setup wdlTools
-RUN git clone https://github.com/dnanexus-rnd/wdlTools.git && \
-    cd wdlTools && \
-    git checkout 1aee3df7b35297de8dc7e2d81f3273123dc9405f && \
-    make && \
-    sbt compile && sbt publishLocal
-
 # Clone and make dxWDL
 RUN git clone https://github.com/dnanexus/dxWDL.git
 RUN cd /dxWDL && sbt assembly
