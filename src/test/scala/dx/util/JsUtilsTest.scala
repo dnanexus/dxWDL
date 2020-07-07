@@ -5,7 +5,7 @@ import org.scalatest.matchers.should.Matchers
 import spray.json.{JsNumber, JsObject}
 
 class JsUtilsTest extends AnyFlatSpec with Matchers {
-  it should "Make JSON maps deterministic" in {
+  it should "make JSON maps deterministic" in {
     val x = JsObject("a" -> JsNumber(1), "b" -> JsNumber(2))
     val y = JsObject("b" -> JsNumber(2), "a" -> JsNumber(1))
     JsUtils.makeDeterministic(x) should be(JsUtils.makeDeterministic(y))
