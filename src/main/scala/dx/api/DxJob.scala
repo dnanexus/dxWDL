@@ -9,7 +9,7 @@ case class DxJobDescribe(project: String,
                          modified: Long,
                          properties: Option[Map[String, String]],
                          details: Option[JsValue],
-                         applet: DxApplet,
+                         executable: DxExecutable,
                          parentJob: Option[DxJob],
                          analysis: Option[DxAnalysis])
     extends DxObjectDescribe
@@ -22,7 +22,7 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None) ex
                             Field.Name,
                             Field.Created,
                             Field.Modified,
-                            Field.Applet,
+                            Field.Executable,
                             Field.ParentJob,
                             Field.Analysis)
     val allFields = fields ++ defaultFields
@@ -35,7 +35,7 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None) ex
                  JsString(name),
                  JsNumber(created),
                  JsNumber(modified),
-                 JsString(applet)) =>
+                 JsString(executable)) =>
           DxJobDescribe(project,
                         id,
                         name,
