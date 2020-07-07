@@ -1,5 +1,9 @@
 # Release Notes
 
+## 2.0.0-rc2
+
+- Mostly internal changes and code re-organization, in preparation for adding CWL support
+
 ## 2.0.0-rc 25-Jun-2020
 
 - Replaced WOM with `wdlTools`
