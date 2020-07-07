@@ -3,17 +3,29 @@ package dx.api
 import spray.json._
 
 object DxUtils {
-  def isDxId(objName: String): Boolean = {
-    objName match {
-      case _ if objName.startsWith("applet-")   => true
-      case _ if objName.startsWith("file-")     => true
-      case _ if objName.startsWith("record-")   => true
-      case _ if objName.startsWith("workflow-") => true
-      case _                                    => false
+  private val dxObjectIdRegexp = "^(applet|database|dbcluster|file|record|workflow)-(\\w{24})$".r
+  // Other entity ID regexps if/when needed:
+  //  private val dxContainerIdRegexp = "^(container|project)-(\\w{24})$".r
+  //  private val dxExecutableIdRegexp = "^(applet|app|globalworkflow|workflow)-(\\w{24})$".r
+  //  private val dxExecutionIdRegexp = "^(analysis|job)-(\\w{24})$".r
+
+  def parseDxObjectId(dxId: String): (String, String) = {
+    dxId match {
+      case dxObjectIdRegexp(idType, idHash) => (idType, idHash)
+      case _                                => throw new RuntimeException(s"${dxId} is not a valid object ID")
     }
   }
 
-  def dxDataObjectToURL(dxObj: DxDataObject): String = {
+  def isDataObjectId(objName: String): Boolean = {
+    try {
+      parseDxObjectId(objName)
+      true
+    } catch {
+      case _: Throwable => false
+    }
+  }
+
+  def dxDataObjectToUri(dxObj: DxDataObject): String = {
     dxObj match {
       case DxFile(_, _, Some(container)) =>
         s"${DxPath.DX_URL_PREFIX}${container.id}:${dxObj.id}"
@@ -26,7 +38,7 @@ object DxUtils {
 
   // Create a dx link to a field in an execution. The execution could
   // be a job or an analysis.
-  def makeEBOR(dxExec: DxExecution, fieldName: String): JsValue = {
+  def dxExecutionToEbor(dxExec: DxExecution, fieldName: String): JsValue = {
     dxExec match {
       case _: DxJob =>
         JsObject(

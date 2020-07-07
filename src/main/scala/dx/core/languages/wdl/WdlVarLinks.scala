@@ -354,7 +354,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
               "$dnanexus_link" -> JsObject("workflowInputField" -> JsString(nodots(varEncName)))
           )
         case DxlExec(dxJob, varEncName) =>
-          DxUtils.makeEBOR(dxJob, nodots(varEncName))
+          DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName))
       }
       (bindEncName, jsv)
     }
@@ -397,8 +397,8 @@ case class WdlVarLinksConverter(dxApi: DxApi,
           )
         case DxlExec(dxJob, varEncName) =>
           val varEncName_F = varEncName + WdlVarLinksConverter.FLAT_FILES_SUFFIX
-          Map(bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
-              bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F)))
+          Map(bindEncName -> DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName)),
+              bindEncName_F -> DxUtils.dxExecutionToEbor(dxJob, nodots(varEncName_F)))
       }
     }
 

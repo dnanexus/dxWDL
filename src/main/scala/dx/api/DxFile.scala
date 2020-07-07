@@ -138,22 +138,21 @@ object DxFile {
 
   // Parse a dnanexus file descriptor. Examples:
   //
-  // "$dnanexus_link": {
-  //    "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
-  //    "id": "file-BKQGkgQ0b06xG5560GGQ001B"
-  //   }
-  //
-  //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
-  //
+  // {
+  //   "$dnanexus_link": {
+  //     "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
+  //     "id": "file-BKQGkgQ0b06xG5560GGQ001B"
+  //   },
+  //   "$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"
+  // }
   def fromJsValue(dxApi: DxApi, jsValue: JsValue): DxFile = {
     val innerObj = jsValue match {
-      case JsObject(fields) =>
-        fields.get("$dnanexus_link") match {
-          case None    => throw new AppInternalException(s"Non-dxfile json $jsValue")
-          case Some(x) => x
-        }
+      case JsObject(fields) if fields.contains("$dnanexus_link") =>
+        fields("$dnanexus_link")
       case _ =>
-        throw new AppInternalException(s"Non-dxfile json $jsValue")
+        throw new AppInternalException(
+            s"An object with key '$$dnanexus_link' is expected, not $jsValue"
+        )
     }
 
     val (fid, projId): (String, Option[String]) = innerObj match {

@@ -50,7 +50,7 @@ object DxPath {
 
     // We don't want a folder if this is a dx-data-object (file-xxxx, record-yyyy)
     val folder =
-      if (DxUtils.isDxId(name)) None
+      if (DxUtils.isDataObjectId(name)) None
       else if (folderRaw == "") Some("/")
       else Some(folderRaw)
 
