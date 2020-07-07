@@ -188,9 +188,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
         // decide if we want to download it or not
         // use the cache value if there is one to save the API call
         val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJsValue(dxApi, jsValue))
-        val uri = dxFile.asUri
-        System.err.println(s"jobInputToWdlValue ${name} before ${jsValue} after ${uri}")
-        WdlValues.V_File(uri)
+        WdlValues.V_File(dxFile.asUri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
