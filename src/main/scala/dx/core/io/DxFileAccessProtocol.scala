@@ -92,9 +92,12 @@ object DxFileDescCache {
 /**
   * Implementation of FileAccessProtocol for dx:// URIs
   * @param dxApi DxApi instance.
+  * @param dxFileCache Vector of DxFiles that have already been described (matching is done by file+project IDs)
   * @param encoding character encoding, for resolving binary data.
   */
-case class DxFileAccessProtocol(dxApi: DxApi, encoding: Charset = Util.DefaultEncoding)
+case class DxFileAccessProtocol(dxApi: DxApi,
+                                dxFileCache: DxFileDescCache = DxFileDescCache.empty,
+                                encoding: Charset = Util.DefaultEncoding)
     extends FileAccessProtocol {
   val prefixes = Vector(DxFileAccessProtocol.DX_URI_PREFIX)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
@@ -108,7 +111,7 @@ case class DxFileAccessProtocol(dxApi: DxApi, encoding: Charset = Util.DefaultEn
     uriToFileSource.get(uri) match {
       case Some(src) => src
       case None =>
-        val dxFile = resolveFileUri(uri)
+        val dxFile = dxFileCache.updateFileFromCache(resolveFileUri(uri))
         val src = DxFileSource(uri, dxFile, dxApi, encoding)
         uriToFileSource += (uri -> src)
         src
@@ -120,7 +123,7 @@ case class DxFileAccessProtocol(dxApi: DxApi, encoding: Charset = Util.DefaultEn
   }
 
   def fromDxFile(dxFile: DxFile): DxFileSource = {
-    DxFileSource(Furl.fromDxFile(dxFile, Map.empty).value, dxFile, dxApi, encoding)
+    DxFileSource(dxFile.asUri, dxFile, dxApi, encoding)
   }
 }
 

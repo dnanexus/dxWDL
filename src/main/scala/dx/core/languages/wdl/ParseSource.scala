@@ -15,7 +15,7 @@ import wdlTools.types.{
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, StringFileSource}
+import wdlTools.util.{Adjuncts, FileSource, FileSourceResolver, LocalFileSource, StringFileSource}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseSource(dxApi: DxApi) {
@@ -120,7 +120,8 @@ case class ParseSource(dxApi: DxApi) {
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source documents; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
-  def apply(mainFile: Path, imports: List[Path]): (Language.Value,
+  def apply(mainFile: Path, imports: List[Path]): (FileSource,
+                                                   Language.Value,
                                                    Bundle,
                                                    Map[String, TAT.Document],
                                                    Map[String, Vector[Adjuncts.AdjunctFile]]) = {
@@ -153,7 +154,8 @@ case class ParseSource(dxApi: DxApi) {
     // merge everything into one bundle.
     val flatInfo: BInfo = dfsFlatten(tMainDoc)
 
-    (Language.fromWdlVersion(tMainDoc.version.value),
+    (tMainDoc.source,
+     Language.fromWdlVersion(tMainDoc.version.value),
      Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      flatInfo.sources,
      flatInfo.adjunctFiles)

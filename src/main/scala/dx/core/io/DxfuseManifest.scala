@@ -5,14 +5,14 @@ package dx.core.io
 
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxArchivalState, DxFile, DxFileDescribe}
+import dx.api.{DxApi, DxArchivalState, DxFile}
 import spray.json._
 
 case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[DxFile, Path],
-            fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+            dxFileDescCache: DxFileDescCache,
             dxPathConfig: DxPathConfig): DxfuseManifest = {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
@@ -20,13 +20,12 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
 
     // Check that the files are not archived
     val dxFiles = file2LocalMapping.keys.toVector
-    val fileDescs: Map[DxFile, DxFileDescribe] = dxApi.fileBulkDescribe(dxFiles)
-    fileDescs.foreach {
-      case (dxFile, desc) =>
-        if (desc.archivalState != DxArchivalState.LIVE)
-          throw new Exception(
-              s"file ${dxFile.id} is not live, it is in ${desc.archivalState} state"
-          )
+    val fileDescs = dxApi.fileBulkDescribe(dxFiles)
+    fileDescs.map(_.describe()).foreach { desc =>
+      if (desc.archivalState != DxArchivalState.LIVE)
+        throw new Exception(
+            s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
+        )
     }
 
     val files = file2LocalMapping.map {
@@ -39,7 +38,7 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
-        val (_, fDesc) = fileInfoDir(dxFile.id)
+        val fDesc = dxFileDescCache.updateFileFromCache(dxFile).describe()
         JsObject(
             "proj_id" -> JsString(fDesc.project),
             "file_id" -> JsString(dxFile.id),

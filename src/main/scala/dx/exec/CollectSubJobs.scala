@@ -74,9 +74,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
-                          typeAliases: Map[String, WdlTypes.T]) {
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, Map.empty, typeAliases)
-
+                          wdlVarLinksConverter: WdlVarLinksConverter) {
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
              exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {

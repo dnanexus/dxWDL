@@ -5,8 +5,8 @@ import java.nio.file.{Path, Paths}
 import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxExecutable, DxFile, DxFileDescribe, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
-import dx.core.languages.wdl.{Evaluator, ParseSource}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
+import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
@@ -34,7 +34,7 @@ object Main {
                          jobOutputPath: Path,
                          dxPathConfig: DxPathConfig,
                          fileResolver: FileSourceResolver,
-                         fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                         dxFileDescCache: DxFileDescCache,
                          defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                          delayWorkspaceDestruction: Option[Boolean],
                          dxApi: DxApi): Termination = {
@@ -48,9 +48,16 @@ object Main {
     // setup the utility directories that the task-runner employs
     dxPathConfig.createCleanDirs()
 
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
     val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput =
-      JobInputOutput(dxPathConfig, fileInfoDir, typeAliases, dxApi, evaluator)
+      JobInputOutput(dxPathConfig,
+                     fileResolver,
+                     dxFileDescCache,
+                     wdlVarLinksConverter,
+                     dxApi,
+                     evaluator)
     val inputs = jobInputOutput.loadInputs(originalInputs, task)
     System.err.println(s"""|Main processing inputs in taskAction
                            |originalInputs:
@@ -65,7 +72,8 @@ object Main {
         typeAliases,
         instanceTypeDB,
         dxPathConfig,
-        fileInfoDir,
+        fileResolver,
+        wdlVarLinksConverter,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,

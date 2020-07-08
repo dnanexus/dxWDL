@@ -42,7 +42,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                  wdlVarLinksConverter: WdlVarLinksConverter,
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   rtTraceLevel: Int,
@@ -52,7 +52,6 @@ case class Native(dxWDLrtId: Option[String],
                   locked: Boolean,
                   dxApi: DxApi) {
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {
     val p = Paths.get("/tmp/dxWDL_Compile")
@@ -951,7 +950,7 @@ case class Native(dxWDLrtId: Option[String],
 
     val details: Map[String, JsValue] = dockerFile match {
       case None         => Map.empty
-      case Some(dxfile) => Map("docker-image" -> DxFile.toJsValue(dxfile))
+      case Some(dxFile) => Map("docker-image" -> dxFile.getLinkAsJson)
     }
 
     (runSpecEverything, details)
