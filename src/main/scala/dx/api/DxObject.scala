@@ -102,3 +102,23 @@ trait DxExecutable extends DxDataObject
 
 // Actual executions on the platform. There are jobs and analyses
 trait DxExecution extends DxObject
+
+// DxDataObject that caches its description
+abstract class CachingDxDataObject[T <: DxObjectDescribe] extends DxDataObject {
+  private var cachedDesc: Option[T] = None
+
+  def hasCachedDesc: Boolean = cachedDesc.nonEmpty
+
+  def cacheDescribe(desc: DxObjectDescribe): Unit = {
+    cachedDesc = Some(desc.asInstanceOf[T])
+  }
+
+  def describe(fields: Set[Field.Value] = Set.empty): T = {
+    if (cachedDesc.isEmpty) {
+      cachedDesc = Some(describeNoCache(fields))
+    }
+    cachedDesc.get
+  }
+
+  def describeNoCache(fields: Set[Field.Value]): T
+}
