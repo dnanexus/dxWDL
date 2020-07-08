@@ -2,6 +2,7 @@ package dx.core.languages.wdl
 
 import java.nio.file.{Path, Paths}
 
+import dx.api.DxApi
 import dx.core.languages.wdl.{Bundle => WdlBundle}
 import dx.core.util.SysUtils
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,7 +12,8 @@ import wdlTools.util.Logger
 
 class BlockTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet
-  private val parseWdlSourceFile = ParseSource(logger)
+  private val dxApi = DxApi(logger)
+  private val parseWdlSourceFile = ParseSource(dxApi)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath

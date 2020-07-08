@@ -3,19 +3,11 @@ package dx.exec
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import dx.api._
-import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.DxFileAccessProtocol
 import dx.exec
 import dx.util.{JsUtils, getVersion}
 import spray.json.{JsBoolean, JsObject, JsValue}
-import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
 
-case class WorkflowOutputReorg(wf: TAT.Workflow,
-                               document: TAT.Document,
-                               typeAliases: Map[String, WdlTypes.T],
-                               dxPathConfig: DxPathConfig,
-                               dxIoFunctions: DxFileAccessProtocol,
-                               dxApi: DxApi) {
+case class WorkflowOutputReorg(dxApi: DxApi) {
   // Efficiently get the names of many files. We
   // don't want to do a `describe` each one of them, instead,
   // we do a bulk-describe.

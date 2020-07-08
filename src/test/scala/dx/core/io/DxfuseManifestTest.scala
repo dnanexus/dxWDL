@@ -3,7 +3,6 @@ package dx.core.io
 import java.nio.file.{Path, Paths}
 
 import dx.api.{DxApi, DxDataObject, DxFile, DxProject}
-import dx.core.languages.wdl.DxFileAccessProtocol
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
@@ -13,7 +12,6 @@ class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   private lazy val homeDir = Paths.get(System.getProperty("user.home"))
   private lazy val dxPathConfig =
     DxPathConfig.apply(homeDir, streamAllFiles = false, DX_API.logger)
-  private lazy val dxIoFunctions = DxFileAccessProtocol(DX_API, Map.empty, dxPathConfig)
 
   it should "detect and provide legible error for archived files" in {
     val ARCHIVED_PROJ = "ArchivedStuff"
@@ -37,7 +35,7 @@ class DxfuseManifestTest extends AnyFlatSpec with Matchers {
 
     // Creating a manifest should fail, because some of the files are archived
     assertThrows[Exception] {
-      DxfuseManifestBuilder(DX_API).apply(filesInManifest, dxIoFunctions)
+      DxfuseManifestBuilder(DX_API).apply(filesInManifest, Map.empty, dxPathConfig)
     }
   }
 }

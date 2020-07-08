@@ -1,11 +1,11 @@
 package dx.exec
 
-import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.ExecLinkInfo
-import dx.core.languages.wdl.{DxFileAccessProtocol, TypeSerialization, WdlVarLinksConverter}
+import dx.api.{DxApi, DxFile, DxFileDescribe}
+import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.core.languages.wdl.{TypeSerialization, WdlVarLinksConverter}
 import dx.exec
 import spray.json._
-import wdlTools.eval.WdlValues
+import wdlTools.eval.{Eval, WdlValues}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes
 
@@ -13,13 +13,14 @@ case class WfFragInput(blockPath: Vector[Int],
                        env: Map[String, (WdlTypes.T, WdlValues.V)],
                        execLinkInfo: Map[String, ExecLinkInfo])
 
-case class WfFragInputOutput(dxIoFunctions: DxFileAccessProtocol,
-                             dxProject: DxProject,
+case class WfFragInputOutput(dxPathConfig: DxPathConfig,
+                             fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                              typeAliases: Map[String, WdlTypes.T],
                              wdlVersion: WdlVersion,
-                             dxApi: DxApi) {
+                             dxApi: DxApi,
+                             evaluator: Eval) {
   val jobInputOutput: JobInputOutput =
-    exec.JobInputOutput(dxIoFunctions, typeAliases, wdlVersion, dxApi)
+    exec.JobInputOutput(dxPathConfig, fileInfoDir, typeAliases, dxApi, evaluator)
 
   private def revTransformVarName(varName: String): String = {
     varName.replaceAll("___", "\\.")
