@@ -71,7 +71,10 @@ wdl_v1_list = [
     "scatter_subworkflow_with_optional",
 
     # streaming
-    "streaming_inputs"
+    "streaming_inputs",
+
+    # call workflow with complex default value
+    "input_default_value"
 ]
 
 # docker image tests
@@ -278,7 +281,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
     # convert dots to ___
     field_name = "___".join(field_name_parts)
     if exec_name != tname:
-        raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
+        raise RuntimeError("Key {} is invalid, must start with {} name {}".format(key, desc.kind, exec_name))
     try:
         # get the actual results
         if field_name not in exec_outputs:
