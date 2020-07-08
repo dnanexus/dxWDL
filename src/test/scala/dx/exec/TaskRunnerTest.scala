@@ -4,9 +4,9 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
+import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -139,7 +139,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
 
-    val (language, wdlBundle: WdlBundle, allSources, _) =
+    val (_, language, wdlBundle: WdlBundle, allSources, _) =
       ParseSource(dxApi).apply(wdlCode, List.empty)
     val task: TAT.Task = ParseSource(dxApi).getMainTask(wdlBundle)
     assert(allSources.size == 1)
@@ -151,10 +151,17 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // from the platform, we may not need to access them.
     val dxProtocol = DxFileAccessProtocol(dxApi)
     val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, wdlBundle.typeAliases)
     val evaluator =
       Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
     val jobInputOutput =
-      JobInputOutput(dxPathConfig, Map.empty, wdlBundle.typeAliases, dxApi, evaluator)
+      JobInputOutput(dxPathConfig,
+                     fileResolver,
+                     DxFileDescCache.empty,
+                     wdlVarLinksConverter,
+                     dxApi,
+                     evaluator)
 
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
@@ -166,7 +173,8 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
         wdlBundle.typeAliases,
         instanceTypeDB,
         dxPathConfig,
-        Map.empty,
+        fileResolver,
+        wdlVarLinksConverter,
         jobInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),

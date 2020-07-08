@@ -3,7 +3,7 @@ package dx.exec
 import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxExecutable, DxFile, DxFileDescribe, Field, InstanceTypeDB}
+import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
@@ -89,19 +89,19 @@ object Main {
         Success(correctInstanceType.toString)
 
       case ExecAction.TaskProlog =>
-        val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
-        taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
+        val (localizedInputs, fileSourceToPath) = taskRunner.prolog(inputs)
+        taskRunner.writeEnvToDisk(localizedInputs, fileSourceToPath)
         Success(s"success ${op}")
 
       case ExecAction.TaskInstantiateCommand =>
-        val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
+        val (localizedInputs, fileSourceToPath) = taskRunner.readEnvFromDisk()
         val env = taskRunner.instantiateCommand(localizedInputs)
-        taskRunner.writeEnvToDisk(env, dxUrl2path)
+        taskRunner.writeEnvToDisk(env, fileSourceToPath)
         Success(s"success ${op}")
 
       case ExecAction.TaskEpilog =>
-        val (env, dxUrl2path) = taskRunner.readEnvFromDisk()
-        val outputFields: Map[String, JsValue] = taskRunner.epilog(env, dxUrl2path)
+        val (env, fileSourceToPath) = taskRunner.readEnvFromDisk()
+        val outputFields: Map[String, JsValue] = taskRunner.epilog(env, fileSourceToPath)
 
         // write outputs, ignore null values, these could occur for optional
         // values that were not specified.
@@ -135,7 +135,7 @@ object Main {
                                  jobOutputPath: Path,
                                  dxPathConfig: DxPathConfig,
                                  fileResolver: FileSourceResolver,
-                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                                 dxFileDescCache: DxFileDescCache,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  dxApi: DxApi): Termination = {
@@ -146,15 +146,17 @@ object Main {
 
     val (wf, taskDir, typeAliases, document) =
       ParseSource(dxApi).parseWdlWorkflow(wdlSourceCode)
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
     val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+    val jobInputOutput = JobInputOutput(dxPathConfig,
+                                        fileResolver,
+                                        dxFileDescCache,
+                                        wdlVarLinksConverter,
+                                        dxApi,
+                                        evaluator)
     // setup the utility directories that the frag-runner employs
-    val fragInputOutput =
-      WfFragInputOutput(dxPathConfig,
-                        fileInfoDir,
-                        typeAliases,
-                        document.version.value,
-                        dxApi,
-                        evaluator)
+    val fragInputOutput = WfFragInputOutput(typeAliases, wdlVarLinksConverter, dxApi)
 
     // process the inputs
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
@@ -169,7 +171,9 @@ object Main {
               instanceTypeDB,
               fragInputs.execLinkInfo,
               dxPathConfig,
-              fileInfoDir,
+              fileResolver,
+              wdlVarLinksConverter,
+              jobInputOutput,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -187,7 +191,9 @@ object Main {
               instanceTypeDB,
               fragInputs.execLinkInfo,
               dxPathConfig,
-              fileInfoDir,
+              fileResolver,
+              wdlVarLinksConverter,
+              jobInputOutput,
               inputsRaw,
               fragInputOutput,
               defaultRuntimeAttributes,
@@ -197,20 +203,17 @@ object Main {
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case ExecAction.WfInputs =>
-          val wfInputs =
-            WfInputs(wf, document, typeAliases, dxPathConfig, fileInfoDir, dxApi)
+          val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
-          val wfOutputs =
-            WfOutputs(wf, document, typeAliases, fileInfoDir, dxApi, evaluator)
+          val wfOutputs = WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
           wfOutputs.apply(fragInputs.env)
 
         case ExecAction.WfCustomReorgOutputs =>
           val wfCustomReorgOutputs = WfOutputs(
               wf,
               document,
-              typeAliases,
-              fileInfoDir,
+              wdlVarLinksConverter,
               dxApi,
               evaluator
           )
@@ -245,23 +248,6 @@ object Main {
                 |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
-    }
-  }
-
-  // Make a list of all the files cloned for access by this applet.
-  // Bulk describe all the them.
-  private def runtimeBulkFileDescribe(dxApi: DxApi,
-                                      jobInputPath: Path): Map[String, (DxFile, DxFileDescribe)] = {
-    val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
-
-    val allFilesReferenced = inputs.asJsObject.fields.flatMap {
-      case (_, jsElem) => dxApi.findFiles(jsElem)
-    }.toVector
-
-    // Describe all the files, in one go
-    val descAll = dxApi.fileBulkDescribe(allFilesReferenced)
-    descAll.map {
-      case (file, desc) => file.id -> (file, desc)
     }
   }
 
@@ -357,8 +343,13 @@ object Main {
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
-        val fileInfoDir = runtimeBulkFileDescribe(dxApi, jobInputPath)
-        val dxProtocol = DxFileAccessProtocol(dxApi)
+        val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
+        val allFilesReferenced = inputs.asJsObject.fields.flatMap {
+          case (_, jsElem) => dxApi.findFiles(jsElem)
+        }.toVector
+        // Describe all the files, in one go
+        val dxFileDescCache = DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
+        val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
         val fileResolver =
           FileSourceResolver.create(localDirectories = Vector(dxPathConfig.homeDir),
                                     userProtocols = Vector(dxProtocol),
@@ -387,7 +378,7 @@ object Main {
                   jobOutputPath,
                   dxPathConfig,
                   fileResolver,
-                  fileInfoDir,
+                  dxFileDescCache,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
                   dxApi
@@ -395,17 +386,19 @@ object Main {
             case ExecAction.TaskCheckInstanceType | ExecAction.TaskProlog |
                 ExecAction.TaskInstantiateCommand | ExecAction.TaskEpilog |
                 ExecAction.TaskRelaunch =>
-              taskAction(op,
-                         wdlSourceCode,
-                         instanceTypeDB,
-                         jobInputPath,
-                         jobOutputPath,
-                         dxPathConfig,
-                         fileResolver,
-                         fileInfoDir,
-                         defaultRuntimeAttrs,
-                         delayWorkspaceDestruction,
-                         dxApi)
+              taskAction(
+                  op,
+                  wdlSourceCode,
+                  instanceTypeDB,
+                  jobInputPath,
+                  jobOutputPath,
+                  dxPathConfig,
+                  fileResolver,
+                  dxFileDescCache,
+                  defaultRuntimeAttrs,
+                  delayWorkspaceDestruction,
+                  dxApi
+              )
           }
         } catch {
           case e: Throwable =>

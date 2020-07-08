@@ -206,7 +206,7 @@ case class Top(cOpt: CompilerOptions) {
   }
 
   private def wdlToIR(source: Path): IR.Bundle = {
-    val (language, everythingBundle, allSources, adjunctFiles) =
+    val (_, language, everythingBundle, allSources, adjunctFiles) =
       ParseSource(dxApi).apply(source, cOpt.importDirs)
 
     // validate

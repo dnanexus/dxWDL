@@ -1,20 +1,22 @@
 package dx.core.languages.wdl
 
 import dx.api.DxApi
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.Logger
+import wdlTools.util.{FileSourceResolver, Logger}
 
 class WdlVarLinksTest extends AnyFlatSpec with Matchers {
-  private val DX_API = DxApi(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
+  private val dxProtocol = DxFileAccessProtocol(dxApi)
+  private val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
 
   case class Element(name: String, wdlType: WdlTypes.T, wdlValue: WdlValues.V)
 
-  def makeElement(t: WdlTypes.T, v: WdlValues.V): Element =
-    Element("A", t, v)
+  def makeElement(t: WdlTypes.T, v: WdlValues.V): Element = Element("A", t, v)
 
   def check(elem: Element, wvlConverter: WdlVarLinksConverter): Unit = {
     val prefix = "XXX_"
@@ -27,12 +29,12 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
     val (name2, jsv) = allDxFields2.head
 
     name2 should be(prefix + elem.name)
-    val (wdlValue2, _) = wvlConverter.unpackJobInput(elem.name, elem.wdlType, jsv)
+    val wdlValue2 = wvlConverter.unpackJobInput(elem.name, elem.wdlType, jsv)
     wdlValue2 should be(elem.wdlValue)
   }
 
   it should "handle primitive WDL elements" in {
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     val testCases = List(
         // primitives
@@ -49,7 +51,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle compound WDL types" in {
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, Map.empty)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     def makePair(x: Double, s: String): WdlValues.V = {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))
@@ -114,7 +116,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
 //        }
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType)
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }
@@ -154,7 +156,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
     val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
 
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
-    val wvlConverter = WdlVarLinksConverter(DX_API, Map.empty, typeAliases)
+    val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     testCases.foreach { elem =>
       check(elem, wvlConverter)
     }

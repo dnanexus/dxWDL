@@ -17,14 +17,14 @@ import wdlTools.util.Logger
 // These tests involve compilation -without- access to the platform.
 //
 class GenerateIRTest extends AnyFlatSpec with Matchers {
-  private val DX_API = DxApi(Logger.Quiet)
+  private val dxApi = DxApi(Logger.Quiet)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
   }
 
-  private val dxProject = DX_API.currentProject
+  private val dxProject = dxApi.currentProject
 
   // task compilation
   private val cFlags = List("--compileMode",
