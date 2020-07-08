@@ -7,6 +7,7 @@ import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
+import dx.core.util.CompressionUtils
 import dx.core.util.MainUtils._
 import spray.json._
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
@@ -292,10 +293,10 @@ object Main {
 
     val details: JsValue = executable.describe(Set(Field.Details)).details.get
     val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
-    val wdlSourceCode = Util.base64DecodeAndGunzip(wdlSourceCodeEncoded)
+    val wdlSourceCode = CompressionUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
 
     val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw = Util.base64DecodeAndGunzip(instanceTypeDBEncoded)
+    val dbRaw = CompressionUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
     val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
     val runtimeAttrs: Option[WdlRuntimeAttrs] =

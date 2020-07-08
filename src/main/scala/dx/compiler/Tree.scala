@@ -7,6 +7,7 @@ import Native.ExecRecord
 import IR._
 import dx.api.DxWorkflow
 import dx.api.Field
+import dx.core.util.CompressionUtils
 import wdlTools.util.Util
 
 case class Tree(execDict: Map[String, ExecRecord]) {
@@ -86,7 +87,7 @@ object Tree {
       case None => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
     }
 
-    val TreeJS = Util.base64DecodeAndGunzip(execTree).parseJson.asJsObject
+    val TreeJS = CompressionUtils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
 
     JsObject(
         TreeJS.fields + ("id" -> JsString(workflow.id))

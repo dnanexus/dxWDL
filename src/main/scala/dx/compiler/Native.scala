@@ -18,6 +18,7 @@ import dx.core.languages.wdl.{
 }
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.getVersion
+import dx.core.util.CompressionUtils
 
 import scala.collection.immutable.TreeMap
 import spray.json._
@@ -1085,9 +1086,9 @@ case class Native(dxWDLrtId: Option[String],
     // Add the pricing model, and make the prices opaque.
     val generator = WdlV1Generator()
     val sourceLines = generator.generateDocument(applet.document)
-    val sourceCode = Util.gzipAndBase64Encode(sourceLines.mkString("\n"))
+    val sourceCode = CompressionUtils.gzipAndBase64Encode(sourceLines.mkString("\n"))
     val dbOpaque = InstanceTypeDbQuery(dxApi).opaquePrices(instanceTypeDB)
-    val dbOpaqueInstance = Util.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+    val dbOpaqueInstance = CompressionUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     val runtimeAttrs = extras match {
       case None      => JsNull
       case Some(ext) => ext.defaultRuntimeAttributes.toJson
@@ -1427,7 +1428,7 @@ case class Native(dxWDLrtId: Option[String],
     // It could be quite large, so we use compression.
     val generator = WdlV1Generator()
     val sourceLines = generator.generateElement(wf.document)
-    val sourceCode = Util.gzipAndBase64Encode(sourceLines.mkString("\n"))
+    val sourceCode = CompressionUtils.gzipAndBase64Encode(sourceLines.mkString("\n"))
     val sourceCodeField: Map[String, JsValue] = Map("wdlSourceCode" -> JsString(sourceCode))
 
     // link to applets used by the fragments. This notifies the platform that they
@@ -1524,7 +1525,7 @@ case class Native(dxWDLrtId: Option[String],
       execDict: Map[String, Native.ExecRecord]
   ): Map[String, JsString] = {
     val jsonTreeString = Tree(execDict).fromWorkflowIR(wf).toString
-    val compressedTree = Util.gzipAndBase64Encode(jsonTreeString)
+    val compressedTree = CompressionUtils.gzipAndBase64Encode(jsonTreeString)
     Map("execTree" -> JsString(compressedTree))
   }
 

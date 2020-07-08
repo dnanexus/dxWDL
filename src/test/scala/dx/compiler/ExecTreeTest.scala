@@ -4,6 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import dx.api._
 import dx.compiler.Main.SuccessTree
+import dx.core.util.CompressionUtils
 import dx.core.util.MainUtils.Success
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -100,7 +101,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         )
     }
 
-    val treeJs = Util.base64DecodeAndGunzip(execString).parseJson
+    val treeJs = CompressionUtils.base64DecodeAndGunzip(execString).parseJson
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
