@@ -2,8 +2,7 @@ package dx.core.io
 
 import java.nio.file.Path
 
-import dx.core.util.SysUtils
-import wdlTools.util.Logger
+import wdlTools.util.{Logger, Util}
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -60,11 +59,11 @@ case class DxPathConfig(homeDir: Path,
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
   def createCleanDirs(): Unit = {
-    SysUtils.safeMkdir(metaDir)
-    SysUtils.safeMkdir(inputFilesDir)
-    SysUtils.safeMkdir(outputFilesDir)
-    SysUtils.safeMkdir(tmpDir)
-    SysUtils.safeMkdir(dxfuseMountpoint)
+    Util.createDirectories(metaDir)
+    Util.createDirectories(inputFilesDir)
+    Util.createDirectories(outputFilesDir)
+    Util.createDirectories(tmpDir)
+    Util.createDirectories(dxfuseMountpoint)
   }
 }
 

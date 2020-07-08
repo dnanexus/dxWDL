@@ -7,7 +7,6 @@ import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
 import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
-import dx.core.util.SysUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -116,7 +115,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val inputsFile = pathFromBasename(s"${wdlName}_input.json")
         assert(Files.exists(inputsFile))
-        SysUtils.readFileContent(inputsFile).parseJson.asJsObject.fields
+        Util.readFileContent(inputsFile).parseJson.asJsObject.fields
       } catch {
         case _: Throwable =>
           Map.empty
@@ -127,7 +126,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val outputsFile = pathFromBasename(s"${wdlName}_output.json")
         assert(Files.exists(outputsFile))
-        Some(SysUtils.readFileContent(outputsFile).parseJson.asJsObject.fields)
+        Some(Util.readFileContent(outputsFile).parseJson.asJsObject.fields)
       } catch {
         case _: Throwable =>
           None
@@ -135,8 +134,8 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Create a clean directory in "/tmp" for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
-    SysUtils.deleteRecursive(jobHomeDir.toFile)
-    SysUtils.safeMkdir(jobHomeDir)
+    Util.deleteRecursive(jobHomeDir)
+    Util.createDirectories(jobHomeDir)
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
 

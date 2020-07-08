@@ -26,7 +26,6 @@ import dx.compiler.WdlRuntimeAttrs
 import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
 import dx.core.languages.wdl._
-import dx.core.util.SysUtils
 import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
@@ -63,11 +62,11 @@ case class TaskRunner(task: TAT.Task,
 
     // marshal into json, and then to a string
     val json = JsObject("localizedInputs" -> JsObject(locInputsM), "dxUrl2path" -> JsObject(dxUrlM))
-    SysUtils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
+    Util.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
   def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
-    val buf = SysUtils.readFileContent(dxPathConfig.runnerTaskEnv)
+    val buf = Util.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
     val (locInputsM, dxUrlM) = json match {
       case JsObject(m) =>
@@ -165,7 +164,7 @@ case class TaskRunner(task: TAT.Task,
         val dxFile = dxApi.resolveDxUrlFile(url)
         val fileName = dxFile.describe().name
         val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-        SysUtils.safeMkdir(tarballDir)
+        Util.createDirectories(tarballDir)
         val localTar: Path = tarballDir.resolve(fileName)
 
         dxApi.logger.traceLimited(s"downloading docker tarball to ${localTar}")
@@ -256,7 +255,7 @@ case class TaskRunner(task: TAT.Task,
         List(part1, command, part2).mkString("\n")
       }
     dxApi.logger.traceLimited(s"writing bash script to ${dxPathConfig.script}")
-    SysUtils.writeFileContent(dxPathConfig.script, script)
+    Util.writeFileContent(dxPathConfig.script, script)
     dxPathConfig.script.toFile.setExecutable(true)
   }
 
@@ -315,7 +314,7 @@ case class TaskRunner(task: TAT.Task,
     //  -v ${dxPathConfig.dxfuseMountpoint}:${dxPathConfig.dxfuseMountpoint}
 
     dxApi.logger.traceLimited(s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
-    SysUtils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
+    Util.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
 
@@ -381,13 +380,13 @@ case class TaskRunner(task: TAT.Task,
     // build a manifest for dxda, if there are files to download
     val DxdaManifest(manifestJs) = dxdaManifest
     if (manifestJs.asJsObject.fields.nonEmpty) {
-      SysUtils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
+      Util.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
     }
 
     // build a manifest for dxfuse
     val DxfuseManifest(manifest2Js) = dxfuseManifest
     if (manifest2Js != JsNull) {
-      SysUtils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
+      Util.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =

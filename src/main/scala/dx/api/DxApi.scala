@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import com.dnanexus.{DXAPI, DXEnvironment}
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
-import dx.core.util.SysUtils
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
 import spray.json._
@@ -587,7 +586,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
     silentFileDelete(tempFi)
     downloadFile(tempFi, dxFile)
-    val content = SysUtils.readFileContent(tempFi)
+    val content = Util.readFileContent(tempFi)
     silentFileDelete(tempFi)
     content
   }
