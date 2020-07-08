@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.core.util.SysUtils
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
-import dx.util.JsUtils
 import spray.json._
 import wdlTools.util.{Logger, Util}
 
@@ -241,6 +240,10 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     logger.ignore(result)
   }
 
+  def executionsDescribe(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemDescribeExecutions[JsonNode], fields)
+  }
+
   def fileDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }
@@ -325,6 +328,10 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     callObject(DXAPI.jobDescribe[JsonNode], id, fields)
   }
 
+  def jobNew(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.jobNew[JsonNode], fields)
+  }
+
   def orgDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     try {
       callObject(DXAPI.orgDescribe[JsonNode], id, fields)
@@ -335,6 +342,10 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
             cause
         )
     }
+  }
+
+  def projectClone(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
+    callObject(DXAPI.projectClone[JsonNode], id, fields)
   }
 
   def projectDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
@@ -431,12 +442,11 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val req = JsObject(fields ++ instanceFields ++ dependsFields ++ dwd)
-    logger.traceLimited(s"subjob request=${req.prettyPrint}")
+    val request = fields ++ instanceFields ++ dependsFields ++ dwd
+    logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
 
-    val retval: JsonNode = DXAPI.jobNew(JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-    val info: JsValue = JsUtils.jsValueOfJsonNode(retval)
-    val id: String = info.asJsObject.fields.get("id") match {
+    val info = jobNew(request)
+    val id: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
         throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
@@ -456,14 +466,12 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     logger.trace(s"The asset ${pkgName} is from a different project ${rmtProject.id}")
 
     // clone
-    val req = JsObject("objects" -> JsArray(JsString(assetRecord.id)),
-                       "project" -> JsString(dxProject.id),
-                       "destination" -> JsString("/"))
-    val rep =
-      DXAPI.projectClone(rmtProject.id, JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-    val repJs: JsValue = JsUtils.jsValueOfJsonNode(rep)
+    val request = Map("objects" -> JsArray(JsString(assetRecord.id)),
+                      "project" -> JsString(dxProject.id),
+                      "destination" -> JsString("/"))
+    val responseJs = projectClone(rmtProject.id, request)
 
-    val exists = repJs.asJsObject.fields.get("exists") match {
+    val exists = responseJs.fields.get("exists") match {
       case None => throw new Exception("API call did not returnd an exists field")
       case Some(JsArray(x)) =>
         x.map {
@@ -631,8 +639,8 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
                             dxProject: DxProject): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map(makeResolutionReq)
     val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
-    val repJs = resolveDataObjects(request)
-    val resultsPerObj: Vector[JsValue] = repJs.fields.get("results") match {
+    val responseJs = resolveDataObjects(request)
+    val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
       case Some(JsArray(x)) => x
       case other            => throw new Exception(s"API call returned invalid data ${other}")
     }

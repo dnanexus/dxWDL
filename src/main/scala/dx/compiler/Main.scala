@@ -7,7 +7,7 @@ import dx.InvalidInputException
 import dx.api.{DxApi, DxProject}
 import dx.core.io.DxPathConfig
 import dx.core.languages.Language
-import dx.util.getVersion
+import dx.core.getVersion
 import dx.core.util.MainUtils._
 import dx.core.util.SysUtils
 import spray.json._

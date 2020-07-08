@@ -3,7 +3,7 @@ package dx.exec
 import dx.api.{DxApi, DxFile, DxFileDescribe}
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json.{JsString, JsValue}
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

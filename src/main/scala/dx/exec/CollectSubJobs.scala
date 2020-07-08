@@ -57,12 +57,9 @@ Note: the compiler ensures that the scatter will call exactly one call.
   */
 package dx.exec
 
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
 import dx.core.io.ExecLinkInfo
 import dx.core.languages.wdl.{DxlExec, WdlVarLinks, WdlVarLinksConverter}
-import dx.util.JsUtils
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
@@ -124,13 +121,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                                  "properties" -> JsBoolean(true))
       )
     }
-    val req = JsObject("executions" -> JsArray(jobInfoReq))
-    System.err.println(s"bulk-describe request=${req}")
-    val retval: JsValue =
-      JsUtils.jsValueOfJsonNode(
-          DXAPI.systemDescribeExecutions(JsUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-      )
-    val results: Vector[JsValue] = retval.asJsObject.fields.get("results") match {
+    val request = Map("executions" -> JsArray(jobInfoReq))
+    dxApi.logger.info(s"bulk-describe request=${request}")
+    val retval: JsObject = dxApi.executionsDescribe(request)
+    val results: Vector[JsValue] = retval.fields.get("results") match {
       case Some(JsArray(x)) => x
       case _                => throw new Exception(s"wrong type for executableName ${retval}")
     }

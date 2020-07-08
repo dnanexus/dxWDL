@@ -5,7 +5,6 @@ import java.nio.file.Path
 import dx.api.DxApi
 import dx.core.io.DxFileAccessProtocol
 import dx.core.languages.Language
-import dx.core.util.Adjuncts
 import wdlTools.syntax.{Parsers, SyntaxException}
 import wdlTools.types.{
   Context,
@@ -16,7 +15,7 @@ import wdlTools.types.{
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{FileSourceResolver, LocalFileSource, StringFileSource}
+import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, StringFileSource}
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseSource(dxApi: DxApi) {

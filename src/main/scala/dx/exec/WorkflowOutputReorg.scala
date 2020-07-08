@@ -1,10 +1,8 @@
 package dx.exec
 
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 import dx.api._
 import dx.exec
-import dx.util.{JsUtils, getVersion}
+import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
 
 case class WorkflowOutputReorg(dxApi: DxApi) {
@@ -30,16 +28,15 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
   // file. Instead, we find all the output files that do not also
   // appear in the input.
   private def analysisFileOutputs(dxAnalysis: DxAnalysis): Vector[DxFile] = {
-    val req = JsObject(
+    val request = Map(
         "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
     )
-    val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
-    val repJs: JsValue = JsUtils.jsValueOfJsonNode(rep)
-    val outputs = repJs.asJsObject.fields.get("output") match {
+    val responseJs = dxApi.analysisDescribe(dxAnalysis.id, request)
+    val outputs = responseJs.fields.get("output") match {
       case None    => throw new Exception("Failed to get analysis outputs")
       case Some(x) => x
     }
-    val inputs = repJs.asJsObject.fields.get("input") match {
+    val inputs = responseJs.fields.get("input") match {
       case None    => throw new Exception("Failed to get analysis inputs")
       case Some(x) => x
     }

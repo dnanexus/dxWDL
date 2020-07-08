@@ -9,7 +9,7 @@ import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource}
 import dx.core.util.MainUtils._
 import dx.core.util.SysUtils
-import dx.util.JsUtils
+import wdlTools.util.JsUtils
 import spray.json._
 import wdlTools.util.{FileSourceResolver, Logger, TraceLevel}
 
@@ -329,7 +329,7 @@ object Main {
     val errMsg = JsObject(
         "error" -> JsObject(
             "type" -> JsString(errType),
-            "message" -> JsString(JsUtils.sanitize(e.getMessage))
+            "message" -> JsUtils.sanitizedString(e.getMessage)
         )
     ).prettyPrint
     SysUtils.writeFileContent(jobErrorPath, errMsg)

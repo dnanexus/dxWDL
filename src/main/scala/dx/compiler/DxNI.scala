@@ -49,7 +49,7 @@ import dx.api._
 import dx.core.languages.Language
 import dx.core.languages.wdl.ParseSource
 import dx.core.util.SysUtils
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json._
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation}

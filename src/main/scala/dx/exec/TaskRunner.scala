@@ -27,7 +27,7 @@ import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
 import dx.core.languages.wdl._
 import dx.core.util.SysUtils
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
