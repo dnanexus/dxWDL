@@ -273,7 +273,7 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
   // Query the platform for the available instance types in
   // this project.
   private def queryAvailableInstanceTypes(dxProject: DxProject): Map[String, DxInstanceType] = {
-    // get List of supported OSes
+    // get Vector of supported OSes
     def getSupportedOSes(js: JsValue): Vector[(String, String)] = {
       val osSupported: Vector[JsValue] = js.asJsObject.fields.get("os") match {
         case Some(JsArray(x)) => x
