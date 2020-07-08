@@ -1,6 +1,6 @@
 version 1.0
 
-# A trivial workflow, to test the basic sanity
+# A trivial workflow, to test the basic integrity
 # of a dxWDL release.
 
 workflow wf_linear_no_expr {

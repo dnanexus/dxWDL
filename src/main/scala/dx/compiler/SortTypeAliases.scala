@@ -94,9 +94,8 @@ case class SortTypeAliases(logger: Logger) {
     val sortedTypes = apply2(justTypes)
 
     sortedTypes.map {
-      case a @ WdlTypes.T_Struct(name, _) =>
-        (name, a)
-      case _ => throw new Exception("sanity")
+      case a @ WdlTypes.T_Struct(name, _) => (name, a)
+      case other                          => throw new Exception(s"Unexpected type ${other}")
     }
   }
 }

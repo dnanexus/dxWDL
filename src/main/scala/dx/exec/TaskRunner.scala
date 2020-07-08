@@ -84,11 +84,11 @@ case class TaskRunner(task: TAT.Task,
         val value = WdlValueSerialization(typeAliases).fromJSON(jsVal)
         key -> (t, value)
       case (_, other) =>
-        throw new Exception(s"sanity: bad deserialization value ${other}")
+        throw new Exception(s"Bad deserialization value ${other}")
     }
     val dxUrl2path = dxUrlM.map {
       case (key, JsString(path)) => Furl.fromUrl(key, dxApi) -> Paths.get(path)
-      case (_, _)                => throw new Exception("Sanity")
+      case other                 => throw new Exception(s"Invalid map item ${other}")
     }
     (localizedInputs, dxUrl2path)
   }
@@ -344,7 +344,7 @@ case class TaskRunner(task: TAT.Task,
             evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(stripTypesFromEnv(env)))
           env + (name -> (wdlType, wdlValue))
         case (_, TAT.Declaration(name, _, None, _)) =>
-          throw new Exception(s"sanity: declaration ${name} has no expression")
+          throw new Exception(s"Declaration ${name} has no expression")
       }
     env
   }

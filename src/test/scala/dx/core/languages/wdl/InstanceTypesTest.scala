@@ -107,7 +107,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     def intOfJs(jsVal: JsValue): Int = {
       jsVal match {
         case JsNumber(x) => x.toInt
-        case _           => throw new Exception("sanity")
+        case _           => throw new Exception("unexpected")
       }
     }
     val awsOnDemandHourlyPriceTable: Map[String, Float] = {
@@ -116,7 +116,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
         case (name, v) =>
           val price: Float = v match {
             case JsNumber(x) => x.toFloat
-            case _           => throw new Exception("sanity")
+            case _           => throw new Exception("unexpected")
           }
           name -> price
       }
@@ -128,7 +128,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
         val fields: Map[String, JsValue] = v.asJsObject.fields
         val internalName = fields("internalName") match {
           case JsString(s) => s
-          case _           => throw new Exception("sanity")
+          case _           => throw new Exception("unexpected")
         }
         val price: Float =
           if (pricingInfo) awsOnDemandHourlyPriceTable(internalName)

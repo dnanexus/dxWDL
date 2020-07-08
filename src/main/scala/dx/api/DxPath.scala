@@ -9,6 +9,7 @@ object DxPath {
                               objFullName: String,
                               sourcePath: String)
 
+  // TODO: use RuntimeExceptions for assertions
   def parse(dxPath: String): DxPathComponents = {
     // strip the prefix
     if (!dxPath.startsWith(DX_URL_PREFIX)) {
@@ -28,7 +29,6 @@ object DxPath {
         (Some(projName), rest)
     }
 
-    // sanity test
     projName match {
       case None => ()
       case Some(proj) =>

@@ -81,7 +81,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
     val wf: DxWorkflow = retval match {
       case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     val description = wf.describe(Set(Field.Details))
@@ -121,7 +121,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
     val wf: DxWorkflow = retval match {
       case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     val treeJs = Tree.formDXworkflow(wf)

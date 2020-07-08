@@ -222,7 +222,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     val calleeName = call.unqualifiedName
     val callee: IR.Callable = callables.get(calleeName) match {
       case None =>
-        throw new Exception(s"""|sanity: callable ${calleeName} should exist
+        throw new Exception(s"""|Callable ${calleeName} should exist
                                 |but is missing from the list of known tasks/workflows ${callables.keys}
                                 |""".stripMargin)
       case Some(x) => x
@@ -267,7 +267,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         logger.trace(s"""|env=[
                          |$envDesc
                          |]""".stripMargin)
-        throw new Exception(s"Sanity: could not find $source in the workflow environment")
+        throw new Exception(s"Could not find $source in the workflow environment")
       case Some(lVar) => lVar.sArg
     }
   }
@@ -320,7 +320,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     if (subBlocks.size == 1) {
       Block.categorize(subBlocks(0)) match {
         case Block.CallDirect(_, _) | Block.CallWithSubexpressions(_, _) =>
-          throw new Exception("sanity")
+          throw new RuntimeException("Single call not expected in nested block")
         case _ => ()
       }
 
@@ -996,10 +996,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (wf2, apl2)
   }
 
+  // TODO: use RuntimeExceptions for assertions
   def apply(): (IR.Workflow, Vector[IR.Callable]) = {
     val (irwf, irCallables) = apply2()
 
-    // sanity check
     val callableNames: Set[String] =
       irCallables.map(_.name).toSet ++ callables.keySet
 

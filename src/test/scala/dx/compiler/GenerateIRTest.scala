@@ -156,11 +156,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val irwf = retval match {
       case SuccessIR(irwf, _) => irwf
-      case _                  => throw new Exception("sanity")
+      case _                  => throw new Exception("unexpected")
     }
     val primaryWf: IR.Workflow = irwf.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
-      case _                     => throw new Exception("sanity")
+      case _                     => throw new Exception("unexpected")
     }
     primaryWf.stages.size shouldBe 2
   }
@@ -254,12 +254,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
     val primary: IR.Callable = bundle.primaryCallable.get
     val wf = primary match {
       case wf: IR.Workflow => wf
-      case _               => throw new Exception("sanity")
+      case _               => throw new Exception("unexpected")
     }
 
     wf.stages.size shouldBe 1
@@ -309,7 +309,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("pattern_params_cgrep", bundle)
@@ -360,7 +360,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("pattern_params_obj_cgrep", bundle)
@@ -417,7 +417,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
@@ -500,7 +500,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
@@ -593,7 +593,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
@@ -646,7 +646,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
@@ -709,7 +709,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
@@ -766,7 +766,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
@@ -843,7 +843,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("add_dx_type", bundle)
@@ -904,7 +904,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("add_default", bundle)
@@ -942,7 +942,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
@@ -1017,7 +1017,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
@@ -1070,7 +1070,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("help_output_params_cgrep", bundle)
@@ -1092,7 +1092,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("add", bundle)
@@ -1158,7 +1158,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepApplet = getAppletByName("add_runtime_hints", bundle)
@@ -1184,7 +1184,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
   }
 
@@ -1196,7 +1196,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
@@ -1230,7 +1230,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val cgrepTask = getTaskByName("cgrep", bundle)
@@ -1272,7 +1272,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
@@ -1434,7 +1434,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val bundle = retval match {
       case SuccessIR(bundle, _) => bundle
-      case _                    => throw new Exception("sanity")
+      case _                    => throw new Exception("unexpected")
     }
 
     val wfs: Vector[IR.Workflow] = bundle.allCallables.flatMap {
@@ -1497,7 +1497,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
@@ -1527,7 +1527,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
     val workflow = bundle.primaryCallable match {
       case Some(wf: IR.Workflow) => wf
@@ -1570,7 +1570,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("sanity")
+      case _                => throw new Exception("unexpected")
     }
 
     val workflow = bundle.primaryCallable match {
