@@ -289,7 +289,6 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
       case (accuOuter, (proj, files)) =>
         // Limit on number of objects in one API request
-        // TODO: List vs Vector
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
         // iterate on the ranges
         accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
@@ -702,7 +701,6 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       return alreadyResolved
 
     // Limit on number of objects in one API request
-    // TODO: List vs Vector
     val slices = dxPathsToResolve.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
     // iterate on the ranges
