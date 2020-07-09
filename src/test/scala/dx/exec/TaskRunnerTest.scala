@@ -140,7 +140,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     dxPathConfig.createCleanDirs()
 
     val (_, language, wdlBundle: WdlBundle, allSources, _) =
-      ParseSource(dxApi).apply(wdlCode, List.empty)
+      ParseSource(dxApi).apply(wdlCode, Vector.empty)
     val task: TAT.Task = ParseSource(dxApi).getMainTask(wdlBundle)
     assert(allSources.size == 1)
     val sourceDict = scanForTasks(allSources.values.head)

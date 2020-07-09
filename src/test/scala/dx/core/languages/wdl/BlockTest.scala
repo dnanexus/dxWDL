@@ -155,7 +155,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
   it should "categorize correctly calls to subworkflows" in {
     val path = pathFromBasename("subworkflows", "trains.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, List.empty)
+    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
       case _                      => throw new Exception("Could not find the workflow in the source")
@@ -193,7 +193,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
   it should "handle calls to imported modules II" in {
     val path = pathFromBasename("draft2", "block_category.wdl")
     val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, List.empty)
+      parseWdlSourceFile.apply(path, Vector.empty)
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
@@ -206,7 +206,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
   it should "handle calls to imported modules" in {
     val path = pathFromBasename("draft2", "conditionals1.wdl")
     val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, List.empty)
+      parseWdlSourceFile.apply(path, Vector.empty)
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
@@ -228,7 +228,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
   it should "compile a workflow calling a subworkflow as a direct call" in {
     val path = pathFromBasename("draft2", "movies.wdl")
     val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, List.empty)
+      parseWdlSourceFile.apply(path, Vector.empty)
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
@@ -269,7 +269,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
   it should "find the correct number of scatters" in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, List.empty)
+    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
@@ -284,7 +284,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
   it should "sort a subblock properly" in {
     val path = pathFromBasename("draft2", "conditionals4.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, List.empty)
+    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf

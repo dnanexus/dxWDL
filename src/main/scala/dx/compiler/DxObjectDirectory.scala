@@ -104,7 +104,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
     val dxObjects = dxAppletsInFolder ++ dxWorkflowsInFolder
 
-    val dxObjectList: List[DxObjectInfo] = dxObjects.map {
+    val dxObjectVec: Vector[DxObjectInfo] = dxObjects.map {
       case (dxObj, desc) =>
         val creationDate = new java.util.Date(desc.created)
         val crLdt: LocalDateTime =
@@ -113,11 +113,11 @@ case class DxObjectDirectory(ns: IR.Bundle,
           p.get(CHECKSUM_PROP)
         }
         DxObjectInfo(desc.name, crLdt, dxObj, chksum)
-    }.toList
+    }.toVector
 
     // There could be multiple versions of the same applet/workflow, collect their
     // information in vectors
-    dxObjectList.foldLeft(Map.empty[String, Vector[DxObjectInfo]]) {
+    dxObjectVec.foldLeft(Map.empty[String, Vector[DxObjectInfo]]) {
       case (accu, dxObjInfo) =>
         val name = dxObjInfo.name
         accu.get(name) match {

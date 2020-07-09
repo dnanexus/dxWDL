@@ -628,7 +628,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
                 Some(
                     DxDetails(
                         Some(
-                            List(
+                            Vector(
                                 DxLicense("GATK4",
                                           "https://github.com/broadinstitute/gatk",
                                           "GATK-4.0.1.2",
@@ -700,7 +700,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
                 Some(
                     DxDetails(
                         Some(
-                            List(
+                            Vector(
                                 DxLicense("GATK4",
                                           "https://github.com/broadinstitute/gatk",
                                           "GATK-4.0.1.2",
@@ -798,7 +798,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |]
          |""".stripMargin.parseJson
 
-    val upstreamProjects = List(
+    val upstreamProjects = Vector(
         DxLicense("name", "repoURL", "version1", "license1", "licenseURL", "author1"),
         DxLicense("name2", "repoURL", "version2", "license2", "licenseURL", "author2")
     )
@@ -867,7 +867,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
         Some(
             DxDetails(
                 Some(
-                    List(
+                    Vector(
                         DxLicense("GATK4",
                                   "https://github.com/broadinstitute/gatk",
                                   "GATK-4.0.1.2",

@@ -29,8 +29,8 @@ case class CompilerOptions(archive: Boolean,
                            extras: Option[Extras],
                            fatalValidationWarnings: Boolean,
                            force: Boolean,
-                           importDirs: List[Path],
-                           inputs: List[Path],
+                           importDirs: Vector[Path],
+                           inputs: Vector[Path],
                            leaveWorkflowsOpen: Boolean,
                            locked: Boolean,
                            projectWideReuse: Boolean,
@@ -67,7 +67,7 @@ case class Top(cOpt: CompilerOptions) {
   // the regions live in dxWDL.conf
   def getRegions: Map[String, String] = {
     val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
-    val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+    val l: Vector[Config] = config.getConfigList("dxWDL.region2project").asScala.toVector
     val region2project: Map[String, String] = l.map { pair =>
       val r = pair.getString("region")
       val projName = pair.getString("path")

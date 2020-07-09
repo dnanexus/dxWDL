@@ -32,9 +32,7 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 import wdlTools.util.{FileSourceResolver, Logger, Util}
 
-import scala.collection.mutable
-
-// scan a Cromwell style JSON input file, and return all the dx:files in it.
+// scan a WDL JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
 // {
 //   "foo.f": "dx://dxWDL_playground:/test_data/fileB",
@@ -70,7 +68,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
       // Two ways of writing pairs: an object with left/right fields, or an array
       // with two elements.
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if List("left", "right").forall(fields.contains) =>
+          if Vector("left", "right").forall(fields.contains) =>
         val lFiles = findDxFiles(lType, fields("left"))
         val rFiles = findDxFiles(rType, fields("right"))
         lFiles ++ rFiles
@@ -208,7 +206,7 @@ case class InputFile(fileResolver: FileSourceResolver,
 
       // a few ways of writing a pair: an object, or an array
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if List("left", "right").forall(fields.contains) =>
+          if Vector("left", "right").forall(fields.contains) =>
         val left = wdlValueFromInputJson(lType, fields("left"))
         val right = wdlValueFromInputJson(rType, fields("right"))
         WdlValues.V_Pair(left, right)
@@ -260,25 +258,40 @@ case class InputFile(fileResolver: FileSourceResolver,
   }
 
   // skip comment lines, these start with ##.
-  private def preprocessInputs(obj: JsObject): mutable.HashMap[String, JsValue] = {
-    val inputFields = mutable.HashMap.empty[String, JsValue]
-    obj.fields.foreach {
-      case (k, v) =>
-        if (!k.startsWith("##"))
-          inputFields(k) = v
+  private def preprocessInputs(obj: JsObject): Map[String, JsValue] = {
+    obj.fields.foldLeft(Map.empty[String, JsValue]) {
+      case (accu, (k, v)) if !k.startsWith("##") => accu + (k -> v)
     }
-    inputFields
   }
 
-  private def getExactlyOnce(fields: mutable.HashMap[String, JsValue],
-                             fqn: String): Option[JsValue] = {
+  private class Fields(fields: Map[String, JsValue] = Map.empty) {
+    private var mutFields = fields
+
+    def toMap: Map[String, JsValue] = mutFields
+
+    def nonEmpty: Boolean = mutFields.nonEmpty
+
+    def get(key: String): Option[JsValue] = {
+      mutFields.get(key)
+    }
+
+    def add(key: String, value: JsValue): Unit = {
+      mutFields += (key -> value)
+    }
+
+    def remove(key: String): Unit = {
+      mutFields -= key
+    }
+  }
+
+  private def getExactlyOnce(fields: Fields, fqn: String): Option[JsValue] = {
     fields.get(fqn) match {
       case None =>
         dxApi.logger.trace(s"getExactlyOnce ${fqn} => None")
         None
       case Some(v: JsValue) =>
         dxApi.logger.trace(s"getExactlyOnce ${fqn} => Some(${v})")
-        fields -= fqn
+        fields.remove(fqn)
         Some(v)
     }
   }
@@ -288,7 +301,7 @@ case class InputFile(fileResolver: FileSourceResolver,
   private def addDefaultsToStage(stg: IR.Stage,
                                  prefix: String,
                                  callee: IR.Callable,
-                                 defaultFields: mutable.HashMap[String, JsValue]): IR.Stage = {
+                                 defaultFields: Fields): IR.Stage = {
     logger2.trace(s"addDefaultToStage ${stg.id.getId}, ${stg.description}")
     val inputsFull: Vector[(SArg, CVar)] = stg.inputs.zipWithIndex.map {
       case (sArg, idx) =>
@@ -312,7 +325,7 @@ case class InputFile(fileResolver: FileSourceResolver,
   private def addDefaultsToWorkflowInputs(
       inputs: Vector[(CVar, SArg)],
       wfName: String,
-      defaultFields: mutable.HashMap[String, JsValue]
+      defaultFields: Fields
   ): Vector[(CVar, SArg)] = {
     inputs.map {
       case (cVar, sArg) =>
@@ -328,8 +341,7 @@ case class InputFile(fileResolver: FileSourceResolver,
   }
 
   // set defaults for a task
-  private def embedDefaultsIntoTask(applet: IR.Applet,
-                                    defaultFields: mutable.HashMap[String, JsValue]): IR.Applet = {
+  private def embedDefaultsIntoTask(applet: IR.Applet, defaultFields: Fields): IR.Applet = {
     val inputsWithDefaults: Vector[CVar] = applet.inputs.map { cVar =>
       val fqn = s"${applet.name}.${cVar.name}"
       getExactlyOnce(defaultFields, fqn) match {
@@ -351,7 +363,7 @@ case class InputFile(fileResolver: FileSourceResolver,
   private def embedDefaultsIntoWorkflow(
       wf: IR.Workflow,
       callables: Map[String, IR.Callable],
-      defaultFields: mutable.HashMap[String, JsValue]
+      defaultFields: Fields
   ): IR.Workflow = {
     val wfWithDefaults =
       if (wf.locked) {
@@ -394,7 +406,7 @@ case class InputFile(fileResolver: FileSourceResolver,
 
     // read the default inputs file (xxxx.json)
     val wdlDefaults: JsObject = Util.readFileContent(defaultInputs).parseJson.asJsObject
-    val defaultFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
+    val defaultFields: Fields = new Fields(preprocessInputs(wdlDefaults))
 
     val callablesWithDefaults = bundle.allCallables.map {
       case (name, callable) =>
@@ -420,10 +432,11 @@ case class InputFile(fileResolver: FileSourceResolver,
     bundle.copy(primaryCallable = primaryCallable, allCallables = callablesWithDefaults)
   }
 
-  // Converting a Cromwell style input JSON file, into a valid DNAx input file
+  // Converting a WDL input JSON file, into a valid DNAnexus input file
   //
-  case class CromwellInputFileState(inputFields: mutable.HashMap[String, JsValue],
-                                    dxKeyValues: mutable.HashMap[String, JsValue]) {
+  private case class InputFileState(inputFields: Fields) {
+    private val dxKeyValues: Fields = new Fields()
+
     // If WDL variable fully qualified name [fqn] was provided in the
     // input file, set [stage.cvar] to its JSON value
     def checkAndBind(fqn: String, dxName: String, cVar: IR.CVar): Unit = {
@@ -437,17 +450,18 @@ case class InputFile(fileResolver: FileSourceResolver,
           val wvl = translateValue(cVar, jsv)
           wdlVarLinksConverter
             .genFields(wvl, dxName, encodeDots = false)
-            .foreach { case (name, jsv) => dxKeyValues(name) = jsv }
+            .foreach { case (name, jsv) => dxKeyValues.add(name, jsv) }
       }
     }
 
     // Check if all the input fields were actually used. Otherwise, there are some
     // key/value pairs that were not translated to DNAx.
-    def checkAllUsed(): Unit = {
-      if (inputFields.isEmpty)
-        return
-      throw new Exception(s"""|Could not map all input fields.
-                              |These were left: ${inputFields}""".stripMargin)
+    def checkAllUsed(): JsObject = {
+      if (inputFields.nonEmpty) {
+        throw new Exception(s"""|Could not map all input fields.
+                                |These were left: ${inputFields}""".stripMargin)
+      }
+      JsObject(dxKeyValues.toMap)
     }
   }
 
@@ -462,8 +476,8 @@ case class InputFile(fileResolver: FileSourceResolver,
 
     // read the input file xxxx.json
     val wdlInputs: JsObject = Util.readFileContent(inputPath).parseJson.asJsObject
-    val inputFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlInputs)
-    val cif = CromwellInputFileState(inputFields, mutable.HashMap.empty)
+    val inputFields: Fields = new Fields(preprocessInputs(wdlInputs))
+    val cif = InputFileState(inputFields)
 
     def handleTask(applet: IR.Applet): Unit = {
       applet.inputs.foreach { cVar =>
@@ -539,7 +553,5 @@ case class InputFile(fileResolver: FileSourceResolver,
     }
 
     cif.checkAllUsed()
-
-    JsObject(cif.dxKeyValues.toMap)
   }
 }

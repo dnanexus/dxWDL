@@ -6,7 +6,7 @@ import wdlTools.types.WdlTypes
 
 class TypeSerializationTest extends AnyFlatSpec with Matchers {
 
-  val testCases: List[WdlTypes.T] = List(
+  val testCases: Vector[WdlTypes.T] = Vector(
       // Primitive types
       WdlTypes.T_Boolean,
       WdlTypes.T_Int,
@@ -40,7 +40,7 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
       Map("street" -> WdlTypes.T_String, "zip code" -> WdlTypes.T_Int, "owner" -> personType)
   )
 
-  val structTestCases: List[WdlTypes.T] = List(
+  val structTestCases: Vector[WdlTypes.T] = Vector(
       personType,
       WdlTypes.T_Pair(personType, houseType),
       WdlTypes.T_Optional(houseType)
@@ -55,7 +55,7 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  val badTypeNames: List[String] = List(
+  val badTypeNames: Vector[String] = Vector(
       "A bad type",
       "placeholder",
       "Map[Int, UnrealFile]",

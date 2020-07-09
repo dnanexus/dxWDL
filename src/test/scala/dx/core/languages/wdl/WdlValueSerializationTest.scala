@@ -14,7 +14,7 @@ class WdlValueSerializationTest extends AnyFlatSpec with Matchers {
   private val typeAliases: Map[String, T] = Map("Person" -> personType, "House" -> houseType)
   private val valueSerializer = WdlValueSerialization(typeAliases)
 
-  val valueTestCases: List[(T, V)] = List(
+  val valueTestCases: Vector[(T, V)] = Vector(
       // primitive types
       (T_Boolean, V_Boolean(false)),
       (T_Int, V_Int(12)),

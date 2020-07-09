@@ -95,7 +95,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, fileResolver) = setup()
 
-    val (_, language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, List.empty)
+    val (_, language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, Vector.empty)
 
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf

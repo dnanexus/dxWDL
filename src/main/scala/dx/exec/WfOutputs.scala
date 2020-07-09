@@ -65,7 +65,7 @@ case class WfOutputs(wf: TAT.Workflow,
           val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
-      .toList
+      .toVector
       .flatten
       .toMap
 

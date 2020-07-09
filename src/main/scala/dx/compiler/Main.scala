@@ -12,8 +12,6 @@ import dx.core.util.MainUtils._
 import spray.json._
 import wdlTools.util.{Logger, TraceLevel, Util}
 
-import scala.collection.mutable
-
 object Main {
   private val DEFAULT_RUNTIME_TRACE_LEVEL: Int = TraceLevel.Verbose
 
@@ -75,19 +73,19 @@ object Main {
   // TODO: use RuntimeException for assertions
   private def pathOptions(options: OptionsMap, dxApi: DxApi): (DxProject, String) = {
     var folderOpt: Option[String] = options.get("folder") match {
-      case None          => None
-      case Some(List(f)) => Some(f)
-      case other         => throw new Exception(s"Unexpected value for 'folder': ${other}")
+      case None            => None
+      case Some(Vector(f)) => Some(f)
+      case other           => throw new Exception(s"Unexpected value for 'folder': ${other}")
     }
     var projectOpt: Option[String] = options.get("project") match {
-      case None          => None
-      case Some(List(p)) => Some(p)
-      case other         => throw new Exception(s"Unexpected value for 'project': ${other}")
+      case None            => None
+      case Some(Vector(p)) => Some(p)
+      case other           => throw new Exception(s"Unexpected value for 'project': ${other}")
     }
     val destinationOpt: Option[String] = options.get("destination") match {
-      case None          => None
-      case Some(List(d)) => Some(d)
-      case Some(other)   => throw new Exception(s"Invalid path syntex <${other}>")
+      case None            => None
+      case Some(Vector(d)) => Some(d)
+      case Some(other)     => throw new Exception(s"Invalid path syntex <${other}>")
     }
 
     // There are three possible syntaxes:
@@ -142,13 +140,12 @@ object Main {
 
   // parse extra command line arguments
   private def parseCmdlineOptions(arglist: List[String]): OptionsMap = {
-    def keywordValueIsList = Set("inputs", "imports", "verboseKey")
+    def keywordValueIsVector = Set("inputs", "imports", "verboseKey")
 
     val cmdLineOpts = splitCmdLine(arglist)
-    val options = mutable.HashMap.empty[String, List[String]]
-    cmdLineOpts.foreach {
-      case Nil => throw new Exception("Empty command line option")
-      case keyOrg :: subargs =>
+    val options = cmdLineOpts.foldLeft(Map.empty[String, List[String]]) {
+      case (_, Nil) => throw new Exception("sanity: empty command line option")
+      case (options, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {
           case "apps" =>
@@ -238,16 +235,16 @@ object Main {
         options.get(nKeyword) match {
           case None =>
             // first time
-            options(nKeyword) = List(value)
-          case Some(x) if keywordValueIsList contains nKeyword =>
+            options + (nKeyword -> List(value))
+          case Some(x) if keywordValueIsVector contains nKeyword =>
             // append to the already existing verbose flags
-            options(nKeyword) = value :: x
+            options + (nKeyword -> (value :: x))
           case Some(_) =>
             // overwrite the previous flag value
-            options(nKeyword) = List(value)
+            options + (nKeyword -> List(value))
         }
     }
-    options.toMap
+    options.view.mapValues(_.toVector).toMap
   }
 
   def compile(args: Seq[String]): Termination = {
@@ -335,13 +332,11 @@ object Main {
     }
   }
 
-  private def parseDescribeOptions(argList: List[String]): OptionsMap = {
-    val describeOpts = splitCmdLine(argList)
-    val options = mutable.HashMap.empty[String, List[String]]
-
-    describeOpts.foreach {
-      case Nil => Nil
-      case keyOrg :: subargs =>
+  private def parseDescribeOptions(arglist: List[String]): OptionsMap = {
+    val describeOpts = splitCmdLine(arglist)
+    describeOpts.foldLeft(Map.empty[String, Vector[String]]) {
+      case (options, Nil) => options
+      case (options, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {
           case "pretty" =>
@@ -354,16 +349,8 @@ object Main {
             throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
 
         }
-        options.get(nKeyword) match {
-          case None =>
-            // first time
-            options(nKeyword) = List(value)
-          case Some(_) =>
-            // overwrite the previous flag value
-            options(nKeyword) = List(value)
-        }
+        options + (nKeyword -> Vector(value))
     }
-    options.toMap
   }
 
   def describe(args: Seq[String]): Termination = {
@@ -409,30 +396,30 @@ object Main {
   private def compilerOptions(options: OptionsMap): CompilerOptions = {
     val dxApi = createDxApi(options)
     val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-      case None                                               => CompilerFlag.All
-      case Some(List(x)) if x.toLowerCase == "IR".toLowerCase => CompilerFlag.IR
-      case Some(List(x)) if x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase =>
+      case None                                                 => CompilerFlag.All
+      case Some(Vector(x)) if x.toLowerCase == "IR".toLowerCase => CompilerFlag.IR
+      case Some(Vector(x)) if x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase =>
         CompilerFlag.NativeWithoutRuntimeAsset
       case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
     }
     val defaults: Option[Path] = options.get("defaults") match {
-      case None          => None
-      case Some(List(p)) => Some(Paths.get(p))
-      case _             => throw new Exception("defaults specified twice")
+      case None            => None
+      case Some(Vector(p)) => Some(Paths.get(p))
+      case _               => throw new Exception("defaults specified twice")
     }
     val extras = options.get("extras") match {
       case None => None
-      case Some(List(p)) =>
+      case Some(Vector(p)) =>
         val contents = Util.readFileContent(Paths.get(p))
         Some(Extras.parse(contents.parseJson, dxApi))
       case _ => throw new Exception("extras specified twice")
     }
-    val inputs: List[Path] = options.get("inputs") match {
-      case None     => List.empty
+    val inputs: Vector[Path] = options.get("inputs") match {
+      case None     => Vector.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
-    val imports: List[Path] = options.get("imports") match {
-      case None     => List.empty
+    val imports: Vector[Path] = options.get("imports") match {
+      case None     => Vector.empty
       case Some(pl) => pl.map(p => Paths.get(p))
     }
     val treePrinter: Option[TreePrinter] = options.get("execTree") match {
@@ -477,14 +464,14 @@ object Main {
 
   private def dxniAppOptions(options: OptionsMap): DxniBaseOptions = {
     val outputFile: Path = options.get("outputFile") match {
-      case None          => throw new Exception("output file not specified")
-      case Some(List(p)) => Paths.get(p)
-      case _             => throw new Exception("only one output file can be specified")
+      case None            => throw new Exception("output file not specified")
+      case Some(Vector(p)) => Paths.get(p)
+      case _               => throw new Exception("only one output file can be specified")
     }
     val dxApi = createDxApi(options)
     val language = options.get("language") match {
       case None => Language.WDLvDraft2
-      case Some(List(buf)) =>
+      case Some(Vector(buf)) =>
         val bufNorm = buf.toLowerCase
           .replaceAll("\\.", "")
           .replaceAll("_", "")
@@ -512,9 +499,9 @@ object Main {
   private def dxniAppletOptions(options: OptionsMap): DxniAppletOptions = {
     val dOpt = dxniAppOptions(options)
     val project: String = options.get("project") match {
-      case None          => throw new Exception("no project specified")
-      case Some(List(p)) => p
-      case _             => throw new Exception("project specified multiple times")
+      case None            => throw new Exception("no project specified")
+      case Some(Vector(p)) => p
+      case _               => throw new Exception("project specified multiple times")
     }
     val dxProject =
       try {
@@ -528,8 +515,8 @@ object Main {
           )
       }
     val folder = options.get("folder") match {
-      case None           => None
-      case Some(List(fl)) =>
+      case None             => None
+      case Some(Vector(fl)) =>
         // Validate the folder. It would have been nicer to be able
         // to check if a folder exists, instead of validating by
         // listing its contents, which could be very large.
@@ -543,9 +530,9 @@ object Main {
       case Some(_) => throw new Exception("folder specified multiple times")
     }
     val path: Option[String] = options.get("path") match {
-      case None          => None
-      case Some(List(p)) => Some(p)
-      case Some(_)       => throw new Exception("path specified multiple times")
+      case None            => None
+      case Some(Vector(p)) => Some(p)
+      case Some(_)         => throw new Exception("path specified multiple times")
     }
     val folderOrPath: Either[String, String] = (folder, path) match {
       case (None, None)       => Left("/") // use the root folder as the default

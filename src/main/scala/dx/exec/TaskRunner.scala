@@ -187,7 +187,7 @@ case class TaskRunner(task: TAT.Task,
               |# characters that may be in the fifo queues.
               |sync
               |""".stripMargin
-        List(part1, command, part2).mkString("\n")
+        Vector(part1, command, part2).mkString("\n")
       }
     dxApi.logger.traceLimited(s"writing bash script to ${dxPathConfig.script}")
     Util.writeFileContent(dxPathConfig.script, script)
@@ -396,7 +396,7 @@ case class TaskRunner(task: TAT.Task,
           val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
           wdlVarLinksConverter.genFields(wvl, outputVarName)
       }
-      .toList
+      .toVector
       .flatten
       .toMap
     outputFields
