@@ -264,35 +264,62 @@ case class InputFile(fileResolver: FileSourceResolver,
     }
   }
 
-  private class Fields(fields: Map[String, JsValue] = Map.empty) {
-    private var mutFields = fields
+  private class Fields(name: String, fields: Map[String, JsValue]) {
+    private var retrievedKeys: Set[String] = Set.empty
 
-    def toMap: Map[String, JsValue] = mutFields
-
-    def nonEmpty: Boolean = mutFields.nonEmpty
-
-    def get(key: String): Option[JsValue] = {
-      mutFields.get(key)
+    def getExactlyOnce(fqn: String): Option[JsValue] = {
+      fields.get(fqn) match {
+        case None =>
+          dxApi.logger.trace(s"getExactlyOnce ${fqn} => None")
+          None
+        case Some(v: JsValue) if retrievedKeys.contains(fqn) =>
+          dxApi.logger.trace(
+              s"getExactlyOnce ${fqn} => Some(${v}); value already retrieved so returning None"
+          )
+          None
+        case Some(v: JsValue) =>
+          dxApi.logger.trace(s"getExactlyOnce ${fqn} => Some(${v})")
+          retrievedKeys += fqn
+          Some(v)
+      }
     }
 
-    def add(key: String, value: JsValue): Unit = {
-      mutFields += (key -> value)
-    }
+    def checkAllUsed(): Unit = {
+      val unused = fields.keySet -- retrievedKeys
+      if (unused.nonEmpty) {
+        throw new Exception(s"""|Could not map all ${name} fields.
+                                |These were left: ${unused}""".stripMargin)
 
-    def remove(key: String): Unit = {
-      mutFields -= key
+      }
     }
   }
 
-  private def getExactlyOnce(fields: Fields, fqn: String): Option[JsValue] = {
-    fields.get(fqn) match {
-      case None =>
-        dxApi.logger.trace(s"getExactlyOnce ${fqn} => None")
-        None
-      case Some(v: JsValue) =>
-        dxApi.logger.trace(s"getExactlyOnce ${fqn} => Some(${v})")
-        fields.remove(fqn)
-        Some(v)
+  // Converting a WDL input JSON file, into a valid DNAnexus input file
+  private case class InputFileState(fields: Map[String, JsValue]) {
+    private val inputFields: Fields = new Fields("input", fields)
+    private var dxKeyValues: Map[String, JsValue] = Map.empty
+
+    // If WDL variable fully qualified name [fqn] was provided in the
+    // input file, set [stage.cvar] to its JSON value
+    def checkAndBind(fqn: String, dxName: String, cVar: IR.CVar): Unit = {
+      inputFields.getExactlyOnce(fqn) match {
+        case None      => ()
+        case Some(jsv) =>
+          // Do not assign the value to any later stages.
+          // We found the variable declaration, the others
+          // are variable uses.
+          dxApi.logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
+          dxKeyValues ++= wdlVarLinksConverter
+            .genFields(translateValue(cVar, jsv), dxName, encodeDots = false)
+            .toMap
+      }
+    }
+
+    // Check if all the input fields were actually used. Otherwise, there are some
+    // key/value pairs that were not translated to DNAx.
+    def toJsObject: JsObject = {
+      inputFields.checkAllUsed()
+      JsObject(dxKeyValues)
     }
   }
 
@@ -311,7 +338,7 @@ case class InputFile(fileResolver: FileSourceResolver,
     val inputsWithDefaults: Vector[SArg] = inputsFull.map {
       case (sArg, cVar) =>
         val fqn = s"${prefix}.${cVar.name}"
-        getExactlyOnce(defaultFields, fqn) match {
+        defaultFields.getExactlyOnce(fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
             val w: WdlValues.V = wdlValueFromInputJson(cVar.wdlType, dflt)
@@ -330,7 +357,7 @@ case class InputFile(fileResolver: FileSourceResolver,
     inputs.map {
       case (cVar, sArg) =>
         val fqn = s"${wfName}.${cVar.name}"
-        val sArgDflt = getExactlyOnce(defaultFields, fqn) match {
+        val sArgDflt = defaultFields.getExactlyOnce(fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
             val w: WdlValues.V = wdlValueFromInputJson(cVar.wdlType, dflt)
@@ -344,7 +371,7 @@ case class InputFile(fileResolver: FileSourceResolver,
   private def embedDefaultsIntoTask(applet: IR.Applet, defaultFields: Fields): IR.Applet = {
     val inputsWithDefaults: Vector[CVar] = applet.inputs.map { cVar =>
       val fqn = s"${applet.name}.${cVar.name}"
-      getExactlyOnce(defaultFields, fqn) match {
+      defaultFields.getExactlyOnce(fqn) match {
         case None =>
           cVar
         case Some(dflt: JsValue) =>
@@ -406,7 +433,7 @@ case class InputFile(fileResolver: FileSourceResolver,
 
     // read the default inputs file (xxxx.json)
     val wdlDefaults: JsObject = Util.readFileContent(defaultInputs).parseJson.asJsObject
-    val defaultFields: Fields = new Fields(preprocessInputs(wdlDefaults))
+    val defaultFields: Fields = new Fields("default", preprocessInputs(wdlDefaults))
 
     val callablesWithDefaults = bundle.allCallables.map {
       case (name, callable) =>
@@ -425,44 +452,8 @@ case class InputFile(fileResolver: FileSourceResolver,
       case Some(wf: IR.Workflow) =>
         Some(embedDefaultsIntoWorkflow(wf, bundle.allCallables, defaultFields))
     }
-    if (defaultFields.nonEmpty) {
-      throw new Exception(s"""|Could not map all default fields.
-                              |These were left: ${defaultFields}""".stripMargin)
-    }
+    defaultFields.checkAllUsed()
     bundle.copy(primaryCallable = primaryCallable, allCallables = callablesWithDefaults)
-  }
-
-  // Converting a WDL input JSON file, into a valid DNAnexus input file
-  //
-  private case class InputFileState(inputFields: Fields) {
-    private val dxKeyValues: Fields = new Fields()
-
-    // If WDL variable fully qualified name [fqn] was provided in the
-    // input file, set [stage.cvar] to its JSON value
-    def checkAndBind(fqn: String, dxName: String, cVar: IR.CVar): Unit = {
-      getExactlyOnce(inputFields, fqn) match {
-        case None      => ()
-        case Some(jsv) =>
-          // Do not assign the value to any later stages.
-          // We found the variable declaration, the others
-          // are variable uses.
-          dxApi.logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
-          val wvl = translateValue(cVar, jsv)
-          wdlVarLinksConverter
-            .genFields(wvl, dxName, encodeDots = false)
-            .foreach { case (name, jsv) => dxKeyValues.add(name, jsv) }
-      }
-    }
-
-    // Check if all the input fields were actually used. Otherwise, there are some
-    // key/value pairs that were not translated to DNAx.
-    def checkAllUsed(): JsObject = {
-      if (inputFields.nonEmpty) {
-        throw new Exception(s"""|Could not map all input fields.
-                                |These were left: ${inputFields}""".stripMargin)
-      }
-      JsObject(dxKeyValues.toMap)
-    }
   }
 
   // Build a dx input file, based on the JSON input file and the workflow
@@ -476,14 +467,13 @@ case class InputFile(fileResolver: FileSourceResolver,
 
     // read the input file xxxx.json
     val wdlInputs: JsObject = Util.readFileContent(inputPath).parseJson.asJsObject
-    val inputFields: Fields = new Fields(preprocessInputs(wdlInputs))
-    val cif = InputFileState(inputFields)
+    val inputFields = InputFileState(preprocessInputs(wdlInputs))
 
     def handleTask(applet: IR.Applet): Unit = {
       applet.inputs.foreach { cVar =>
         val fqn = s"${applet.name}.${cVar.name}"
         val dxName = s"${cVar.name}"
-        cif.checkAndBind(fqn, dxName, cVar)
+        inputFields.checkAndBind(fqn, dxName, cVar)
       }
     }
 
@@ -510,7 +500,7 @@ case class InputFile(fileResolver: FileSourceResolver,
           case (cVar, _) =>
             val fqn = s"${wf.name}.${cVar.name}"
             val dxName = s"${cVar.name}"
-            cif.checkAndBind(fqn, dxName, cVar)
+            inputFields.checkAndBind(fqn, dxName, cVar)
         }
       case Some(wf: IR.Workflow) if wf.stages.isEmpty =>
         // edge case: workflow, with zero stages
@@ -524,7 +514,7 @@ case class InputFile(fileResolver: FileSourceResolver,
           case (cVar, _) =>
             val fqn = s"${wf.name}.${cVar.name}"
             val dxName = s"${commonStage}.${cVar.name}"
-            cif.checkAndBind(fqn, dxName, cVar)
+            inputFields.checkAndBind(fqn, dxName, cVar)
         }
 
         // filter out auxiliary stages
@@ -544,7 +534,7 @@ case class InputFile(fileResolver: FileSourceResolver,
           callee.inputVars.foreach { cVar =>
             val fqn = s"${wf.name}.${stage.description}.${cVar.name}"
             val dxName = s"${stage.description}.${cVar.name}"
-            cif.checkAndBind(fqn, dxName, cVar)
+            inputFields.checkAndBind(fqn, dxName, cVar)
           }
         }
 
@@ -552,6 +542,6 @@ case class InputFile(fileResolver: FileSourceResolver,
         throw new Exception(s"Unknown case ${other.getClass}")
     }
 
-    cif.checkAllUsed()
+    inputFields.toJsObject
   }
 }
