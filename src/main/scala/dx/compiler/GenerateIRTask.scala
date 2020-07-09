@@ -43,7 +43,7 @@ case class GenerateIRTask(dxApi: DxApi,
       runtimeAttributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
-          defaultRuntimeAttrs.m.get(attrName)
+          defaultRuntimeAttrs.value.get(attrName)
         case Some(expr) =>
           Some(evalWdlExpression(expr))
       }
@@ -57,7 +57,7 @@ case class GenerateIRTask(dxApi: DxApi,
       hintAttributes.get(attrName) match {
         case None =>
           // Check the overall defaults, there might be a setting over there
-          defaultHintAttrs.m.get(attrName)
+          defaultHintAttrs.value.get(attrName)
         case Some(value) => Some(value)
       }
     }
@@ -395,7 +395,7 @@ case class GenerateIRTask(dxApi: DxApi,
       case IR.DockerImageNone =>
         // No docker image was specified, but there might be one in the
         // overall defaults
-        defaultRuntimeAttrs.m.get("docker") match {
+        defaultRuntimeAttrs.value.get("docker") match {
           case None         => IR.DockerImageNone
           case Some(wValue) => triageDockerImageFromValue(wValue)
         }

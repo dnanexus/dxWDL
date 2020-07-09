@@ -40,26 +40,21 @@ import java.nio.file.Paths
 import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileDescCache, ExecLinkInfo}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, TraceLevel}
+import wdlTools.util.TraceLevel
 
 case class WfFragRunner(wf: TAT.Workflow,
                         taskDir: Map[String, TAT.Task],
-                        typeAliases: Map[String, WdlTypes.T],
-                        document: TAT.Document,
-                        instanceTypeDB: InstanceTypeDB,
+                        instanceTypeDb: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
-                        dxPathConfig: DxPathConfig,
-                        fileResolver: FileSourceResolver,
                         wdlVarLinksConverter: WdlVarLinksConverter,
                         jobInputOutput: JobInputOutput,
                         inputsRaw: JsValue,
-                        fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
                         dxApi: DxApi,
@@ -68,7 +63,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private val collectSubJobs = CollectSubJobs(
       jobInputOutput,
       inputsRaw,
-      instanceTypeDB,
+      instanceTypeDb,
       delayWorkspaceDestruction,
       dxApi,
       // TODO: to we really need to provide an empty cache?
@@ -338,22 +333,9 @@ case class WfFragRunner(wf: TAT.Workflow,
       return None
 
     // There is runtime evaluation for the instance type
-    val taskRunner = TaskRunner(
-        task,
-        document,
-        typeAliases,
-        instanceTypeDB,
-        dxPathConfig,
-        fileResolver,
-        wdlVarLinksConverter,
-        jobInputOutput,
-        defaultRuntimeAttributes,
-        delayWorkspaceDestruction,
-        dxApi,
-        evaluator
-    )
+    val runnerEval = RunnerEval(task, taskInputs, defaultRuntimeAttributes, dxApi.logger, evaluator)
     try {
-      val iType = taskRunner.calcInstanceType(taskInputs)
+      val iType = runnerEval.calcInstanceType(instanceTypeDb)
       dxApi.logger.traceLimited(s"Precalculated instance type for ${task.name}: ${iType}")
       Some(iType)
     } catch {
@@ -369,11 +351,11 @@ case class WfFragRunner(wf: TAT.Workflow,
     }
   }
 
-  private def execDNAxExecutable(execLink: ExecLinkInfo,
-                                 dbgName: String,
-                                 callInputs: JsValue,
-                                 instanceType: Option[String]): (Int, DxExecution) = {
-    dxApi.logger.traceLimited(s"execDNAx ${callInputs.prettyPrint}", minLevel = TraceLevel.VVerbose)
+  private def execDxExecutable(execLink: ExecLinkInfo,
+                               dbgName: String,
+                               callInputs: JsValue,
+                               instanceType: Option[String]): (Int, DxExecution) = {
+    dxApi.logger.traceLimited(s"execDx ${callInputs.prettyPrint}", minLevel = TraceLevel.VVerbose)
 
     // Last check that we have all the compulsory arguments.
     //
@@ -476,7 +458,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         preCalcInstanceType(task, taskInputs)
     }
     val linkInfo = getCallLinkInfo(call)
-    execDNAxExecutable(linkInfo, dbgName, callInputsJSON, instanceType)
+    execDxExecutable(linkInfo, dbgName, callInputsJSON, instanceType)
   }
 
   // create promises to this call. This allows returning
@@ -601,7 +583,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
       // The subblock is complex, and requires a fragment, or a subworkflow
       val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-      val (_, dxExec) = execDNAxExecutable(linkInfo, linkInfo.name, callInputs, None)
+      val (_, dxExec) = execDxExecutable(linkInfo, linkInfo.name, callInputs, None)
 
       // create promises for results
       linkInfo.outputs.map {
@@ -736,7 +718,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
         // The subblock is complex, and requires a fragment, or a subworkflow
         val callInputs: JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-        val (_, dxJob) = execDNAxExecutable(linkInfo, dbgName, callInputs, None)
+        val (_, dxJob) = execDxExecutable(linkInfo, dbgName, callInputs, None)
         dxJob
       }
 

@@ -187,21 +187,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     }
 
     // run the entire task
-
-    // prolog
-    val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
-
-    // instantiate the command
-    val env = taskRunner.instantiateCommand(localizedInputs)
-
-    // execute the shell script in a child job
-    val script: Path = dxPathConfig.script
-    if (Files.exists(script)) {
-      val (_, _) = Util.execCommand(script.toString, None)
-    }
-
-    // epilog
-    val outputFields: Map[String, JsValue] = taskRunner.epilog(env, dxUrl2path)
+    val outputFields = taskRunner.runTask(inputs)
 
     outputFieldsExpected match {
       case None      => ()
@@ -210,6 +196,43 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // return the task structure
     taskRunner
+  }
+
+  // Read the manifest file from a docker tarball, and get the repository name.
+  //
+  // A manifest could look like this:
+  // [
+  //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
+  //     "RepoTags":["ubuntu_18_04_minimal:latest"],
+  //     "Layers":[
+  //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
+  //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
+  //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
+  //          ]}
+  // ]
+  private def readManifestGetDockerImageName(buf: String): String = {
+    val jso = buf.parseJson
+    val elem = jso match {
+      case JsArray(elements) if elements.nonEmpty => elements.head
+      case other =>
+        throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
+    }
+    val repo: String = elem.asJsObject.fields.get("RepoTags") match {
+      case None =>
+        throw new Exception("The repository is not specified for the image")
+      case Some(JsString(repo)) =>
+        repo
+      case Some(JsArray(elements)) =>
+        if (elements.isEmpty)
+          throw new Exception("RepoTags has an empty array")
+        elements.head match {
+          case JsString(repo) => repo
+          case other          => throw new Exception(s"bad value ${other} in RepoTags manifest field")
+        }
+      case other =>
+        throw new Exception(s"bad value ${other} in RepoTags manifest field")
+    }
+    repo
   }
 
   it should "execute a simple WDL task" in {
@@ -278,7 +301,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
                  |}
                  |]""".stripMargin.trim
 
-    val repo = TaskRunner.readManifestGetDockerImageName(buf)
+    val repo = readManifestGetDockerImageName(buf)
     repo should equal("ubuntu_18_04_minimal:latest")
   }
 

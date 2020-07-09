@@ -201,8 +201,8 @@ case class DxDetails(upstreamProjects: Option[Vector[DxLicense]]) {
 //    cpu
 //    docker
 //
-case class WdlRuntimeAttrs(m: Map[String, WdlValues.V])
-case class WdlHintAttrs(m: Map[String, TAT.MetaValue])
+case class WdlRuntimeAttrs(value: Map[String, WdlValues.V])
+case class WdlHintAttrs(value: Map[String, TAT.MetaValue])
 
 // support automatic conversion to/from JsValue
 object WdlRuntimeAttrs extends DefaultJsonProtocol {
@@ -226,7 +226,7 @@ object WdlRuntimeAttrs extends DefaultJsonProtocol {
     }
 
     def write(wra: WdlRuntimeAttrs): JsValue = {
-      val fields = wra.m.map {
+      val fields = wra.value.map {
         case (k, v) =>
           k -> writeWdlValue(v)
       }

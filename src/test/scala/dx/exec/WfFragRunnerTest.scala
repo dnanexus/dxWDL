@@ -52,21 +52,14 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                                         wdlVarLinksConverter,
                                         dxApi,
                                         evaluator)
-    val fragInputOutput =
-      WfFragInputOutput(typeAliases, wdlVarLinksConverter, dxApi)
     val fragRunner = WfFragRunner(
         wf,
         taskDir,
-        typeAliases,
-        document,
         instanceTypeDB,
         Map.empty[String, ExecLinkInfo],
-        dxPathConfig,
-        fileResolver,
         wdlVarLinksConverter,
         jobInputOutput,
         JsNull,
-        fragInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),
         dxApi,

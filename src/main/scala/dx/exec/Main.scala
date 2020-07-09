@@ -81,44 +81,40 @@ object Main {
         evaluator
     )
 
+    def writeJsonOutput(fields: Map[String, JsValue]): Unit = {
+      val json = JsObject(fields.filter {
+        case (_, jsValue) => jsValue != null && jsValue != JsNull
+      })
+      Util.writeFileContent(jobOutputPath, json.prettyPrint)
+    }
+
+    val runnerEval = RunnerEval(task, inputs, defaultRuntimeAttributes, dxApi.logger, evaluator)
+
     // Running tasks
     op match {
       case ExecAction.TaskCheckInstanceType =>
         // special operation to check if this task is on the right instance type
-        val correctInstanceType: Boolean = taskRunner.checkInstanceType(inputs)
+        val correctInstanceType: Boolean = taskRunner.checkInstanceType(runnerEval)
         Success(correctInstanceType.toString)
 
       case ExecAction.TaskProlog =>
-        val (localizedInputs, fileSourceToPath) = taskRunner.prolog(inputs)
-        taskRunner.writeEnvToDisk(localizedInputs, fileSourceToPath)
+        taskRunner.prologStep(inputs)
         Success(s"success ${op}")
 
       case ExecAction.TaskInstantiateCommand =>
-        val (localizedInputs, fileSourceToPath) = taskRunner.readEnvFromDisk()
-        val env = taskRunner.instantiateCommand(localizedInputs)
-        taskRunner.writeEnvToDisk(env, fileSourceToPath)
+        taskRunner.instantiateCommandStep()
         Success(s"success ${op}")
 
       case ExecAction.TaskEpilog =>
-        val (env, fileSourceToPath) = taskRunner.readEnvFromDisk()
-        val outputFields: Map[String, JsValue] = taskRunner.epilog(env, fileSourceToPath)
-
+        val outputFields: Map[String, JsValue] = taskRunner.epilogStep()
         // write outputs, ignore null values, these could occur for optional
         // values that were not specified.
-        val json = JsObject(outputFields.filter {
-          case (_, jsValue) => jsValue != null && jsValue != JsNull
-        })
-        val ast_pp = json.prettyPrint
-        Util.writeFileContent(jobOutputPath, ast_pp)
+        writeJsonOutput(outputFields)
         Success(s"success ${op}")
 
       case ExecAction.TaskRelaunch =>
-        val outputFields: Map[String, JsValue] = taskRunner.relaunch(inputs, originalInputs)
-        val json = JsObject(outputFields.filter {
-          case (_, jsValue) => jsValue != null && jsValue != JsNull
-        })
-        val ast_pp = json.prettyPrint
-        Util.writeFileContent(jobOutputPath, ast_pp)
+        val outputFields: Map[String, JsValue] = taskRunner.relaunch(runnerEval, originalInputs)
+        writeJsonOutput(outputFields)
         Success(s"success ${op}")
 
       case _ =>
@@ -166,16 +162,11 @@ object Main {
           val fragRunner = WfFragRunner(
               wf,
               taskDir,
-              typeAliases,
-              document,
               instanceTypeDB,
               fragInputs.execLinkInfo,
-              dxPathConfig,
-              fileResolver,
               wdlVarLinksConverter,
               jobInputOutput,
               inputsRaw,
-              fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
               dxApi,
@@ -186,16 +177,11 @@ object Main {
           val fragRunner = WfFragRunner(
               wf,
               taskDir,
-              typeAliases,
-              document,
               instanceTypeDB,
               fragInputs.execLinkInfo,
-              dxPathConfig,
-              fileResolver,
               wdlVarLinksConverter,
               jobInputOutput,
               inputsRaw,
-              fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
               dxApi,

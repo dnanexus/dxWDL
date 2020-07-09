@@ -463,7 +463,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
          |}""".stripMargin.parseJson
 
     val extras = Extras.parse(runtimeAttrs, dxApi_LOUD)
-    val dockerOpt: Option[WdlValues.V] = extras.defaultRuntimeAttributes.m.get("docker")
+    val dockerOpt: Option[WdlValues.V] = extras.defaultRuntimeAttributes.value.get("docker")
     dockerOpt match {
       case None =>
         throw new Exception("Wrong type for dockerOpt")
