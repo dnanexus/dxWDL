@@ -10,7 +10,7 @@ import dx.core.languages.Language
 import dx.core.getVersion
 import dx.core.util.MainUtils._
 import spray.json._
-import wdlTools.util.{Logger, TraceLevel, Util}
+import wdlTools.util.{FileUtils, Logger, TraceLevel}
 
 object Main {
   private val DEFAULT_RUNTIME_TRACE_LEVEL: Int = TraceLevel.Verbose
@@ -410,7 +410,7 @@ object Main {
     val extras = options.get("extras") match {
       case None => None
       case Some(Vector(p)) =>
-        val contents = Util.readFileContent(Paths.get(p))
+        val contents = FileUtils.readFileContent(Paths.get(p))
         Some(Extras.parse(contents.parseJson, dxApi))
       case _ => throw new Exception("extras specified twice")
     }

@@ -25,7 +25,7 @@ import scala.collection.immutable.TreeMap
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
+import wdlTools.util.{FileUtils, JsUtils, Logger, TraceLevel}
 
 // The end result of the compiler
 object Native {
@@ -56,7 +56,7 @@ case class Native(dxWDLrtId: Option[String],
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")
     sys.addShutdownHook({
-      Util.deleteRecursive(p)
+      FileUtils.deleteRecursive(p)
     })
     p
   }
@@ -1205,7 +1205,7 @@ case class Native(dxWDLrtId: Option[String],
     if (logger2.traceLevel >= TraceLevel.Verbose) {
       val fName = s"${applet.name}_req.json"
       val trgPath = appCompileDirPath.resolve(fName)
-      Util.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
+      FileUtils.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
     }
 
     val buildRequired = isBuildRequired(applet.name, digest)
@@ -1317,7 +1317,7 @@ case class Native(dxWDLrtId: Option[String],
             specJs.asJsObject.fields ++
               Map("outputSource" -> outputJs)
         )
-    }.toVector
+    }
   }
 
   private def buildWorkflowMetadata(

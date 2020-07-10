@@ -3,7 +3,7 @@ package dx.api
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{Logger, SysUtils}
 
 class DxPathTest extends AnyFlatSpec with Matchers {
   val dxApi: DxApi = DxApi(Logger.Quiet)
@@ -22,7 +22,7 @@ class DxPathTest extends AnyFlatSpec with Matchers {
 
   // describe a file on the platform using the dx-toolkit. This is a baseline for comparison
   private def describeDxFilePath(path: String): String = {
-    val (stdout, _) = Util.execCommand(s"dx describe ${path} --json")
+    val (stdout, _) = SysUtils.execCommand(s"dx describe ${path} --json")
     val id = stdout.parseJson.asJsObject.fields.get("id") match {
       case Some(JsString(x)) => x.replaceAll("\"", "")
       case other             => throw new Exception(s"Unexpected result ${other}")

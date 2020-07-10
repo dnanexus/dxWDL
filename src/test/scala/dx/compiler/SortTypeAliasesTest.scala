@@ -7,7 +7,7 @@ import dx.core.languages.wdl
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.WdlTypes
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileUtils, Logger}
 
 class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
@@ -20,7 +20,7 @@ class SortTypeAliasesTest extends AnyFlatSpec with Matchers {
 
   it should "sort type aliases properly" in {
     val path = pathFromBasename("struct", "many_structs.wdl")
-    val wfSourceCode = Util.readFileContent(path)
+    val wfSourceCode = FileUtils.readFileContent(path)
     val (_, _, typeAliases: Map[String, WdlTypes.T], _) =
       wdl.ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
 

@@ -9,7 +9,8 @@ import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
-import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
+import dx.core.util.MainUtils.Termination
+import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 import spray.json._
 
 object Main {
@@ -40,7 +41,7 @@ object Main {
                          dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = Util.readFileContent(jobInputPath)
+    val inputLines: String = FileUtils.readFileContent(jobInputPath)
     val originalInputs: JsValue = inputLines.parseJson
 
     val (task, typeAliases, document) = ParseSource(dxApi).parseWdlTask(taskSourceCode)
@@ -85,7 +86,7 @@ object Main {
       val json = JsObject(fields.filter {
         case (_, jsValue) => jsValue != null && jsValue != JsNull
       })
-      Util.writeFileContent(jobOutputPath, json.prettyPrint)
+      FileUtils.writeFileContent(jobOutputPath, json.prettyPrint)
     }
 
     val runnerEval = RunnerEval(task, inputs, defaultRuntimeAttributes, dxApi.logger, evaluator)
@@ -137,7 +138,7 @@ object Main {
                                  dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = Util.readFileContent(jobInputPath)
+    val inputLines: String = FileUtils.readFileContent(jobInputPath)
     val inputsRaw: JsValue = inputLines.parseJson
 
     val (wf, taskDir, typeAliases, document) =
@@ -219,7 +220,7 @@ object Main {
     // values that were not specified.
     val json = JsObject(outputFields)
     val ast_pp = json.prettyPrint
-    Util.writeFileContent(jobOutputPath, ast_pp)
+    FileUtils.writeFileContent(jobOutputPath, ast_pp)
 
     Success(s"success ${op}")
   }
@@ -249,7 +250,7 @@ object Main {
       dxApi: DxApi,
       jobInfoPath: Path
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
-    val jobInfo = Util.readFileContent(jobInfoPath).parseJson
+    val jobInfo = FileUtils.readFileContent(jobInfoPath).parseJson
     val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
       case None =>
         dxApi.logger.trace(
@@ -311,7 +312,7 @@ object Main {
             "message" -> JsUtils.sanitizedString(e.getMessage)
         )
     ).prettyPrint
-    Util.writeFileContent(jobErrorPath, errMsg)
+    FileUtils.writeFileContent(jobErrorPath, errMsg)
 
     // Write out a full stack trace to standard error.
     System.err.println(exceptionToString(e))
@@ -329,7 +330,7 @@ object Main {
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
-        val inputs: JsValue = Util.readFileContent(jobInputPath).parseJson
+        val inputs: JsValue = FileUtils.readFileContent(jobInputPath).parseJson
         val allFilesReferenced = inputs.asJsObject.fields.flatMap {
           case (_, jsElem) => dxApi.findFiles(jsElem)
         }.toVector

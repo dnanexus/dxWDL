@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileUtils, Logger, SysUtils}
 
 // wrapper around DNAnexus Java API
 case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnvironment.create()) {
@@ -508,7 +508,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       try {
         // Use dx download. Quote the path, because it may contains spaces.
         val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString}" """
-        val (_, _) = Util.execCommand(dxDownloadCmd, None)
+        val (_, _) = SysUtils.execCommand(dxDownloadCmd, None)
         true
       } catch {
         case e: Throwable =>
@@ -547,7 +547,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
         // spaces
         val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
         logger.traceLimited(s"--  ${dxUploadCmd}")
-        val (outmsg, _) = Util.execCommand(dxUploadCmd, None)
+        val (outmsg, _) = SysUtils.execCommand(dxUploadCmd, None)
         if (!outmsg.startsWith("file-"))
           return None
         Some(outmsg.trim())
@@ -593,7 +593,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
     silentFileDelete(tempFi)
     downloadFile(tempFi, dxFile)
-    val content = Util.readFileContent(tempFi)
+    val content = FileUtils.readFileContent(tempFi)
     silentFileDelete(tempFi)
     content
   }

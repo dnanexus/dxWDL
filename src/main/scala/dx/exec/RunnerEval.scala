@@ -67,7 +67,7 @@ case class RunnerEval(task: TAT.Task,
       case None                             => Map.empty
       case Some(TAT.RuntimeSection(kvs, _)) => kvs
     }
-    val dImg: Option[WdlValues.V] = attributes.get("docker") match {
+    val dockerImage: Option[WdlValues.V] = attributes.get("docker") match {
       case None =>
         defaultRuntimeAttrs match {
           case None      => None
@@ -80,7 +80,7 @@ case class RunnerEval(task: TAT.Task,
                                        EvalContext.createFromEnv(inputs.env))
         Some(value)
     }
-    dImg match {
+    dockerImage match {
       case None => None
       case Some(WdlValues.V_String(nameOrUrl)) =>
         val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)

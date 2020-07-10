@@ -6,7 +6,7 @@ import dx.core.languages.wdl.{TypeSerialization, WdlValueSerialization}
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSource, FileSourceResolver, RealFileSource, Util}
+import wdlTools.util.{FileSource, FileSourceResolver, FileUtils, RealFileSource}
 
 trait RunnerEnv {
   def env: Map[String, (WdlTypes.T, WdlValues.V)]
@@ -73,7 +73,7 @@ case class LocalizedRunnerInputs(env: Map[String, (WdlTypes.T, WdlValues.V)],
     // marshal into json, and then to a string
     val json =
       JsObject("localizedInputs" -> JsObject(localPathToJs), "dxUrl2path" -> JsObject(dxUriToJs))
-    Util.writeFileContent(path, json.prettyPrint)
+    FileUtils.writeFileContent(path, json.prettyPrint)
   }
 }
 
@@ -89,7 +89,7 @@ object LocalizedRunnerInputs {
   def apply(path: Path,
             typeAliases: Map[String, WdlTypes.T],
             fileResolver: FileSourceResolver): LocalizedRunnerInputs = {
-    val buf = Util.readFileContent(path)
+    val buf = FileUtils.readFileContent(path)
     val json: JsValue = buf.parseJson
     val (localPathToJs, dxUriToJs) = json match {
       case JsObject(m) =>

@@ -29,7 +29,7 @@ import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, TraceLevel, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils, SysUtils, TraceLevel}
 
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
@@ -45,7 +45,7 @@ case class TaskRunner(task: TAT.Task,
                       evaluator: Eval) {
   private def printDirStruct(): Unit = {
     dxApi.logger.traceLimited("Directory structure:", minLevel = TraceLevel.VVerbose)
-    val (stdout, _) = Util.execCommand("ls -lR", None)
+    val (stdout, _) = SysUtils.execCommand("ls -lR", None)
     dxApi.logger.traceLimited(stdout + "\n", 10000, minLevel = TraceLevel.VVerbose)
   }
 
@@ -106,7 +106,7 @@ case class TaskRunner(task: TAT.Task,
         Vector(part1, command, part2).mkString("\n")
       }
     dxApi.logger.traceLimited(s"writing bash script to ${dxPathConfig.script}")
-    Util.writeFileContent(dxPathConfig.script, script)
+    FileUtils.writeFileContent(dxPathConfig.script, script)
     dxPathConfig.script.toFile.setExecutable(true)
   }
 
@@ -165,7 +165,7 @@ case class TaskRunner(task: TAT.Task,
     //  -v ${dxPathConfig.dxfuseMountpoint}:${dxPathConfig.dxfuseMountpoint}
 
     dxApi.logger.traceLimited(s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
-    Util.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
+    FileUtils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
 
@@ -223,13 +223,13 @@ case class TaskRunner(task: TAT.Task,
     // build a manifest for dxda, if there are files to download
     val DxdaManifest(manifestJs) = dxdaManifest
     if (manifestJs.asJsObject.fields.nonEmpty) {
-      Util.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
+      FileUtils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
     }
 
     // build a manifest for dxfuse
     val DxfuseManifest(manifest2Js) = dxfuseManifest
     if (manifest2Js != JsNull) {
-      Util.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
+      FileUtils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -320,7 +320,7 @@ case class TaskRunner(task: TAT.Task,
     // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      Util.execCommand(script.toString, None)
+      SysUtils.execScript(script, None)
     }
 
     // epilog
