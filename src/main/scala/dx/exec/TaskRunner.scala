@@ -21,7 +21,8 @@ import java.lang.management._
 import java.nio.file.{Files, Path, Paths}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxFile, DxFileDescribe, DxJob, DxPath, InstanceTypeDB}
+
+import dx.api.{DxApi, DxFile, DxFileDescribe, DxJob, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
@@ -29,6 +30,8 @@ import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.exec.DockerUtils
+import wdlTools.syntax.SourceLocation
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{TraceLevel, Util}
 
@@ -45,7 +48,7 @@ case class TaskRunner(task: TAT.Task,
                       evaluator: Eval) {
   private val wdlVarLinksConverter =
     WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
-  private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
+  private val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -123,78 +126,10 @@ case class TaskRunner(task: TAT.Task,
     }
   }
 
-  private def pullImage(dImg: String): Option[String] = {
-    var retry_count = 5
-    while (retry_count > 0) {
-      try {
-        val (outstr, errstr) = Util.execCommand(s"docker pull ${dImg}")
-
-        dxApi.logger.traceLimited(
-            s"""|output:
-                |${outstr}
-                |stderr:
-                |${errstr}""".stripMargin
-        )
-        return Some(dImg)
-      } catch {
-        // ideally should catch specific exception.
-        case _: Throwable =>
-          retry_count = retry_count - 1
-          dxApi.logger.traceLimited(
-              s"""Failed to pull docker image:
-                 |${dImg}. Retrying... ${5 - retry_count}
-                    """.stripMargin
-          )
-          Thread.sleep(1000)
-      }
-    }
-    throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
-  }
-
-  private def dockerImage(env: Map[String, WdlValues.V]): Option[String] = {
-    val dImg = dockerImageEval(env)
-    dImg match {
-      case Some(url) if url.startsWith(DxPath.DX_URL_PREFIX) =>
-        // a tarball created with "docker save".
-        // 1. download it
-        // 2. open the tar archive
-        // 2. load into the local docker cache
-        // 3. figure out the image name
-        dxApi.logger.traceLimited(s"looking up dx:url ${url}")
-        val dxFile = dxApi.resolveDxUrlFile(url)
-        val fileName = dxFile.describe().name
-        val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-        Util.createDirectories(tarballDir)
-        val localTar: Path = tarballDir.resolve(fileName)
-
-        dxApi.logger.traceLimited(s"downloading docker tarball to ${localTar}")
-        dxApi.downloadFile(localTar, dxFile)
-
-        dxApi.logger.traceLimited("figuring out the image name")
-        val (mContent, _) = Util.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-        dxApi.logger.traceLimited(
-            s"""|manifest content:
-                |${mContent}
-                |""".stripMargin
-        )
-        val repo = TaskRunner.readManifestGetDockerImageName(mContent)
-        dxApi.logger.traceLimited(s"repository is ${repo}")
-
-        dxApi.logger.traceLimited(s"load tarball ${localTar} to docker", minLevel = TraceLevel.None)
-        val (outstr, errstr) = Util.execCommand(s"docker load --input ${localTar}")
-        dxApi.logger.traceLimited(
-            s"""|output:
-                |${outstr}
-                |stderr:
-                |${errstr}""".stripMargin
-        )
-        Some(repo)
-
-      case Some(dImg) =>
-        pullImage(dImg)
-
-      case _ =>
-        dImg
+  private def dockerImage(env: Map[String, WdlValues.V], loc: SourceLocation): Option[String] = {
+    dockerImageEval(env) match {
+      case Some(nameOrUrl) => Some(dockerUtils.getImage(nameOrUrl, loc))
+      case other           => other
     }
   }
 
@@ -408,7 +343,7 @@ case class TaskRunner(task: TAT.Task,
     dxApi.logger.traceLimited(s"InstantiateCommand, env = ${localizedInputs}")
 
     val env = evalInputsAndDeclarations(localizedInputs)
-    val docker = dockerImage(stripTypesFromEnv(env))
+    val docker = dockerImage(stripTypesFromEnv(env), task.command.loc)
 
     // instantiate the command
     val command = evaluator.applyCommand(task.command, EvalContext(stripTypesFromEnv(env)))
