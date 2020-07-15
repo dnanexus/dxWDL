@@ -6,14 +6,14 @@ package dx.core.io
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxArchivalState, DxFile, DxFileDescribe}
-import dx.core.languages.wdl.DxFileAccessProtocol
 import spray.json._
 
 case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[DxFile, Path],
-            dxIoFunctions: DxFileAccessProtocol): DxfuseManifest = {
+            fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+            dxPathConfig: DxPathConfig): DxfuseManifest = {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
     }
@@ -35,11 +35,11 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
 
         // remove the mountpoint from the directory. We need
         // paths that are relative to the mount point.
-        val mountDir = dxIoFunctions.config.dxfuseMountpoint.toString
+        val mountDir = dxPathConfig.dxfuseMountpoint.toString
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
-        val (_, fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
+        val (_, fDesc) = fileInfoDir(dxFile.id)
         JsObject(
             "proj_id" -> JsString(fDesc.project),
             "file_id" -> JsString(dxFile.id),

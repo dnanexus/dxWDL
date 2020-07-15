@@ -2,11 +2,13 @@ package dx.core.languages.wdl
 
 import java.io.File
 
+import dx.api.DxApi
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
 
 class PrettyPrintApproxTest extends AnyFlatSpec with Matchers {
+  private val dxApi = DxApi(Logger.Quiet)
 
   private def tryToPrintFile(path: File): Unit = {
     val src = scala.io.Source.fromFile(path)
@@ -17,7 +19,7 @@ class PrettyPrintApproxTest extends AnyFlatSpec with Matchers {
         src.close()
       }
     try {
-      val (wf, _, _, _) = ParseSource(Logger.Quiet).parseWdlWorkflow(wfSourceCode)
+      val (wf, _, _, _) = ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
       val blocks = Block.splitWorkflow(wf)
 
       PrettyPrintApprox.graphInputs(wf.inputs)

@@ -367,9 +367,9 @@ case class GenerateIRTask(dxApi: DxApi,
         if (runtime.kvs.contains(key)) {
           return TAT.RuntimeSection(
               runtime.kvs ++ Map(
-                  key -> TAT.ValueString(newContainer, WdlTypes.T_String, runtime.kvs(key).text)
+                  key -> TAT.ValueString(newContainer, WdlTypes.T_String, runtime.kvs(key).loc)
               ),
-              runtime.text
+              runtime.loc
           )
         }
       }

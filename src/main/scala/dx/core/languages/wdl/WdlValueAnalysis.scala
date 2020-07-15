@@ -161,8 +161,7 @@ object WdlValueAnalysis {
   def ifConstEval(wdlType: WdlTypes.T, expr: TAT.Expr): Option[WdlValues.V] = {
     try {
       val value = evalConst(expr)
-      val coercion = Coercion(None)
-      val valueWithCorrectType = coercion.coerceTo(wdlType, value, expr.text)
+      val valueWithCorrectType = Coercion.coerceTo(wdlType, value, expr.loc)
       checkForLocalFiles(valueWithCorrectType)
       Some(valueWithCorrectType)
     } catch {

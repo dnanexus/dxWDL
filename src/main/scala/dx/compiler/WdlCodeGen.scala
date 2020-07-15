@@ -3,16 +3,16 @@ package dx.compiler
 import dx.core.languages.Language
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
-import wdlTools.syntax.{CommentMap, TextSource, WdlVersion}
+import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.WdlTypes.T_Task
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.Logger
+import wdlTools.util.{Logger, StringFileSource}
 
 case class WdlCodeGen(logger: Logger,
                       typeAliases: Map[String, WdlTypes.T],
                       language: Language.Value) {
 
-  private val dummyTextSource: TextSource = TextSource.empty
+  private val dummySourceLocation: SourceLocation = SourceLocation.empty
 
   // A self contained WDL workflow
   val wdlVersion: WdlVersion = {
@@ -31,7 +31,7 @@ case class WdlCodeGen(logger: Logger,
     val sortedTypeAliases = SortTypeAliases(logger).apply(typeAliases.toVector)
     sortedTypeAliases.map {
       case (name, wdlType: WdlTypes.T_Struct) =>
-        TAT.StructDefinition(name, wdlType, wdlType.members, dummyTextSource)
+        TAT.StructDefinition(name, wdlType, wdlType.members, dummySourceLocation)
       case other => throw new RuntimeException(s"Unexpected type alias ${other}")
     }
   }
@@ -39,11 +39,11 @@ case class WdlCodeGen(logger: Logger,
   // create a wdl-value of a specific type.
   private[compiler] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
     wdlType match {
-      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, dummyTextSource)
-      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, dummyTextSource)
-      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, dummyTextSource)
-      case WdlTypes.T_String  => TAT.ValueString("", wdlType, dummyTextSource)
-      case WdlTypes.T_File    => TAT.ValueString("dummy.txt", wdlType, dummyTextSource)
+      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, dummySourceLocation)
+      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, dummySourceLocation)
+      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, dummySourceLocation)
+      case WdlTypes.T_String  => TAT.ValueString("", wdlType, dummySourceLocation)
+      case WdlTypes.T_File    => TAT.ValueString("dummy.txt", wdlType, dummySourceLocation)
 
       // We could convert an optional to a null value, but that causes
       // problems for the pretty printer.
@@ -56,29 +56,29 @@ case class WdlCodeGen(logger: Logger,
       case WdlTypes.T_Map(keyType, valueType) =>
         val k = genDefaultValueOfType(keyType)
         val v = genDefaultValueOfType(valueType)
-        TAT.ExprMap(Map(k -> v), wdlType, dummyTextSource)
+        TAT.ExprMap(Map(k -> v), wdlType, dummySourceLocation)
 
       // an empty array
       case WdlTypes.T_Array(_, false) =>
-        TAT.ExprArray(Vector.empty, wdlType, dummyTextSource)
+        TAT.ExprArray(Vector.empty, wdlType, dummySourceLocation)
 
       // Non empty array
       case WdlTypes.T_Array(t, true) =>
-        TAT.ExprArray(Vector(genDefaultValueOfType(t)), wdlType, dummyTextSource)
+        TAT.ExprArray(Vector(genDefaultValueOfType(t)), wdlType, dummySourceLocation)
 
       case WdlTypes.T_Pair(lType, rType) =>
         TAT.ExprPair(genDefaultValueOfType(lType),
                      genDefaultValueOfType(rType),
                      wdlType,
-                     dummyTextSource)
+                     dummySourceLocation)
 
       case WdlTypes.T_Struct(_, typeMap) =>
         val members = typeMap.map {
           case (fieldName, t) =>
-            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, dummyTextSource)
+            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, dummySourceLocation)
             key -> genDefaultValueOfType(t)
         }
-        TAT.ExprObject(members, wdlType, dummyTextSource)
+        TAT.ExprObject(members, wdlType, dummySourceLocation)
 
       case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
@@ -90,51 +90,55 @@ case class WdlCodeGen(logger: Logger,
     }
 
     value match {
-      case WdlValues.V_Null => TAT.ValueNull(WdlTypes.T_Any, dummyTextSource)
+      case WdlValues.V_Null => TAT.ValueNull(WdlTypes.T_Any, dummySourceLocation)
       case WdlValues.V_Boolean(value) =>
-        TAT.ValueBoolean(value, WdlTypes.T_Boolean, dummyTextSource)
-      case WdlValues.V_Int(value)    => TAT.ValueInt(value, WdlTypes.T_Int, dummyTextSource)
-      case WdlValues.V_Float(value)  => TAT.ValueFloat(value, WdlTypes.T_Float, dummyTextSource)
-      case WdlValues.V_String(value) => TAT.ValueString(value, WdlTypes.T_String, dummyTextSource)
-      case WdlValues.V_File(value)   => TAT.ValueFile(value, WdlTypes.T_File, dummyTextSource)
+        TAT.ValueBoolean(value, WdlTypes.T_Boolean, dummySourceLocation)
+      case WdlValues.V_Int(value)   => TAT.ValueInt(value, WdlTypes.T_Int, dummySourceLocation)
+      case WdlValues.V_Float(value) => TAT.ValueFloat(value, WdlTypes.T_Float, dummySourceLocation)
+      case WdlValues.V_String(value) =>
+        TAT.ValueString(value, WdlTypes.T_String, dummySourceLocation)
+      case WdlValues.V_File(value) => TAT.ValueFile(value, WdlTypes.T_File, dummySourceLocation)
       case WdlValues.V_Directory(value) =>
-        TAT.ValueDirectory(value, WdlTypes.T_Directory, dummyTextSource)
+        TAT.ValueDirectory(value, WdlTypes.T_Directory, dummySourceLocation)
 
       // compound values
       case WdlValues.V_Pair(l, r) =>
         val lExpr = wdlValueToExpr(l)
         val rExpr = wdlValueToExpr(r)
-        TAT.ExprPair(lExpr, rExpr, WdlTypes.T_Pair(lExpr.wdlType, rExpr.wdlType), dummyTextSource)
+        TAT.ExprPair(lExpr,
+                     rExpr,
+                     WdlTypes.T_Pair(lExpr.wdlType, rExpr.wdlType),
+                     dummySourceLocation)
       case WdlValues.V_Array(value) =>
         val valueExprs = value.map(wdlValueToExpr)
-        TAT.ExprArray(valueExprs, seqToType(valueExprs), dummyTextSource)
+        TAT.ExprArray(valueExprs, seqToType(valueExprs), dummySourceLocation)
       case WdlValues.V_Map(value) =>
         val keyExprs = value.keys.map(wdlValueToExpr)
         val valueExprs = value.values.map(wdlValueToExpr)
         TAT.ExprMap(keyExprs.zip(valueExprs).toMap,
                     WdlTypes.T_Map(seqToType(keyExprs), seqToType(valueExprs)),
-                    dummyTextSource)
+                    dummySourceLocation)
 
       case WdlValues.V_Optional(value) => wdlValueToExpr(value)
       case WdlValues.V_Struct(name, members) =>
         val memberExprs: Map[TAT.Expr, TAT.Expr] = members.map {
           case (name, value) =>
-            TAT.ValueString(name, WdlTypes.T_String, dummyTextSource) -> wdlValueToExpr(value)
+            TAT.ValueString(name, WdlTypes.T_String, dummySourceLocation) -> wdlValueToExpr(value)
           case other => throw new RuntimeException(s"Unexpected member ${other}")
         }
         val memberTypes = memberExprs.map {
           case (name: TAT.ValueString, value) => name.value -> value.wdlType
           case other                          => throw new RuntimeException(s"Unexpected member ${other}")
         }
-        TAT.ExprMap(memberExprs, WdlTypes.T_Struct(name, memberTypes), dummyTextSource)
+        TAT.ExprMap(memberExprs, WdlTypes.T_Struct(name, memberTypes), dummySourceLocation)
 
       case WdlValues.V_Object(members) =>
         val memberExprs = members.map {
           case (name, value) =>
-            val key: TAT.Expr = TAT.ValueString(name, WdlTypes.T_String, dummyTextSource)
+            val key: TAT.Expr = TAT.ValueString(name, WdlTypes.T_String, dummySourceLocation)
             key -> wdlValueToExpr(value)
         }
-        TAT.ExprObject(memberExprs, WdlTypes.T_Object, dummyTextSource)
+        TAT.ExprObject(memberExprs, WdlTypes.T_Object, dummySourceLocation)
 
       case other =>
         throw new Exception(s"Unhandled value ${other}")
@@ -189,12 +193,12 @@ case class WdlCodeGen(logger: Logger,
         .map { cVar =>
           cVar.default match {
             case None =>
-              TAT.RequiredInputDefinition(cVar.name, cVar.wdlType, dummyTextSource)
+              TAT.RequiredInputDefinition(cVar.name, cVar.wdlType, dummySourceLocation)
             case Some(wValue) =>
               TAT.OverridableInputDefinitionWithDefault(cVar.name,
                                                         cVar.wdlType,
                                                         wdlValueToExpr(wValue),
-                                                        dummyTextSource)
+                                                        dummySourceLocation)
           }
         }
 
@@ -203,7 +207,7 @@ case class WdlCodeGen(logger: Logger,
         .sortWith(_.name < _.name)
         .map { cVar =>
           val defaultVal = genDefaultValueOfType(cVar.wdlType)
-          TAT.OutputDefinition(cVar.name, cVar.wdlType, defaultVal, dummyTextSource)
+          TAT.OutputDefinition(cVar.name, cVar.wdlType, defaultVal, dummySourceLocation)
         }
 
     language match {
@@ -222,13 +226,13 @@ case class WdlCodeGen(logger: Logger,
             ),
             inputs,
             outputs,
-            TAT.CommandSection(Vector.empty, dummyTextSource),
+            TAT.CommandSection(Vector.empty, dummySourceLocation),
             Vector.empty,
             None,
             None,
             None,
             None,
-            dummyTextSource
+            dummySourceLocation
         )
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
@@ -250,10 +254,10 @@ case class WdlCodeGen(logger: Logger,
 
     val meta = TAT.MetaSection(
         Map(
-            "type" -> TAT.MetaValueString("native", dummyTextSource),
-            "id" -> TAT.MetaValueString(id, dummyTextSource)
+            "type" -> TAT.MetaValueString("native", dummySourceLocation),
+            "id" -> TAT.MetaValueString(id, dummySourceLocation)
         ),
-        dummyTextSource
+        dummySourceLocation
     )
     TAT.Task(
         appletName,
@@ -261,31 +265,30 @@ case class WdlCodeGen(logger: Logger,
           case (name, wdlType) => name -> (wdlType, false)
         }, outputSpec),
         inputSpec.map {
-          case (name, wdlType) => TAT.RequiredInputDefinition(name, wdlType, dummyTextSource)
+          case (name, wdlType) => TAT.RequiredInputDefinition(name, wdlType, dummySourceLocation)
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
             val expr = genDefaultValueOfType(wdlType)
-            TAT.OutputDefinition(name, wdlType, expr, dummyTextSource)
+            TAT.OutputDefinition(name, wdlType, expr, dummySourceLocation)
         }.toVector,
-        TAT.CommandSection(Vector.empty, dummyTextSource),
+        TAT.CommandSection(Vector.empty, dummySourceLocation),
         Vector.empty,
         Some(meta),
         parameterMeta = None,
         runtime = None,
         hints = None,
-        text = dummyTextSource
+        loc = dummySourceLocation
     )
   }
 
   def standAloneTask(task: TAT.Task): TAT.Document = {
     TAT.Document(
-        None,
-        "",
-        TAT.Version(wdlVersion, dummyTextSource),
+        StringFileSource.empty,
+        TAT.Version(wdlVersion, dummySourceLocation),
         typeAliasDefinitions :+ task,
         None,
-        dummyTextSource,
+        dummySourceLocation,
         CommentMap.empty
     )
   }
@@ -358,12 +361,11 @@ case class WdlCodeGen(logger: Logger,
     val wfWithoutImportCalls = wf.copy(body = cleanCalls(wf.body))
 
     TAT.Document(
-        None,
-        "",
-        TAT.Version(wdlVersion, dummyTextSource),
+        StringFileSource.empty,
+        TAT.Version(wdlVersion, dummySourceLocation),
         typeAliasDefinitions ++ tasks,
         Some(wfWithoutImportCalls),
-        dummyTextSource,
+        dummySourceLocation,
         CommentMap.empty
     )
   }

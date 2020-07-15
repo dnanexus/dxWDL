@@ -4,16 +4,16 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.{WdlCodeGen, WdlRuntimeAttrs}
-import dx.core.io.DxPathConfig
-import dx.core.languages.{Language, wdl}
-import dx.core.languages.wdl.{Bundle => WdlBundle}
+import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.languages.Language
+import dx.core.languages.wdl.{Evaluator, ParseSource, Bundle => WdlBundle}
 import dx.core.util.SysUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileSourceResolver, Logger, Util}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -141,8 +141,8 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     dxPathConfig.createCleanDirs()
 
     val (language, wdlBundle: WdlBundle, allSources, _) =
-      wdl.ParseSource(logger).apply(wdlCode, List.empty)
-    val task: TAT.Task = wdl.ParseSource(logger).getMainTask(wdlBundle)
+      ParseSource(dxApi).apply(wdlCode, List.empty)
+    val task: TAT.Task = ParseSource(dxApi).getMainTask(wdlBundle)
     assert(allSources.size == 1)
     val sourceDict = scanForTasks(allSources.values.head)
     assert(sourceDict.size == 1)
@@ -150,24 +150,30 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
-    val dxIoFunctions = wdl.DxFileAccessProtocol(dxApi, Map.empty, dxPathConfig)
+    val dxProtocol = DxFileAccessProtocol(dxApi)
+    val fileResolver = FileSourceResolver.create(userProtocols = Vector(dxProtocol))
+    val evaluator =
+      Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
     val jobInputOutput =
-      JobInputOutput(dxIoFunctions, wdlBundle.typeAliases, Language.toWdlVersion(language), dxApi)
+      JobInputOutput(dxPathConfig, Map.empty, wdlBundle.typeAliases, dxApi, evaluator)
 
     // Add the WDL version to the task source code, so the parser
     // will pick up the correct language dielect.
     val wdlCodeGen = WdlCodeGen(logger, wdlBundle.typeAliases, language)
     val taskDocument = wdlCodeGen.standAloneTask(taskSourceCode)
-    val taskRunner = TaskRunner(task,
-                                taskDocument,
-                                wdlBundle.typeAliases,
-                                instanceTypeDB,
-                                dxPathConfig,
-                                dxIoFunctions,
-                                jobInputOutput,
-                                Some(WdlRuntimeAttrs(Map.empty)),
-                                Some(false),
-                                dxApi)
+    val taskRunner = TaskRunner(
+        task,
+        taskDocument,
+        wdlBundle.typeAliases,
+        instanceTypeDB,
+        dxPathConfig,
+        Map.empty,
+        jobInputOutput,
+        Some(WdlRuntimeAttrs(Map.empty)),
+        Some(false),
+        dxApi,
+        evaluator
+    )
     val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
     val inputs = inputsRelPaths.map {
       case (inpDef, value) => (inpDef, addBaseDir(value))

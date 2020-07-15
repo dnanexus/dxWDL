@@ -3,21 +3,20 @@ package dx.exec
 import java.nio.file.{Files, Path}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxFile}
+import dx.api.{DxApi, DxFile, DxFileDescribe}
 import dx.core.io._
-import dx.core.languages.wdl.{DxFileAccessProtocol, Evaluator, WdlVarLinksConverter}
+import dx.core.languages.wdl.WdlVarLinksConverter
 import spray.json.{JsNull, JsValue}
-import wdlTools.eval.{WdlValues, Context => EvalContext}
-import wdlTools.syntax.WdlVersion
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
-case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
+case class JobInputOutput(dxPathConfig: DxPathConfig,
+                          fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                           structDefs: Map[String, WdlTypes.T],
-                          wdlVersion: WdlVersion,
-                          dxApi: DxApi) {
+                          dxApi: DxApi,
+                          evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, structDefs)
-  private val evaluator = Evaluator.make(dxIoFunctions, wdlVersion)
+    WdlVarLinksConverter(dxApi, fileInfoDir, structDefs)
 
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
@@ -261,7 +260,7 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
                            inputs: Map[TAT.InputDefinition, WdlValues.V]): Set[Furl] = {
     inputs.flatMap {
       case (iDef, wdlValue) =>
-        if (dxIoFunctions.config.streamAllFiles) {
+        if (dxPathConfig.streamAllFiles) {
           findFiles(wdlValue)
         } else {
           // This is better than "iDef.parameterMeta", but it does not
@@ -330,17 +329,17 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
             case dxUrl: FurlDx if streamingFiles contains dxUrl =>
               // file should be streamed
               val existingFiles = accu.values.toSet
-              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val (_, desc) = fileInfoDir(dxUrl.dxFile.id)
               val path = createUniqueDownloadPath(desc.name,
                                                   dxUrl.dxFile,
                                                   existingFiles,
-                                                  dxIoFunctions.config.dxfuseMountpoint)
+                                                  dxPathConfig.dxfuseMountpoint)
               accu + (dxUrl -> path)
 
             case dxUrl: FurlDx =>
               // The file needs to be localized
               val existingFiles = accu.values.toSet
-              val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
+              val (_, desc) = fileInfoDir(dxUrl.dxFile.id)
               val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
               accu + (dxUrl -> path)
           }
@@ -352,7 +351,7 @@ case class JobInputOutput(dxIoFunctions: DxFileAccessProtocol,
         case (dxUrl: FurlDx, localPath) if streamingFiles contains dxUrl =>
           dxUrl.dxFile -> localPath
       }
-    val dxfuseManifest = DxfuseManifestBuilder(dxApi).apply(filesToMount, dxIoFunctions)
+    val dxfuseManifest = DxfuseManifestBuilder(dxApi).apply(filesToMount, fileInfoDir, dxPathConfig)
 
     // Create a manifest for the download agent (dxda)
     val filesToDownloadWithDxda: Map[String, (DxFile, Path)] =

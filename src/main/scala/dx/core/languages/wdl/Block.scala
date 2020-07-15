@@ -391,7 +391,7 @@ object Block {
             val callOutputs = call.callee.output.map {
               case (name, wdlType) =>
                 val fqn = call.actualName + "." + name
-                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.text))
+                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.loc))
             }.toVector
             ctx
               .addInputs(callInputs(call))

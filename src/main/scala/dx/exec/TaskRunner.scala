@@ -21,7 +21,7 @@ import java.lang.management._
 import java.nio.file.{Files, Path, Paths}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxJob, DxPath, InstanceTypeDB}
+import dx.api.{DxApi, DxFile, DxFileDescribe, DxJob, DxPath, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
@@ -29,7 +29,7 @@ import dx.core.languages.wdl._
 import dx.core.util.SysUtils
 import dx.util.getVersion
 import spray.json._
-import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{TraceLevel, Util}
 
@@ -38,17 +38,15 @@ case class TaskRunner(task: TAT.Task,
                       typeAliases: Map[String, WdlTypes.T],
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
-                      dxIoFunctions: DxFileAccessProtocol,
+                      fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
-                      dxApi: DxApi) {
+                      dxApi: DxApi,
+                      evaluator: Eval) {
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, typeAliases)
+    WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
   private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
-
-  // build an object capable of evaluating WDL expressions
-  private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -364,7 +362,7 @@ case class TaskRunner(task: TAT.Task,
         printDirStruct()
       }
       dxApi.logger.traceLimited(s"Task source code:")
-      dxApi.logger.traceLimited(document.sourceCode, 10000)
+      dxApi.logger.traceLimited(document.source.readString, 10000)
       dxApi.logger.traceLimited(s"inputs: ${inputsDbg(taskInputs)}")
     }
 

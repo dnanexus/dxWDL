@@ -44,7 +44,7 @@ import dx.core.io.{DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
 import dx.util.getVersion
 import spray.json._
-import wdlTools.eval.{WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.TraceLevel
 
@@ -55,15 +55,16 @@ case class WfFragRunner(wf: TAT.Workflow,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
-                        dxIoFunctions: DxFileAccessProtocol,
+                        fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
-                        dxApi: DxApi) {
+                        dxApi: DxApi,
+                        evaluator: Eval) {
   private val MAX_JOB_NAME = 50
   private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, dxIoFunctions.fileInfoDir, fragInputOutput.typeAliases)
+    WdlVarLinksConverter(dxApi, fileInfoDir, fragInputOutput.typeAliases)
   private val jobInputOutput = fragInputOutput.jobInputOutput
   private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                               inputsRaw,
@@ -71,8 +72,6 @@ case class WfFragRunner(wf: TAT.Workflow,
                                               delayWorkspaceDestruction,
                                               dxApi,
                                               fragInputOutput.typeAliases)
-  // build an object capable of evaluating WDL expressions
-  private val evaluator = Evaluator.make(dxIoFunctions, document.version.value)
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {
@@ -343,11 +342,12 @@ case class WfFragRunner(wf: TAT.Workflow,
         typeAliases,
         instanceTypeDB,
         dxPathConfig,
-        dxIoFunctions,
+        fileInfoDir,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,
-        dxApi
+        dxApi,
+        evaluator
     )
     try {
       val iType = taskRunner.calcInstanceType(taskInputs)
