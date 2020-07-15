@@ -94,7 +94,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
     val subBlocks = Block.splitWorkflow(wf)
 

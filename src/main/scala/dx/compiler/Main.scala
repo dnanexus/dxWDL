@@ -72,16 +72,17 @@ object Main {
     }
   }
 
+  // TODO: use RuntimeException for assertions
   private def pathOptions(options: OptionsMap, dxApi: DxApi): (DxProject, String) = {
     var folderOpt: Option[String] = options.get("folder") match {
       case None          => None
       case Some(List(f)) => Some(f)
-      case _             => throw new Exception("sanity")
+      case other         => throw new Exception(s"Unexpected value for 'folder': ${other}")
     }
     var projectOpt: Option[String] = options.get("project") match {
       case None          => None
       case Some(List(p)) => Some(p)
-      case _             => throw new Exception("sanity")
+      case other         => throw new Exception(s"Unexpected value for 'project': ${other}")
     }
     val destinationOpt: Option[String] = options.get("destination") match {
       case None          => None
@@ -146,7 +147,7 @@ object Main {
     val cmdLineOpts = splitCmdLine(arglist)
     val options = mutable.HashMap.empty[String, List[String]]
     cmdLineOpts.foreach {
-      case Nil => throw new Exception("sanity: empty command line option")
+      case Nil => throw new Exception("Empty command line option")
       case keyOrg :: subargs =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {

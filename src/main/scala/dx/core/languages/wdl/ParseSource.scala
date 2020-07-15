@@ -210,7 +210,7 @@ case class ParseSource(dxApi: DxApi) {
         struct.name -> WdlTypes.T_Struct(struct.name, struct.members)
     }.toMap
     val wf = tDoc.workflow match {
-      case None    => throw new RuntimeException("Sanity, this document should have a workflow")
+      case None    => throw new RuntimeException("This document should have a workflow")
       case Some(x) => x
     }
     (wf, tasks, aliases, tDoc)

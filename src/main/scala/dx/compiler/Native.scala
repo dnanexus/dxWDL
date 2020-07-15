@@ -513,9 +513,9 @@ case class Native(dxWDLrtId: Option[String],
   private def genBashScript(applet: IR.Applet, instanceType: IR.InstanceType): String = {
     val body: String = applet.kind match {
       case IR.AppletKindNative(_) =>
-        throw new Exception("Sanity: generating a bash script for a native applet")
+        throw new Exception("Should not generate a bash script for a native applet")
       case IR.AppletKindWorkflowCustomReorg(_) =>
-        throw new Exception("Sanity: generating a bash script for a custom reorg applet")
+        throw new Exception("Should not generate a bash script for a custom reorg applet")
       case IR.AppletKindWfFragment(_, _, _) =>
         genBashScriptWfFragment()
       case IR.AppletKindWfInputs =>
@@ -1287,7 +1287,7 @@ case class Native(dxWDLrtId: Option[String],
     val oSpecMap: Map[String, JsValue] = oSpec.map { jso =>
       val nm = jso.asJsObject.fields.get("name") match {
         case Some(JsString(nm)) => nm
-        case _                  => throw new Exception("sanity")
+        case other              => throw new Exception(s"Unexpected value for 'name' field: ${other}")
       }
       nm -> jso
     }.toMap

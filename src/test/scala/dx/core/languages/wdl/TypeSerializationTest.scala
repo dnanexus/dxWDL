@@ -57,7 +57,7 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
 
   val badTypeNames: List[String] = List(
       "A bad type",
-      "dummy",
+      "placeholder",
       "Map[Int, UnrealFile]",
       "Pair[Int, Map[Int, X__String]]"
   )

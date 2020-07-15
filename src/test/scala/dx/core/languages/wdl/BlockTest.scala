@@ -197,7 +197,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
     val blocks = Block.splitWorkflow(wf)
     Block.categorize(blocks(0)) shouldBe a[Block.CondOneCall]
@@ -210,7 +210,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
     val blocks = Block.splitWorkflow(wf)
 
@@ -232,7 +232,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
 
     // Find the fragment block to execute
@@ -273,7 +273,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
 
     val scatters: Seq[TAT.Scatter] = wf.body.collect {
@@ -288,7 +288,7 @@ class BlockTest extends AnyFlatSpec with Matchers {
 
     val wf = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
 
     // Find the fragment block to execute

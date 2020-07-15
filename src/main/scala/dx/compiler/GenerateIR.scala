@@ -61,7 +61,7 @@ case class GenerateIR(dxApi: DxApi,
           name -> (immediateDeps(name) -- readyNames)
         }.toMap
         val explanationLines = stuckWaitingOn.mkString("\n")
-        throw new Exception(s"""|Sanity: cannot find the next callable to compile.
+        throw new Exception(s"""|Cannot find the next callable to compile.
                                 |ready = ${readyNames}
                                 |stuck = ${stuck}
                                 |stuckWaitingOn =
