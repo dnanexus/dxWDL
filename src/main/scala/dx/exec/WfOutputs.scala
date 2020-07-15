@@ -1,6 +1,6 @@
 package dx.exec
 
-import dx.api.DxApi
+import dx.api.{DxApi, DxFile, DxFileDescribe}
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion

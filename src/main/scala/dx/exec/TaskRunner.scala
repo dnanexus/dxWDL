@@ -87,7 +87,7 @@ case class TaskRunner(task: TAT.Task,
         val value = WdlValueSerialization(typeAliases).fromJSON(jsVal)
         key -> (t, value)
       case (_, other) =>
-        throw new Exception(s"sanity: bad deserialization value ${other}")
+        throw new Exception(s"Bad deserialization value ${other}")
     }
     val fileSourceToPath = dxUriToJs.map {
       case (uri, JsString(path)) => fileResolver.resolve(uri) -> Paths.get(path)

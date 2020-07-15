@@ -454,7 +454,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     val id: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
-        throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
+        throw new AppInternalException(s"Bad format returned from jobNew ${response.prettyPrint}")
     }
     job(id)
   }
@@ -650,8 +650,8 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
                             dxProject: DxProject): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map(makeResolutionReq)
     val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
-    val repJs = resolveDataObjects(request)
-    val resultsPerObj: Vector[JsValue] = repJs.fields.get("results") match {
+    val responseJs = resolveDataObjects(request)
+    val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
       case Some(JsArray(x)) => x
       case other            => throw new Exception(s"API call returned invalid data ${other}")
     }
