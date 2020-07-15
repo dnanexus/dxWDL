@@ -55,13 +55,13 @@ case class ParseSource(dxApi: DxApi) {
   private def bInfoFromDoc(doc: TAT.Document): BInfo = {
     // Add source and adjuncts for main file
     val (sources, adjunctFiles) = doc.source match {
-      case localFs: LocalFileSource =>
-        val absPath: Path = localFs.localPath
+      case localSource: LocalFileSource =>
+        val absPath: Path = localSource.localPath
         val sources = Map(absPath.toString -> doc)
         val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
         (sources, adjunctFiles)
-      case fs =>
-        val sources = Map(fs.toString -> doc)
+      case otherSource =>
+        val sources = Map(otherSource.toString -> doc)
         (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
     }
     val tasks: Vector[TAT.Task] = doc.elements.collect {
