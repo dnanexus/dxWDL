@@ -450,8 +450,8 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     val request = fields ++ instanceFields ++ dependsFields ++ dwd
     logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
 
-    val info = jobNew(request)
-    val id: String = info.fields.get("id") match {
+    val response = jobNew(request)
+    val id: String = response.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
         throw new AppInternalException(s"Bad format returned from jobNew ${response.prettyPrint}")

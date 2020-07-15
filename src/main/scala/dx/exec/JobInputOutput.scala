@@ -3,7 +3,7 @@ package dx.exec
 import java.nio.file.{Files, Path}
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxFile, DxFileDescribe}
+import dx.api.{DxApi, DxFile}
 import dx.core.io._
 import dx.core.languages.wdl.WdlVarLinksConverter
 import spray.json.{JsNull, JsValue}
