@@ -5,10 +5,9 @@ import dx.compiler.IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlValueAnalysis}
-import dx.core.util.Adjuncts
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.Logger
+import wdlTools.util.{Adjuncts, Logger}
 
 case class GenerateIRWorkflow(wf: TAT.Workflow,
                               wfStandAlone: TAT.Document,

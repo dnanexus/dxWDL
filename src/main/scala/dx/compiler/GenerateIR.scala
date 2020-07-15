@@ -3,8 +3,7 @@ package dx.compiler
 import dx.api.DxApi
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Block, Bundle => WdlBundle}
-import dx.core.util.Adjuncts
-import wdlTools.util.Logger
+import wdlTools.util.{Adjuncts, Logger}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class GenerateIR(dxApi: DxApi,

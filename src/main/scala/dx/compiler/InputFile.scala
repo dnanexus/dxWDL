@@ -27,11 +27,10 @@ import dx.api._
 import dx.compiler.IR._
 import dx.core.io.{Furl, FurlDx}
 import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
-import dx.core.util.SysUtils
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.Logger
+import wdlTools.util.{Logger, Util}
 
 import scala.collection.mutable
 
@@ -130,7 +129,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
 
   def apply(inputPath: Path): InputFileScanResults = {
     // Read the JSON values from the file
-    val content = SysUtils.readFileContent(inputPath).parseJson
+    val content = Util.readFileContent(inputPath).parseJson
     val inputs: Map[String, JsValue] = content.asJsObject.fields
 
     val allCallables: Vector[IR.Callable] =
@@ -392,7 +391,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     dxApi.logger.trace(s"Embedding defaults into the IR")
 
     // read the default inputs file (xxxx.json)
-    val wdlDefaults: JsObject = SysUtils.readFileContent(defaultInputs).parseJson.asJsObject
+    val wdlDefaults: JsObject = Util.readFileContent(defaultInputs).parseJson.asJsObject
     val defaultFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlDefaults)
 
     val callablesWithDefaults = bundle.allCallables.map {
@@ -460,7 +459,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
     dxApi.logger.trace(s"Translating WDL input file ${inputPath}")
 
     // read the input file xxxx.json
-    val wdlInputs: JsObject = SysUtils.readFileContent(inputPath).parseJson.asJsObject
+    val wdlInputs: JsObject = Util.readFileContent(inputPath).parseJson.asJsObject
     val inputFields: mutable.HashMap[String, JsValue] = preprocessInputs(wdlInputs)
     val cif = CromwellInputFileState(inputFields, mutable.HashMap.empty)
 

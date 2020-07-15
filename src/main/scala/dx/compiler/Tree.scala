@@ -5,7 +5,7 @@ package dx.compiler
 import spray.json._
 import Native.ExecRecord
 import IR._
-import dx.core.util.SysUtils
+import dx.core.util.CompressionUtils
 import dx.api.DxWorkflow
 import dx.api.Field
 
@@ -86,7 +86,7 @@ object Tree {
       case None => throw new Exception(s"${CANNOT_FIND_EXEC_TREE} for ${workflow.id}")
     }
 
-    val TreeJS = SysUtils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
+    val TreeJS = CompressionUtils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
 
     JsObject(
         TreeJS.fields + ("id" -> JsString(workflow.id))

@@ -7,11 +7,10 @@ import dx.InvalidInputException
 import dx.api.{DxApi, DxProject}
 import dx.core.io.DxPathConfig
 import dx.core.languages.Language
-import dx.util.getVersion
+import dx.core.getVersion
 import dx.core.util.MainUtils._
-import dx.core.util.SysUtils
 import spray.json._
-import wdlTools.util.{Logger, TraceLevel}
+import wdlTools.util.{Logger, TraceLevel, Util}
 
 import scala.collection.mutable
 
@@ -423,7 +422,7 @@ object Main {
     val extras = options.get("extras") match {
       case None => None
       case Some(List(p)) =>
-        val contents = SysUtils.readFileContent(Paths.get(p))
+        val contents = Util.readFileContent(Paths.get(p))
         Some(Extras.parse(contents.parseJson, dxApi))
       case _ => throw new Exception("extras specified twice")
     }

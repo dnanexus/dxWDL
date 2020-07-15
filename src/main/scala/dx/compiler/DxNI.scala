@@ -48,13 +48,12 @@ import java.nio.file.{Files, Path}
 import dx.api._
 import dx.core.languages.Language
 import dx.core.languages.wdl.ParseSource
-import dx.core.util.SysUtils
-import dx.util.getVersion
+import dx.core.getVersion
 import spray.json._
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.StringFileSource
+import wdlTools.util.{StringFileSource, Util}
 
 import scala.util.matching.Regex
 
@@ -436,7 +435,7 @@ object DxNI {
     }
     val generator = WdlV1Generator()
     val lines = generator.generateDocument(element, header)
-    SysUtils.writeFileContent(outputPath, lines.mkString("\n"))
+    Util.writeFileContent(outputPath, lines.mkString("\n"))
   }
 
   // create headers for calling dx:applets and dx:workflows
