@@ -123,10 +123,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }
     val request = Map("executions" -> JsArray(jobInfoReq))
     dxApi.logger.info(s"bulk-describe request=${request}")
-    val retval: JsObject = dxApi.executionsDescribe(request)
-    val results: Vector[JsValue] = retval.fields.get("results") match {
+    val response: JsObject = dxApi.executionsDescribe(request)
+    val results: Vector[JsValue] = response.fields.get("results") match {
       case Some(JsArray(x)) => x
-      case _                => throw new Exception(s"wrong type for executableName ${retval}")
+      case _                => throw new Exception(s"wrong type for executableName ${response}")
     }
     (execs zip results).map {
       case (dxExec, desc) =>
