@@ -41,7 +41,9 @@ case class DxWorkflowDescribe(project: String,
                               outputs: Option[Vector[IOParameter]] = None)
     extends DxObjectDescribe
 
-case class DxWorkflow(dxApi: DxApi, id: String, project: Option[DxProject]) extends DxExecutable {
+case class DxWorkflow(dxApi: DxApi, id: String, project: Option[DxProject])
+    extends DxExecutable
+    with DxDataObject {
   private def parseStages(jsv: JsValue): Vector[DxWorkflowStageDesc] = {
     val jsVec = jsv match {
       case JsArray(a) => a

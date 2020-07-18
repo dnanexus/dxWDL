@@ -1,7 +1,6 @@
-package dx.core.io
+package dx.core.languages.wdl
 
-import dx.api.{DxApi, DxApp, DxApplet, DxExecutable, DxWorkflow}
-import dx.core.languages.wdl.TypeSerialization
+import dx.api._
 import spray.json._
 import wdlTools.types.WdlTypes
 

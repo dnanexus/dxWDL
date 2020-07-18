@@ -98,13 +98,13 @@ object DxObject {
 trait DxDataObject extends DxObject
 
 // Objects that can be run on the platform. These are apps, applets, and workflows.
-trait DxExecutable extends DxDataObject
+trait DxExecutable extends DxObject
 
 // Actual executions on the platform. There are jobs and analyses
 trait DxExecution extends DxObject
 
 // DxDataObject that caches its description
-abstract class CachingDxDataObject[T <: DxObjectDescribe] extends DxDataObject {
+abstract class CachingDxObject[T <: DxObjectDescribe] extends DxObject {
   private var cachedDesc: Option[T] = None
 
   def hasCachedDesc: Boolean = cachedDesc.nonEmpty
@@ -114,7 +114,9 @@ abstract class CachingDxDataObject[T <: DxObjectDescribe] extends DxDataObject {
   }
 
   def describe(fields: Set[Field.Value] = Set.empty): T = {
-    if (cachedDesc.isEmpty) {
+    if (cachedDesc.nonEmpty) {
+      // TODO: check that all `fields` are present in desc
+    } else {
       cachedDesc = Some(describeNoCache(fields))
     }
     cachedDesc.get

@@ -2,7 +2,7 @@ package dx.api
 
 import spray.json._
 
-case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
+case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int] = None) {
   private def parseDescribe(jsv: JsValue,
                             dxobj: DxDataObject,
                             dxProject: DxProject): DxObjectDescribe = {
@@ -116,7 +116,7 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
         val dxDataObj = dxApi.dataObject(dxid, Some(dxProj))
         val dxDesc = parseDescribe(desc, dxDataObj, dxProj)
         dxDataObj match {
-          case dataObject: CachingDxDataObject[_] =>
+          case dataObject: CachingDxObject[_] =>
             dataObject.cacheDescribe(dxDesc)
           case _ =>
             // TODO: make all data objects caching, and throw exception here
@@ -241,16 +241,29 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
     (results.toMap, next)
   }
 
+  /**
+    *
+    * @param dxProject project to search in; None = search across all projects
+    * @param folder folder to search in; None = root folder ("/")
+    * @param recurse recurse into subfolders
+    * @param classRestriction object classes to search
+    * @param withProperties objects must have these properties
+    * @param nameConstraints object name has to be one of these strings
+    * @param withInputOutputSpec should the IO spec be described?
+    * @param idConstraints object must have one of these IDs
+    * @param extrafields extra fields to describe
+    * @return
+    */
   def apply(dxProject: Option[DxProject],
             folder: Option[String],
             recurse: Boolean,
-            klassRestriction: Option[String],
-            withProperties: Vector[String], // object must have these properties
-            nameConstraints: Vector[String], // the object name has to be one of these strings
-            withInputOutputSpec: Boolean, // should the IO spec be described?
-            idConstraints: Vector[String],
-            extrafields: Set[Field.Value]): Map[DxDataObject, DxObjectDescribe] = {
-    klassRestriction.foreach { k =>
+            classRestriction: Option[String] = None,
+            withProperties: Vector[String] = Vector.empty,
+            nameConstraints: Vector[String] = Vector.empty,
+            withInputOutputSpec: Boolean,
+            idConstraints: Vector[String] = Vector.empty,
+            extrafields: Set[Field.Value] = Set.empty): Map[DxDataObject, DxObjectDescribe] = {
+    classRestriction.foreach { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
@@ -265,7 +278,7 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
       val (results, next) = submitRequest(scope,
                                           dxProject,
                                           cursor,
-                                          klassRestriction,
+                                          classRestriction,
                                           withProperties,
                                           nameConstraints,
                                           withInputOutputSpec,

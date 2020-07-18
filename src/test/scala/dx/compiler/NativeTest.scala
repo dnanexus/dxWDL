@@ -94,7 +94,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         Some(dxTestProject),
         Some(folder),
         recurse = false,
-        klassRestriction = None,
+        classRestriction = None,
         withProperties = Vector.empty,
         nameConstraints = Vector(basename),
         withInputOutputSpec = false,

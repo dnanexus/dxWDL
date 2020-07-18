@@ -1,46 +1,3 @@
-/**
- Enable calling native dx:applets. They are represented as empty
- tasks, and it is possible to call them at runtime from the WDL
- workflow. dx:workflows will be supported in the future.
-
- For example, an applet with a signature like:
-
-{
-  "name": "mk_int_list",
-  "inputSpec": [
-    {
-      "name": "a",
-      "class": "int"
-    },
-    {
-      "name": "b",
-      "class": "int"
-    }
-  ],
-  "outputSpec": [
-    {
-      "name": "all",
-      "class": "array:int"
-      }
-  ]
-}
-
-Is represented as:
-
-task mk_int_list {
-  Int a
-  Int b
-  command {}
-  output {
-    Array[Int] all = []
-  }
-  meta {
-    type: native
-    applet_id: applet-xxxx
-  }
-}
-
-  */
 package dx.compiler
 
 import java.nio.file.{Files, Path}
@@ -57,6 +14,51 @@ import wdlTools.util.{StringFileSource, Util}
 
 import scala.util.matching.Regex
 
+/**
+  * Enable calling native dx:applets. They are represented as empty
+  * tasks, and it is possible to call them at runtime from the WDL
+  * workflow. dx:workflows will be supported in the future.
+  *
+  * For example, an applet with a signature like:
+  *
+  * {
+  *   "name": "mk_int_list",
+  *   "inputSpec": [
+  *     {
+  *       "name": "a",
+  *       "class": "int"
+  *     },
+  *     {
+  *       "name": "b",
+  *       "class": "int"
+  *     }
+  *   ],
+  *   "outputSpec": [
+  *     {
+  *       "name": "all",
+  *       "class": "array:int"
+  *     }
+  *   ]
+  * }
+  *
+  * Is represented as:
+  *
+  * task mk_int_list {
+  *   Int a
+  *   Int b
+  *
+  *   command {}
+  *
+  *   output {
+  *     Array[Int] all = []
+  *   }
+  *
+  *   meta {
+  *     type: native
+  *     applet_id: applet-xxxx
+  *   }
+  * }
+  */
 case class DxNI(dxApi: DxApi, language: Language.Value) {
   private val codeGen = WdlCodeGen(dxApi.logger, Map.empty, language)
 
@@ -393,8 +395,9 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
                                         |
                                         |${repJs}""".stripMargin)
     }
-    if (appsJs.length == 1000)
-      throw new Exception("There are probably more than 1000 accessible apps")
+    if (appsJs.length >= 1000) {
+      throw new Exception("There are >= 1000 accessible apps")
+    }
 
     val taskHeaders = appsJs.flatMap { jsv =>
       val desc: JsObject = checkedGetJsObject(jsv, "describe")

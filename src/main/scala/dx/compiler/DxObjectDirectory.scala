@@ -1,5 +1,3 @@
-/** Efficient lookup for dx:applets in a platform directory
-  */
 package dx.compiler
 
 import java.time.format.DateTimeFormatter
@@ -8,7 +6,9 @@ import java.time.{LocalDateTime, ZoneId}
 import dx.api._
 import spray.json._
 
-// Keep all the information about an applet in packaged form
+/**
+  * Keeps all the information about an applet in packaged form.
+  */
 case class DxObjectInfo(name: String,
                         crDate: LocalDateTime,
                         dxObj: DxDataObject,
@@ -21,9 +21,12 @@ case class DxObjectInfo(name: String,
     }
 }
 
-// Take a snapshot of the platform target path before the build starts.
-// Make an efficient directory of all the applets that exist there. Update
-// the directory when an applet is compiled.
+/**
+  * Efficient lookup for dx:applets in a platform directory.
+  * Takes a snapshot of the platform target path before the build starts.
+  * Makes an efficient directory of all the applets that exist there. Update
+  * the directory when an applet is compiled.
+  */
 case class DxObjectDirectory(ns: IR.Bundle,
                              dxProject: DxProject,
                              folder: String,

@@ -13,8 +13,10 @@ case class DxAppDescribe(id: String,
                          outputSpec: Option[Vector[IOParameter]])
     extends DxObjectDescribe
 
-case class DxApp(dxApi: DxApi, id: String) extends DxExecutable {
-  def describe(fields: Set[Field.Value] = Set.empty): DxAppDescribe = {
+case class DxApp(dxApi: DxApi, id: String)
+    extends CachingDxObject[DxAppDescribe]
+    with DxExecutable {
+  override def describeNoCache(fields: Set[Field.Value] = Set.empty): DxAppDescribe = {
     val defaultFields =
       Set(Field.Id, Field.Name, Field.Created, Field.Modified, Field.InputSpec, Field.OutputSpec)
     val allFields = fields ++ defaultFields

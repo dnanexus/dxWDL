@@ -1,16 +1,16 @@
-/** Describe the workflow in a tree representation
-  */
 package dx.compiler
 
-import spray.json._
-import Native.ExecRecord
-import IR._
-import dx.core.util.CompressionUtils
 import dx.api.DxWorkflow
 import dx.api.Field
+import dx.core.util.CompressionUtils
+import Native.ExecRecord
+import IR._
+import spray.json._
 
+/**
+  * Describe the workflow in a tree representation
+  */
 case class Tree(execDict: Map[String, ExecRecord]) {
-
   private def kindToString(kind: AppletKind): String = {
     kind match {
       case _: AppletKindNative               => "Native"
@@ -69,9 +69,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
 }
 
 object Tree {
-
   val CANNOT_FIND_EXEC_TREE = "Unable to find exec tree from"
-
   val INDENT = 3
   val LAST_ELEM = s"└${"─" * INDENT}"
   val MID_ELEM = s"├${"─" * INDENT}"

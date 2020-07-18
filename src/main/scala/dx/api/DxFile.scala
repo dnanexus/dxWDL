@@ -40,7 +40,8 @@ case class DxFileDescribe(project: String,
     extends DxObjectDescribe
 
 case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
-    extends CachingDxDataObject[DxFileDescribe] {
+    extends CachingDxObject[DxFileDescribe]
+    with DxDataObject {
   def describeNoCache(fields: Set[Field.Value] = Set.empty): DxFileDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(Field.Project,

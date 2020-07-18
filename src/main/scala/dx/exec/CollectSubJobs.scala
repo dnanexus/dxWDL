@@ -58,8 +58,7 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dx.exec
 
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.io.ExecLinkInfo
-import dx.core.languages.wdl.{DxlExec, WdlVarLinks, WdlVarLinksConverter}
+import dx.core.languages.wdl.{DxlExec, ExecLinkInfo, WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

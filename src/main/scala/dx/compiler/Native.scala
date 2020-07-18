@@ -12,11 +12,12 @@ import dx.core.languages.IORef
 import dx.core.languages.wdl.{
   DxlStage,
   DxlWorkflowInput,
+  ExecLinkInfo,
   TypeSerialization,
   WdlVarLinks,
   WdlVarLinksConverter
 }
-import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.core.io.DxPathConfig
 import dx.core.util.CompressionUtils
 import dx.core.getVersion
 import wdlTools.generators.code.WdlV1Generator

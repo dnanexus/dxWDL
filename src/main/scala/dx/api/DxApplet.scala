@@ -24,8 +24,10 @@ case class DxAppletDescribe(project: String,
                             ignoreReuse: Option[Boolean] = None)
     extends DxObjectDescribe
 
-case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject]) extends DxExecutable {
-  def describe(fields: Set[Field.Value] = Set.empty): DxAppletDescribe = {
+case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject])
+    extends CachingDxObject[DxAppletDescribe]
+    with DxExecutable {
+  def describeNoCache(fields: Set[Field.Value] = Set.empty): DxAppletDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(Field.Project,
                             Field.Id,

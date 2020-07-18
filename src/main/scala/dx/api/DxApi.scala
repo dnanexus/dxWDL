@@ -9,8 +9,18 @@ import dx.{AppInternalException, IllegalArgumentException}
 import spray.json._
 import wdlTools.util.{Logger, Util}
 
-// wrapper around DNAnexus Java API
-case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnvironment.create()) {
+object DxApi {
+  val MAX_RESULTS_PER_CALL = 1000
+}
+
+/**
+  * Wrapper around DNAnexus Java API
+  * @param limit maximal number of objects in a single API request
+  */
+case class DxApi(logger: Logger = Logger.Quiet,
+                 dxEnv: DXEnvironment = DXEnvironment.create(),
+                 limit: Int = DxApi.MAX_RESULTS_PER_CALL) {
+  require(limit > 0 && limit <= DxApi.MAX_RESULTS_PER_CALL)
   lazy val currentProject: DxProject = DxProject(this, dxEnv.getProjectContext)
   lazy val currentJob: DxJob = DxJob(this, dxEnv.getJob)
   // Convert from spray-json to jackson JsonNode
@@ -18,7 +28,6 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
   private lazy val objMapper: ObjectMapper = new ObjectMapper()
   private val DOWNLOAD_RETRY_LIMIT = 3
   private val UPLOAD_RETRY_LIMIT = 3
-  private val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
 
   // We are expecting string like:
   //    record-FgG51b00xF63k86F13pqFv57
@@ -91,7 +100,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       case Some(JsArray(x)) => x
       case _ =>
         throw new Exception(
-            s"""Bad response from systemFindProject API call (${responseJs.prettyPrint}), 
+            s"""Bad response from systemFindProject API call (${responseJs.prettyPrint}),
                |when resolving project ${projName}.""".stripMargin
         )
     }
@@ -273,7 +282,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
             dxProject = project,
             folder = None,
             recurse = true,
-            klassRestriction = Some("file"),
+            classRestriction = Some("file"),
             withProperties = Vector.empty,
             nameConstraints = Vector.empty,
             withInputOutputSpec = true,
@@ -289,8 +298,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
       case (accuOuter, (proj, files)) =>
         // Limit on number of objects in one API request
-        // TODO: List vs Vector
-        val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+        val slices = files.grouped(limit).toList
         // iterate on the ranges
         accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
           case (accu, objRange) =>
@@ -702,8 +710,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       return alreadyResolved
 
     // Limit on number of objects in one API request
-    // TODO: List vs Vector
-    val slices = dxPathsToResolve.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+    val slices = dxPathsToResolve.grouped(limit).toList
 
     // iterate on the ranges
     val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {

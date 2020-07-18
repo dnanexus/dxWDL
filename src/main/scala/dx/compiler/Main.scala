@@ -5,13 +5,16 @@ import java.nio.file.{Path, Paths}
 import com.typesafe.config.ConfigFactory
 import dx.InvalidInputException
 import dx.api.{DxApi, DxProject}
+import dx.core.getVersion
 import dx.core.io.DxPathConfig
 import dx.core.languages.Language
-import dx.core.getVersion
 import dx.core.util.MainUtils._
 import spray.json._
 import wdlTools.util.{Logger, TraceLevel, Util}
 
+/**
+  * Compiler CLI.
+  */
 object Main {
   private val DEFAULT_RUNTIME_TRACE_LEVEL: Int = TraceLevel.Verbose
 
@@ -140,12 +143,10 @@ object Main {
 
   // parse extra command line arguments
   private def parseCmdlineOptions(arglist: List[String]): OptionsMap = {
-    def keywordValueIsVector = Set("inputs", "imports", "verboseKey")
-
-    val cmdLineOpts = splitCmdLine(arglist)
-    val options = cmdLineOpts.foldLeft(Map.empty[String, List[String]]) {
-      case (_, Nil) => throw new Exception("sanity: empty command line option")
-      case (options, keyOrg :: subargs) =>
+    val keywordValueIsList = Set("inputs", "imports", "verboseKey")
+    splitCmdLine(arglist).foldLeft(Map.empty[String, Vector[String]]) {
+      case (_, Nil) => throw new Exception("Empty command line option")
+      case (accu, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {
           case "apps" =>
@@ -232,19 +233,14 @@ object Main {
           case _ =>
             throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
         }
-        options.get(nKeyword) match {
-          case None =>
-            // first time
-            options + (nKeyword -> List(value))
-          case Some(x) if keywordValueIsVector contains nKeyword =>
-            // append to the already existing verbose flags
-            options + (nKeyword -> (value :: x))
-          case Some(_) =>
-            // overwrite the previous flag value
-            options + (nKeyword -> List(value))
+        if (accu.contains(nKeyword) && keywordValueIsList.contains(nKeyword)) {
+          // append to the already existing verbose flags
+          accu + (nKeyword -> (value + accu(nKeyword)))
+        } else {
+          // either the first time we've seen this key, or overwrite the previous value
+          accu + (nKeyword -> Vector(value))
         }
     }
-    options.view.mapValues(_.toVector).toMap
   }
 
   def compile(args: Seq[String]): Termination = {
@@ -332,24 +328,18 @@ object Main {
     }
   }
 
-  private def parseDescribeOptions(arglist: List[String]): OptionsMap = {
-    val describeOpts = splitCmdLine(arglist)
-    describeOpts.foldLeft(Map.empty[String, Vector[String]]) {
-      case (options, Nil) => options
-      case (options, keyOrg :: subargs) =>
+  private def parseDescribeOptions(argList: List[String]): OptionsMap = {
+    val acceptedKeywords = Set("pretty", "help")
+    splitCmdLine(argList).foldLeft(Map.empty[String, Vector[String]]) {
+      case (accu, Nil) => accu
+      case (accu, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
-        val (nKeyword, value) = keyword match {
-          case "pretty" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "help" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case _ =>
-            throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
-
+        if (acceptedKeywords.contains(keyword)) {
+          checkNumberOfArguments(keyword, 0, subargs)
+          accu + (keyword -> List(""))
+        } else {
+          throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
         }
-        options + (nKeyword -> Vector(value))
     }
   }
 
