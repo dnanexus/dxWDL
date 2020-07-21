@@ -51,7 +51,7 @@ case class Native(dxWDLrtId: Option[String],
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
-                  dxApi: DxApi) {
+                  dxApi: DxApi = DxApi.get) {
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {

@@ -7,17 +7,31 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.api.DxPath.DxPathComponents
 import dx.{AppInternalException, IllegalArgumentException}
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileUtils, Logger, SysUtils}
 
 object DxApi {
   val MAX_RESULTS_PER_CALL = 1000
+
+  private var instance: Option[DxApi] = None
+
+  def get: DxApi =
+    instance.getOrElse({
+      instance = Some(DxApi())
+      instance
+    })
+
+  def set(dxApi: DxApi): Option[DxApi] = {
+    val curDxApi = instance
+    instance = dxApi
+    curDxApi
+  }
 }
 
 /**
   * Wrapper around DNAnexus Java API
   * @param limit maximal number of objects in a single API request
   */
-case class DxApi(logger: Logger = Logger.Quiet,
+case class DxApi(logger: Logger = Logger.get,
                  dxEnv: DXEnvironment = DXEnvironment.create(),
                  limit: Int = DxApi.MAX_RESULTS_PER_CALL) {
   require(limit > 0 && limit <= DxApi.MAX_RESULTS_PER_CALL)
@@ -516,7 +530,7 @@ case class DxApi(logger: Logger = Logger.Quiet,
       try {
         // Use dx download. Quote the path, because it may contains spaces.
         val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString}" """
-        val (_, _) = Util.execCommand(dxDownloadCmd, None)
+        logger.ignore(SysUtils.execCommand(dxDownloadCmd, None))
         true
       } catch {
         case e: Throwable =>
@@ -555,9 +569,10 @@ case class DxApi(logger: Logger = Logger.Quiet,
         // spaces
         val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
         logger.traceLimited(s"--  ${dxUploadCmd}")
-        val (outmsg, _) = Util.execCommand(dxUploadCmd, None)
-        if (!outmsg.startsWith("file-"))
+        val (_, outmsg, _) = SysUtils.execCommand(dxUploadCmd, None)
+        if (!outmsg.startsWith("file-")) {
           return None
+        }
         Some(outmsg.trim())
       } catch {
         case e: Throwable =>
@@ -601,7 +616,7 @@ case class DxApi(logger: Logger = Logger.Quiet,
     val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
     silentFileDelete(tempFi)
     downloadFile(tempFi, dxFile)
-    val content = Util.readFileContent(tempFi)
+    val content = FileUtils.readFileContent(tempFi)
     silentFileDelete(tempFi)
     content
   }

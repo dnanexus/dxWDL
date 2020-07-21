@@ -30,7 +30,7 @@ import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{FileSourceResolver, Logger, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger, Util}
 
 // scan a WDL JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
@@ -127,7 +127,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
 
   def apply(inputPath: Path): InputFileScanResults = {
     // Read the JSON values from the file
-    val content = Util.readFileContent(inputPath).parseJson
+    val content = FileUtils.readFileContent(inputPath).parseJson
     val inputs: Map[String, JsValue] = content.asJsObject.fields
 
     val allCallables: Vector[IR.Callable] =
@@ -432,7 +432,7 @@ case class InputFile(fileResolver: FileSourceResolver,
     dxApi.logger.trace(s"Embedding defaults into the IR")
 
     // read the default inputs file (xxxx.json)
-    val wdlDefaults: JsObject = Util.readFileContent(defaultInputs).parseJson.asJsObject
+    val wdlDefaults: JsObject = FileUtils.readFileContent(defaultInputs).parseJson.asJsObject
     val defaultFields: Fields = new Fields("default", preprocessInputs(wdlDefaults))
 
     val callablesWithDefaults = bundle.allCallables.map {
@@ -466,7 +466,7 @@ case class InputFile(fileResolver: FileSourceResolver,
     dxApi.logger.trace(s"Translating WDL input file ${inputPath}")
 
     // read the input file xxxx.json
-    val wdlInputs: JsObject = Util.readFileContent(inputPath).parseJson.asJsObject
+    val wdlInputs: JsObject = FileUtils.readFileContent(inputPath).parseJson.asJsObject
     val inputFields = InputFileState(preprocessInputs(wdlInputs))
 
     def handleTask(applet: IR.Applet): Unit = {

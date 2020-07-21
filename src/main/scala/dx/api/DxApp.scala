@@ -10,7 +10,8 @@ case class DxAppDescribe(id: String,
                          properties: Option[Map[String, String]],
                          details: Option[JsValue],
                          inputSpec: Option[Vector[IOParameter]],
-                         outputSpec: Option[Vector[IOParameter]])
+                         outputSpec: Option[Vector[IOParameter]],
+                         access: Option[JsValue] = None)
     extends DxObjectDescribe
 
 case class DxApp(dxApi: DxApi, id: String)
@@ -42,7 +43,8 @@ case class DxApp(dxApi: DxApi, id: String)
       }
     val details = descJs.fields.get("details")
     val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
-    desc.copy(details = details, properties = props)
+    val access = descJs.fields.get("access")
+    desc.copy(details = details, properties = props, access = access)
   }
 
   def newRun(name: String,

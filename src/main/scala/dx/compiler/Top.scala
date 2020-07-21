@@ -8,7 +8,7 @@ import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{ParseSource, WdlVarLinksConverter}
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
 
 import scala.jdk.CollectionConverters._
 
@@ -37,13 +37,9 @@ case class CompilerOptions(archive: Boolean,
                            reorg: Boolean,
                            streamAllFiles: Boolean,
                            execTree: Option[TreePrinter],
-                           runtimeTraceLevel: Int,
-                           dxApi: DxApi)
+                           runtimeTraceLevel: Int)
 
-case class Top(cOpt: CompilerOptions) {
-  private val dxApi = cOpt.dxApi
-  private val logger = dxApi.logger
-
+case class Top(cOpt: CompilerOptions, dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
   // The mapping from region to project name is list of (region, proj-name) pairs.
   // Get the project for this region.
   private def getProjectWithRuntimeLibrary(region2project: Map[String, String],
@@ -151,7 +147,7 @@ case class Top(cOpt: CompilerOptions) {
         cOpt.force,
         cOpt.archive,
         cOpt.locked,
-        cOpt.dxApi
+        dxApi
     ).apply(bundle)
   }
 
@@ -257,7 +253,7 @@ case class Top(cOpt: CompilerOptions) {
     cOpt.inputs.foreach { path =>
       val dxInputs = inputFile.dxFromInputJson(bundle2, path)
       // write back out as xxxx.dx.json
-      val filename = Util.replaceFileSuffix(path, ".dx.json")
+      val filename = FileUtils.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
       val dxInputFile =
         if (parent != null) {
@@ -265,7 +261,7 @@ case class Top(cOpt: CompilerOptions) {
         } else {
           Paths.get(filename)
         }
-      Util.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+      FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
       logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
     }
     bundle2

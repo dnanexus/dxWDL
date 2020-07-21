@@ -74,7 +74,7 @@ object Tree {
   val LAST_ELEM = s"└${"─" * INDENT}"
   val MID_ELEM = s"├${"─" * INDENT}"
 
-  def formDXworkflow(workflow: DxWorkflow): JsValue = {
+  def fromDxWorkflow(workflow: DxWorkflow): JsValue = {
     val execTree = workflow.describe(Set(Field.Details)).details match {
       case Some(x: JsValue) =>
         x.asJsObject.fields.get("execTree") match {

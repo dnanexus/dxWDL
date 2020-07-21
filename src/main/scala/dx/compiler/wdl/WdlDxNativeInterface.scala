@@ -1,22 +1,71 @@
 package dx.compiler.wdl
 
 import dx.api.{DxApi, DxApp, DxAppDescribe, DxApplet, DxAppletDescribe, DxIOClass}
-import dx.compiler.{DxNativeInterface, WdlCodeGen}
-import dx.core.languages.Language
-import dx.core.languages.wdl.ParseSource
-import wdlTools.syntax.{CommentMap, SourceLocation}
+import dx.compiler.DxNativeInterface
+import dx.core.languages.wdl.{ParseSource, Utils, VersionSupport}
+import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
+import wdlTools.types.WdlTypes.T_Task
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.StringFileSource
+import wdlTools.util.{Logger, StringFileSource}
 
-class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
+case class WdlDxNativeInterface(wdlVersion: WdlVersion,
+                                dxApi: DxApi = DxApi.get,
+                                logger: Logger = Logger.get)
     extends DxNativeInterface(dxApi) {
-  private val codeGen = WdlCodeGen(dxApi.logger, Map.empty, language)
+  private lazy val wdl = VersionSupport(wdlVersion, dxApi, logger)
+
+  /**
+    * Generate a WDL stub fore a DNAnexus applet.
+    * @param id the applet ID
+    * @param appletName the applet name
+    * @param inputSpec the applet inputs
+    * @param outputSpec the applet outputs
+    * @return an AST.Task
+    */
+  private def createDnanexusAppletStub(
+      id: String,
+      appletName: String,
+      inputSpec: Map[String, WdlTypes.T],
+      outputSpec: Map[String, WdlTypes.T],
+      loc: SourceLocation = Utils.locPlaceholder
+  ): TAT.Task = {
+
+    val meta = TAT.MetaSection(
+        Map(
+            "type" -> TAT.MetaValueString("native", loc),
+            "id" -> TAT.MetaValueString(id, loc)
+        ),
+        loc
+    )
+    TAT.Task(
+        appletName,
+        T_Task(appletName, inputSpec.map {
+          case (name, wdlType) => name -> (wdlType, false)
+        }, outputSpec),
+        inputSpec.map {
+          case (name, wdlType) =>
+            TAT.RequiredInputDefinition(name, wdlType, loc)
+        }.toVector,
+        outputSpec.map {
+          case (name, wdlType) =>
+            val expr = Utils.genDefaultValueOfType(wdlType)
+            TAT.OutputDefinition(name, wdlType, expr, loc)
+        }.toVector,
+        TAT.CommandSection(Vector.empty, loc),
+        Vector.empty,
+        Some(meta),
+        parameterMeta = None,
+        runtime = None,
+        hints = None,
+        loc = loc
+    )
+  }
 
   private def documentFromTasks(tasks: Vector[TAT.Task]): TAT.Document = {
     def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
       TAT.Document(
           StringFileSource.empty,
-          TAT.Version(codeGen.wdlVersion, SourceLocation.empty),
+          TAT.Version(wdl.version, SourceLocation.empty),
           docTasks,
           None,
           SourceLocation.empty,
@@ -34,7 +83,7 @@ class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
         // TODO: currently we always generate WDL 1.0 - other versions of the code generator
         //  need to be implemented in wdlTools
         val taskDoc = createDocument(Vector(task))
-        val sourceCode = codeGen.generateDocument(taskDoc)
+        val sourceCode = wdl.codeGenerator.generateDocument(taskDoc).mkString("\n")
         parser.validateWdlCode(sourceCode)
         Some(task)
       } catch {
@@ -122,7 +171,7 @@ class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
             s"""Parameters ${bothStr} used as both input and output in applet ${appletName}"""
         )
       }
-      Some(codeGen.genDnanexusAppletStub(dxAppletDesc.id, appletName, inputSpec, outputSpec))
+      Some(createDnanexusAppletStub(dxAppletDesc.id, appletName, inputSpec, outputSpec))
     } catch {
       case e: Throwable =>
         dxApi.logger.warning(
@@ -133,10 +182,12 @@ class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
     }
   }
 
-  override def generateApplets(applets: Vector[DxApplet], headerLines: Vector[String]): String = {
+  override def generateApplets(applets: Vector[DxApplet],
+                               headerLines: Vector[String]): Option[Vector[String]] = {
     val tasks = applets.map(_.describe()).flatMap(appletToWdlInterface)
-    val doc = if (tasks.nonEmpty) {
-      Some(documentFromTasks(tasks))
+    if (tasks.nonEmpty) {
+      val doc = documentFromTasks(tasks)
+      Some(wdl.codeGenerator.generateDocument(doc))
     } else {
       None
     }
@@ -172,7 +223,7 @@ class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
               .replaceAll("\n", " ")
         )
       }
-      Some(codeGen.genDnanexusAppletStub(dxAppDesc.id, dxAppDesc.name, inputSpec, outputSpec))
+      Some(createDnanexusAppletStub(dxAppDesc.id, dxAppDesc.name, inputSpec, outputSpec))
     } catch {
       case e: Throwable =>
         dxApi.logger.warning(
@@ -183,10 +234,26 @@ class WdlDxNativeInterface(dxApi: DxApi, language: Language.Value)
     }
   }
 
-  override def generateApps(apps: Vector[DxApp], headerLines: Vector[String]): String = {
-    val tasks = apps.flatmap(appToWdlInterface)
+  override def generateApps(apps: Vector[DxApp],
+                            headerLines: Vector[String]): Option[Vector[String]] = {
+    val tasks = apps.map(_.describe()).flatMap(appToWdlInterface)
     if (tasks.nonEmpty) {
-      Some(documentFromTasks(tasks))
+      val doc = documentFromTasks(tasks)
+      Some(wdl.codeGenerator.generateDocument(doc))
+    } else {
+      None
+    }
+  }
+
+  override def generateAppsAndApplets(apps: Vector[DxApp],
+                                      applets: Vector[DxApplet],
+                                      headerLines: Vector[String]): Option[Vector[String]] = {
+    val appTasks: Vector[TAT.Task] = apps.map(_.describe()).flatMap(appToWdlInterface)
+    val appletTasks: Vector[TAT.Task] = applets.map(_.describe()).flatMap(appletToWdlInterface)
+    val tasks: Vector[TAT.Task] = appTasks ++ appletTasks
+    if (tasks.nonEmpty) {
+      val doc = documentFromTasks(tasks)
+      Some(wdl.codeGenerator.generateDocument(doc))
     } else {
       None
     }

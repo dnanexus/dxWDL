@@ -124,7 +124,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case _           => throw new Exception("unexpected")
     }
 
-    val treeJs = Tree.formDXworkflow(wf)
+    val treeJs = Tree.fromDxWorkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
         id shouldBe wf.id

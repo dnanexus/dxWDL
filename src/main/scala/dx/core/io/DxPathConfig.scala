@@ -2,7 +2,7 @@ package dx.core.io
 
 import java.nio.file.Path
 
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileUtils, Logger}
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -59,16 +59,16 @@ case class DxPathConfig(homeDir: Path,
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
   def createCleanDirs(): Unit = {
-    Util.createDirectories(metaDir)
-    Util.createDirectories(inputFilesDir)
-    Util.createDirectories(outputFilesDir)
-    Util.createDirectories(tmpDir)
-    Util.createDirectories(dxfuseMountpoint)
+    FileUtils.createDirectories(metaDir)
+    FileUtils.createDirectories(inputFilesDir)
+    FileUtils.createDirectories(outputFilesDir)
+    FileUtils.createDirectories(tmpDir)
+    FileUtils.createDirectories(dxfuseMountpoint)
   }
 }
 
 object DxPathConfig {
-  def apply(homeDir: Path, streamAllFiles: Boolean, logger: Logger): DxPathConfig = {
+  def apply(homeDir: Path, streamAllFiles: Boolean, logger: Logger = Logger.get): DxPathConfig = {
     val metaDir: Path = homeDir.resolve("meta")
     val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")
