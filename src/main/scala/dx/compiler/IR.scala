@@ -14,6 +14,7 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 object IR {
   // stages that the compiler uses in generated DNAx workflows
   val COMMON = "common"
+  val EVAL_STAGE = "eval"
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
@@ -381,15 +382,18 @@ object IR {
     def outputVars: Vector[CVar] = outputs
   }
 
-  /** An input to a stage. Could be empty, a wdl constant,
-    *  a link to an output variable from another stage,
-    *  or a workflow input.
+  /**
+    * An input to a stage. Could be empty, a wdl constant,
+    * a link to an output variable from another stage,
+    * or a workflow input. The workflow input may have a
+    * default value that is a complex expression that must
+    * be evaluated at runtime.
     */
   sealed trait SArg
   case object SArgEmpty extends SArg
   case class SArgConst(wdlValue: WdlValues.V) extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
-  case class SArgWorkflowInput(argName: CVar) extends SArg
+  case class SArgWorkflowInput(arg: CVar, dynamicDefault: Boolean = false) extends SArg
 
   // A stage can call an applet or a workflow.
   //
