@@ -21,7 +21,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   def check(elem: Element, wvlConverter: WdlVarLinksConverter): Unit = {
     val prefix = "XXX_"
     val wvl: WdlVarLinks = wvlConverter.importFromWDL(elem.wdlType, elem.wdlValue)
-    val allDxFields1: List[(String, JsValue)] = wvlConverter.genFields(wvl, prefix + elem.name)
+    val allDxFields1: Vector[(String, JsValue)] = wvlConverter.genFields(wvl, prefix + elem.name)
     val allDxFields2 = allDxFields1.filter {
       case (key, _) => !key.endsWith(WdlVarLinksConverter.FLAT_FILES_SUFFIX)
     }
@@ -36,7 +36,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
   it should "handle primitive WDL elements" in {
     val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
-    val testCases = List(
+    val testCases = Vector(
         // primitives
         makeElement(WdlTypes.T_Boolean, WdlValues.V_Boolean(true)),
         makeElement(WdlTypes.T_Int, WdlValues.V_Int(19)),
@@ -57,7 +57,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))
     }
 
-    val testCases = List(
+    val testCases = Vector(
         // pairs
         makeElement(WdlTypes.T_Pair(WdlTypes.T_Float, WdlTypes.T_String),
                     makePair(24.1, "Fiji is an island in the pacific ocean")),
@@ -107,7 +107,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
       WdlValues.V_Struct("Person",
                          Map("name" -> WdlValues.V_String("Janice"), "age" -> WdlValues.V_Int(25)))
 
-    val testCases = List(makeElement(personType, jeff), makeElement(personType, janice))
+    val testCases = Vector(makeElement(personType, jeff), makeElement(personType, janice))
 
     // no definitions for struct Person, should fail
     // val wvlConverterEmpty = new WdlVarLinksConverter(verbose, Map.empty, Map.empty)
@@ -155,7 +155,7 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
                              "zipcode" -> WdlValues.V_Int(94043),
                              "type" -> WdlValues.V_String("town house")))
 
-    val testCases = List(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
+    val testCases = Vector(makeElement(houseType, learCastle), makeElement(houseType, lucyHouse))
     val typeAliases: Map[String, WdlTypes.T] = Map("Person" -> personType, "House" -> houseType)
     val wvlConverter = WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     testCases.foreach { elem =>

@@ -15,7 +15,7 @@ class ParseSourceTest extends AnyFlatSpec with Matchers {
   private def validateTaskMeta(task: TAT.Task): Unit = {
     val kvs = task.meta match {
       case Some(TAT.MetaSection(kvs, _)) => kvs
-      case _                             => throw new Exception("sanity")
+      case _                             => throw new Exception("unexpected")
     }
     kvs.get("type") should matchPattern {
       case Some(TAT.MetaValueString("native", _)) =>

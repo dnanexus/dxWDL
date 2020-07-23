@@ -289,6 +289,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
       case (accuOuter, (proj, files)) =>
         // Limit on number of objects in one API request
+        // TODO: List vs Vector
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
         // iterate on the ranges
         accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
@@ -447,14 +448,14 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val req = fields ++ instanceFields ++ dependsFields ++ dwd
-    logger.traceLimited(s"subjob request=${JsObject(req).prettyPrint}")
+    val request = fields ++ instanceFields ++ dependsFields ++ dwd
+    logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
 
-    val info = jobNew(req)
-    val id: String = info.fields.get("id") match {
+    val response = jobNew(request)
+    val id: String = response.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>
-        throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
+        throw new AppInternalException(s"Bad format returned from jobNew ${response.prettyPrint}")
     }
     job(id)
   }
@@ -471,12 +472,14 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
     logger.trace(s"The asset ${pkgName} is from a different project ${rmtProject.id}")
 
     // clone
-    val req = Map("objects" -> JsArray(JsString(assetRecord.id)),
-                  "project" -> JsString(dxProject.id),
-                  "destination" -> JsString("/"))
-    val repJs = projectClone(rmtProject.id, req)
 
-    val exists = repJs.fields.get("exists") match {
+    val request = Map("objects" -> JsArray(JsString(assetRecord.id)),
+                      "project" -> JsString(dxProject.id),
+                      "destination" -> JsString("/"))
+    val responseJs = projectClone(rmtProject.id, request)
+
+    val exists = responseJs.fields.get("exists") match {
+
       case None => throw new Exception("API call did not returnd an exists field")
       case Some(JsArray(x)) =>
         x.map {
@@ -600,13 +603,13 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
   private def triageOne(components: DxPathComponents): Either[DxDataObject, DxPathComponents] = {
     if (isDataObjectId(components.name)) {
       val dxDataObj = dataObject(components.name)
-      val dxObjWithProj = components.projName match {
+      val dxDataObjWithProj = components.projName match {
         case None => dxDataObj
         case Some(pid) =>
           val dxProj = resolveProject(pid)
           dataObject(dxDataObj.getId, Some(dxProj))
       }
-      Left(dxObjWithProj)
+      Left(dxDataObjWithProj)
     } else {
       Right(components)
     }
@@ -650,8 +653,8 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
                             dxProject: DxProject): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map(makeResolutionReq)
     val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
-    val repJs = resolveDataObjects(request)
-    val resultsPerObj: Vector[JsValue] = repJs.fields.get("results") match {
+    val responseJs = resolveDataObjects(request)
+    val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
       case Some(JsArray(x)) => x
       case other            => throw new Exception(s"API call returned invalid data ${other}")
     }
@@ -701,6 +704,7 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
       return alreadyResolved
 
     // Limit on number of objects in one API request
+    // TODO: List vs Vector
     val slices = dxPathsToResolve.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
     // iterate on the ranges

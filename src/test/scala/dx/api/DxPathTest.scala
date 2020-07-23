@@ -6,8 +6,8 @@ import spray.json._
 import wdlTools.util.{Logger, Util}
 
 class DxPathTest extends AnyFlatSpec with Matchers {
-  private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private val testProject = "dxWDL_playground"
+  val dxApi: DxApi = DxApi(Logger.Quiet)
+  val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {

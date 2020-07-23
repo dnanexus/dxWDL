@@ -4,13 +4,13 @@ import java.nio.file.{Path, Paths}
 
 import dx.api._
 import dx.compiler.Main.SuccessTree
-import dx.core.util.CompressionUtils
 import dx.core.util.MainUtils.Success
+import dx.core.util.CompressionUtils
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.Logger
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -24,15 +24,15 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   }
 
   private val dxApi = DxApi(Logger.Quiet)
-  private val TEST_PROJECT = "dxWDL_playground"
+  private val testProject = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
@@ -81,7 +81,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
     val wf: DxWorkflow = retval match {
       case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     val description = wf.describe(Set(Field.Details))
@@ -121,7 +121,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
     val wf: DxWorkflow = retval match {
       case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     val treeJs = Tree.formDXworkflow(wf)

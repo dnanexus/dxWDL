@@ -17,8 +17,8 @@ import dx.core.languages.wdl.{
   WdlVarLinksConverter
 }
 import dx.core.io.{DxPathConfig, ExecLinkInfo}
-import dx.core.getVersion
 import dx.core.util.CompressionUtils
+import dx.core.getVersion
 
 import scala.collection.immutable.TreeMap
 import spray.json._
@@ -163,7 +163,7 @@ case class Native(dxWDLrtId: Option[String],
                   Some(DxIOSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
                 // If we have the alternative patterns object, extrac the values, if any at all
                 case IR.PatternsReprObj(name, klass, tags) =>
-                  val attrs: Map[String, JsValue] = List(
+                  val attrs: Map[String, JsValue] = Vector(
                       if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
                       else None,
                       if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
@@ -202,7 +202,7 @@ case class Native(dxWDLrtId: Option[String],
                     case None      => None
                   }
                   if (name.isDefined || project.isDefined || path.isDefined) {
-                    val attrs: Map[String, JsValue] = List(
+                    val attrs: Map[String, JsValue] = Vector(
                         if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
                         if (name.isDefined) Some("name" -> JsString(name.get)) else None,
                         if (project.isDefined) Some("project" -> JsString(project.get)) else None,
@@ -514,9 +514,9 @@ case class Native(dxWDLrtId: Option[String],
   private def genBashScript(applet: IR.Applet, instanceType: IR.InstanceType): String = {
     val body: String = applet.kind match {
       case IR.AppletKindNative(_) =>
-        throw new Exception("Sanity: generating a bash script for a native applet")
+        throw new Exception("Should not generate a bash script for a native applet")
       case IR.AppletKindWorkflowCustomReorg(_) =>
-        throw new Exception("Sanity: generating a bash script for a custom reorg applet")
+        throw new Exception("Should not generate a bash script for a custom reorg applet")
       case IR.AppletKindWfFragment(_, _, _) =>
         genBashScriptWfFragment()
       case IR.AppletKindWfInputs =>
@@ -952,7 +952,7 @@ case class Native(dxWDLrtId: Option[String],
 
     val details: Map[String, JsValue] = dockerFile match {
       case None         => Map.empty
-      case Some(dxfile) => Map("docker-image" -> dxfile.getLinkAsJson)
+      case Some(dxFile) => Map("docker-image" -> dxFile.getLinkAsJson)
     }
 
     (runSpecEverything, details)
@@ -1288,12 +1288,12 @@ case class Native(dxWDLrtId: Option[String],
     val oSpecMap: Map[String, JsValue] = oSpec.map { jso =>
       val nm = jso.asJsObject.fields.get("name") match {
         case Some(JsString(nm)) => nm
-        case _                  => throw new Exception("sanity")
+        case other              => throw new Exception(s"Unexpected value for 'name' field: ${other}")
       }
       nm -> jso
     }.toMap
 
-    val outputSources: List[(String, JsValue)] = sArg match {
+    val outputSources: Vector[(String, JsValue)] = sArg match {
       case IR.SArgConst(wdlValue) =>
         // constant
         throw new Exception(
@@ -1317,7 +1317,7 @@ case class Native(dxWDLrtId: Option[String],
             specJs.asJsObject.fields ++
               Map("outputSource" -> outputJs)
         )
-    }.toVector
+    }
   }
 
   private def buildWorkflowMetadata(

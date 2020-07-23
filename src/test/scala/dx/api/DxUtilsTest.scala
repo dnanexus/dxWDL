@@ -5,8 +5,8 @@ import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
 
 class DxUtilsTest extends AnyFlatSpec with Matchers {
-  private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private val testProject = "dxWDL_playground"
+  val dxApi: DxApi = DxApi(Logger.Quiet)
+  val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
@@ -20,7 +20,7 @@ class DxUtilsTest extends AnyFlatSpec with Matchers {
     }
 
   it should "download files as strings" in {
-    val results = dxApi.resolveBulk(List(s"dx://${testProject}:/test_data/fileA"), dxTestProject)
+    val results = dxApi.resolveBulk(Vector(s"dx://${testProject}:/test_data/fileA"), dxTestProject)
     results.size shouldBe 1
     val dxobj = results.values.head
     val dxFile: DxFile = dxobj.asInstanceOf[DxFile]

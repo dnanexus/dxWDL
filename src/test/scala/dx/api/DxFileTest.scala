@@ -8,22 +8,25 @@ import wdlTools.util.Logger
 
 class DxFileTest extends AnyFlatSpec with Matchers {
   private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private val TEST_PROJECT: DxProject = dxApi.project(
+
+  private val testProject: DxProject = dxApi.project(
       "project-FGpfqjQ0ffPF1Q106JYP2j3v"
   ) // dxWDL_playground
-  private val PUBLIC_PROJECT
-      : DxProject = dxApi.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // dxWDL_CI
+  private val publicProject: DxProject = dxApi.project(
+      "project-FQ7BqkQ0FyXgJxGP2Bpfv3vK"
+  ) // dxWDL_CI
   private val FILE_IN_TWO_PROJS: DxFile =
-    dxApi.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", Some(TEST_PROJECT))
+    dxApi.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", Some(testProject))
   private val FILE_IN_TWO_PROJS_WO_PROJ: DxFile = dxApi.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", None)
-  private val FILE1: DxFile = dxApi.file("file-FGqFGBQ0ffPPkYP19gBvFkZy", Some(TEST_PROJECT))
-  private val FILE2: DxFile = dxApi.file("file-FGqFJ8Q0ffPGVz3zGy4FK02P", Some(TEST_PROJECT))
-  private val FILE3: DxFile = dxApi.file("file-FGzzpkQ0ffPJX74548Vp6670", Some(TEST_PROJECT))
-  private val FILE4: DxFile = dxApi.file("file-FqP0x4Q0bxKXBBXX5pjVYf3Q", Some(PUBLIC_PROJECT))
-  private val FILE5: DxFile = dxApi.file("file-FqP0x4Q0bxKykykX5pVXB1YZ", Some(PUBLIC_PROJECT))
-  private val FILE6: DxFile = dxApi.file("file-FqP0x4Q0bxKykfF55qk98vYj", Some(PUBLIC_PROJECT))
+  private val FILE1: DxFile = dxApi.file("file-FGqFGBQ0ffPPkYP19gBvFkZy", Some(testProject))
+  private val FILE2: DxFile = dxApi.file("file-FGqFJ8Q0ffPGVz3zGy4FK02P", Some(testProject))
+  private val FILE3: DxFile = dxApi.file("file-FGzzpkQ0ffPJX74548Vp6670", Some(testProject))
+  private val FILE4: DxFile = dxApi.file("file-FqP0x4Q0bxKXBBXX5pjVYf3Q", Some(publicProject))
+  private val FILE5: DxFile = dxApi.file("file-FqP0x4Q0bxKykykX5pVXB1YZ", Some(publicProject))
+  private val FILE6: DxFile = dxApi.file("file-FqP0x4Q0bxKykfF55qk98vYj", Some(publicProject))
   private val FILE6_WO_PROJ: DxFile = dxApi.file("file-FqP0x4Q0bxKykfF55qk98vYj", None)
-  //private val FILE7: DxFile = dxApi.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", Some(PUBLIC_PROJECT))
+  //private val FILE7: DxFile = dxApi.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", Some(publicProject))
+
   private val FILE7_WO_PROJ: DxFile = dxApi.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", None)
 
   private def checkFileDesc(query: Vector[DxFile],
@@ -96,7 +99,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
 
   it should "bulk describe a file without project" in {
     val query = Vector(FILE7_WO_PROJ)
-    checkFileDesc(query, createFiles(query, Vector("test4.test"), Vector(PUBLIC_PROJECT)))
+    checkFileDesc(query, createFiles(query, Vector("test4.test"), Vector(publicProject)))
   }
 
   it should "bulk describe an empty vector" in {
@@ -125,16 +128,16 @@ class DxFileTest extends AnyFlatSpec with Matchers {
     checkFileDesc(query,
                   createFiles(query,
                               Vector("test1.test", "test3.test", "test4.test"),
-                              Vector(PUBLIC_PROJECT, PUBLIC_PROJECT, PUBLIC_PROJECT)))
+                              Vector(publicProject, publicProject, publicProject)))
   }
 
   it should "describe files in bulk with extrafields" in {
     val expected = Vector(
         createFile(FILE_IN_TWO_PROJS,
                    "File_copied_to_another_project",
-                   Some(TEST_PROJECT),
+                   Some(testProject),
                    Some("{\"detail1\":\"value1\"}")),
-        createFile(FILE2, "fileB", Some(TEST_PROJECT), Some("{}"))
+        createFile(FILE2, "fileB", Some(testProject), Some("{}"))
     )
     checkFileDesc(Vector(FILE_IN_TWO_PROJS, FILE2), expected, compareDetails = true)
   }

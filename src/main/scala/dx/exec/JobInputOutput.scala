@@ -19,10 +19,6 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
                           evaluator: Eval) {
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
-  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlValues.V = {
-    wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv)
-  }
-
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {

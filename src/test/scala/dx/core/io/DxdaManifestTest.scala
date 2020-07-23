@@ -10,15 +10,15 @@ import wdlTools.util.Logger
 
 class DxdaManifestTest extends AnyFlatSpec with Matchers {
   val dxApi: DxApi = DxApi(Logger.Quiet)
-  val TEST_PROJECT = "dxWDL_playground"
+  val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
         )
     }
@@ -28,9 +28,9 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
   //
   it should "create manifests for dxda" in {
     val fileDir: Map[String, Path] = Map(
-        s"dx://${TEST_PROJECT}:/test_data/fileA" -> Paths.get("inputs/A"),
-        s"dx://${TEST_PROJECT}:/test_data/fileB" -> Paths.get("inputs/B"),
-        s"dx://${TEST_PROJECT}:/test_data/fileC" -> Paths.get("inputs/C")
+        s"dx://${testProject}:/test_data/fileA" -> Paths.get("inputs/A"),
+        s"dx://${testProject}:/test_data/fileB" -> Paths.get("inputs/B"),
+        s"dx://${testProject}:/test_data/fileC" -> Paths.get("inputs/C")
     )
 
     // resolve the paths

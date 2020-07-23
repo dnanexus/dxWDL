@@ -26,7 +26,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
 
   private def setup(): (DxPathConfig, FileSourceResolver) = {
-    // Create a clean directory in "/tmp" for the task to use
+    // Create a clean temp directory for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     val dxPathConfig =
       DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
@@ -87,38 +87,30 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                             fileResolver: FileSourceResolver,
                             language: Language.Value): WdlValues.V = {
     // build an object capable of evaluating WDL expressions
-    val evaluator =
-      Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
+    val evaluator = Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
     evaluator.applyExpr(expr, EvalContext(env))
   }
 
   it should "second block in a linear workflow" in {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, fileResolver) = setup()
-
-    val (_, language, wdlBundle, _, _) =
-      ParseSource(dxApi).apply(source, Vector.empty)
-
+    val (_, language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, Vector.empty)
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("sanity")
+      case _                      => throw new Exception("unexpected")
     }
     val subBlocks = Block.splitWorkflow(wf)
-
     val block = subBlocks(1)
-
     val env: Map[String, WdlValues.V] = Map(
         "x" -> WdlValues.V_Int(3),
         "y" -> WdlValues.V_Int(5),
         "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
     )
-
     val decls: Vector[TAT.Declaration] = block.nodes.collect {
       case eNode: TAT.Declaration => eNode
     }
     val expr: TAT.Expr = decls.head.expr.get
-    val value: WdlValues.V =
-      evaluateWdlExpression(expr, env, dxPathConfig, fileResolver, language)
+    val value: WdlValues.V = evaluateWdlExpression(expr, env, dxPathConfig, fileResolver, language)
     value should be(WdlValues.V_Int(9))
   }
 
@@ -286,8 +278,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "evaluate call inputs properly" in {
     val path = pathFromBasename("draft2", "various_calls.wdl")
     val wfSourceCode = Util.readFileContent(path)
-    val (dxPathConfig, fileResolver) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
+    val (dxPathConfig, dxIoFunctions) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
     val call1 = findCallByName("MaybeInt", wf.body)
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -324,8 +316,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "evaluate call constant inputs" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Util.readFileContent(path)
-    val (dxPathConfig, fileResolver) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
+    val (dxPathConfig, dxIoFunctions) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
     val zincCall = findCallByName("zincWithNoParams", wf.body)
 

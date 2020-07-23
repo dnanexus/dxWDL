@@ -78,7 +78,6 @@ case class ParseSource(dxApi: DxApi) {
     val fileResolver = FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
     TypeOptions(
         fileResolver = fileResolver,
-        antlr4Trace = false,
         logger = logger,
         followImports = true,
         typeChecking = WdlTypeCheckingRegime.Strict
@@ -121,21 +120,18 @@ case class ParseSource(dxApi: DxApi) {
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source documents; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
-  def apply(
-      mainFile: Path,
-      importDirs: Vector[Path] = Vector.empty
-  ): (FileSource,
-      Language.Value,
-      Bundle,
-      Map[String, TAT.Document],
-      Map[String, Vector[Adjuncts.AdjunctFile]]) = {
+  def apply(mainFile: Path, imports: Vector[Path]): (FileSource,
+                                                     Language.Value,
+                                                     Bundle,
+                                                     Map[String, TAT.Document],
+                                                     Map[String, Vector[Adjuncts.AdjunctFile]]) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
-    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, importDirs)
+    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, imports)
 
     val primaryCallable =
       tMainDoc.workflow match {
@@ -216,7 +212,7 @@ case class ParseSource(dxApi: DxApi) {
         struct.name -> WdlTypes.T_Struct(struct.name, struct.members)
     }.toMap
     val wf = tDoc.workflow match {
-      case None    => throw new RuntimeException("Sanity, this document should have a workflow")
+      case None    => throw new RuntimeException("This document should have a workflow")
       case Some(x) => x
     }
     (wf, tasks, aliases, tDoc)

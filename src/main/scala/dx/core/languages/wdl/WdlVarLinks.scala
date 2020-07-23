@@ -182,9 +182,8 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       case (WdlTypes.T_File, JsString(s)) =>
         WdlValues.V_File(s)
       case (WdlTypes.T_File, JsObject(_)) =>
-        // Convert the path in DNAx to a string. We can later
-        // decide if we want to download it or not
-        // use the cache value if there is one to save the API call
+        // Convert the path in DNAx to a string. We can later decide if we want to download it or not.
+        // Use the cache value if there is one to save the API call.
         val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJsValue(dxApi, jsValue))
         WdlValues.V_File(dxFile.asUri)
 
@@ -213,7 +212,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
         WdlValues.V_Map(m)
 
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
-          if List("left", "right").forall(fields.contains) =>
+          if Vector("left", "right").forall(fields.contains) =>
         val left = jobInputToWdlValue(name, lType, fields("left"))
         val right = jobInputToWdlValue(name, rType, fields("right"))
         WdlValues.V_Pair(left, right)
@@ -330,7 +329,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
   // this WdlVar
   def genFields(wvl: WdlVarLinks,
                 bindName: String,
-                encodeDots: Boolean = true): List[(String, JsValue)] = {
+                encodeDots: Boolean = true): Vector[(String, JsValue)] = {
     def nodots(s: String): String = encodeAppletVarName(WdlVarLinksConverter.transformVarName(s))
     val bindEncName =
       if (encodeDots) nodots(bindName)
@@ -399,11 +398,11 @@ case class WdlVarLinksConverter(dxApi: DxApi,
     val wdlType = stripOptional(wvl.wdlType)
     if (isNativeDxType(wdlType)) {
       // Types that are supported natively in DX
-      List(mkSimple())
+      Vector(mkSimple())
     } else {
       // General complex type requiring two fields: a JSON
       // structure, and a flat array of files.
-      mkComplex.toList
+      mkComplex.toVector
     }
   }
 }

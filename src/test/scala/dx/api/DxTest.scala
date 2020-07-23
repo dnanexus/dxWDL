@@ -5,8 +5,8 @@ import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
 
 class DxTest extends AnyFlatSpec with Matchers {
-  private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private val testProject = "dxWDL_playground"
+  val dxApi: DxApi = DxApi(Logger.Quiet)
+  val testProject = "dxWDL_playground"
 
   lazy val dxTestProject: DxProject =
     try {

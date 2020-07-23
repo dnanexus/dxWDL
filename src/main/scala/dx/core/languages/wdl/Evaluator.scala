@@ -10,7 +10,7 @@ object Evaluator {
   def make(dxPathConfig: DxPathConfig,
            fileResolver: FileSourceResolver,
            wdlVersion: WdlVersion): Eval = {
-    val evalOpts = TypeOptions(fileResolver,
+    val evalOpts = TypeOptions(fileResolver = fileResolver,
                                typeChecking = TypeCheckingRegime.Strict,
                                antlr4Trace = false,
                                logger = Logger.Quiet)

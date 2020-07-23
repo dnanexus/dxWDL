@@ -7,10 +7,10 @@ import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
-import dx.core.util.CompressionUtils
 import dx.core.util.MainUtils._
-import spray.json._
+import dx.core.util.CompressionUtils
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, TraceLevel, Util}
+import spray.json._
 
 object Main {
   object ExecAction extends Enumeration {
@@ -50,6 +50,7 @@ object Main {
 
     val wdlVarLinksConverter =
       WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
+
     // build an object capable of evaluating WDL expressions
     val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput =
@@ -207,8 +208,7 @@ object Main {
           val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
-          val wfOutputs =
-            WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
+          val wfOutputs = WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
           wfOutputs.apply(fragInputs.env)
 
         case ExecAction.WfCustomReorgOutputs =>
@@ -223,14 +223,7 @@ object Main {
           wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
         case ExecAction.WorkflowOutputReorg =>
-          val wfReorg =
-            WorkflowOutputReorg(wf,
-                                document,
-                                typeAliases,
-                                dxPathConfig,
-                                fileResolver,
-                                dxFileDescCache,
-                                dxApi)
+          val wfReorg = WorkflowOutputReorg(dxApi)
           val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
           wfReorg.apply(refDxFiles)
 

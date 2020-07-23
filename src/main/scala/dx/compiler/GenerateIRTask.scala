@@ -4,6 +4,7 @@ import dx.api.{DxApi, DxPath, DxUtils}
 import dx.compiler.IR.CVar
 import dx.core.languages.Language
 import dx.core.languages.wdl.{InstanceTypes, WdlValueAnalysis}
+
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.Adjuncts

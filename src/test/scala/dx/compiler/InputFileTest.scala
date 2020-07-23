@@ -125,7 +125,6 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "support struct inputs" in {
     val wdlCode = pathFromBasename("struct", "Person.wdl")
     val inputs = pathFromBasename("struct", "Person_input.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
@@ -136,7 +135,6 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "support array of pairs" taggedAs EdgeTest in {
     val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
     val inputs = pathFromBasename("input_file", "echo_pairs.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
 //        ++ List("--verbose", "--verboseKey", "GenerateIR")
@@ -148,7 +146,6 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "array of structs" in {
     val wdlCode = pathFromBasename("struct", "array_of_structs.wdl")
     val inputs = pathFromBasename("struct", "array_of_structs_input.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
@@ -159,7 +156,6 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "override default values in input file" in {
     val wdlCode = pathFromBasename("input_file", "override.wdl")
     val inputs = pathFromBasename("input_file", "override_input.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
@@ -170,7 +166,6 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "WDL map input" in {
     val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
     val inputs = pathFromBasename("input_file", "map_argument_input.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
@@ -181,12 +176,10 @@ class InputFileTest extends AnyFlatSpec with Matchers {
   it should "allow file as WDL map key" in {
     val wdlCode = pathFromBasename("input_file", "no_file_key.wdl")
     val inputs = pathFromBasename("input_file", "no_file_key_input.json")
-
     val retval = Main.compile(
         List(wdlCode.toString, "-inputs", inputs.toString)
           ++ cFlags
     )
     retval shouldBe a[SuccessIR]
   }
-
 }

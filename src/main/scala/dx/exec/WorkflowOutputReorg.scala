@@ -1,20 +1,11 @@
 package dx.exec
 
 import dx.api._
-import dx.core.io.{DxFileDescCache, DxPathConfig}
 import dx.exec
 import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.FileSourceResolver
 
-case class WorkflowOutputReorg(wf: TAT.Workflow,
-                               document: TAT.Document,
-                               typeAliases: Map[String, WdlTypes.T],
-                               dxPathConfig: DxPathConfig,
-                               fileResolver: FileSourceResolver,
-                               dxFileDescCache: DxFileDescCache,
-                               dxApi: DxApi) {
+case class WorkflowOutputReorg(dxApi: DxApi) {
   // Efficiently get the names of many files. We
   // don't want to do a `describe` each one of them, instead,
   // we do a bulk-describe.
@@ -37,26 +28,24 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
   // file. Instead, we find all the output files that do not also
   // appear in the input.
   private def analysisFileOutputs(dxAnalysis: DxAnalysis): Vector[DxFile] = {
-    val req = Map(
+    val request = Map(
         "fields" -> JsObject("input" -> JsBoolean(true), "output" -> JsBoolean(true))
     )
-    val repJs = dxApi.analysisDescribe(dxAnalysis.id, req)
-    val outputs = repJs.fields.get("output") match {
+    val responseJs = dxApi.analysisDescribe(dxAnalysis.id, request)
+    val outputs = responseJs.fields.get("output") match {
       case None    => throw new Exception("Failed to get analysis outputs")
       case Some(x) => x
     }
-    val inputs = repJs.fields.get("input") match {
+    val inputs = responseJs.fields.get("input") match {
       case None    => throw new Exception("Failed to get analysis inputs")
       case Some(x) => x
     }
-
     val fileOutputs: Set[DxFile] = dxApi.findFiles(outputs).toSet
     val fileInputs: Set[DxFile] = dxApi.findFiles(inputs).toSet
     val realOutputs: Set[DxFile] = fileOutputs -- fileInputs
     dxApi.logger.traceLimited(s"analysis has ${fileOutputs.size} output files")
     dxApi.logger.traceLimited(s"analysis has ${fileInputs.size} input files")
     dxApi.logger.traceLimited(s"analysis has ${realOutputs.size} real outputs")
-
     dxApi.logger.traceLimited("Checking timestamps")
     if (realOutputs.size > exec.MAX_NUM_FILES_MOVE_LIMIT) {
       dxApi.logger.traceLimited(
@@ -91,8 +80,9 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
 
     // find all analysis output files
     val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxAnalysis)
-    if (analysisFiles.isEmpty)
+    if (analysisFiles.isEmpty) {
       return
+    }
 
     val exportIds: Set[String] = exportFiles.map(_.id).toSet
     val exportNames: Vector[String] = bulkGetFilenames(exportFiles)
@@ -102,8 +92,9 @@ case class WorkflowOutputReorg(wf: TAT.Workflow,
     val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
     val iNames: Vector[String] = bulkGetFilenames(intermediateFiles)
     dxApi.logger.traceLimited(s"intermediate files=${iNames}")
-    if (intermediateFiles.isEmpty)
+    if (intermediateFiles.isEmpty) {
       return
+    }
 
     // Move all non exported results to the subdir. Do this in
     // a single API call, to improve performance.

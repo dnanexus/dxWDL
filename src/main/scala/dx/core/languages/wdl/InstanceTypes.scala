@@ -29,7 +29,7 @@ object InstanceTypes {
       case Some(WdlValues.V_String(buf)) =>
         // extract number
         val numRex = """(\d+\.?\d*)""".r
-        val numbers = numRex.findAllIn(buf).toList
+        val numbers = numRex.findAllIn(buf).toVector
         if (numbers.length != 1)
           throw new Exception(s"Can not parse memory specification ${buf}")
         val number: String = numbers.head
@@ -43,7 +43,7 @@ object InstanceTypes {
 
         // extract memory units
         val memUnitRex = """([a-zA-Z]+)""".r
-        val memUnits = memUnitRex.findAllIn(buf).toList
+        val memUnits = memUnitRex.findAllIn(buf).toVector
         if (memUnits.length > 1)
           throw new Exception(s"Can not parse memory specification ${buf}")
         val memBytes: Double =

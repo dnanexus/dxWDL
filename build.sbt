@@ -4,7 +4,29 @@ import sbtassembly.AssemblyPlugin.autoImport._
 
 scalaVersion := "2.13.2"
 name := "dxWDL"
+import com.typesafe.config._
+val confPath =
+  Option(System.getProperty("config.file")).getOrElse("src/main/resources/application.conf")
+val conf = ConfigFactory.parseFile(new File(confPath)).resolve()
+version := conf.getString("dxWDL.version")
 organization := "com.dnanexus"
+developers := List(
+    Developer("orodeh", "orodeh", "orodeh@dnanexus.com", url("https://github.com/dnanexus")),
+    Developer("jdidion", "jdidion", "jdidion@dnanexus.com", url("https://github.com/dnanexus")),
+    Developer("xquek", "xquek", "xquek@dnanexus.com", url("https://github.com/dnanexus")),
+    Developer("commandlinegirl",
+              "commandlinegirl",
+              "azalcman@dnanexus.com",
+              url("https://github.com/dnanexus")),
+    Developer("mhrvol", "mhrvol", "mhrvol-cf@dnanexus.com", url("https://github.com/dnanexus"))
+)
+homepage := Some(url("https://github.com/dnanexus/dxWDL"))
+scmInfo := Some(
+    ScmInfo(url("https://github.com/dnanexus/dxWDL"), "git@github.com:dnanexus/dxWDL.git")
+)
+licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
+publishMavenStyle := true
+
 val root = project.in(file("."))
 
 // reduce the maximum number of errors shown by the Scala compiler

@@ -244,18 +244,17 @@ case class Top(cOpt: CompilerOptions) {
                                fileResolver: FileSourceResolver,
                                pathToDxFile: Map[String, DxFile],
                                dxFileDescCache: DxFileDescCache): IR.Bundle = {
+    val inputFile =
+      InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
+
     val bundle2: IR.Bundle = cOpt.defaults match {
-      case None => bundle
-      case Some(path) =>
-        InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
-          .embedDefaults(bundle, path)
+      case None       => bundle
+      case Some(path) => inputFile.embedDefaults(bundle, path)
     }
 
     // generate dx inputs from the Cromwell-style input specification.
     cOpt.inputs.foreach { path =>
-      val dxInputs =
-        InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
-          .dxFromCromwell(bundle2, path)
+      val dxInputs = inputFile.dxFromInputJson(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = Util.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
@@ -300,8 +299,10 @@ case class Top(cOpt: CompilerOptions) {
     val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
     val fileResolver =
       FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
+
     // generate IR
     val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
+
     // Up to this point, compilation does not require
     // the dx:project. This allows unit testing without
     // being logged in to the platform. For the native

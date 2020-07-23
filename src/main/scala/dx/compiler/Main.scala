@@ -70,16 +70,17 @@ object Main {
     }
   }
 
+  // TODO: use RuntimeException for assertions
   private def pathOptions(options: OptionsMap, dxApi: DxApi): (DxProject, String) = {
     var folderOpt: Option[String] = options.get("folder") match {
       case None            => None
       case Some(Vector(f)) => Some(f)
-      case _               => throw new Exception("sanity")
+      case other           => throw new Exception(s"Unexpected value for 'folder': ${other}")
     }
     var projectOpt: Option[String] = options.get("project") match {
       case None            => None
       case Some(Vector(p)) => Some(p)
-      case _               => throw new Exception("sanity")
+      case other           => throw new Exception(s"Unexpected value for 'project': ${other}")
     }
     val destinationOpt: Option[String] = options.get("destination") match {
       case None            => None
@@ -142,9 +143,9 @@ object Main {
     def keywordValueIsVector = Set("inputs", "imports", "verboseKey")
 
     val cmdLineOpts = splitCmdLine(arglist)
-    val opts = cmdLineOpts.foldLeft(Map.empty[String, List[String]]) {
-      case (_, Nil) => throw new Exception("sanity: empty command line option")
-      case (opts, keyOrg :: subargs) =>
+    val options = cmdLineOpts.foldLeft(Map.empty[String, List[String]]) {
+      case (_, Nil) => throw new Exception("empty command line option")
+      case (options, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {
           case "apps" =>
@@ -231,19 +232,19 @@ object Main {
           case _ =>
             throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
         }
-        opts.get(nKeyword) match {
+        options.get(nKeyword) match {
           case None =>
             // first time
-            opts + (nKeyword -> List(value))
+            options + (nKeyword -> List(value))
           case Some(x) if keywordValueIsVector contains nKeyword =>
             // append to the already existing verbose flags
-            opts + (nKeyword -> (value :: x))
+            options + (nKeyword -> (value :: x))
           case Some(_) =>
             // overwrite the previous flag value
-            opts + (nKeyword -> List(value))
+            options + (nKeyword -> List(value))
         }
     }
-    opts.view.mapValues(_.toVector).toMap
+    options.view.mapValues(_.toVector).toMap
   }
 
   def compile(args: Seq[String]): Termination = {
@@ -334,8 +335,8 @@ object Main {
   private def parseDescribeOptions(arglist: List[String]): OptionsMap = {
     val describeOpts = splitCmdLine(arglist)
     describeOpts.foldLeft(Map.empty[String, Vector[String]]) {
-      case (opts, Nil) => opts
-      case (opts, keyOrg :: subargs) =>
+      case (options, Nil) => options
+      case (options, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {
           case "pretty" =>
@@ -348,7 +349,7 @@ object Main {
             throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
 
         }
-        opts + (nKeyword -> Vector(value))
+        options + (nKeyword -> Vector(value))
     }
   }
 

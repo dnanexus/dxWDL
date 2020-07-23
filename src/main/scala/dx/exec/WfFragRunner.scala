@@ -523,7 +523,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       case (key, expr) =>
         val actualCalleeType: WdlTypes.T = calleeInputs.get(key) match {
           case None =>
-            throw new Exception(s"Sanity: callee ${call.callee.name} doesn't have input ${key}")
+            throw new Exception(s"Callee ${call.callee.name} doesn't have input ${key}")
           case Some((t, _)) => t
         }
 
@@ -673,7 +673,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
     val elemType = sct.expr.wdlType match {
       case WdlTypes.T_Array(t, _) => t
-      case _                      => throw new Exception("sanity, scatter collection is not an array")
+      case _                      => throw new Exception("Scatter collection is not an array")
     }
     (sct.identifier, elemType, collection.toVector)
   }
@@ -784,7 +784,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             Map.empty
 
           case Block.CallDirect(_, _) =>
-            throw new Exception("sanity, shouldn't reach this state")
+            throw new Exception("Should not be able to reach this state")
 
           // A single call at the end of the block
           case Block.CallWithSubexpressions(_, call) =>

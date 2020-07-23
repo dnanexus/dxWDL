@@ -30,15 +30,15 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     Paths.get(p)
   }
 
-  val TEST_PROJECT = "dxWDL_playground"
+  val testProject = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
@@ -78,7 +78,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     native_applets.foreach { app =>
       try {
         val (_, _) = Util.execCommand(
-            s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/${unitTestsPath}/applets/",
+            s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
             quiet = true
         )
       } catch {
@@ -261,7 +261,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -291,7 +291,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -325,7 +325,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -398,7 +398,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -533,7 +533,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -557,7 +557,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -578,7 +578,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
 
     }
 
@@ -911,7 +911,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         path.toString :: "--force" :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the timeout is what it should be
@@ -938,7 +938,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           :: "--extras" :: extraPath.toString :: cFlags
     ) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the timeout is what it should be
@@ -961,7 +961,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val appId = Main.compile(path.toString :: cFlags) match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the timeout is what it should be
@@ -999,7 +999,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Success]
     val wfId: String = retval match {
       case Success(id) => id
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     val wf = dxApi.workflow(wfId)
@@ -1016,7 +1016,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     // There should be 3 inputs, the output from output stage and the custom reorg config file.
     val reorgInput: JsObject = reorgStage.input match {
       case JsObject(x) => JsObject(x)
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
 
     // no reorg conf input. only status.
@@ -1052,7 +1052,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Success]
     val wfId: String = retval match {
       case Success(wfId) => wfId
-      case _             => throw new Exception("sanity")
+      case _             => throw new Exception("unexpected")
     }
 
     val wf = dxApi.workflow(wfId)
@@ -1063,7 +1063,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     // There should be 3 inputs, the output from output stage and the custom reorg config file.
     val reorgInput: JsObject = reorgStage.input match {
       case JsObject(x) => JsObject(x)
-      case _           => throw new Exception("sanity")
+      case _           => throw new Exception("unexpected")
     }
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 2
@@ -1094,7 +1094,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val bundle = retval match {
       case SuccessIR(bundle, _) => bundle
-      case _                    => throw new Exception("sanity")
+      case _                    => throw new Exception("unexpected")
     }
 
     // this is a subworkflow so there is no reorg_status___ added.
@@ -1119,7 +1119,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val appletId = retval match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the job reuse flag is set
@@ -1146,7 +1146,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val wfId = retval match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the job reuse flag is set
@@ -1172,7 +1172,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val appletId = retval match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the delayWorkspaceDestruction flag is set
@@ -1199,7 +1199,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     val wfId = retval match {
       case Success(x) => x
-      case _          => throw new Exception("sanity")
+      case _          => throw new Exception("unexpected")
     }
 
     // make sure the flag is set on the resulting workflow
