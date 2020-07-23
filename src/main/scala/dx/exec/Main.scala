@@ -108,8 +108,7 @@ object Main {
         val json = JsObject(outputFields.filter {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
-        val ast_pp = json.prettyPrint
-        Util.writeFileContent(jobOutputPath, ast_pp)
+        Util.writeFileContent(jobOutputPath, json.prettyPrint)
         Success(s"success ${op}")
 
       case ExecAction.TaskRelaunch =>
@@ -117,8 +116,7 @@ object Main {
         val json = JsObject(outputFields.filter {
           case (_, jsValue) => jsValue != null && jsValue != JsNull
         })
-        val ast_pp = json.prettyPrint
-        Util.writeFileContent(jobOutputPath, ast_pp)
+        Util.writeFileContent(jobOutputPath, json.prettyPrint)
         Success(s"success ${op}")
 
       case _ =>
@@ -232,8 +230,7 @@ object Main {
     // write outputs, ignore null values, these could occur for optional
     // values that were not specified.
     val json = JsObject(outputFields)
-    val ast_pp = json.prettyPrint
-    Util.writeFileContent(jobOutputPath, ast_pp)
+    Util.writeFileContent(jobOutputPath, json.prettyPrint)
 
     Success(s"success ${op}")
   }

@@ -1057,6 +1057,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     (wf2, apl2)
   }
 
+  // TODO: use RuntimeExceptions for assertions
   def apply(): (IR.Workflow, Vector[IR.Callable]) = {
     val (irwf, irCallables) = apply2()
 
