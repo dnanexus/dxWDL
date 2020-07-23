@@ -91,7 +91,7 @@ case class TaskRunner(task: TAT.Task,
     }
     val fileSourceToPath = dxUriToJs.map {
       case (uri, JsString(path)) => fileResolver.resolve(uri) -> Paths.get(path)
-      case (_, _)                => throw new Exception("Sanity")
+      case other                 => throw new Exception(s"Invalid map item ${other}")
     }
     (localizedInputs, fileSourceToPath)
   }
