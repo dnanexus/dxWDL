@@ -4,9 +4,9 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{Block, Evaluator, ParseSource}
+import dx.core.languages.wdl.{Block, Evaluator, ParseSource, WdlVarLinksConverter}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -42,15 +42,18 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                               wfSourceCode: String): (TAT.Workflow, WfFragRunner) = {
     val (wf, taskDir, typeAliases, document) =
       ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     val evaluator =
       Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+    val jobInputOutput = JobInputOutput(dxPathConfig,
+                                        fileResolver,
+                                        DxFileDescCache.empty,
+                                        wdlVarLinksConverter,
+                                        dxApi,
+                                        evaluator)
     val fragInputOutput =
-      WfFragInputOutput(dxPathConfig,
-                        Map.empty,
-                        typeAliases,
-                        document.version.value,
-                        dxApi,
-                        evaluator)
+      WfFragInputOutput(typeAliases, wdlVarLinksConverter, dxApi)
     val fragRunner = WfFragRunner(
         wf,
         taskDir,
@@ -59,7 +62,9 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         instanceTypeDB,
         Map.empty[String, ExecLinkInfo],
         dxPathConfig,
-        Map.empty,
+        fileResolver,
+        wdlVarLinksConverter,
+        jobInputOutput,
         JsNull,
         fragInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
@@ -90,7 +95,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, fileResolver) = setup()
 
-    val (language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, List.empty)
+    val (_, language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, List.empty)
 
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf

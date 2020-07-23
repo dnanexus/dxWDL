@@ -40,13 +40,13 @@ import java.nio.file.Paths
 import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.TraceLevel
+import wdlTools.util.{FileSourceResolver, TraceLevel}
 
 case class WfFragRunner(wf: TAT.Workflow,
                         taskDir: Map[String, TAT.Task],
@@ -55,7 +55,9 @@ case class WfFragRunner(wf: TAT.Workflow,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig: DxPathConfig,
-                        fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                        fileResolver: FileSourceResolver,
+                        wdlVarLinksConverter: WdlVarLinksConverter,
+                        jobInputOutput: JobInputOutput,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
@@ -63,15 +65,15 @@ case class WfFragRunner(wf: TAT.Workflow,
                         dxApi: DxApi,
                         evaluator: Eval) {
   private val MAX_JOB_NAME = 50
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileInfoDir, fragInputOutput.typeAliases)
-  private val jobInputOutput = fragInputOutput.jobInputOutput
-  private val collectSubJobs = CollectSubJobs(jobInputOutput,
-                                              inputsRaw,
-                                              instanceTypeDB,
-                                              delayWorkspaceDestruction,
-                                              dxApi,
-                                              fragInputOutput.typeAliases)
+  private val collectSubJobs = CollectSubJobs(
+      jobInputOutput,
+      inputsRaw,
+      instanceTypeDB,
+      delayWorkspaceDestruction,
+      dxApi,
+      // TODO: to we really need to provide an empty cache?
+      wdlVarLinksConverter.copy(dxFileDescCache = DxFileDescCache.empty)
+  )
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {
@@ -342,7 +344,8 @@ case class WfFragRunner(wf: TAT.Workflow,
         typeAliases,
         instanceTypeDB,
         dxPathConfig,
-        fileInfoDir,
+        fileResolver,
+        wdlVarLinksConverter,
         jobInputOutput,
         defaultRuntimeAttributes,
         delayWorkspaceDestruction,

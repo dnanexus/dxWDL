@@ -30,15 +30,15 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     Paths.get(p)
   }
 
-  val TEST_PROJECT = "dxWDL_playground"
+  val testProject = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
-      dxApi.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
@@ -78,7 +78,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     native_applets.foreach { app =>
       try {
         val (_, _) = Util.execCommand(
-            s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/${unitTestsPath}/applets/",
+            s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
             quiet = true
         )
       } catch {
@@ -218,7 +218,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
-    val dxObj = dxApi.resolveDxPath(
+    val dxObj = dxApi.resolveOnePath(
         s"${DxPath.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
     dxObj shouldBe a[DxApplet]

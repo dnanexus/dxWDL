@@ -25,12 +25,12 @@ import java.nio.file.Path
 import dx.AppInternalException
 import dx.api._
 import dx.compiler.IR._
-import dx.core.io.{Furl, FurlDx}
+import dx.core.io.DxFileDescCache
 import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{FileSourceResolver, Logger, Util}
 
 import scala.collection.mutable
 
@@ -167,17 +167,18 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
   }
 }
 
-case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+case class InputFile(fileResolver: FileSourceResolver,
+                     dxFileDescCache: DxFileDescCache,
                      path2file: Map[String, DxFile],
                      typeAliases: Map[String, WdlTypes.T],
                      dxApi: DxApi) {
   private lazy val logger2: Logger = dxApi.logger.withTraceIfContainsKey("InputFile")
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
+  private val wdlVarLinksConverter =
+    WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
 
   // Convert a job input to a WdlValues.V. Do not download any files, convert them
   // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
-  //
-  private def wdlValueFromCromwellJSON(wdlType: WdlTypes.T, jsValue: JsValue): WdlValues.V = {
+  private def wdlValueFromInputJson(wdlType: WdlTypes.T, jsValue: JsValue): WdlValues.V = {
     (wdlType, jsValue) match {
       // base case: primitive types
       case (WdlTypes.T_Boolean, JsBoolean(b)) => WdlValues.V_Boolean(b.booleanValue)
@@ -189,8 +190,9 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         // Convert the path in DNAx to a string. We can later
         // decide if we want to download it or not
         val dxFile = DxFile.fromJsValue(dxApi, jsValue)
-        val FurlDx(s, _, _) = Furl.fromDxFile(dxFile, fileInfoDir)
-        WdlValues.V_File(s)
+        // use the cached file to save an API call if possible
+        val uri = dxFileDescCache.updateFileFromCache(dxFile).asUri
+        WdlValues.V_File(uri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
@@ -198,8 +200,8 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         val fields = jsValue.asJsObject.fields
         val m: Map[WdlValues.V, WdlValues.V] = fields.map {
           case (k: String, v: JsValue) =>
-            val kWdl = wdlValueFromCromwellJSON(keyType, JsString(k))
-            val vWdl = wdlValueFromCromwellJSON(valueType, v)
+            val kWdl = wdlValueFromInputJson(keyType, JsString(k))
+            val vWdl = wdlValueFromInputJson(valueType, v)
             kWdl -> vWdl
         }
         WdlValues.V_Map(m)
@@ -207,13 +209,13 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       // a few ways of writing a pair: an object, or an array
       case (WdlTypes.T_Pair(lType, rType), JsObject(fields))
           if List("left", "right").forall(fields.contains) =>
-        val left = wdlValueFromCromwellJSON(lType, fields("left"))
-        val right = wdlValueFromCromwellJSON(rType, fields("right"))
+        val left = wdlValueFromInputJson(lType, fields("left"))
+        val right = wdlValueFromInputJson(rType, fields("right"))
         WdlValues.V_Pair(left, right)
 
       case (WdlTypes.T_Pair(lType, rType), JsArray(Vector(l, r))) =>
-        val left = wdlValueFromCromwellJSON(lType, l)
-        val right = wdlValueFromCromwellJSON(rType, r)
+        val left = wdlValueFromInputJson(lType, l)
+        val right = wdlValueFromInputJson(rType, r)
         WdlValues.V_Pair(left, right)
 
       // empty array
@@ -223,14 +225,14 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
       // array
       case (WdlTypes.T_Array(t, _), JsArray(vec)) =>
         val wVec: Vector[WdlValues.V] = vec.map { elem: JsValue =>
-          wdlValueFromCromwellJSON(t, elem)
+          wdlValueFromInputJson(t, elem)
         }
         WdlValues.V_Array(wVec)
 
       case (WdlTypes.T_Optional(_), JsNull) =>
         WdlValues.V_Null
       case (WdlTypes.T_Optional(t), jsv) =>
-        val value = wdlValueFromCromwellJSON(t, jsv)
+        val value = wdlValueFromInputJson(t, jsv)
         WdlValues.V_Optional(value)
 
       // structs
@@ -239,7 +241,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         val m = fields.map {
           case (key, value) =>
             val t: WdlTypes.T = typeMap(key)
-            val elem: WdlValues.V = wdlValueFromCromwellJSON(t, value)
+            val elem: WdlValues.V = wdlValueFromInputJson(t, value)
             key -> elem
         }
         WdlValues.V_Struct(structName, m)
@@ -253,7 +255,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
 
   // Import into a WDL value, and convert back to JSON.
   private def translateValue(cVar: CVar, jsv: JsValue): WdlVarLinks = {
-    val wdlValue = wdlValueFromCromwellJSON(cVar.wdlType, jsv)
+    val wdlValue = wdlValueFromInputJson(cVar.wdlType, jsv)
     wdlVarLinksConverter.importFromWDL(cVar.wdlType, wdlValue)
   }
 
@@ -299,7 +301,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         getExactlyOnce(defaultFields, fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
-            val w: WdlValues.V = wdlValueFromCromwellJSON(cVar.wdlType, dflt)
+            val w: WdlValues.V = wdlValueFromInputJson(cVar.wdlType, dflt)
             IR.SArgConst(w)
         }
     }
@@ -318,7 +320,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         val sArgDflt = getExactlyOnce(defaultFields, fqn) match {
           case None => sArg
           case Some(dflt: JsValue) =>
-            val w: WdlValues.V = wdlValueFromCromwellJSON(cVar.wdlType, dflt)
+            val w: WdlValues.V = wdlValueFromInputJson(cVar.wdlType, dflt)
             IR.SArgConst(w)
         }
         (cVar, sArgDflt)
@@ -334,7 +336,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
         case None =>
           cVar
         case Some(dflt: JsValue) =>
-          val w: WdlValues.V = wdlValueFromCromwellJSON(cVar.wdlType, dflt)
+          val w: WdlValues.V = wdlValueFromInputJson(cVar.wdlType, dflt)
           cVar.copy(default = Some(w))
       }
     }
@@ -455,7 +457,7 @@ case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   // applet/call/workflow input. This provides the fully-qualified-name (fqn)
   // of each IR variable. Then we check if the fqn is defined in
   // the input file.
-  def dxFromCromwell(bundle: IR.Bundle, inputPath: Path): JsObject = {
+  def dxFromInputJson(bundle: IR.Bundle, inputPath: Path): JsObject = {
     dxApi.logger.trace(s"Translating WDL input file ${inputPath}")
 
     // read the input file xxxx.json

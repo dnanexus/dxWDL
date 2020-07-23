@@ -1,20 +1,19 @@
 /**
-
-Conversions from WDL types and data structures to DNAx JSON
-representations. There are two difficulties this module needs to deal
-with: (1) WDL has high order types which DNAx does not, and (2) the
-file type is very different between WDL and DNAx.
-
+  * Conversions from WDL types and data structures to DNAx JSON
+  * representations. There are two difficulties this module needs to deal
+  * with: (1) WDL has high order types which DNAx does not, and (2) the
+  * file type is very different between WDL and DNAx.
   */
 package dx.core.languages.wdl
 
 import dx.AppInternalException
-import dx.core.io.{Furl, FurlDx, FurlLocal}
-import dx.api.{DxApi, DxExecution, DxFile, DxFileDescribe, DxUtils, DxWorkflowStage}
+import dx.core.io.{DxFileDescCache, DxFileSource}
+import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
 import dx.core.languages.IORef
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
+import wdlTools.util.{FileSourceResolver, LocalFileSource}
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -35,12 +34,13 @@ case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 case class WdlVarLinks(wdlType: WdlTypes.T, dxlink: DxLink)
 
 case class WdlVarLinksConverter(dxApi: DxApi,
-                                fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                                fileResolver: FileSourceResolver,
+                                dxFileDescCache: DxFileDescCache,
                                 typeAliases: Map[String, WdlTypes.T]) {
 
   private val MAX_STRING_LEN: Int = 32 * 1024 // Long strings cause problems with bash and the UI
 
-  private def isDoubleOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
+  private def isNestedOptional(t: WdlTypes.T, v: WdlValues.V): Boolean = {
     t match {
       case WdlTypes.T_Optional(WdlTypes.T_Optional(_)) => return true
       case _                                           => ()
@@ -56,20 +56,18 @@ case class WdlVarLinksConverter(dxApi: DxApi,
   // to many files. The assumption is that files are already in the format of dxWDLs,
   // requiring not upload/download or any special conversion.
   private def jsFromWdlValue(wdlType: WdlTypes.T, wdlValue: WdlValues.V): JsValue = {
-    if (isDoubleOptional(wdlType, wdlValue)) {
+    if (isNestedOptional(wdlType, wdlValue)) {
       System.err.println(s"""|jsFromWdlValue
                              |    type=${wdlType}
                              |    val=${wdlValue}
                              |""".stripMargin)
-      throw new Exception("a double optional type/value")
+      throw new Exception("a nested optional type/value")
     }
     def handleFile(path: String): JsValue = {
-      Furl.fromUrl(path, dxApi) match {
-        case FurlDx(_, _, dxFile) =>
-          DxFile.toJsValue(dxFile)
-        case FurlLocal(path) =>
-          // A local file.
-          JsString(path.toString)
+      fileResolver.resolve(path) match {
+        case dxFile: DxFileSource       => dxFile.dxFile.getLinkAsJson
+        case localFile: LocalFileSource => JsString(localFile.toString)
+        case other                      => throw new RuntimeException(s"Unsupported file source ${other}")
       }
     }
     (wdlType, wdlValue) match {
@@ -184,11 +182,10 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       case (WdlTypes.T_File, JsString(s)) =>
         WdlValues.V_File(s)
       case (WdlTypes.T_File, JsObject(_)) =>
-        // Convert the path in DNAx to a string. We can later
-        // decide if we want to download it or not
-        val dxFile = DxFile.fromJsValue(dxApi, jsValue)
-        val FurlDx(s, _, _) = Furl.fromDxFile(dxFile, fileInfoDir)
-        WdlValues.V_File(s)
+        // Convert the path in DNAx to a string. We can later decide if we want to download it or not.
+        // Use the cache value if there is one to save the API call.
+        val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJsValue(dxApi, jsValue))
+        WdlValues.V_File(dxFile.asUri)
 
       // Maps. These are serialized as an object with a keys array and
       // a values array.
@@ -265,9 +262,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
     }
   }
 
-  def unpackJobInput(name: String,
-                     wdlType: WdlTypes.T,
-                     jsv: JsValue): (WdlValues.V, Vector[DxFile]) = {
+  def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlValues.V = {
     val jsv1 =
       jsv match {
         case JsObject(fields) if fields contains "___" =>
@@ -276,9 +271,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
           fields("___")
         case _ => jsv
       }
-    val wdlValue = jobInputToWdlValue(name, wdlType, jsv1)
-    val dxFiles = dxApi.findFiles(jsv)
-    (wdlValue, dxFiles)
+    jobInputToWdlValue(name, wdlType, jsv1)
   }
 
   // Is this a WDL type that maps to a native DX type?

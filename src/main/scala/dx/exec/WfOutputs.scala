@@ -1,6 +1,6 @@
 package dx.exec
 
-import dx.api.{DxApi, DxFile, DxFileDescribe}
+import dx.api.DxApi
 import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
@@ -10,13 +10,9 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
-                     typeAliases: Map[String, WdlTypes.T],
-                     fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                     wdlVarLinksConverter: WdlVarLinksConverter,
                      dxApi: DxApi,
                      evaluator: Eval) {
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
-
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {

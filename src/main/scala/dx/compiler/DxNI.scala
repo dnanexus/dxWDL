@@ -243,7 +243,7 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
       case id if id.startsWith("applet-") => dxApi.applet(id)
       case _ =>
         val fullPath = s"${DxPath.DX_URL_PREFIX}/${path}"
-        dxApi.resolveOnePath(fullPath, dxProject)
+        dxApi.resolveOnePath(fullPath, Some(dxProject))
     }
     val task: Option[TAT.Task] = dxObj match {
       // an applet

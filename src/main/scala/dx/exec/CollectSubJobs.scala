@@ -74,9 +74,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
-                          typeAliases: Map[String, WdlTypes.T]) {
-  private val wdlVarLinksConverter = WdlVarLinksConverter(dxApi, Map.empty, typeAliases)
-
+                          wdlVarLinksConverter: WdlVarLinksConverter) {
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
              exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {
@@ -186,12 +184,12 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
             // Optional field that has not been returned
             None
           case (WdlTypes.T_Optional(_), Some(jsv)) =>
-            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+            Some(wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv))
           case (_, None) =>
             // Required output that is missing
             throw new Exception(s"Could not find compulsory field <${name}> in results")
           case (_, Some(jsv)) =>
-            Some(jobInputOutput.unpackJobInput(name, wdlType, jsv))
+            Some(wdlVarLinksConverter.unpackJobInput(name, wdlType, jsv))
         }
       }
     WdlValues.V_Array(vec)

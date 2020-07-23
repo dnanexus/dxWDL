@@ -23,16 +23,16 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  private val DX_API = DxApi(Logger.Quiet)
-  private val TEST_PROJECT = "dxWDL_playground"
+  private val dxApi = DxApi(Logger.Quiet)
+  private val testProject = "dxWDL_playground"
 
   private lazy val dxTestProject =
     try {
-      DX_API.resolveProject(TEST_PROJECT)
+      dxApi.resolveProject(testProject)
     } catch {
       case _: Exception =>
         throw new Exception(
-            s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+            s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform""".stripMargin
         )
     }
@@ -80,7 +80,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
       case _           => throw new Exception("unexpected")
     }
 
@@ -120,7 +120,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[Success]
 
     val wf: DxWorkflow = retval match {
-      case Success(id) => DxWorkflow(DX_API, id, Some(dxTestProject))
+      case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
       case _           => throw new Exception("unexpected")
     }
 

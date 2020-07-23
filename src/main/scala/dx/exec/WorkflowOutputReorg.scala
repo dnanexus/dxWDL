@@ -13,8 +13,8 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
   // In other words, this code is an efficient replacement for:
   // files.map(_.describe().getName())
   private def bulkGetFilenames(files: Seq[DxFile]): Vector[String] = {
-    val info: Map[DxFile, DxFileDescribe] = dxApi.fileBulkDescribe(files.toVector)
-    info.values.map(_.name).toVector
+    val info = dxApi.fileBulkDescribe(files.toVector)
+    info.map(_.describe().name)
   }
 
   // find all output files from the analysis
@@ -40,14 +40,12 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
       case None    => throw new Exception("Failed to get analysis inputs")
       case Some(x) => x
     }
-
     val fileOutputs: Set[DxFile] = dxApi.findFiles(outputs).toSet
     val fileInputs: Set[DxFile] = dxApi.findFiles(inputs).toSet
     val realOutputs: Set[DxFile] = fileOutputs -- fileInputs
     dxApi.logger.traceLimited(s"analysis has ${fileOutputs.size} output files")
     dxApi.logger.traceLimited(s"analysis has ${fileInputs.size} input files")
     dxApi.logger.traceLimited(s"analysis has ${realOutputs.size} real outputs")
-
     dxApi.logger.traceLimited("Checking timestamps")
     if (realOutputs.size > exec.MAX_NUM_FILES_MOVE_LIMIT) {
       dxApi.logger.traceLimited(
@@ -55,21 +53,18 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
       )
       return Vector.empty
     }
-    val realFreshOutputs: Map[DxFile, DxFileDescribe] =
-      dxApi.fileBulkDescribe(realOutputs.toVector)
-
+    val realFreshOutputs = dxApi.fileBulkDescribe(realOutputs.toVector)
     // Retain only files that were created AFTER the analysis started
     val anlCreateTs: java.util.Date = dxAnalysis.describe().getCreationDate
-    val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap {
-      case (dxFile, desc) =>
-        val creationDate = new java.util.Date(desc.created)
-        if (creationDate.compareTo(anlCreateTs) >= 0)
-          Some(dxFile)
-        else
-          None
-    }.toVector
+    val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap { dxFile =>
+      val creationDate = new java.util.Date(dxFile.describe().created)
+      if (creationDate.compareTo(anlCreateTs) >= 0) {
+        Some(dxFile)
+      } else {
+        None
+      }
+    }
     dxApi.logger.traceLimited(s"analysis has ${outputFiles.length} verified output files")
-
     outputFiles
   }
 
@@ -84,19 +79,21 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
 
     // find all analysis output files
     val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxAnalysis)
-    if (analysisFiles.isEmpty)
+    if (analysisFiles.isEmpty) {
       return
+    }
 
     val exportIds: Set[String] = exportFiles.map(_.id).toSet
-    val exportNames: Seq[String] = bulkGetFilenames(exportFiles)
+    val exportNames: Vector[String] = bulkGetFilenames(exportFiles)
     dxApi.logger.traceLimited(s"exportFiles=${exportNames}")
 
     // Figure out which of the files should be kept
     val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
-    val iNames: Seq[String] = bulkGetFilenames(intermediateFiles)
+    val iNames: Vector[String] = bulkGetFilenames(intermediateFiles)
     dxApi.logger.traceLimited(s"intermediate files=${iNames}")
-    if (intermediateFiles.isEmpty)
+    if (intermediateFiles.isEmpty) {
       return
+    }
 
     // Move all non exported results to the subdir. Do this in
     // a single API call, to improve performance.

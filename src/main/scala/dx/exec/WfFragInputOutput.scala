@@ -1,27 +1,19 @@
 package dx.exec
 
-import dx.api.{DxApi, DxFile, DxFileDescribe}
-import dx.core.io.{DxPathConfig, ExecLinkInfo}
+import dx.api.{DxApi, DxFile}
+import dx.core.io.ExecLinkInfo
 import dx.core.languages.wdl.{TypeSerialization, WdlVarLinksConverter}
-import dx.exec
 import spray.json._
-import wdlTools.eval.{Eval, WdlValues}
-import wdlTools.syntax.WdlVersion
+import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 
 case class WfFragInput(blockPath: Vector[Int],
                        env: Map[String, (WdlTypes.T, WdlValues.V)],
                        execLinkInfo: Map[String, ExecLinkInfo])
 
-case class WfFragInputOutput(dxPathConfig: DxPathConfig,
-                             fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
-                             typeAliases: Map[String, WdlTypes.T],
-                             wdlVersion: WdlVersion,
-                             dxApi: DxApi,
-                             evaluator: Eval) {
-  val jobInputOutput: JobInputOutput =
-    exec.JobInputOutput(dxPathConfig, fileInfoDir, typeAliases, dxApi, evaluator)
-
+case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
+                             wdlVarLinksConverter: WdlVarLinksConverter,
+                             dxApi: DxApi) {
   private def revTransformVarName(varName: String): String = {
     varName.replaceAll("___", "\\.")
   }
@@ -83,7 +75,7 @@ case class WfFragInputOutput(dxPathConfig: DxPathConfig,
             throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
           case Some(x) => x
         }
-        val value = jobInputOutput.unpackJobInput(fqn, wdlType, jsValue)
+        val value = wdlVarLinksConverter.unpackJobInput(fqn, wdlType, jsValue)
         fqn -> (wdlType, value)
     }
 
@@ -102,14 +94,12 @@ case class WfFragInputOutput(dxPathConfig: DxPathConfig,
       .map {
         case (name, jsValue) =>
           val fqn = revTransformVarName(name)
-          val wdlType = fqnDictTypes.get(fqn) match {
-            case None =>
-              throw new Exception(
-                  s"Did not find variable ${fqn} (${name}) in the block environment"
-              )
-            case Some(x) => x
+          if (!fqnDictTypes.contains(fqn)) {
+            throw new Exception(
+                s"Did not find variable ${fqn} (${name}) in the block environment"
+            )
           }
-          jobInputOutput.unpackJobInputFindRefFiles(wdlType, jsValue)
+          dxApi.findFiles(jsValue)
       }
       .toVector
       .flatten

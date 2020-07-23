@@ -3,21 +3,12 @@ package dx.compiler
 import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
-import dx.api.{
-  DxApi,
-  DxFile,
-  DxFileDescribe,
-  DxPath,
-  DxProject,
-  DxRecord,
-  Field,
-  InstanceTypeDbQuery
-}
-import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.ParseSource
+import dx.api.{DxApi, DxFile, DxPath, DxProject, DxRecord, Field, InstanceTypeDbQuery}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
+import dx.core.languages.wdl.{ParseSource, WdlVarLinksConverter}
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.Util
+import wdlTools.util.{FileSourceResolver, Util}
 
 import scala.jdk.CollectionConverters._
 
@@ -51,6 +42,7 @@ case class CompilerOptions(archive: Boolean,
 
 case class Top(cOpt: CompilerOptions) {
   private val dxApi = cOpt.dxApi
+  private val logger = dxApi.logger
 
   // The mapping from region to project name is list of (region, proj-name) pairs.
   // Get the project for this region.
@@ -90,10 +82,10 @@ case class Top(cOpt: CompilerOptions) {
     val region2project = getRegions
     val (projNameRt, folder) = getProjectWithRuntimeLibrary(region2project, region)
     val dxProjRt = dxApi.resolveProject(projNameRt)
-    dxApi.logger.trace(s"Looking for asset-id in ${projNameRt}:/${folder}")
+    logger.trace(s"Looking for asset-id in ${projNameRt}:/${folder}")
 
     val assetDxPath = s"${DxPath.DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
-    val dxObj = dxApi.resolveOnePath(assetDxPath, dxProjRt)
+    val dxObj = dxApi.resolveOnePath(assetDxPath, Some(dxProjRt))
     if (!dxObj.isInstanceOf[DxRecord])
       throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
     dxObj.getId
@@ -116,7 +108,7 @@ case class Top(cOpt: CompilerOptions) {
       folder: String,
       dxProject: DxProject,
       runtimePathConfig: DxPathConfig,
-      fileInfoDir: Map[String, (DxFile, DxFileDescribe)]
+      wdlVarLinksConverter: WdlVarLinksConverter
   ): Native.Results = {
     val dxWDLrtId: Option[String] = cOpt.compileMode match {
       case CompilerFlag.IR =>
@@ -151,7 +143,7 @@ case class Top(cOpt: CompilerOptions) {
         dxObjDir,
         instanceTypeDB,
         runtimePathConfig,
-        fileInfoDir,
+        wdlVarLinksConverter,
         bundle.typeAliases,
         cOpt.extras,
         cOpt.runtimeTraceLevel,
@@ -176,7 +168,7 @@ case class Top(cOpt: CompilerOptions) {
     callable match {
       case wf: TAT.Workflow =>
         if (wf.parameterMeta.isDefined) {
-          dxApi.logger.warning("dxWDL workflows ignore their parameter meta section")
+          logger.warning("dxWDL workflows ignore their parameter meta section")
         }
         checkDeclarations(wf.inputs.map(_.name))
         checkDeclarations(wf.outputs.map(_.name))
@@ -196,7 +188,7 @@ case class Top(cOpt: CompilerOptions) {
   private def bulkFileDescribe(
       bundle: IR.Bundle,
       dxProject: DxProject
-  ): (Map[String, DxFile], Map[String, (DxFile, DxFileDescribe)]) = {
+  ): (Map[String, DxFile], DxFileDescCache) = {
     val defResults: InputFileScanResults = cOpt.defaults match {
       case None => InputFileScanResults(Map.empty, Vector.empty)
       case Some(path) =>
@@ -209,16 +201,12 @@ case class Top(cOpt: CompilerOptions) {
         InputFileScanResults(accu.path2file ++ res.path2file, accu.dxFiles ++ res.dxFiles)
     }
 
-    val allDescribe = dxApi.fileBulkDescribe(allResults.dxFiles)
-    val allFiles: Map[String, (DxFile, DxFileDescribe)] = allDescribe.map {
-      case (f: DxFile, desc) => f.id -> (f, desc)
-      case _                 => throw new Exception("has to be all files")
-    }
-    (allResults.path2file, allFiles)
+    val allFiles = dxApi.fileBulkDescribe(allResults.dxFiles)
+    (allResults.path2file, DxFileDescCache(allFiles))
   }
 
   private def wdlToIR(source: Path): IR.Bundle = {
-    val (language, everythingBundle, allSources, adjunctFiles) =
+    val (_, language, everythingBundle, allSources, adjunctFiles) =
       ParseSource(dxApi).apply(source, cOpt.importDirs)
 
     // validate
@@ -254,27 +242,31 @@ case class Top(cOpt: CompilerOptions) {
 
   // Compile IR only
   private def handleInputFiles(bundle: IR.Bundle,
-                               path2file: Map[String, DxFile],
-                               fileInfoDir: Map[String, (DxFile, DxFileDescribe)]): IR.Bundle = {
+                               fileResolver: FileSourceResolver,
+                               pathToDxFile: Map[String, DxFile],
+                               dxFileDescCache: DxFileDescCache): IR.Bundle = {
+    val inputFile =
+      InputFile(fileResolver, dxFileDescCache, pathToDxFile, bundle.typeAliases, dxApi)
+
     val bundle2: IR.Bundle = cOpt.defaults match {
-      case None => bundle
-      case Some(path) =>
-        InputFile(fileInfoDir, path2file, bundle.typeAliases, dxApi)
-          .embedDefaults(bundle, path)
+      case None       => bundle
+      case Some(path) => inputFile.embedDefaults(bundle, path)
     }
 
     // generate dx inputs from the Cromwell-style input specification.
     cOpt.inputs.foreach { path =>
-      val dxInputs = InputFile(fileInfoDir, path2file, bundle.typeAliases, dxApi)
-        .dxFromCromwell(bundle2, path)
+      val dxInputs = inputFile.dxFromInputJson(bundle2, path)
       // write back out as xxxx.dx.json
       val filename = Util.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
       val dxInputFile =
-        if (parent != null) parent.resolve(filename)
-        else Paths.get(filename)
+        if (parent != null) {
+          parent.resolve(filename)
+        } else {
+          Paths.get(filename)
+        }
       Util.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-      dxApi.logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
+      logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
     }
     bundle2
   }
@@ -285,11 +277,14 @@ case class Top(cOpt: CompilerOptions) {
     val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
-    val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
+    val (pathToDxFile, dxFileDescCache) = bulkFileDescribe(bundle, dxProject)
+    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
+    val fileResolver =
+      FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
 
     // handle changes resulting from setting defaults, and
     // generate DNAx input files.
-    handleInputFiles(bundle, path2dxFile, fileInfoDir)
+    handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
   }
 
   // Compile up to native dx applets and workflows
@@ -301,10 +296,13 @@ case class Top(cOpt: CompilerOptions) {
     val bundle: IR.Bundle = wdlToIR(source)
 
     // lookup platform files in bulk
-    val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
+    val (pathToDxFile, dxFileDescCache) = bulkFileDescribe(bundle, dxProject)
+    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
+    val fileResolver =
+      FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
 
     // generate IR
-    val bundle2: IR.Bundle = handleInputFiles(bundle, path2dxFile, fileInfoDir)
+    val bundle2: IR.Bundle = handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
 
     // Up to this point, compilation does not require
     // the dx:project. This allows unit testing without
@@ -312,7 +310,10 @@ case class Top(cOpt: CompilerOptions) {
     // pass the dx:project is required to establish
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
-    val cResults = compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
+    val wdlVarLinksConverter =
+      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
+    val cResults =
+      compileNative(bundle2, folder, dxProject, runtimePathConfig, wdlVarLinksConverter)
     cResults.primaryCallable match {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
