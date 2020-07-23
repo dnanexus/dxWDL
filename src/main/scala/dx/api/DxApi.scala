@@ -600,13 +600,13 @@ case class DxApi(logger: Logger = Logger.Quiet, dxEnv: DXEnvironment = DXEnviron
   private def triageOne(components: DxPathComponents): Either[DxDataObject, DxPathComponents] = {
     if (isDataObjectId(components.name)) {
       val dxDataObj = dataObject(components.name)
-      val dxObjWithProj = components.projName match {
+      val dxDataObjWithProj = components.projName match {
         case None => dxDataObj
         case Some(pid) =>
           val dxProj = resolveProject(pid)
           dataObject(dxDataObj.getId, Some(dxProj))
       }
-      Left(dxObjWithProj)
+      Left(dxDataObjWithProj)
     } else {
       Right(components)
     }
