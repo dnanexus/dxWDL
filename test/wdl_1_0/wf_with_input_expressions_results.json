@@ -1,4 +1,4 @@
 {
-  "test_wf.x1": "X.txt",
-  "test_wf.x2": "X.txt"
+  "wf_with_input_expressions.x1": "X.txt",
+  "wf_with_input_expressions.x2": "X.txt"
 }

@@ -1,6 +1,6 @@
 version 1.0
 
-workflow test_wf {
+workflow wf_with_input_expressions {
    input {
      File f
      String s = basename(f)
