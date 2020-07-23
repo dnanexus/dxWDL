@@ -1,104 +1,159 @@
 package dx.api
 
+import dx.core.io.DxFileDescCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.util.Logger
 
 class DxFileTest extends AnyFlatSpec with Matchers {
-  private val DX_API: DxApi = DxApi(Logger.Quiet)
-  private val TEST_PROJECT: DxProject = DX_API.project(
+  private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val testProject: DxProject = dxApi.project(
       "project-FGpfqjQ0ffPF1Q106JYP2j3v"
   ) // dxWDL_playground
-  private val PUBLIC_PROJECT
-      : DxProject = DX_API.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // dxWDL_CI
+  private val publicProject: DxProject = dxApi.project(
+      "project-FQ7BqkQ0FyXgJxGP2Bpfv3vK"
+  ) // dxWDL_CI
   private val FILE_IN_TWO_PROJS: DxFile =
-    DX_API.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", Some(TEST_PROJECT))
-  private val FILE_IN_TWO_PROJS_WO_PROJ: DxFile = DX_API.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", None)
-  private val FILE1: DxFile = DX_API.file("file-FGqFGBQ0ffPPkYP19gBvFkZy", Some(TEST_PROJECT))
-  private val FILE2: DxFile = DX_API.file("file-FGqFJ8Q0ffPGVz3zGy4FK02P", Some(TEST_PROJECT))
-  private val FILE3: DxFile = DX_API.file("file-FGzzpkQ0ffPJX74548Vp6670", Some(TEST_PROJECT))
-  private val FILE4: DxFile = DX_API.file("file-FqP0x4Q0bxKXBBXX5pjVYf3Q", Some(PUBLIC_PROJECT))
-  private val FILE5: DxFile = DX_API.file("file-FqP0x4Q0bxKykykX5pVXB1YZ", Some(PUBLIC_PROJECT))
-  private val FILE6: DxFile = DX_API.file("file-FqP0x4Q0bxKykfF55qk98vYj", Some(PUBLIC_PROJECT))
-  private val FILE6_WO_PROJ: DxFile = DX_API.file("file-FqP0x4Q0bxKykfF55qk98vYj", None)
-  private val FILE7: DxFile = DX_API.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", Some(PUBLIC_PROJECT))
-  private val FILE7_WO_PROJ: DxFile = DX_API.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", None)
+    dxApi.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", Some(testProject))
+  private val FILE_IN_TWO_PROJS_WO_PROJ: DxFile = dxApi.file("file-FqPbPZ00ffPG5zf6FvGJyfVp", None)
+  private val FILE1: DxFile = dxApi.file("file-FGqFGBQ0ffPPkYP19gBvFkZy", Some(testProject))
+  private val FILE2: DxFile = dxApi.file("file-FGqFJ8Q0ffPGVz3zGy4FK02P", Some(testProject))
+  private val FILE3: DxFile = dxApi.file("file-FGzzpkQ0ffPJX74548Vp6670", Some(testProject))
+  private val FILE4: DxFile = dxApi.file("file-FqP0x4Q0bxKXBBXX5pjVYf3Q", Some(publicProject))
+  private val FILE5: DxFile = dxApi.file("file-FqP0x4Q0bxKykykX5pVXB1YZ", Some(publicProject))
+  private val FILE6: DxFile = dxApi.file("file-FqP0x4Q0bxKykfF55qk98vYj", Some(publicProject))
+  private val FILE6_WO_PROJ: DxFile = dxApi.file("file-FqP0x4Q0bxKykfF55qk98vYj", None)
+  //private val FILE7: DxFile = dxApi.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", Some(publicProject))
+  private val FILE7_WO_PROJ: DxFile = dxApi.file("file-FqP0x4Q0bxKxJfBb5p90jzKx", None)
+
+  private def checkFileDesc(query: Vector[DxFile],
+                            expected: Vector[DxFile],
+                            expectedSize: Option[Int] = None,
+                            compareDetails: Boolean = false): Unit = {
+    val extraArgs = if (compareDetails) Set(Field.Details) else Set.empty[Field.Value]
+    val result = dxApi.fileBulkDescribe(query, extraArgs)
+    result.size shouldBe expectedSize.getOrElse(expected.size)
+    result.forall(_.hasCachedDesc) shouldBe true
+    val lookup = DxFileDescCache(expected)
+    result.foreach { r =>
+      val e: Option[DxFileDescribe] = lookup.getCached(r)
+      e shouldBe defined
+      r.describe().name shouldBe e.get.name
+      r.project.get.id shouldBe e.get.project
+      if (compareDetails) {
+        r.describe().details shouldBe e.get.details
+      }
+    }
+  }
+
+  def createFile(template: DxFile,
+                 name: String,
+                 project: Option[DxProject] = None,
+                 details: Option[String] = None): DxFile = {
+    val proj = project
+      .orElse(template.project)
+      .getOrElse(
+          throw new Exception("no project")
+      )
+    val file = DxFile(dxApi, template.id, Some(proj))
+    val desc = DxFileDescribe(
+        proj.id,
+        template.id,
+        name,
+        null,
+        0,
+        0,
+        0,
+        null,
+        null,
+        details.map(_.parseJson),
+        null
+    )
+    file.cacheDescribe(desc)
+    file
+  }
+
+  def createFiles(templates: Vector[DxFile],
+                  names: Vector[String],
+                  projects: Vector[DxProject] = Vector.empty): Vector[DxFile] = {
+    templates.zip(names).zipWithIndex.map {
+      case ((template, name), i) =>
+        val project = if (projects.isEmpty) {
+          None
+        } else if (projects.size <= i) {
+          Some(projects.head)
+        } else {
+          Some(projects(i))
+        }
+        createFile(template, name, project)
+    }
+  }
 
   it should "bulk describe DxFiles with one project" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE1, FILE2, FILE3))
-    result.size shouldBe 3
-    result(FILE1).name shouldBe "fileA"
-    result(FILE2).name shouldBe "fileB"
-    result(FILE3).name shouldBe "fileC"
+    val query = Vector(FILE1, FILE2, FILE3)
+    checkFileDesc(query, createFiles(query, Vector("fileA", "fileB", "fileC")))
   }
 
   it should "bulk describe a file without project" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE7_WO_PROJ))
-    result.size shouldBe 1
-    result(FILE7).name shouldBe "test4.test"
-    result(FILE7).project shouldBe PUBLIC_PROJECT.getId
+    val query = Vector(FILE7_WO_PROJ)
+    checkFileDesc(query, createFiles(query, Vector("test4.test"), Vector(publicProject)))
   }
 
   it should "bulk describe an empty vector" in {
-    val result = DX_API.fileBulkDescribe(Vector.empty)
+    val result = dxApi.fileBulkDescribe(Vector.empty)
     result.size shouldBe 0
   }
 
   it should "bulk describe a duplicate file in vector" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE1, FILE2, FILE1))
-    result.size shouldBe 2
-    result(FILE1).name shouldBe "fileA"
-    result(FILE2).name shouldBe "fileB"
+    checkFileDesc(Vector(FILE1, FILE2, FILE1),
+                  createFiles(Vector(FILE1, FILE2), Vector("fileA", "fileB")))
   }
 
   it should "bulk describe a duplicate file in vector2" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE6, FILE6_WO_PROJ))
-    result.size shouldBe 1
-    result(FILE6).name shouldBe "test3.test"
+    checkFileDesc(Vector(FILE6, FILE6_WO_PROJ),
+                  Vector(createFile(FILE6, "test3.test")),
+                  expectedSize = Some(2))
   }
 
   it should "bulk describe a files from multiple projects" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE1, FILE2, FILE5))
-    result.size shouldBe 3
-    result(FILE1).name shouldBe "fileA"
-    result(FILE1).project shouldBe TEST_PROJECT.getId
-    result(FILE2).name shouldBe "fileB"
-    result(FILE2).project shouldBe TEST_PROJECT.getId
-    result(FILE5).name shouldBe "test2.test"
-    result(FILE5).project shouldBe PUBLIC_PROJECT.getId
+    val query = Vector(FILE1, FILE2, FILE5)
+    checkFileDesc(query, createFiles(query, Vector("fileA", "fileB", "test2.test")))
   }
 
   it should "bulk describe a files with and without project" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE4, FILE6_WO_PROJ, FILE7_WO_PROJ))
-    result.size shouldBe 3
-    result(FILE4).name shouldBe "test1.test"
-    result(FILE4).project shouldBe PUBLIC_PROJECT.getId
-    result(FILE6).name shouldBe "test3.test"
-    result(FILE6).project shouldBe PUBLIC_PROJECT.getId
-    result(FILE7).name shouldBe "test4.test"
-    result(FILE7).project shouldBe PUBLIC_PROJECT.getId
+    val query = Vector(FILE4, FILE6_WO_PROJ, FILE7_WO_PROJ)
+    checkFileDesc(query,
+                  createFiles(query,
+                              Vector("test1.test", "test3.test", "test4.test"),
+                              Vector(publicProject, publicProject, publicProject)))
   }
 
   it should "describe files in bulk with extrafields" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2), Set(Field.Details))
-    result(FILE_IN_TWO_PROJS).details shouldBe Some("{\"detail1\":\"value1\"}".parseJson)
-    result(FILE2).details shouldBe Some("{}".parseJson)
+    val expected = Vector(
+        createFile(FILE_IN_TWO_PROJS,
+                   "File_copied_to_another_project",
+                   Some(testProject),
+                   Some("{\"detail1\":\"value1\"}")),
+        createFile(FILE2, "fileB", Some(testProject), Some("{}"))
+    )
+    checkFileDesc(Vector(FILE_IN_TWO_PROJS, FILE2), expected, compareDetails = true)
   }
 
   it should "Describe files in bulk without extrafield values - details value should be none" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
-    result(FILE_IN_TWO_PROJS).details shouldBe None
-    result(FILE2).details shouldBe None
+    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
+    results.foreach(f => f.describe().details shouldBe None)
   }
 
   it should "bulk describe file which is in two projects, but projects where to search is given" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS))
-    result.size shouldBe 1
+    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS))
+    results.forall(_.hasCachedDesc) shouldBe true
+    results.size shouldBe 1
   }
 
   it should "bulk describe file which is in two projects, project where to search is not given" in {
-    val result = DX_API.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
-    result.size shouldBe 2
+    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
+    results.forall(_.hasCachedDesc) shouldBe true
+    results.size shouldBe 2
   }
 }

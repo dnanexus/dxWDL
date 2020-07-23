@@ -21,11 +21,10 @@ import java.lang.management._
 import java.nio.file.{Files, Path, Paths}
 
 import dx.AppInternalException
-
-import dx.api.{DxApi, DxFile, DxFileDescribe, DxJob, InstanceTypeDB}
+import dx.api.{DxApi, DxJob, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.exec
-import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest, Furl}
+import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
@@ -33,34 +32,35 @@ import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.exec.DockerUtils
 import wdlTools.syntax.SourceLocation
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{TraceLevel, Util}
+import wdlTools.util.{FileSource, FileSourceResolver, RealFileSource, TraceLevel, Util}
 
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
                       typeAliases: Map[String, WdlTypes.T],
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
-                      fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
+                      fileResolver: FileSourceResolver,
+                      wdlVarLinksConverter: WdlVarLinksConverter,
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
                       dxApi: DxApi,
                       evaluator: Eval) {
-  private val wdlVarLinksConverter =
-    WdlVarLinksConverter(dxApi, fileInfoDir, typeAliases)
   private val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
-                     dxUrl2path: Map[Furl, Path]): Unit = {
+                     fileSourceToPath: Map[FileSource, Path]): Unit = {
     val locInputsM: Map[String, JsValue] = localizedInputs.map {
       case (name, (t, v)) =>
         val wdlTypeRepr = TypeSerialization(typeAliases).toString(t)
         val value = WdlValueSerialization(typeAliases).toJSON(t, v)
         (name, JsArray(JsString(wdlTypeRepr), value))
     }
-    val dxUrlM: Map[String, JsValue] = dxUrl2path.map {
-      case (furl, path) => furl.toString -> JsString(path.toString)
+    val dxUrlM: Map[String, JsValue] = fileSourceToPath.map {
+      case (fileSource: RealFileSource, path) => fileSource.value -> JsString(path.toString)
+      case (other, _) =>
+        throw new RuntimeException(s"Can only serialize a RealFileSource, not ${other}")
     }
 
     // marshal into json, and then to a string
@@ -68,10 +68,10 @@ case class TaskRunner(task: TAT.Task,
     Util.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
-  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
+  def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[FileSource, Path]) = {
     val buf = Util.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
-    val (locInputsM, dxUrlM) = json match {
+    val (localPathToJs, dxUriToJs) = json match {
       case JsObject(m) =>
         (m.get("localizedInputs"), m.get("dxUrl2path")) match {
           case (Some(JsObject(env_m)), Some(JsObject(path_m))) =>
@@ -81,7 +81,7 @@ case class TaskRunner(task: TAT.Task,
         }
       case _ => throw new Exception("Malformed environment serialized to disk")
     }
-    val localizedInputs = locInputsM.map {
+    val localizedInputs = localPathToJs.map {
       case (key, JsArray(Vector(JsString(wdlTypeRepr), jsVal))) =>
         val t = TypeSerialization(typeAliases).fromString(wdlTypeRepr)
         val value = WdlValueSerialization(typeAliases).fromJSON(jsVal)
@@ -89,11 +89,11 @@ case class TaskRunner(task: TAT.Task,
       case (_, other) =>
         throw new Exception(s"Bad deserialization value ${other}")
     }
-    val dxUrl2path = dxUrlM.map {
-      case (key, JsString(path)) => Furl.fromUrl(key, dxApi) -> Paths.get(path)
+    val fileSourceToPath = dxUriToJs.map {
+      case (uri, JsString(path)) => fileResolver.resolve(uri) -> Paths.get(path)
       case other                 => throw new Exception(s"Invalid map item ${other}")
     }
-    (localizedInputs, dxUrl2path)
+    (localizedInputs, fileSourceToPath)
   }
 
   private def printDirStruct(): Unit = {
@@ -288,7 +288,7 @@ case class TaskRunner(task: TAT.Task,
   // and build a shell script to run the command.
   def prolog(
       taskInputs: Map[TAT.InputDefinition, WdlValues.V]
-  ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[Furl, Path]) = {
+  ): (Map[String, (WdlTypes.T, WdlValues.V)], Map[FileSource, Path]) = {
     if (dxApi.logger.isVerbose) {
       dxApi.logger.traceLimited(s"Prolog debugLevel=${dxApi.logger.traceLevel}")
       dxApi.logger.traceLimited(s"dxWDL version: ${getVersion}")
@@ -309,7 +309,7 @@ case class TaskRunner(task: TAT.Task,
     //
     // Note: this may be overly conservative,
     // because some of the files may not actually be accessed.
-    val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
+    val (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest) =
       jobInputOutput.localizeFiles(parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
     // build a manifest for dxda, if there are files to download
@@ -331,7 +331,7 @@ case class TaskRunner(task: TAT.Task,
       }
 
     dxApi.logger.traceLimited(s"Epilog: complete, inputsWithTypes = ${localizedInputs}")
-    (inputsWithTypes, dxUrl2path)
+    (inputsWithTypes, fileSourceToPath)
   }
 
   // HERE we download all the inputs, or mount them with dxfuse
@@ -364,7 +364,7 @@ case class TaskRunner(task: TAT.Task,
   // HERE we run docker and/or the bash script
 
   def epilog(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
-             dxUrl2path: Map[Furl, Path]): Map[String, JsValue] = {
+             fileSourceToPath: Map[FileSource, Path]): Map[String, JsValue] = {
     dxApi.logger.traceLimited(s"Epilog debugLevel=${dxApi.logger.traceLevel}")
     if (dxApi.logger.traceLevel >= TraceLevel.VVerbose) {
       printDirStruct()
@@ -387,7 +387,7 @@ case class TaskRunner(task: TAT.Task,
 
     val outputs: Map[String, (WdlTypes.T, WdlValues.V)] =
       // Upload output files to the platform.
-      jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
+      jobInputOutput.delocalizeFiles(outputsLocal, fileSourceToPath)
 
     // convert the WDL values to JSON
     val outputFields: Map[String, JsValue] = outputs

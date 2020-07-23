@@ -291,8 +291,13 @@ object Block {
       case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
         Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
 
-      case TAT.ExprGetName(expr, _, _, _) =>
-        throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
+      case TAT.ExprGetName(expr, fieldName, wdlType, _) =>
+        exprInputs(expr) match {
+          case Vector(RequiredInputDefinition(id, _)) =>
+            Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
+          case _ =>
+            throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
+        }
     }
   }
 

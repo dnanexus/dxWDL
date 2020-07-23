@@ -39,8 +39,9 @@ case class DxFileDescribe(project: String,
                           parts: Option[Map[Int, DxFilePart]])
     extends DxObjectDescribe
 
-case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject]) extends DxDataObject {
-  def describe(fields: Set[Field.Value] = Set.empty): DxFileDescribe = {
+case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
+    extends CachingDxDataObject[DxFileDescribe] {
+  def describeNoCache(fields: Set[Field.Value] = Set.empty): DxFileDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
     val defaultFields = Set(Field.Project,
                             Field.Id,
@@ -52,13 +53,13 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject]) extends 
                             Field.ArchivalState)
     val allFields = fields ++ defaultFields
     val descJs = dxApi.fileDescribe(id, projSpec + ("fields" -> DxObject.requestFields(allFields)))
-    val desc = DxFile.parseJsonFileDesribe(descJs)
-
-    // populate optional fields
+    // optional fields
     val details = descJs.fields.get("details")
     val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
     val parts = descJs.fields.get("parts").map(DxFile.parseFileParts)
-    desc.copy(details = details, properties = props, parts = parts)
+    DxFile
+      .parseJsonFileDesribe(descJs)
+      .copy(details = details, properties = props, parts = parts)
   }
 
   def getLinkAsJson: JsValue = {
@@ -72,6 +73,33 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject]) extends 
                 "id" -> JsString(id)
             )
         )
+    }
+  }
+
+  // Convert a dx-file to a string with the format:
+  //   dx://proj-xxxx:file-yyyy::/A/B/C.txt
+  //
+  // This is needed for operations like:
+  //     File filename
+  //     String  = sub(filename, ".txt", "") + ".md"
+  // The standard library functions requires the file name to
+  // end with a posix-like name. It can't just be:
+  // "dx://file-xxxx", or "dx://proj-xxxx:file-yyyy". It needs
+  // to be something like:  dx://xxxx:yyyy:genome.txt, so that
+  // we can change the suffix.
+  //
+  // We need to change the standard so that the conversion from file to
+  // string is well defined, and requires an explicit conversion function.
+  //
+  def asUri: String = {
+    val desc = describe()
+    val logicalName = s"${desc.folder}/${desc.name}"
+    project match {
+      case None =>
+        s"${DxPath.DX_URL_PREFIX}${getId}::${logicalName}"
+      case Some(proj) =>
+        val projId = proj.getId
+        s"${DxPath.DX_URL_PREFIX}${projId}:${getId}::${logicalName}"
     }
   }
 }
@@ -178,10 +206,6 @@ object DxFile {
       case None      => DxFile(dxApi, fid, None)
       case Some(pid) => DxFile(dxApi, fid, Some(DxProject(dxApi, pid)))
     }
-  }
-
-  def toJsValue(dxFile: DxFile): JsValue = {
-    dxFile.getLinkAsJson
   }
 
   def isDxFile(jsValue: JsValue): Boolean = {
