@@ -11,6 +11,7 @@ import dx.api.Field
 import dx.core.util.CompressionUtils
 
 case class Tree(execDict: Map[String, ExecRecord]) {
+
   private def kindToString(kind: AppletKind): String = {
     kind match {
       case _: AppletKindNative               => "Native"
