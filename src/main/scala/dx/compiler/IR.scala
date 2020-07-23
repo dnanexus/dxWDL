@@ -393,7 +393,7 @@ object IR {
   case object SArgEmpty extends SArg
   case class SArgConst(wdlValue: WdlValues.V) extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
-  case class SArgWorkflowInput(arg: CVar, dynamicDefault: Boolean = false) extends SArg
+  case class SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean = false) extends SArg
 
   // A stage can call an applet or a workflow.
   //
