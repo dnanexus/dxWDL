@@ -94,23 +94,18 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "second block in a linear workflow" in {
     val source: Path = pathFromBasename("frag_runner", "wf_linear.wdl")
     val (dxPathConfig, fileResolver) = setup()
-
     val (_, language, wdlBundle, _, _) = ParseSource(dxApi).apply(source, Vector.empty)
-
     val wf: TAT.Workflow = wdlBundle.primaryCallable match {
       case Some(wf: TAT.Workflow) => wf
       case _                      => throw new Exception("unexpected")
     }
     val subBlocks = Block.splitWorkflow(wf)
-
     val block = subBlocks(1)
-
     val env: Map[String, WdlValues.V] = Map(
         "x" -> WdlValues.V_Int(3),
         "y" -> WdlValues.V_Int(5),
         "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
     )
-
     val decls: Vector[TAT.Declaration] = block.nodes.collect {
       case eNode: TAT.Declaration => eNode
     }
