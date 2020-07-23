@@ -237,7 +237,7 @@ object Block {
   //   1 + 9        Vector.empty
   //   "a" + "b"    Vector.empty
   //
-  def exprInputs(expr: TAT.Expr): Vector[InputDefinition] = {
+  private def exprInputs(expr: TAT.Expr): Vector[InputDefinition] = {
     expr match {
       case _: TAT.ValueNull      => Vector.empty
       case _: TAT.ValueNone      => Vector.empty
@@ -463,7 +463,7 @@ object Block {
       val allButLast = parts.dropRight(1)
       val last = parts.last :+ elem
       if (startNew) {
-        allButLast :+ Vector(last, Vector.empty[TAT.WorkflowElement])
+        allButLast ++ Vector(last, Vector.empty[TAT.WorkflowElement])
       } else {
         allButLast :+ last
       }
