@@ -120,18 +120,18 @@ case class ParseSource(dxApi: DxApi) {
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
   // Also returns 1) a mapping of input files to source documents; 2) a mapping of input files to
   // "adjuncts" (such as README files); and 3) a vector of sub-bundles (one per import).
-  def apply(mainFile: Path, imports: List[Path]): (FileSource,
-                                                   Language.Value,
-                                                   Bundle,
-                                                   Map[String, TAT.Document],
-                                                   Map[String, Vector[Adjuncts.AdjunctFile]]) = {
+  def apply(mainFile: Path, imports: Vector[Path]): (FileSource,
+                                                     Language.Value,
+                                                     Bundle,
+                                                     Map[String, TAT.Document],
+                                                     Map[String, Vector[Adjuncts.AdjunctFile]]) = {
     // Resolves for:
     // - Where we run from
     // - Where the file is
 
     // parse and type check
     val mainAbsPath = mainFile.toAbsolutePath
-    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, imports.toVector)
+    val (tMainDoc, ctxTypes) = parseWdlFromPath(mainAbsPath, imports)
 
     val primaryCallable =
       tMainDoc.workflow match {

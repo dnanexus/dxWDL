@@ -163,7 +163,7 @@ case class Native(dxWDLrtId: Option[String],
                   Some(DxIOSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
                 // If we have the alternative patterns object, extrac the values, if any at all
                 case IR.PatternsReprObj(name, klass, tags) =>
-                  val attrs: Map[String, JsValue] = List(
+                  val attrs: Map[String, JsValue] = Vector(
                       if (name.isDefined) Some("name" -> JsArray(name.get.map(JsString(_))))
                       else None,
                       if (tags.isDefined) Some("tag" -> JsArray(tags.get.map(JsString(_))))
@@ -202,7 +202,7 @@ case class Native(dxWDLrtId: Option[String],
                     case None      => None
                   }
                   if (name.isDefined || project.isDefined || path.isDefined) {
-                    val attrs: Map[String, JsValue] = List(
+                    val attrs: Map[String, JsValue] = Vector(
                         if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
                         if (name.isDefined) Some("name" -> JsString(name.get)) else None,
                         if (project.isDefined) Some("project" -> JsString(project.get)) else None,
@@ -1293,7 +1293,7 @@ case class Native(dxWDLrtId: Option[String],
       nm -> jso
     }.toMap
 
-    val outputSources: List[(String, JsValue)] = sArg match {
+    val outputSources: Vector[(String, JsValue)] = sArg match {
       case IR.SArgConst(wdlValue) =>
         // constant
         throw new Exception(

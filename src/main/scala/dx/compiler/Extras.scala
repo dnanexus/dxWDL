@@ -171,12 +171,12 @@ case class DxLicense(name: String,
                      licenseUrl: String,
                      author: String)
 
-case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
+case class DxDetails(upstreamProjects: Option[Vector[DxLicense]]) {
 
   def toDetailsJson: Map[String, JsValue] = {
 
-    val upstreamProjectList: List[JsObject] = upstreamProjects match {
-      case None => List.empty
+    val upstreamProjectVec: Vector[JsObject] = upstreamProjects match {
+      case None => Vector.empty
       case Some(x) =>
         x.map { dxLicense: DxLicense =>
           JsObject(
@@ -190,7 +190,7 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]) {
         }
     }
 
-    Map("upstreamProjects" -> upstreamProjectList.toJson)
+    Map("upstreamProjects" -> upstreamProjectVec.toJson)
   }
 }
 
@@ -508,9 +508,9 @@ object Extras {
 
     val restartable: Option[String] =
       checkedParseStringField(fields, "restartableEntryPoints") match {
-        case None                                            => None
-        case Some(str) if List("all", "master") contains str => Some(str)
-        case Some(str)                                       => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
+        case None                                           => None
+        case Some(str) if Set("all", "master") contains str => Some(str)
+        case Some(str)                                      => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
       }
     Some(
         DxRunSpec(
@@ -523,13 +523,13 @@ object Extras {
 
   }
 
-  private def parseUpstreamProjects(jsv: Option[JsValue]): Option[List[DxLicense]] = {
+  private def parseUpstreamProjects(jsv: Option[JsValue]): Option[Vector[DxLicense]] = {
     jsv match {
       case None         => None
       case Some(JsNull) => None
       case Some(other) =>
         implicit val dxLicenseFormat: RootJsonFormat[DxLicense] = jsonFormat6(DxLicense)
-        Some(other.convertTo[List[DxLicense]])
+        Some(other.convertTo[Vector[DxLicense]])
     }
   }
 
