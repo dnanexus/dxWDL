@@ -5,9 +5,10 @@ package dx.compiler
 import spray.json._
 import Native.ExecRecord
 import IR._
-import dx.core.util.CompressionUtils
+
 import dx.api.DxWorkflow
 import dx.api.Field
+import dx.core.util.CompressionUtils
 
 case class Tree(execDict: Map[String, ExecRecord]) {
 

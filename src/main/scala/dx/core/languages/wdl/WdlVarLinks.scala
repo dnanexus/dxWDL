@@ -7,8 +7,8 @@
 package dx.core.languages.wdl
 
 import dx.AppInternalException
-import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
+import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.languages.IORef
 import spray.json._
 import wdlTools.eval.WdlValues

@@ -144,7 +144,7 @@ object Main {
 
     val cmdLineOpts = splitCmdLine(arglist)
     val options = cmdLineOpts.foldLeft(Map.empty[String, List[String]]) {
-      case (_, Nil) => throw new Exception("sanity: empty command line option")
+      case (_, Nil) => throw new Exception("empty command line option")
       case (options, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
         val (nKeyword, value) = keyword match {

@@ -1317,7 +1317,7 @@ case class Native(dxWDLrtId: Option[String],
             specJs.asJsObject.fields ++
               Map("outputSource" -> outputJs)
         )
-    }.toVector
+    }
   }
 
   private def buildWorkflowMetadata(

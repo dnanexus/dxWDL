@@ -167,7 +167,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
 
 case class InputFile(fileResolver: FileSourceResolver,
                      dxFileDescCache: DxFileDescCache,
-                     path2file: Map[String, DxFile],
+                     pathToFile: Map[String, DxFile],
                      typeAliases: Map[String, WdlTypes.T],
                      dxApi: DxApi) {
   private lazy val logger2: Logger = dxApi.logger.withTraceIfContainsKey("InputFile")

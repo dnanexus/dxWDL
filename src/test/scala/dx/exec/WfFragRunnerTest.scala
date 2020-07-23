@@ -118,8 +118,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "scatter_no_call.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
     val block = subBlocks(0)
 
@@ -156,8 +156,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "conditional_no_call.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
     val block = subBlocks.head
 
@@ -178,8 +178,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "nested_no_call.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
 
     val block = subBlocks.head
@@ -212,8 +212,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("draft2", "shapes.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
 
     // Make sure an exception is thrown if eval-expressions is called with
@@ -227,8 +227,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("draft2", "conditionals3.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
 
     val results =
@@ -278,8 +278,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "evaluate call inputs properly" in {
     val path = pathFromBasename("draft2", "various_calls.wdl")
     val wfSourceCode = Util.readFileContent(path)
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
 
     val call1 = findCallByName("MaybeInt", wf.body)
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -316,8 +316,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   it should "evaluate call constant inputs" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
     val wfSourceCode = Util.readFileContent(path)
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
 
     val zincCall = findCallByName("zincWithNoParams", wf.body)
 
@@ -329,8 +329,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "House.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (wf, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val subBlocks = Block.splitWorkflow(wf)
 
     val results =
@@ -360,8 +360,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "missing_args.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val env = Map(
         "x" -> (WdlTypes.T_Optional(WdlTypes.T_Int), WdlValues.V_Null),
         "y" -> (WdlTypes.T_Int, WdlValues.V_Int(5))
@@ -375,8 +375,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
     results.keys should contain("bam_lane1")
@@ -387,8 +387,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val path = pathFromBasename("frag_runner", "scatter_with_eval.wdl")
     val wfSourceCode = Util.readFileContent(path)
 
-    val (dxPathConfig, dxIoFunctions) = setup()
-    val (_, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+    val (dxPathConfig, fileResolver) = setup()
+    val (_, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
 
