@@ -3,7 +3,7 @@
 package dx.compiler
 
 import java.io.EOFException
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 
 import dx.api._
@@ -54,8 +54,10 @@ case class Native(dxWDLrtId: Option[String],
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
   private lazy val appCompileDirPath: Path = {
-    val p = Paths.get("/tmp/dxWDL_Compile")
-    Util.createDirectories(p)
+    val p = Files.createTempDirectory("dxWDL_Compile")
+    sys.addShutdownHook({
+      Util.deleteRecursive(p)
+    })
     p
   }
 

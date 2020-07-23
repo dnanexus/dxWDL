@@ -26,7 +26,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
 
   private def setup(): (DxPathConfig, FileSourceResolver) = {
-    // Create a clean directory in "/tmp" for the task to use
+    // Create a clean temp directory for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     val dxPathConfig =
       DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)

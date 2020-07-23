@@ -1,7 +1,7 @@
 package dx.compiler
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import dx.api._
 import dx.compiler.Main.SuccessIR
@@ -153,7 +153,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "be able to build interfaces to native applets" taggedAs NativeTestXX in {
-    val outputPath = "/tmp/dx_extern.wdl"
+    val outputPath: Path = Files.createTempFile("dx_extern", ".wdl")
     Main.dxni(
         List("--force",
              "--quiet",
@@ -164,11 +164,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
              "--language",
              "wdl_draft2",
              "--output",
-             outputPath)
+             outputPath.toString)
     ) shouldBe a[Success]
 
     // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath)
+    val src = Source.fromFile(outputPath.toFile)
     val content =
       try {
         src.getLines.mkString("\n")
@@ -189,22 +189,24 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "be able to build an interface to a specific applet" taggedAs NativeTestXX in {
-    val outputPath = "/tmp/dx_extern_one.wdl"
+    val outputPath: Path = Files.createTempFile("dx_extern_one", ".wdl")
     Main.dxni(
-        List("--force",
-             "--quiet",
-             "--path",
-             s"/${unitTestsPath}/applets/native_sum",
-             "--project",
-             dxTestProject.getId,
-             "--language",
-             "wdl_1_0",
-             "--output",
-             outputPath)
+        List(
+            "--force",
+            "--quiet",
+            "--path",
+            s"/${unitTestsPath}/applets/native_sum",
+            "--project",
+            dxTestProject.getId,
+            "--language",
+            "wdl_1_0",
+            "--output",
+            outputPath.toString
+        )
     ) shouldBe a[Success]
 
     // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath)
+    val src = Source.fromFile(outputPath.toFile)
     val content =
       try {
         src.getLines.mkString("\n")
@@ -224,7 +226,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     dxObj shouldBe a[DxApplet]
     val applet = dxObj.asInstanceOf[DxApplet]
 
-    val outputPath = "/tmp/dx_extern_one.wdl"
+    val outputPath: Path = Files.createTempFile("dx_extern_one", ".wdl")
     Main.dxni(
         List("--force",
              "--quiet",
@@ -235,11 +237,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
              "--language",
              "wdl_1_0",
              "--output",
-             outputPath)
+             outputPath.toString)
     ) shouldBe a[Success]
 
     // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath)
+    val src = Source.fromFile(outputPath.toFile)
     val content =
       try {
         src.getLines.mkString("\n")
