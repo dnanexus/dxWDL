@@ -483,7 +483,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
 
   // Assemble the backbone of a workflow, having compiled the independent tasks.
   // This is shared between locked and unlocked workflows.
-  // At this point we we have workflow level inputs and outputs.
+  // At this point we have workflow level inputs and outputs.
   // Some of the inputs may have default values that are complex expressions
   // (passed as `wfInputExprs`), necessitating an initial fragment that performs
   // the evaluation. This only applies to locked workflows, since unlocked workflows
