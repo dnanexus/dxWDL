@@ -70,7 +70,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         (CVar(id, wdlType, Some(defaultValue), attr), None)
       case Block.OverridableInputDefinitionWithDynamicDefault(id, wdlType, defaultExpr) =>
         // If the default value is an expression that requires evaluation (i.e. not a constant),
-        // treat the input as optional and leave the default value to be calculated at runtime
+        // treat the input as an optional applet input and leave the default value to be calculated
+        // at runtime
         (CVar(id, wdlType, None, attr), Some(defaultExpr))
       case Block.OptionalInputDefinition(id, wdlType) =>
         (CVar(id, wdlType, None, attr), None)
