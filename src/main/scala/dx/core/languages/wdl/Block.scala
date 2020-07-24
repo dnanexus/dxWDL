@@ -75,6 +75,7 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dx.core.languages.wdl
 
+import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Util => TUtil}
 
 // Block: a continuous list of workflow elements from a user
@@ -149,10 +150,17 @@ object Block {
   // A compulsory input that has no default, and must be provided by the caller
   case class RequiredInputDefinition(name: String, wdlType: WdlTypes.T) extends InputDefinition
 
-  // An input that has a default and may be skipped by the caller
-  case class OverridableInputDefinitionWithDefault(name: String,
-                                                   wdlType: WdlTypes.T,
-                                                   defaultExpr: TAT.Expr)
+  // An input that has a constant default value and may be skipped by the caller
+  case class OverridableInputDefinitionWithConstantDefault(name: String,
+                                                           wdlType: WdlTypes.T,
+                                                           defaultValue: WdlValues.V)
+      extends InputDefinition
+
+  // An input that has a default value that is an expression that must be evaluated at runtime,
+  // unless a value is specified by the caller
+  case class OverridableInputDefinitionWithDynamicDefault(name: String,
+                                                          wdlType: WdlTypes.T,
+                                                          defaultExpr: TAT.Expr)
       extends InputDefinition
 
   // an input that may be omitted by the caller. In that case the value will
@@ -165,8 +173,15 @@ object Block {
     i match {
       case TAT.RequiredInputDefinition(name, wdlType, _) =>
         RequiredInputDefinition(name, wdlType)
-      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, expr, _) =>
-        OverridableInputDefinitionWithDefault(name, wdlType, expr)
+      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr, _) =>
+        WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
+          // If the default value is an expression that requires evaluation (i.e. not a constant),
+          // treat the input as optional and leave the default value to be calculated at runtime
+          case None =>
+            OverridableInputDefinitionWithDynamicDefault(name, makeOptional(wdlType), defaultExpr)
+          case Some(value) =>
+            OverridableInputDefinitionWithConstantDefault(name, wdlType, value)
+        }
       case TAT.OptionalInputDefinition(name, wdlType, _) =>
         OptionalInputDefinition(name, wdlType)
     }
@@ -178,9 +193,10 @@ object Block {
 
   def isOptional(inputDef: InputDefinition): Boolean = {
     inputDef match {
-      case _: RequiredInputDefinition               => false
-      case _: OverridableInputDefinitionWithDefault => true
-      case _: OptionalInputDefinition               => true
+      case _: RequiredInputDefinition                       => false
+      case _: OverridableInputDefinitionWithConstantDefault => true
+      case _: OverridableInputDefinitionWithDynamicDefault  => true
+      case _: OptionalInputDefinition                       => true
     }
   }
 
@@ -307,7 +323,6 @@ object Block {
       case (name: String, (_: WdlTypes.T, optional: Boolean)) =>
         // provided by the caller
         val actualInput = call.inputs.get(name)
-
         (actualInput, optional) match {
           case (None, false) =>
             // A required input that will have to be provided at runtime
@@ -441,17 +456,17 @@ object Block {
   //
   private def splitToBlocks(elements: Vector[TAT.WorkflowElement]): Vector[Block] = {
     // add to last part
+    // if startNew = true, also add a new fresh Vector to the end
     def addToLastPart(parts: Vector[Vector[TAT.WorkflowElement]],
-                      elem: TAT.WorkflowElement): Vector[Vector[TAT.WorkflowElement]] = {
+                      elem: TAT.WorkflowElement,
+                      startNew: Boolean = false): Vector[Vector[TAT.WorkflowElement]] = {
       val allButLast = parts.dropRight(1)
       val last = parts.last :+ elem
-      allButLast :+ last
-    }
-    // add to last part and start a new one.
-    def startFresh(parts: Vector[Vector[TAT.WorkflowElement]],
-                   elem: TAT.WorkflowElement): Vector[Vector[TAT.WorkflowElement]] = {
-      val parts2 = addToLastPart(parts, elem)
-      parts2 :+ Vector.empty[TAT.WorkflowElement]
+      if (startNew) {
+        allButLast ++ Vector(last, Vector.empty[TAT.WorkflowElement])
+      } else {
+        allButLast :+ last
+      }
     }
 
     // split into sub-sequences (parts). Each part is a vector of workflow elements.
@@ -461,26 +476,19 @@ object Block {
       case (parts, decl: TAT.Declaration) =>
         addToLastPart(parts, decl)
       case (parts, call: TAT.Call) =>
-        startFresh(parts, call)
+        addToLastPart(parts, call, startNew = true)
       case (parts, cond: TAT.Conditional) if deepFindCalls(cond).isEmpty =>
         addToLastPart(parts, cond)
       case (parts, cond: TAT.Conditional) =>
-        startFresh(parts, cond)
+        addToLastPart(parts, cond, startNew = true)
       case (parts, sct: TAT.Scatter) if deepFindCalls(sct).isEmpty =>
         addToLastPart(parts, sct)
       case (parts, sct: TAT.Scatter) =>
-        startFresh(parts, sct)
+        addToLastPart(parts, sct, startNew = true)
     }
 
-    // if the last block is empty, drop it
-    val cleanParts =
-      if (parts.last.isEmpty)
-        parts.dropRight(1)
-      else
-        parts
-
-    // convert to blocks
-    cleanParts.map(makeBlock)
+    // convert to blocks - keep only non-empty blocks
+    parts.collect { case v if v.nonEmpty => makeBlock(v) }
   }
 
   // We are building an applet for the output section of a workflow.
@@ -587,11 +595,9 @@ object Block {
   private def isSimpleCall(nodes: Vector[TAT.WorkflowElement],
                            trivialExpressionsOnly: Boolean): Boolean = {
     assert(nodes.nonEmpty)
-    if (nodes.size >= 2)
+    if (nodes.size > 1)
       return false
-    // there is example a single node
-    val node = nodes.head
-    node match {
+    nodes.head match {
       case call: TAT.Call if trivialExpressionsOnly =>
         call.inputs.values.forall(expr => WdlValueAnalysis.isTrivialExpression(expr))
       case _: TAT.Call =>

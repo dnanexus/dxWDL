@@ -1246,7 +1246,7 @@ case class Native(dxWDLrtId: Option[String],
             val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
-          case IR.SArgWorkflowInput(argName) =>
+          case IR.SArgWorkflowInput(argName, _) =>
             val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
@@ -1295,14 +1295,14 @@ case class Native(dxWDLrtId: Option[String],
 
     val outputSources: Vector[(String, JsValue)] = sArg match {
       case IR.SArgConst(wdlValue) =>
-        // constant
-        throw new Exception(
-            s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
-        )
+        Vector(wdlVarLinksConverter.genConstantField(wdlValue, cVar.dxVarName))
       case IR.SArgLink(dxStage, argName: CVar) =>
         val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-      case IR.SArgWorkflowInput(argName: CVar) =>
+      case IR.SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean) =>
+        // TODO: if dynamicDefault is true, link to the value of the workflow input
+        //  (either the user-specified value or the result of evaluting the expression)
+        //  - right now this only links to the user-specified value
         val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case other =>

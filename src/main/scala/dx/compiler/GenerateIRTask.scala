@@ -292,18 +292,23 @@ case class GenerateIRTask(dxApi: DxApi,
       }
 
       case TAT.OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _) =>
+        val paramMeta = lookupInputParam(iName, task)
+        val attr = ParameterMeta.unwrap(paramMeta, wdlType)
         WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
           case None =>
             // This is a task "input" parameter definition of the form:
             //    Int y = x + 3
-            // We consider it an expression, and not an input. The
-            // runtime system will evaluate it.
-            None
+            // We treat it as an optional input - the runtime system will
+            // evaluate the expression if no value is specified.
+            // Make sure the WdlType is an Optional
+            val optWdlType = wdlType match {
+              case t: WdlTypes.T_Optional => t
+              case t                      => WdlTypes.T_Optional(t)
+            }
+            Some(CVar(iName, optWdlType, None, attr))
           case Some(value) =>
             // This is a task "input" parameter definition of the form:
             //    Int y = 3
-            val paramMeta = lookupInputParam(iName, task)
-            val attr = ParameterMeta.unwrap(paramMeta, wdlType)
             Some(CVar(iName, wdlType, Some(value), attr))
         }
 

@@ -201,7 +201,7 @@ object Main {
           )
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
         case ExecAction.WfInputs =>
-          val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi)
+          val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
           wfInputs.apply(fragInputs.env)
         case ExecAction.WfOutputs =>
           val wfOutputs = WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
