@@ -964,7 +964,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
   }
 
   /**
-    * Compile a "regular" (i.e. unlocked) workflow. This function only get's
+    * Compile a "regular" (i.e. unlocked) workflow. This function only gets
     * called at the top-level.
     */
   private def compileTopWorkflowUnlocked(
