@@ -325,7 +325,9 @@ object Block {
         // name.
 
         // Note: this case was added to fix bug/APPS-104 - there may be other expressions
-        // besides structs that need to not have the member name added when withMember = false
+        // besides structs that need to not have the member name added when withMember = false.
+        // It may also be the case that the bug is with construction of the environment rather
+        // than here with the closure.
         case TAT.ExprGetName(expr, _, _, _)
             if !withMember && unwrapOptional(expr.wdlType).isInstanceOf[WdlTypes.T_Struct] =>
           inner(expr)
