@@ -117,12 +117,10 @@ object Main {
       case (Some(p), Some(d)) => (p, d)
     }
 
-    if (folderRaw.isEmpty) {
+    if (folderRaw.isEmpty)
       throw new Exception(s"Cannot specify empty folder")
-    }
-    if (!folderRaw.startsWith("/")) {
+    if (!folderRaw.startsWith("/"))
       throw new Exception(s"Folder must start with '/'")
-    }
     val dxFolder = folderRaw
     val dxProject =
       try {

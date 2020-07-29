@@ -637,7 +637,8 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         val lVar = env.get(name) match {
           case None =>
             throw new Exception(s"could not find variable $name in the environment ${env.keys}")
-          case Some(lVar) => name -> lVar
+          case Some(lVar) =>
+            name -> lVar
         }
         lVar
     }
