@@ -319,10 +319,10 @@ object Block {
         case TAT.ExprApply(_, _, elements, _, _) =>
           elements.flatMap(inner)
 
-        // What we do with the remaining types of expressions depends on the
-        // value of withMember. When we are generating a closure, we only need
-        // the parent struct, not the member. Otherwise, we need to add the member
-        // name.
+        // Access the field of a call/struct/etc. What we do here depends on the
+        // value of withMember. When we the expression value is a struct and we
+        // are generating a closure, we only need the parent struct, not the member.
+        // Otherwise, we need to add the member name.
 
         // Note: this case was added to fix bug/APPS-104 - there may be other expressions
         // besides structs that need to not have the member name added when withMember = false.
