@@ -162,10 +162,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
         }
         val value = constInputToSArg(Some(expr), cVar, env, locked, callFqn) match {
           case IR.SArgConst(WdlValues.V_Array(arrayValue)) if arrayValue.size > indexValue =>
-            arrayValue(indexValue)
+            arrayValue(indexValue.toInt)
           case IR.SArgWorkflowInput(CVar(_, _, Some(WdlValues.V_Array(arrayValue)), _), _)
               if arrayValue.size > indexValue =>
-            arrayValue(indexValue)
+            arrayValue(indexValue.toInt)
           case other =>
             throw new Exception(
                 s"Left-hand side expression ${other} is not a constant nor an identifier"

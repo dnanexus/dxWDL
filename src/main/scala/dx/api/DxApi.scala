@@ -17,7 +17,7 @@ object DxApi {
   def get: DxApi =
     instance.getOrElse({
       instance = Some(DxApi())
-      instance
+      instance.get
     })
 
   def set(dxApi: DxApi): Option[DxApi] = {

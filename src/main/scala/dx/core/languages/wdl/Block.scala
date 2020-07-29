@@ -76,7 +76,7 @@ These are not blocks, because we need a subworkflow to run them:
 package dx.core.languages.wdl
 
 import wdlTools.eval.WdlValues
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtil}
 
 // Block: a continuous list of workflow elements from a user
 // workflow.

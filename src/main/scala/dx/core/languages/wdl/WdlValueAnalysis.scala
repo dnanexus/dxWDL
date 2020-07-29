@@ -2,7 +2,7 @@ package dx.core.languages.wdl
 
 import dx.api.DxPath
 import wdlTools.eval.{Coercion, WdlValues}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtil}
 
 object WdlValueAnalysis {
   private class ExprNotConst(message: String) extends RuntimeException(message)

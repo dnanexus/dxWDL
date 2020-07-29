@@ -40,7 +40,7 @@ object Main {
       case (_, Nil) => throw new Exception("Empty command line option")
       case (accu, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
-        val (nKeyword, value) = keyword match {
+        val (nKeyword: String, value: String) = keyword match {
           case "apps" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
@@ -127,7 +127,8 @@ object Main {
         }
         if (accu.contains(nKeyword) && keywordValueIsList.contains(nKeyword)) {
           // append to the already existing verbose flags
-          accu + (nKeyword -> (value + accu(nKeyword)))
+          val newValue: Vector[String] = value +: accu(nKeyword)
+          accu + (nKeyword -> newValue)
         } else {
           // either the first time we've seen this key, or overwrite the previous value
           accu + (nKeyword -> Vector(value))
@@ -453,7 +454,7 @@ object Main {
             val keyword = normKeyword(keyOrg)
             if (acceptedKeywords.contains(keyword)) {
               checkNumberOfArguments(keyword, 0, subargs)
-              accu + (keyword -> List(""))
+              accu + (keyword -> Vector(""))
             } else {
               throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
             }

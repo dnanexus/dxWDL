@@ -45,7 +45,7 @@ object IR {
   sealed abstract class MetaValue
   final case object MetaValueNull extends MetaValue
   final case class MetaValueBoolean(value: Boolean) extends MetaValue
-  final case class MetaValueInt(value: Int) extends MetaValue
+  final case class MetaValueInt(value: Long) extends MetaValue
   final case class MetaValueFloat(value: Double) extends MetaValue
   final case class MetaValueString(value: String) extends MetaValue
   final case class MetaValueObject(value: Map[String, MetaValue]) extends MetaValue
@@ -192,7 +192,7 @@ object IR {
   **/
   sealed abstract class ChoiceRepr
   final case class ChoiceReprString(value: String) extends ChoiceRepr
-  final case class ChoiceReprInteger(value: Int) extends ChoiceRepr
+  final case class ChoiceReprInteger(value: Long) extends ChoiceRepr
   final case class ChoiceReprFloat(value: Double) extends ChoiceRepr
   final case class ChoiceReprBoolean(value: Boolean) extends ChoiceRepr
   final case class ChoiceReprFile(value: String, name: Option[String]) extends ChoiceRepr
@@ -215,7 +215,7 @@ object IR {
   **/
   sealed abstract class SuggestionRepr
   sealed case class SuggestionReprString(value: String) extends SuggestionRepr
-  sealed case class SuggestionReprInteger(value: Int) extends SuggestionRepr
+  sealed case class SuggestionReprInteger(value: Long) extends SuggestionRepr
   sealed case class SuggestionReprFloat(value: Double) extends SuggestionRepr
   sealed case class SuggestionReprBoolean(value: Boolean) extends SuggestionRepr
   sealed case class SuggestionReprFile(
@@ -247,7 +247,7 @@ object IR {
   **/
   sealed abstract class DefaultRepr
   final case class DefaultReprString(value: String) extends DefaultRepr
-  final case class DefaultReprInteger(value: Int) extends DefaultRepr
+  final case class DefaultReprInteger(value: Long) extends DefaultRepr
   final case class DefaultReprFloat(value: Double) extends DefaultRepr
   final case class DefaultReprBoolean(value: Boolean) extends DefaultRepr
   final case class DefaultReprFile(value: String) extends DefaultRepr
@@ -307,9 +307,9 @@ object IR {
   case object InstanceTypeDefault extends InstanceType
   case class InstanceTypeConst(
       dxInstanceType: Option[String],
-      memoryMB: Option[Int],
-      diskGB: Option[Int],
-      cpu: Option[Int],
+      memoryMB: Option[Long],
+      diskGB: Option[Long],
+      cpu: Option[Long],
       gpu: Option[Boolean]
   ) extends InstanceType
   case object InstanceTypeRuntime extends InstanceType

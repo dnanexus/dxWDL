@@ -10,7 +10,7 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.Logger
 
-case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
+case class DxExecPolicy(restartOn: Option[Map[String, Long]], maxRestarts: Option[Long]) {
   def toJson: Map[String, JsValue] = {
     val restartOnFields = restartOn match {
       case None => Map.empty
@@ -30,7 +30,7 @@ case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option
   }
 }
 
-case class DxTimeout(days: Option[Int], hours: Option[Int], minutes: Option[Int]) {
+case class DxTimeout(days: Option[Long], hours: Option[Long], minutes: Option[Long]) {
   def toJson: Map[String, JsValue] = {
     val daysField: Map[String, JsValue] = days match {
       case None    => Map.empty
@@ -304,10 +304,11 @@ object Extras {
   val TASK_DX_ATTRS = Set("runSpec", "details")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
-  private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
+  private def checkedParseIntField(fields: Map[String, JsValue],
+                                   fieldName: String): Option[Long] = {
     fields.get(fieldName) match {
       case None                => None
-      case Some(JsNumber(bnm)) => Some(bnm.intValue)
+      case Some(JsNumber(bnm)) => Some(bnm.longValue)
       case Some(other)         => throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
@@ -371,12 +372,12 @@ object Extras {
   }
 
   private def checkedParseMapStringInt(fields: Map[String, JsValue],
-                                       fieldName: String): Option[Map[String, Int]] = {
+                                       fieldName: String): Option[Map[String, Long]] = {
     val m = checkedParseObjectField(fields, fieldName)
     if (m == JsNull)
       return None
     val m1 = m.asJsObject.fields.map {
-      case (name, JsNumber(nmb)) => name -> nmb.intValue
+      case (name, JsNumber(nmb)) => name -> nmb.longValue
       case (name, other)         => throw new Exception(s"Malformed ${fieldName} (${name} -> ${other})")
     }
     Some(m1)
@@ -429,8 +430,9 @@ object Extras {
       case None => ()
       case Some(restartOnPolicy) =>
         for (k <- restartOnPolicy.keys)
-          if (!(RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS contains k))
+          if (!RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS.contains(k)) {
             throw new Exception(s"unknown field ${k} in restart policy")
+          }
     }
 
     val maxRestarts = checkedParseIntField(fields, "maxRestarts")
@@ -670,7 +672,7 @@ object Extras {
     Some(ReorgAttrs(reorgAppId, reorgConf))
   }
 
-  def parse(jsv: JsValue, dxApi: DxApi = DxApi.instance): Extras = {
+  def parse(jsv: JsValue, dxApi: DxApi = DxApi.get): Extras = {
     val fields = jsv match {
       case JsObject(fields) => fields
       case _                => throw new Exception(s"malformed extras JSON ${jsv}")

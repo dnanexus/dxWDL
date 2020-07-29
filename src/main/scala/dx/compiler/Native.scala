@@ -894,7 +894,7 @@ case class Native(dxWDLrtId: Option[String],
         hints
           .flatMap {
             case IR.RuntimeHintRestart(max, default, errors) =>
-              val defaultMap: Option[Map[String, Int]] = default match {
+              val defaultMap: Option[Map[String, Long]] = default match {
                 case Some(i) => Some(Map("*" -> i))
                 case _       => None
               }
