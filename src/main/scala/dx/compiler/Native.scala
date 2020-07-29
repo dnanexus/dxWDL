@@ -26,7 +26,7 @@ import scala.collection.immutable.TreeMap
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{JsUtils, Logger, TraceLevel, Util}
+import wdlTools.util.{FileUtils, JsUtils, Logger, TraceLevel}
 
 // The end result of the compiler
 object Native {
@@ -57,7 +57,7 @@ case class Native(dxWDLrtId: Option[String],
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")
     sys.addShutdownHook({
-      Util.deleteRecursive(p)
+      FileUtils.deleteRecursive(p)
     })
     p
   }
@@ -1206,7 +1206,7 @@ case class Native(dxWDLrtId: Option[String],
     if (logger2.traceLevel >= TraceLevel.Verbose) {
       val fName = s"${applet.name}_req.json"
       val trgPath = appCompileDirPath.resolve(fName)
-      Util.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
+      FileUtils.writeFileContent(trgPath, JsObject(appletApiRequest).prettyPrint)
     }
 
     val buildRequired = isBuildRequired(applet.name, digest)
@@ -1247,7 +1247,7 @@ case class Native(dxWDLrtId: Option[String],
             val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
-          case IR.SArgWorkflowInput(argName) =>
+          case IR.SArgWorkflowInput(argName, _) =>
             val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
@@ -1296,14 +1296,14 @@ case class Native(dxWDLrtId: Option[String],
 
     val outputSources: Vector[(String, JsValue)] = sArg match {
       case IR.SArgConst(wdlValue) =>
-        // constant
-        throw new Exception(
-            s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})"
-        )
+        Vector(wdlVarLinksConverter.genConstantField(wdlValue, cVar.dxVarName))
       case IR.SArgLink(dxStage, argName: CVar) =>
         val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
-      case IR.SArgWorkflowInput(argName: CVar) =>
+      case IR.SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean) =>
+        // TODO: if dynamicDefault is true, link to the value of the workflow input
+        //  (either the user-specified value or the result of evaluting the expression)
+        //  - right now this only links to the user-specified value
         val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case other =>
@@ -1318,7 +1318,7 @@ case class Native(dxWDLrtId: Option[String],
             specJs.asJsObject.fields ++
               Map("outputSource" -> outputJs)
         )
-    }.toVector
+    }
   }
 
   private def buildWorkflowMetadata(

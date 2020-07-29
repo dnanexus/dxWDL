@@ -36,7 +36,7 @@ object Main {
   // parse extra command line arguments
   private def parseCmdlineOptions(arglist: List[String]): OptionsMap = {
     val keywordValueIsList = Set("inputs", "imports", "verboseKey")
-    val opts = splitCmdLine(arglist).foldLeft(Map.empty[String, Vector[String]]) {
+    val options = splitCmdLine(arglist).foldLeft(Map.empty[String, Vector[String]]) {
       case (_, Nil) => throw new Exception("Empty command line option")
       case (accu, keyOrg :: subargs) =>
         val keyword = normKeyword(keyOrg)
@@ -133,8 +133,8 @@ object Main {
           accu + (nKeyword -> Vector(value))
         }
     }
-    initLogger(opts)
-    opts
+    initLogger(options)
+    options
   }
 
   // compile
@@ -194,10 +194,13 @@ object Main {
       case (Some(p), Some(d)) => (p, d)
     }
 
-    if (folderRaw.isEmpty)
+    if (folderRaw.isEmpty) {
       throw new Exception(s"Cannot specify empty folder")
-    if (!folderRaw.startsWith("/"))
+    }
+    if (!folderRaw.startsWith("/")) {
       throw new Exception(s"Folder must start with '/'")
+    }
+
     val dxFolder = folderRaw
     val dxProject =
       try {

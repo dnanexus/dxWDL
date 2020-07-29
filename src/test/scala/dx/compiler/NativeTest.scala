@@ -68,14 +68,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     dxTestProject.newFolder(s"/${unitTestsPath}/applets/", parents = true)
     // building necessary applets before starting the tests
-    val native_applets = Vector("native_concat",
-                                "native_diff",
-                                "native_mk_list",
-                                "native_sum",
-                                "native_sum_012",
-                                "functional_reorg_test")
+    val nativeApplets = Vector("native_concat",
+                               "native_diff",
+                               "native_mk_list",
+                               "native_sum",
+                               "native_sum_012",
+                               "functional_reorg_test")
     val topDir = Paths.get(System.getProperty("user.dir"))
-    native_applets.foreach { app =>
+    nativeApplets.foreach { app =>
       try {
         val (_, _) = Util.execCommand(
             s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
@@ -107,15 +107,14 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   private def createExtras(extrasContent: String): String = {
+    val tmpExtras = File.createTempFile("reorg-", ".json")
+    tmpExtras.deleteOnExit()
 
-    val tmp_extras = File.createTempFile("reorg-", ".json")
-    tmp_extras.deleteOnExit()
-
-    val bw = new BufferedWriter(new FileWriter(tmp_extras))
+    val bw = new BufferedWriter(new FileWriter(tmpExtras))
     bw.write(extrasContent)
     bw.close()
 
-    tmp_extras.toString
+    tmpExtras.toString
   }
 
   it should "Native compile a linear WDL workflow" taggedAs NativeTestXX in {

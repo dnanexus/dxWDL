@@ -26,6 +26,7 @@ case class DxAppletDescribe(project: String,
 
 case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject])
     extends CachingDxObject[DxAppletDescribe]
+    with DxDataObject
     with DxExecutable {
   def describeNoCache(fields: Set[Field.Value] = Set.empty): DxAppletDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)

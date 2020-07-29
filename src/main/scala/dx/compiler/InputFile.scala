@@ -30,7 +30,7 @@ import dx.core.languages.wdl.{WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
-import wdlTools.util.{FileSourceResolver, FileUtils, Logger, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
 
 // scan a WDL JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
@@ -167,7 +167,7 @@ case class InputFileScan(bundle: IR.Bundle, dxProject: DxProject, dxApi: DxApi) 
 
 case class InputFile(fileResolver: FileSourceResolver,
                      dxFileDescCache: DxFileDescCache,
-                     path2file: Map[String, DxFile],
+                     pathToFile: Map[String, DxFile],
                      typeAliases: Map[String, WdlTypes.T],
                      dxApi: DxApi) {
   private lazy val logger2: Logger = dxApi.logger.withTraceIfContainsKey("InputFile")

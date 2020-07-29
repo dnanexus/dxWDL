@@ -7,11 +7,11 @@
 package dx.core.languages.wdl
 
 import dx.AppInternalException
-import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
+import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.languages.IORef
 import spray.json._
-import wdlTools.eval.WdlValues
+import wdlTools.eval.{Serialize => WdlSerialize, WdlValues}
 import wdlTools.types.WdlTypes
 import wdlTools.util.{FileSourceResolver, LocalFileSource}
 
@@ -325,15 +325,34 @@ case class WdlVarLinksConverter(dxApi: DxApi,
     }
   }
 
+  private def nodots(s: String): String = {
+    encodeAppletVarName(WdlVarLinksConverter.transformVarName(s))
+  }
+
+  def genConstantField(wdlValue: WdlValues.V,
+                       bindName: String,
+                       encodeDots: Boolean = true): (String, JsValue) = {
+    val bindEncName =
+      if (encodeDots) {
+        nodots(bindName)
+      } else {
+        bindName
+      }
+    (bindEncName, WdlSerialize.toJson(wdlValue))
+  }
+
   // create input/output fields that bind the variable name [bindName] to
   // this WdlVar
   def genFields(wvl: WdlVarLinks,
                 bindName: String,
                 encodeDots: Boolean = true): Vector[(String, JsValue)] = {
-    def nodots(s: String): String = encodeAppletVarName(WdlVarLinksConverter.transformVarName(s))
+
     val bindEncName =
-      if (encodeDots) nodots(bindName)
-      else bindName
+      if (encodeDots) {
+        nodots(bindName)
+      } else {
+        bindName
+      }
     def mkSimple(): (String, JsValue) = {
       val jsv: JsValue = wvl.dxlink match {
         case DxlValue(jsn) => jsn

@@ -15,6 +15,7 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 object IR {
   // stages that the compiler uses in generated DNAx workflows
   val COMMON = "common"
+  val EVAL_STAGE = "eval"
   val OUTPUT_SECTION = "outputs"
   val REORG = "reorg"
   val CUSTOM_REORG_CONFIG = "reorg_config"
@@ -92,13 +93,13 @@ object IR {
   val ALL_KEY = "All"
 
   sealed abstract class RuntimeHint
-  final case class RuntimeHintRestart(max: Option[Int] = None,
-                                      default: Option[Int] = None,
-                                      errors: Option[Map[String, Int]] = None)
+  final case class RuntimeHintRestart(max: Option[Long] = None,
+                                      default: Option[Long] = None,
+                                      errors: Option[Map[String, Long]] = None)
       extends RuntimeHint
-  final case class RuntimeHintTimeout(days: Option[Int] = None,
-                                      hours: Option[Int] = None,
-                                      minutes: Option[Int] = None)
+  final case class RuntimeHintTimeout(days: Option[Long] = None,
+                                      hours: Option[Long] = None,
+                                      minutes: Option[Long] = None)
       extends RuntimeHint
   final case class RuntimeHintIgnoreReuse(value: Boolean) extends RuntimeHint
   final case class RuntimeHintAccess(network: Option[Vector[String]] = None,
@@ -382,15 +383,18 @@ object IR {
     def outputVars: Vector[CVar] = outputs
   }
 
-  /** An input to a stage. Could be empty, a wdl constant,
-    *  a link to an output variable from another stage,
-    *  or a workflow input.
+  /**
+    * An input to a stage. Could be empty, a wdl constant,
+    * a link to an output variable from another stage,
+    * or a workflow input. The workflow input may have a
+    * default value that is a complex expression that must
+    * be evaluated at runtime.
     */
   sealed trait SArg
   case object SArgEmpty extends SArg
   case class SArgConst(wdlValue: WdlValues.V) extends SArg
   case class SArgLink(stageId: DxWorkflowStage, argName: CVar) extends SArg
-  case class SArgWorkflowInput(argName: CVar) extends SArg
+  case class SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean = false) extends SArg
 
   // A stage can call an applet or a workflow.
   //

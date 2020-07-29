@@ -40,9 +40,9 @@ import java.nio.file.Paths
 import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
+import dx.core.getVersion
 import dx.core.io.{DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl._
-import dx.core.getVersion
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

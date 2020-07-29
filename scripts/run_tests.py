@@ -72,7 +72,11 @@ wdl_v1_list = [
     "scatter_subworkflow_with_optional",
 
     # streaming
-    "streaming_inputs"
+    "streaming_inputs",
+
+    # input/output linear_no_expressions
+    "wf_with_input_expressions",
+    "wf_with_output_expressions"
 ]
 
 # docker image tests
