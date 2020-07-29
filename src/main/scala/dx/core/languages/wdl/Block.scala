@@ -302,18 +302,20 @@ object Block {
       case TAT.ExprApply(_, _, elements, _, _) =>
         elements.flatMap(exprInputs)
 
+      // Access a struct
+      case TAT.ExprGetName(TAT.ExprIdentifier(id, WdlTypes.T_Struct(_, members), _), _, _, _) =>
+        members.map {
+          case (fieldName, wdlType) =>
+            RequiredInputDefinition(s"${id}.${fieldName}", wdlType)
+        }.toVector
+
       // Access a field in a call
       //   Int z = eliminateDuplicate.fields
-      case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
-        Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
+      case TAT.ExprGetName(TAT.ExprIdentifier(id, _: WdlTypes.T_Call, _), fieldName, wdlType, _) =>
+        Vector(RequiredInputDefinition(s"${id}.${fieldName}", wdlType))
 
-      case TAT.ExprGetName(expr, fieldName, wdlType, _) =>
-        exprInputs(expr) match {
-          case Vector(RequiredInputDefinition(id, _)) =>
-            Vector(RequiredInputDefinition(id + "." + fieldName, wdlType))
-          case _ =>
-            throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
-        }
+      case TAT.ExprGetName(expr, _, _, _) =>
+        exprInputs(expr)
     }
   }
 
