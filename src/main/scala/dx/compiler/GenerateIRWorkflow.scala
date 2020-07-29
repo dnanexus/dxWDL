@@ -177,7 +177,7 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
           if env.contains(s"$id.$field") =>
         env(s"$id.$field").sArg
 
-      case Some(TAT.ExprGetName(expr, id, _, _)) =>
+      case Some(TAT.ExprGetName(expr, field, _, _)) =>
         val lhs = constInputToSArg(Some(expr), cVar, env, locked, callFqn)
         val lhsWdlValue = lhs match {
           case IR.SArgConst(wdlValue)                                 => wdlValue
@@ -188,18 +188,18 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
             )
         }
         val wdlValue = lhsWdlValue match {
-          case WdlValues.V_Object(members) if members.contains(id) => members(id)
+          case WdlValues.V_Object(members) if members.contains(field) => members(field)
           case WdlValues.V_Pair(l, r) =>
-            id match {
+            field match {
               case "left"  => l
               case "right" => r
               case _ =>
-                throw new Exception(s"Pair member name must be 'left' or 'right', not ${id}")
+                throw new Exception(s"Pair member name must be 'left' or 'right', not ${field}")
             }
-          case WdlValues.V_Call(_, members) if members.contains(id)   => members(id)
-          case WdlValues.V_Struct(_, members) if members.contains(id) => members(id)
+          case WdlValues.V_Call(_, members) if members.contains(field)   => members(field)
+          case WdlValues.V_Struct(_, members) if members.contains(field) => members(field)
           case other =>
-            throw new Exception(s"Cannot resolve id ${id} for value ${other}")
+            throw new Exception(s"Cannot resolve id ${field} for value ${other}")
         }
         IR.SArgConst(wdlValue)
 
@@ -635,8 +635,10 @@ case class GenerateIRWorkflow(wf: TAT.Workflow,
     val closureInputVars: Map[String, LinkedVar] = closure.map {
       case (name, _) =>
         val lVar = env.get(name) match {
-          case None       => throw new Exception(s"could not find variable $name in the environment")
-          case Some(lVar) => name -> lVar
+          case None =>
+            throw new Exception(s"could not find variable $name in the environment ${env.keys}")
+          case Some(lVar) =>
+            name -> lVar
         }
         lVar
     }
