@@ -2,14 +2,22 @@ package dx.compiler.wdl
 
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxFile, DxProject}
-import dx.compiler
-import dx.compiler.{GenerateIR, ReorgAttrs, WdlHintAttrs, WdlRuntimeAttrs}
-import dx.compiler.ir.{Bundle, Extras, Parameter, RuntimeAttributes, Translator}
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
-import dx.core.languages.wdl.{Block, ParseSource, Utils, Bundle => WdlBundle}
+import dx.api.{DxApi, DxFile}
+import dx.compiler.ir.{
+  Bundle,
+  Callable,
+  Extras,
+  Parameter,
+  ReorgAttributes,
+  RuntimeAttributes,
+  Translator,
+  Type
+}
+import dx.core.io.DxFileDescCache
+import dx.core.languages.wdl.{Block, Utils => WdlUtils}
 import spray.json.JsValue
-import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
+import wdlTools.syntax.WdlVersion
+import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, Logger}
 
@@ -19,87 +27,24 @@ import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, 
   * @Todo rewrite sortByDependencies using a graph data structure
   */
 case class WdlTranslator(extras: Option[Extras] = None,
-                         reorgEnabled: Option[Boolean] = None,
                          fileResolver: FileSourceResolver = FileSourceResolver.get,
                          regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
     extends Translator(dxApi, logger) {
-  private case class BundleInfo(tasks: Map[String, TAT.Task],
-                                workflows: Map[String, TAT.Workflow],
-                                callableNames: Set[String],
-                                sources: Map[String, TAT.Document],
-                                adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
-  def bundleInfoFromDoc(doc: TAT.Document): BundleInfo = {
-    // Add source and adjuncts for main file
-    val (sources, adjunctFiles) = doc.source match {
-      case localFs: LocalFileSource =>
-        val absPath: Path = localFs.localPath
-        val sources = Map(absPath.toString -> doc)
-        val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
-        (sources, adjunctFiles)
-      case fs =>
-        val sources = Map(fs.toString -> doc)
-        (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
-    }
-    val tasks: Map[String, TAT.Task] = doc.elements.collect {
-      case x: TAT.Task => x.name -> x
-    }.toMap
-    val workflows = doc.workflow.map(x => x.name -> x).toMap
-    BundleInfo(tasks, workflows, tasks.keySet ++ workflows.keySet, sources, adjunctFiles)
-  }
+  private case class WdlBundle(version: WdlVersion,
+                               primaryCallable: Option[TAT.Callable],
+                               tasks: Map[String, TAT.Task],
+                               workflows: Map[String, TAT.Workflow],
+                               callableNames: Set[String],
+                               sources: Map[String, TAT.Document],
+                               adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
-  private def mergeBundleInfo(a: BundleInfo, b: BundleInfo): BundleInfo = {
-    val intersection = (a.callableNames & b.callableNames)
-      .map { name =>
-        val aCallable = a.tasks.getOrElse(name, a.workflows(name))
-        val bCallable = b.tasks.getOrElse(name, b.workflows(name))
-        name -> (aCallable, bCallable)
-      }
-      .filter {
-        // The comparision is done with "toString", because otherwise two identical
-        // definitions are somehow, through the magic of Scala, unequal.
-        case (_, (ac, bc)) => ac == bc
-      }
-      .toMap
-    if (intersection.nonEmpty) {
-      intersection.foreach {
-        case (name, (ac, bc)) =>
-          logger.error(s"""|name ${name} appears with two different callable definitions
-                           |1)
-                           |${ac}
-                           |2)
-                           |${bc}
-                           |""".stripMargin)
-      }
-      throw new Exception(
-          s"callable(s) ${intersection.keySet} appears multiple times with different definitions"
-      )
-    }
-    BundleInfo(
-        a.tasks ++ b.tasks,
-        a.workflows ++ b.workflows,
-        a.callableNames | b.callableNames,
-        a.sources ++ b.sources,
-        a.adjunctFiles ++ b.adjunctFiles
-    )
-  }
-
-  // recurse into the imported packages
-  // Check the uniqueness of tasks, Workflows, and Types
-  // merge everything into one bundle.
-  private def flattenDepthFirst(tDoc: TAT.Document): BundleInfo = {
-    val topLevelInfo = bundleInfoFromDoc(tDoc)
-    val imports: Vector[TAT.ImportDoc] = tDoc.elements.collect {
-      case x: TAT.ImportDoc => x
-    }
-    imports.foldLeft(topLevelInfo) {
-      case (accu: BundleInfo, imp) =>
-        val flatImportInfo = flattenDepthFirst(imp.doc)
-        mergeBundleInfo(accu, flatImportInfo)
-    }
-  }
+  override protected def translateInput(parameter: Parameter,
+                                        jsv: JsValue,
+                                        dxName: String,
+                                        encodeDots: Boolean): Map[String, JsValue] = ???
 
   // check the declarations in [graph], and make sure they
   // do not contain the reserved '___' substring.
@@ -129,6 +74,97 @@ case class WdlTranslator(extras: Option[Extras] = None,
     }
   }
 
+  private def bundleInfoFromDoc(doc: TAT.Document): WdlBundle = {
+    // Add source and adjuncts for main file
+    val (sources, adjunctFiles) = doc.source match {
+      case localFs: LocalFileSource =>
+        val absPath: Path = localFs.localPath
+        val sources = Map(absPath.toString -> doc)
+        val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
+        (sources, adjunctFiles)
+      case fs =>
+        val sources = Map(fs.toString -> doc)
+        (sources, Map.empty[String, Vector[Adjuncts.AdjunctFile]])
+    }
+    val tasks: Map[String, TAT.Task] = doc.elements.collect {
+      case x: TAT.Task =>
+        validateVariableNames(x)
+        x.name -> x
+    }.toMap
+    val workflows = doc.workflow.map { x =>
+      validateVariableNames(x)
+      x.name -> x
+    }.toMap
+    val primaryCallable: Option[TAT.Callable] = doc.workflow match {
+      case None if tasks.size == 1 => Some(tasks.values.head)
+      case wf                      => wf
+    }
+    WdlBundle(doc.version.value,
+              primaryCallable,
+              tasks,
+              workflows,
+              tasks.keySet ++ workflows.keySet,
+              sources,
+              adjunctFiles)
+  }
+
+  private def mergeBundleInfo(accu: WdlBundle, from: WdlBundle): WdlBundle = {
+    val version = accu.version
+    if (version != from.version) {
+      throw new RuntimeException(s"Different WDL versions: ${version} != ${from.version}")
+    }
+    val intersection = (accu.callableNames & from.callableNames)
+      .map { name =>
+        val aCallable = accu.tasks.getOrElse(name, accu.workflows(name))
+        val bCallable = from.tasks.getOrElse(name, from.workflows(name))
+        name -> (aCallable, bCallable)
+      }
+      .filter {
+        // The comparision is done with "toString", because otherwise two identical
+        // definitions are somehow, through the magic of Scala, unequal.
+        case (_, (ac, bc)) => ac == bc
+      }
+      .toMap
+    if (intersection.nonEmpty) {
+      intersection.foreach {
+        case (name, (ac, bc)) =>
+          logger.error(s"""|name ${name} appears with two different callable definitions
+                           |1)
+                           |${ac}
+                           |2)
+                           |${bc}
+                           |""".stripMargin)
+      }
+      throw new Exception(
+          s"callable(s) ${intersection.keySet} appears multiple times with different definitions"
+      )
+    }
+    WdlBundle(
+        version,
+        accu.primaryCallable.orElse(from.primaryCallable),
+        accu.tasks ++ from.tasks,
+        accu.workflows ++ from.workflows,
+        accu.callableNames | from.callableNames,
+        accu.sources ++ from.sources,
+        accu.adjunctFiles ++ from.adjunctFiles
+    )
+  }
+
+  // recurse into the imported packages
+  // Check the uniqueness of tasks, Workflows, and Types
+  // merge everything into one bundle.
+  private def flattenDepthFirst(tDoc: TAT.Document): WdlBundle = {
+    val topLevelInfo = bundleInfoFromDoc(tDoc)
+    val imports: Vector[TAT.ImportDoc] = tDoc.elements.collect {
+      case x: TAT.ImportDoc => x
+    }
+    imports.foldLeft(topLevelInfo) {
+      case (accu: WdlBundle, imp) =>
+        val flatImportInfo = flattenDepthFirst(imp.doc)
+        mergeBundleInfo(accu, flatImportInfo)
+    }
+  }
+
   private def getUnqualifiedName(name: String): String = {
     if (name contains ".") {
       name.split("\\.").last
@@ -137,7 +173,7 @@ case class WdlTranslator(extras: Option[Extras] = None,
     }
   }
 
-  private def sortByDependencies(bundleInfo: BundleInfo,
+  private def sortByDependencies(bundleInfo: WdlBundle,
                                  traceLogger: Logger): Vector[TAT.Callable] = {
     // We only need to figure out the dependency order of workflows. Tasks don't depend
     // on anything else - they are at the bottom of the dependency tree.
@@ -201,100 +237,82 @@ case class WdlTranslator(extras: Option[Extras] = None,
     bundleInfo.tasks.values.toVector ++ orderedWorkflows
   }
 
-  override protected def translateDocument(source: Path): Bundle = {
+  private def compileCallable(callable: TAT.Callable,
+                              wdlBundle: WdlBundle,
+                              typeAliases: Map[String, Type],
+                              locked: Boolean,
+                              defaultRuntimeAttrs: RuntimeAttributes,
+                              reorgAttrs: ReorgAttributes): Vector[Callable] = {}
+
+  override protected def translateDocument(source: Path,
+                                           locked: Boolean,
+                                           reorgEnabled: Option[Boolean]): Bundle = {
     val sourceAbsPath = FileUtils.absolutePath(source)
     val sourceFileResolver = fileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
-    val (tDoc, typeAliases) = Utils.parseSource(sourceAbsPath, sourceFileResolver, regime, logger)
-    // validate document and variable names
-    val primaryCallable =
-      tDoc.workflow match {
-        case None =>
-          val tasks: Vector[TAT.Task] = tDoc.elements.collect {
-            case x: TAT.Task => x
-          }
-          if (tasks.size == 1) {
-            Some(tasks.head)
-          } else {
-            None
-          }
-        case Some(wf) => Some(wf)
-        case _        => None
-      }
-    primaryCallable match {
-      case None    => ()
-      case Some(x) => validateVariableNames(x)
-    }
-    val flatInfo: BundleInfo = flattenDepthFirst(tDoc)
-    (flatInfo.tasks ++ flatInfo.workflows).values.foreach(validateVariableNames)
+    val (tDoc, typeAliases) =
+      WdlUtils.parseSource(sourceAbsPath, sourceFileResolver, regime, logger)
+    val wdlBundle: WdlBundle = flattenDepthFirst(tDoc)
+    val irTypeAliases = typeAliases.view.mapValues(Utils.wdlToIRType).toMap
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()
-    val depOrder: Vector[TAT.Callable] = sortByDependencies(flatInfo, logger2)
+    val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle, logger2)
     if (logger.isVerbose) {
-      logger2.trace(s"all tasks: ${flatInfo.tasks.keySet}")
+      logger2.trace(s"all tasks: ${wdlBundle.tasks.keySet}")
       logger2.trace(s"all callables in dependency order: ${depOrder.map { _.name }}")
     }
-
+    // load defaults from extras
     val defaultRuntimeAttrs =
       extras.map(_.defaultRuntimeAttributes).getOrElse(RuntimeAttributes.empty)
-    val reorgAttrs = extras.map(_.customReorgAttributes)
-  }
+    val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
+      case (Some(attr), None)    => attr
+      case (Some(attr), Some(b)) => attr.copy(enabled = b)
+      case (None, Some(b))       => ReorgAttributes(enabled = b)
+      case (None, None)          => ReorgAttributes(enabled = false)
+    }
 
-  override protected def translateInput(parameter: Parameter,
-                                        jsv: JsValue,
-                                        dxName: String,
-                                        encodeDots: Boolean): Map[String, JsValue] = ???
+    // Only the toplevel workflow may be unlocked. This happens
+    // only if the user specifically compiles it as "unlocked".
+    def isLocked(callable: TAT.Callable): Boolean = {
+      (callable, wdlBundle.primaryCallable) match {
+        case (wf: TAT.Workflow, Some(wf2: TAT.Workflow)) =>
+          wf.name != wf2.name || locked
+        case _ =>
+          true
+      }
+    }
+
+    val sortedCallables = depOrder.flatMap { callable =>
+      compileCallable(
+          callable,
+          wdlBundle,
+          irTypeAliases,
+          isLocked(callable),
+          defaultRuntimeAttrs,
+          reorgAttrs
+      )
+    }
+
+    val allCallables: Map[String, Callable] = sortedCallables.map(c => c.name -> c).toMap
+    val allCallablesSortedNames = sortedCallables.map(_.name).distinct
+    val primaryCallable = wdlBundle.primaryCallable.map { callable =>
+      allCallables(getUnqualifiedName(callable.name))
+    }
+    if (logger2.isVerbose) {
+      logger2.trace(s"allCallables: ${allCallables.keys}")
+      logger2.trace(s"allCallablesSorted: ${allCallablesSortedNames}")
+    }
+
+    Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
+  }
 
   override protected def filterFiles(
       fields: Map[String, JsValue]
   ): (Map[String, DxFile], Vector[DxFile]) = ???
 
-  override def embedDefaults(bundle: Bundle,
-                             fileResolver: FileSourceResolver,
-                             pathToDxFile: Map[String, DxFile],
-                             dxFileDescCache: DxFileDescCache,
-                             defaults: Map[String, JsValue]): Bundle = ???
+  override protected def embedDefaults(bundle: Bundle,
+                                       fileResolver: FileSourceResolver,
+                                       pathToDxFile: Map[String, DxFile],
+                                       dxFileDescCache: DxFileDescCache,
+                                       defaults: Map[String, JsValue]): Bundle = ???
 
-  override protected def translate(source: Path): Bundle = {
-    val (_, language, everythingBundle, allSources, adjunctFiles) =
-      ParseSource(dxApi).apply(source, cOpt.importDirs)
-
-    // validate
-    everythingBundle.allCallables.foreach { case (_, c) => validateVariableNames(c) }
-    everythingBundle.primaryCallable match {
-      case None    => ()
-      case Some(x) => validateVariableNames(x)
-    }
-
-    // Compile the WDL workflow into an Intermediate
-    // Representation (IR)
-    val defaultRuntimeAttrs = extras match {
-      case None     => RuntimeAttributes.empty
-      case Some(ex) => ex.defaultRuntimeAttributes
-    }
-
-    val reorg = reorgEnabled.orElse(extras.map(_.customReorgAttributes.isDefined)).getOrElse(false)
-
-    // TODO: load default hints from attrs
-    val defaultHintAttrs = WdlHintAttrs(Map.empty)
-    compiler
-      .GenerateIR(dxApi, defaultRuntimeAttrs, defaultHintAttrs)
-      .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
-  }
-
-  def apply(source: Path,
-            inputs: Vector[Path] = Vector.empty,
-            defaults: Option[Path] = None): Bundle = {
-    // generate IR
-    val bundle: Bundle = translate(source)
-
-    // lookup platform files in bulk
-    val (pathToDxFile, dxFileDescCache) = bulkFileDescribe(bundle, dxProject)
-    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-    val fileResolver =
-      FileSourceResolver.create(userProtocols = Vector(dxProtocol), logger = logger)
-
-    // handle changes resulting from setting defaults, and
-    // generate DNAx input files.
-    handleInputFiles(bundle, fileResolver, pathToDxFile, dxFileDescCache)
-  }
 }

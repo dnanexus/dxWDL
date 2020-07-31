@@ -221,13 +221,15 @@ case class DxAppJson(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
 
 case class DockerRegistry(registry: String, username: String, credentials: String)
 
-case class CustomReorgAttributes(appUri: String, reorgConfigFile: Option[String])
+case class ReorgAttributes(enabled: Boolean = true,
+                           appUri: Option[String] = None,
+                           reorgConfigFile: Option[String] = None)
 
 case class Extras(defaultRuntimeAttributes: RuntimeAttributes,
                   defaultTaskDxAttributes: Option[DxAppJson],
                   perTaskDxAttributes: Map[String, DxAppJson],
                   dockerRegistry: Option[DockerRegistry],
-                  customReorgAttributes: Option[CustomReorgAttributes],
+                  customReorgAttributes: Option[ReorgAttributes],
                   ignoreReuse: Option[Boolean],
                   delayWorkspaceDestruction: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
@@ -582,7 +584,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     Some(DockerRegistry(registry, username, credentials))
   }
 
-  def parseCustomReorgAttrs(jsv: JsValue): Option[CustomReorgAttributes] = {
+  def parseCustomReorgAttrs(jsv: JsValue): Option[ReorgAttributes] = {
     if (jsv == JsNull) {
       return None
     }
@@ -661,7 +663,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
             |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
             """.stripMargin.replaceAll("\n", " ")
     )
-    Some(ReorgOptions(reorgAppId, reorgConf))
+    Some(ReorgAttributes(appUri = Some(reorgAppId), reorgConfigFile = reorgConf))
   }
 
   def parse(path: Path): Extras = {

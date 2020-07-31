@@ -1,5 +1,7 @@
 package dx.compiler.ir
 
+// TODO: unify this with dx.api.DxIOType
+
 sealed trait Type
 
 // Null represents that no value is specified for an optional field.

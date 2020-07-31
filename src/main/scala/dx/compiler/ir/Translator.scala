@@ -174,7 +174,9 @@ abstract class Translator(dxApi: DxApi, logger: Logger = Logger.get) {
     * @param source the source file.
     * @return
     */
-  protected def translateDocument(source: Path): Bundle
+  protected def translateDocument(source: Path,
+                                  locked: Boolean,
+                                  reorgEnabled: Option[Boolean]): Bundle
 
   /**
     * Given a mapping of field name to value, selects just the file-type fields.
@@ -194,18 +196,20 @@ abstract class Translator(dxApi: DxApi, logger: Logger = Logger.get) {
     * @param defaults default values
     * @return
     */
-  def embedDefaults(bundle: Bundle,
-                    fileResolver: FileSourceResolver,
-                    pathToDxFile: Map[String, DxFile],
-                    dxFileDescCache: DxFileDescCache,
-                    defaults: Map[String, JsValue]): Bundle
+  protected def embedDefaults(bundle: Bundle,
+                              fileResolver: FileSourceResolver,
+                              pathToDxFile: Map[String, DxFile],
+                              dxFileDescCache: DxFileDescCache,
+                              defaults: Map[String, JsValue]): Bundle
 
   def apply(source: Path,
             inputs: Vector[Path] = Vector.empty,
             defaults: Option[Path] = None,
+            locked: Boolean = false,
+            reorgEnabled: Option[Boolean] = None,
             writeDxInputsFile: Boolean = true): Bundle = {
     // generate IR
-    val bundle: Bundle = translateDocument(source)
+    val bundle: Bundle = translateDocument(source, locked, reorgEnabled)
     val jsDefaults =
       defaults
         .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
