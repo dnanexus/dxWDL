@@ -4,15 +4,18 @@ import dx.api.{DxApi, DxApp, DxAppDescribe, DxApplet, DxAppletDescribe, DxIOClas
 import dx.compiler.DxNativeInterface
 import dx.core.languages.wdl.{ParseSource, Utils, VersionSupport}
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
+import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.WdlTypes.T_Task
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{Logger, StringFileSource}
+import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.{FileSourceResolver, Logger, StringFileSource}
 
 case class WdlDxNativeInterface(wdlVersion: WdlVersion,
+                                fileResolver: FileSourceResolver = FileSourceResolver.get,
+                                regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                                 dxApi: DxApi = DxApi.get,
                                 logger: Logger = Logger.get)
     extends DxNativeInterface(dxApi) {
-  private lazy val wdl = VersionSupport(wdlVersion, dxApi, logger)
+  private lazy val wdl = VersionSupport(wdlVersion, fileResolver, regime, dxApi, logger)
 
   /**
     * Generate a WDL stub fore a DNAnexus applet.
@@ -96,10 +99,10 @@ case class WdlDxNativeInterface(wdlVersion: WdlVersion,
     createDocument(validTasks)
   }
 
-  private def wdlTypeOfIOClass(appletName: String,
-                               argName: String,
-                               ioClass: DxIOClass.Value,
-                               isOptional: Boolean): WdlTypes.T = {
+  private def wdlTypeFromDxClass(appletName: String,
+                                 argName: String,
+                                 ioClass: DxIOClass.Value,
+                                 isOptional: Boolean): WdlTypes.T = {
     if (isOptional) {
       ioClass match {
         case DxIOClass.BOOLEAN           => WdlTypes.T_Optional(WdlTypes.T_Boolean)
@@ -146,11 +149,11 @@ case class WdlDxNativeInterface(wdlVersion: WdlVersion,
     dxApi.logger.trace(s"analyzing applet ${aplName}")
     val inputSpec: Map[String, WdlTypes.T] =
       desc.inputSpec.get.map { iSpec =>
-        iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
+        iSpec.name -> wdlTypeFromDxClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
     val outputSpec: Map[String, WdlTypes.T] =
       desc.outputSpec.get.map { iSpec =>
-        iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
+        iSpec.name -> wdlTypeFromDxClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
       }.toMap
     (inputSpec, outputSpec)
   }
@@ -198,17 +201,17 @@ case class WdlDxNativeInterface(wdlVersion: WdlVersion,
     try {
       val inputSpec: Map[String, WdlTypes.T] =
         dxAppDesc.inputSpec.get.map { ioSpec =>
-          ioSpec.name -> wdlTypeOfIOClass(dxAppDesc.name,
-                                          ioSpec.name,
-                                          ioSpec.ioClass,
-                                          ioSpec.optional)
+          ioSpec.name -> wdlTypeFromDxClass(dxAppDesc.name,
+                                            ioSpec.name,
+                                            ioSpec.ioClass,
+                                            ioSpec.optional)
         }.toMap
       val outputSpec: Map[String, WdlTypes.T] =
         dxAppDesc.outputSpec.get.map { ioSpec =>
-          ioSpec.name -> wdlTypeOfIOClass(dxAppDesc.name,
-                                          ioSpec.name,
-                                          ioSpec.ioClass,
-                                          ioSpec.optional)
+          ioSpec.name -> wdlTypeFromDxClass(dxAppDesc.name,
+                                            ioSpec.name,
+                                            ioSpec.ioClass,
+                                            ioSpec.optional)
         }.toMap
       // DNAnexus applets allow the same variable name to be used for inputs and outputs.
       // This is illegal in WDL.

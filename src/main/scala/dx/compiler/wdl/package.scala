@@ -1,7 +1,17 @@
 package dx.compiler.wdl
 
 import dx.compiler.ir._
-import wdlTools.types.WdlTypes
+import wdlTools.syntax.WdlVersion
+import wdlTools.types.{TypedAbstractSyntax => TAT, WdlTypes}
+import wdlTools.util.Adjuncts
+
+case class WdlBundle(version: WdlVersion,
+                     primaryCallable: Option[TAT.Callable],
+                     tasks: Map[String, TAT.Task],
+                     workflows: Map[String, TAT.Workflow],
+                     callableNames: Set[String],
+                     sources: Map[String, TAT.Document],
+                     adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
 object Utils {
   def wdlToIRType(wdlType: WdlTypes.T): Type = {

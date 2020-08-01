@@ -7,7 +7,12 @@ import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
 
-abstract class Translator(dxApi: DxApi, logger: Logger = Logger.get) {
+/**
+  * Base class for Translators, which convert from language-specific AST into IR.
+  * @param dxApi DxApi
+  * @param logger Logger
+  */
+abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
   private class Fields(name: String, fields: Map[String, JsValue]) {
     private var retrievedKeys: Set[String] = Set.empty
 

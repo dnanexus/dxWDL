@@ -11,10 +11,10 @@ import wdlTools.util.{FileSource, FileSourceResolver, Logger, StringFileSource}
 
 case class VersionSupport(version: WdlVersion,
                           fileResolver: FileSourceResolver = FileSourceResolver.get,
-                          wdlParser: Option[WdlParser] = None,
                           regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                           dxApi: DxApi = DxApi.get,
-                          logger: Logger = Logger.get) {
+                          logger: Logger = Logger.get,
+                          wdlParser: Option[WdlParser] = None) {
   private lazy val parser = wdlParser.getOrElse(
       Parsers(followImports = true, fileResolver = fileResolver, logger = logger).getParser(version)
   )
@@ -67,7 +67,7 @@ object VersionSupport {
       .getParser(sourceCode)
     val (doc, typeAliases) = Utils.parseSource(parser, sourceCode, fileResolver, regime, logger)
     val versionSupport =
-      VersionSupport(doc.version.value, fileResolver, Some(parser), regime, dxApi, logger)
+      VersionSupport(doc.version.value, fileResolver, regime, dxApi, logger, Some(parser))
     (doc, typeAliases, versionSupport)
   }
 }

@@ -10,21 +10,19 @@ import dx.compiler.ir.{
   Parameter,
   ReorgAttributes,
   RuntimeAttributes,
-  Translator,
-  Type
+  Translator
 }
 import dx.core.io.DxFileDescCache
 import dx.core.languages.wdl.{Block, Utils => WdlUtils}
 import spray.json.JsValue
-import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, Logger}
 
 /**
   * Compiles WDL to IR.
-  * @Todo remove limitation that two callables cannot have the same name
-  * @Todo rewrite sortByDependencies using a graph data structure
+  * TODO: remove limitation that two callables cannot have the same name
+  * TODO: rewrite sortByDependencies using a graph data structure
   */
 case class WdlTranslator(extras: Option[Extras] = None,
                          fileResolver: FileSourceResolver = FileSourceResolver.get,
@@ -32,14 +30,6 @@ case class WdlTranslator(extras: Option[Extras] = None,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
     extends Translator(dxApi, logger) {
-
-  private case class WdlBundle(version: WdlVersion,
-                               primaryCallable: Option[TAT.Callable],
-                               tasks: Map[String, TAT.Task],
-                               workflows: Map[String, TAT.Workflow],
-                               callableNames: Set[String],
-                               sources: Map[String, TAT.Document],
-                               adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
   override protected def translateInput(parameter: Parameter,
                                         jsv: JsValue,
@@ -237,13 +227,6 @@ case class WdlTranslator(extras: Option[Extras] = None,
     bundleInfo.tasks.values.toVector ++ orderedWorkflows
   }
 
-  private def compileCallable(callable: TAT.Callable,
-                              wdlBundle: WdlBundle,
-                              typeAliases: Map[String, Type],
-                              locked: Boolean,
-                              defaultRuntimeAttrs: RuntimeAttributes,
-                              reorgAttrs: ReorgAttributes): Vector[Callable] = {}
-
   override protected def translateDocument(source: Path,
                                            locked: Boolean,
                                            reorgEnabled: Option[Boolean]): Bundle = {
@@ -269,29 +252,17 @@ case class WdlTranslator(extras: Option[Extras] = None,
       case (None, Some(b))       => ReorgAttributes(enabled = b)
       case (None, None)          => ReorgAttributes(enabled = false)
     }
-
-    // Only the toplevel workflow may be unlocked. This happens
-    // only if the user specifically compiles it as "unlocked".
-    def isLocked(callable: TAT.Callable): Boolean = {
-      (callable, wdlBundle.primaryCallable) match {
-        case (wf: TAT.Workflow, Some(wf2: TAT.Workflow)) =>
-          wf.name != wf2.name || locked
-        case _ =>
-          true
-      }
-    }
-
-    val sortedCallables = depOrder.flatMap { callable =>
-      compileCallable(
-          callable,
-          wdlBundle,
-          irTypeAliases,
-          isLocked(callable),
-          defaultRuntimeAttrs,
-          reorgAttrs
-      )
-    }
-
+    // translate callables
+    val callableTranslator = WdlCallableTranslator(
+        wdlBundle,
+        irTypeAliases,
+        locked,
+        defaultRuntimeAttrs,
+        reorgAttrs,
+        dxApi,
+        logger
+    )
+    val sortedCallables = depOrder.flatMap(callableTranslator.translateCallable)
     val allCallables: Map[String, Callable] = sortedCallables.map(c => c.name -> c).toMap
     val allCallablesSortedNames = sortedCallables.map(_.name).distinct
     val primaryCallable = wdlBundle.primaryCallable.map { callable =>
@@ -301,7 +272,6 @@ case class WdlTranslator(extras: Option[Extras] = None,
       logger2.trace(s"allCallables: ${allCallables.keys}")
       logger2.trace(s"allCallablesSorted: ${allCallablesSortedNames}")
     }
-
     Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
   }
 

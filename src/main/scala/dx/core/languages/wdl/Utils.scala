@@ -75,6 +75,17 @@ object Utils {
     }
   }
 
+  /**
+    * Parses a top-level WDL file and all its imports.
+    * @param path the path to the WDL file
+    * @param fileResolver FileSourceResolver
+    * @param regime TypeCheckingRegime
+    * @param logger Logger
+    * @return (document, aliases), where aliases is a mapping of all the (fully-qualified)
+    *         alias names to values. Aliases include Structs defined in any file (which are
+    *         *not* namespaced) and all aliases defined in import statements of all documents
+    *         (which *are* namespaced).
+    */
   def parseSource(path: Path,
                   fileResolver: FileSourceResolver = FileSourceResolver.get,
                   regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
