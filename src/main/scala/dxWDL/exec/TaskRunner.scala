@@ -23,13 +23,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import common.validation.ErrorOr.ErrorOr
 import java.lang.management._
 import java.nio.file.{Path, Paths}
+
 import spray.json._
 import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
 import wom.types.WomType
 import wom.values._
-
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
@@ -49,29 +49,34 @@ object TaskRunnerUtils {
   //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
   //          ]}
   // ]
-  def readManifestGetDockerImageName(buf: String): String = {
+  def readManifestGetDockerImageName(buf: String): Option[String] = {
     val jso = buf.parseJson
     val elem = jso match {
       case JsArray(elements) if elements.size >= 1 => elements.head
       case other =>
-        throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
+        Utils.error(s"bad value ${other} for manifest, expecting non empty array")
+        return None
     }
-    val repo: String = elem.asJsObject.fields.get("RepoTags") match {
-      case None =>
-        throw new Exception("The repository is not specified for the image")
+    elem.asJsObject.fields.get("RepoTags") match {
+      case None | Some(JsNull) =>
+        Utils.error("The repository is not specified for the image")
+        None
       case Some(JsString(repo)) =>
-        repo
+        Some(repo)
+      case Some(JsArray(elements)) if (elements.isEmpty) =>
+        Utils.error("RepoTags has an empty array")
+        None
       case Some(JsArray(elements)) =>
-        if (elements.isEmpty)
-          throw new Exception("RepoTags has an empty array")
         elements.head match {
-          case JsString(repo) => repo
-          case other          => throw new Exception(s"bad value ${other} in RepoTags manifest field")
+          case JsString(repo) => Some(repo)
+          case other =>
+            Utils.error(s"bad value ${other} in RepoTags manifest field")
+            None
         }
       case other =>
-        throw new Exception(s"bad value ${other} in RepoTags manifest field")
+        Utils.error(s"bad value ${other} in RepoTags manifest field")
+        None
     }
-    repo
   }
 }
 
@@ -254,7 +259,18 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |stderr:
                 |${errstr}""".stripMargin
         )
-        Some(repo)
+        repo match {
+          case Some(r) => Some(r)
+          case None =>
+            val dockerLoadRegexp = "^Loaded image: (.+)$".r
+            outstr.trim match {
+              case dockerLoadRegexp(r) => Some(r)
+              case _ =>
+                throw new Exception(
+                    s"Could not determine the repo name from either the manifest or the 'docker load' output ${outstr}"
+                )
+            }
+        }
 
       case Some(dImg) =>
         pullImage(dImg)
