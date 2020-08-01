@@ -248,7 +248,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
                  |]""".stripMargin.trim
 
     val repo = TaskRunnerUtils.readManifestGetDockerImageName(buf)
-    repo should equal(Some("ubuntu_18_04_minimal:latest")) c
+    repo should equal(Some("ubuntu_18_04_minimal:latest"))
   }
 
   it should "handle structs" in {
