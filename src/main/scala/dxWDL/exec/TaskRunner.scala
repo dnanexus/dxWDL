@@ -262,9 +262,11 @@ case class TaskRunner(task: CallableTaskDefinition,
         repo match {
           case Some(r) => Some(r)
           case None =>
-            val dockerLoadRegexp = "^Loaded image: (.+)$".r
+            val dockerRepoRegexp = "^Loaded image: (.+)$".r
+            val dockerHashRegexp = "^Loaded image ID: (.+)$".r
             outstr.trim match {
-              case dockerLoadRegexp(r) => Some(r)
+              case dockerRepoRegexp(r) => Some(r)
+              case dockerHashRegexp(h) => Some(h)
               case _ =>
                 throw new Exception(
                     s"Could not determine the repo name from either the manifest or the 'docker load' output ${outstr}"
