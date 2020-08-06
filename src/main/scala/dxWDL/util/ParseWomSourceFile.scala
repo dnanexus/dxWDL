@@ -321,20 +321,18 @@ case class ParseWomSourceFile(verbose: Boolean) {
   // in this file.
   def scanForTasks(sourceCode: String): Map[String, String] = {
     var lines = sourceCode.split("\n").toList
-    val taskDir = HashMap.empty[String, String]
-
-    while (!lines.isEmpty) {
+    var taskDir = Map.empty[String, String]
+    while (lines.nonEmpty) {
       val retval = findNextTask(lines)
-
       // TODO: add a WOM syntax check that this is indeed a task.
       retval match {
-        case None => return taskDir.toMap
+        case None => return taskDir
         case Some((remainingLines, taskName, taskLines)) =>
-          taskDir(taskName) = taskLines
+          taskDir += (taskName -> taskLines)
           lines = remainingLines
       }
     }
-    return taskDir.toMap
+    taskDir
   }
 
   // Go through one WDL source file, and return a map from task name

@@ -101,7 +101,15 @@ case class Block(nodes: Vector[GraphNode]) {
     // There can be no calls in the first nodes
     val allButLast: Vector[GraphNode] = this.nodes.dropRight(1)
     val allCalls = Block.deepFindCalls(allButLast)
-    assert(allCalls.size == 0)
+    if (allCalls.nonEmpty) {
+      throw new Exception(s"""Invalid block: calls made prior to last node
+                             |Block:
+                             |${prettyPrint}
+                             |
+                             |Calls:
+                             |${allCalls}
+                             |""".stripMargin)
+    }
   }
 
   // Create a human readable name for a block of statements

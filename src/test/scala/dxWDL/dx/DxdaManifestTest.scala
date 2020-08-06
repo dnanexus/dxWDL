@@ -43,19 +43,22 @@ class DxdaManifestTest extends FlatSpec with Matchers {
     val manifest: DxdaManifest = DxdaManifest.apply(filesInManifest)
 
     // compare to data obtained with dx-toolkit
-    val expected: Vector[JsValue] = resolvedObjects.map {
-      case (dxPath, dataObj) =>
-        val dxFile = dataObj.asInstanceOf[DxFile]
-        val local: Path = fileDir(dxPath)
+    val expected: Vector[JsValue] = resolvedObjects
+      .map {
+        case (dxPath, dataObj) =>
+          val dxFile = dataObj.asInstanceOf[DxFile]
+          val local: Path = fileDir(dxPath)
 
-        // add the target folder and name
-        val fields = Map(
-            "id" -> JsString(dxFile.getId),
-            "name" -> JsString(local.toFile().getName()),
-            "folder" -> JsString(local.toFile().getParent())
-        )
-        JsObject(fields)
-    }.toVector.reverse
+          // add the target folder and name
+          val fields = Map(
+              "id" -> JsString(dxFile.getId),
+              "name" -> JsString(local.toFile().getName()),
+              "folder" -> JsString(local.toFile().getParent())
+          )
+          JsObject(fields)
+      }
+      .toVector
+      .reverse
 
     manifest shouldBe (DxdaManifest(
         JsObject(dxTestProject.getId -> JsArray(expected))
