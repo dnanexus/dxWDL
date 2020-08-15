@@ -318,18 +318,18 @@ case class Top(cOpt: CompilerOptions) {
       case None =>
         val ids = cResults.execDict.map { case (_, r) => r.dxExec.getId }.mkString(",")
         (ids, None)
-      case Some(wf) if execTree.isDefined =>
-        val tree = new Tree(cResults.execDict)
-        val treeRepr = execTree.get match { // Safe get because we check isDefined above
-          case PrettyTreePrinter =>
-            Left(
-                Tree.generateTreeFromJson(tree.apply(wf).asJsObject)
-            )
-          case JsonTreePrinter => Right(tree.apply(wf)) // Convert to string
-        }
-        (wf.dxExec.getId, Some(treeRepr))
       case Some(wf) =>
-        (wf.dxExec.getId, None)
+        val treeReprOpt = execTree.map { treePrinter =>
+          val tree = new Tree(cResults.execDict)
+          treePrinter match {
+            case PrettyTreePrinter =>
+              Left(
+                  Tree.generateTreeFromJson(tree.apply(wf).asJsObject)
+              )
+            case JsonTreePrinter => Right(tree.apply(wf)) // Convert to string
+          }
+        }
+        (wf.dxExec.getId, treeReprOpt)
     }
   }
 }
