@@ -75,8 +75,70 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dx.core.languages.wdl
 
-import wdlTools.eval.WdlValues
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtil}
+import wdlTools.eval.{Eval, EvalException, WdlValues}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
+
+sealed trait BlockInput {
+  val name: String
+  val wdlType: WdlTypes.T
+}
+
+// A compulsory input that has no default, and must be provided by the caller
+case class RequiredBlockInput(name: String, wdlType: WdlTypes.T) extends BlockInput
+
+// An input that has a constant default value and may be skipped by the caller
+case class OverridableBlockInputWithConstantDefault(name: String,
+                                                    wdlType: WdlTypes.T,
+                                                    defaultValue: WdlValues.V)
+    extends BlockInput
+
+// An input that has a default value that is an expression that must be evaluated at runtime,
+// unless a value is specified by the caller
+case class OverridableBlockInputWithDynamicDefault(name: String,
+                                                   wdlType: WdlTypes.T,
+                                                   defaultExpr: TAT.Expr)
+    extends BlockInput
+
+// an input that may be omitted by the caller. In that case the value will
+// be null (or None).
+case class OptionalBlockInput(name: String, wdlType: WdlTypes.T) extends BlockInput
+
+object BlockInput {
+  private lazy val evaluator: Eval = Eval.empty
+
+  def translate(i: TAT.InputDefinition): BlockInput = {
+    i match {
+      case TAT.RequiredInputDefinition(name, wdlType, _) =>
+        RequiredBlockInput(name, wdlType)
+      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr, _) =>
+        // If the default value is an expression that requires evaluation (i.e. not a
+        // constant), treat the input as optional and leave the default value to be
+        // calculated at runtime
+        try {
+          val value = evaluator.applyConstAndCoerce(defaultExpr, wdlType)
+          OverridableBlockInputWithConstantDefault(name, wdlType, value)
+        } catch {
+          case _: EvalException =>
+            OverridableBlockInputWithDynamicDefault(
+                name,
+                TUtils.makeOptional(wdlType),
+                defaultExpr
+            )
+        }
+      case TAT.OptionalInputDefinition(name, wdlType, _) =>
+        OptionalBlockInput(name, wdlType)
+    }
+  }
+
+  def isOptional(inputDef: BlockInput): Boolean = {
+    inputDef match {
+      case _: RequiredBlockInput                       => false
+      case _: OverridableBlockInputWithConstantDefault => true
+      case _: OverridableBlockInputWithDynamicDefault  => true
+      case _: OptionalBlockInput                       => true
+    }
+  }
+}
 
 // Block: a continuous list of workflow elements from a user
 // workflow.
@@ -112,8 +174,8 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtil}
 // the block.  For example, 'Int x' declared inside a scatter, is
 // 'Array[Int] x' outside the scatter.
 //
-case class Block(inputs: Vector[Block.InputDefinition],
-                 outputs: Vector[Block.OutputDefinition],
+case class Block(inputs: Vector[BlockInput],
+                 outputs: Vector[TAT.OutputDefinition],
                  nodes: Vector[TAT.WorkflowElement]) {
   // Create a human readable name for a block of statements
   //
@@ -125,10 +187,10 @@ case class Block(inputs: Vector[Block.InputDefinition],
   def makeName: Option[String] = {
     nodes.collectFirst {
       case TAT.Scatter(id, expr, _, _) =>
-        val collection = TUtil.exprToString(expr)
+        val collection = TUtils.prettyFormatExpr(expr)
         s"scatter (${id} in ${collection})"
       case TAT.Conditional(expr, _, _) =>
-        val cond = TUtil.exprToString(expr)
+        val cond = TUtils.prettyFormatExpr(expr)
         s"if (${cond})"
       case call: TAT.Call =>
         s"frag ${call.actualName}"
@@ -137,84 +199,6 @@ case class Block(inputs: Vector[Block.InputDefinition],
 }
 
 object Block {
-  private def makeOptional(t: WdlTypes.T): WdlTypes.T = {
-    t match {
-      case _: WdlTypes.T_Optional => t
-      case _                      => WdlTypes.T_Optional(t)
-    }
-  }
-
-  @scala.annotation.tailrec
-  private def unwrapOptional(t: WdlTypes.T): WdlTypes.T = {
-    t match {
-      case WdlTypes.T_Optional(inner) => unwrapOptional(inner)
-      case _                          => t
-    }
-  }
-
-  // These are the same definitions as in TypedAbstractSyntax,
-  // with the SourceLocation field stripped out. This is because the inputs
-  // and outputs here are compiler constructs, they have not been defined by the user.
-  // They are computed by the algorithm and assigned to blocks of
-  // statements.
-  sealed trait InputDefinition {
-    val name: String
-    val wdlType: WdlTypes.T
-  }
-
-  // A compulsory input that has no default, and must be provided by the caller
-  case class RequiredInputDefinition(name: String, wdlType: WdlTypes.T) extends InputDefinition
-
-  // An input that has a constant default value and may be skipped by the caller
-  case class OverridableInputDefinitionWithConstantDefault(name: String,
-                                                           wdlType: WdlTypes.T,
-                                                           defaultValue: WdlValues.V)
-      extends InputDefinition
-
-  // An input that has a default value that is an expression that must be evaluated at runtime,
-  // unless a value is specified by the caller
-  case class OverridableInputDefinitionWithDynamicDefault(name: String,
-                                                          wdlType: WdlTypes.T,
-                                                          defaultExpr: TAT.Expr)
-      extends InputDefinition
-
-  // an input that may be omitted by the caller. In that case the value will
-  // be null (or None).
-  case class OptionalInputDefinition(name: String, wdlType: WdlTypes.T) extends InputDefinition
-
-  case class OutputDefinition(name: String, wdlType: WdlTypes.T, expr: TAT.Expr)
-
-  def translate(i: TAT.InputDefinition): InputDefinition = {
-    i match {
-      case TAT.RequiredInputDefinition(name, wdlType, _) =>
-        RequiredInputDefinition(name, wdlType)
-      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr, _) =>
-        WdlValueAnalysis.ifConstEval(wdlType, defaultExpr) match {
-          // If the default value is an expression that requires evaluation (i.e. not a constant),
-          // treat the input as optional and leave the default value to be calculated at runtime
-          case None =>
-            OverridableInputDefinitionWithDynamicDefault(name, makeOptional(wdlType), defaultExpr)
-          case Some(value) =>
-            OverridableInputDefinitionWithConstantDefault(name, wdlType, value)
-        }
-      case TAT.OptionalInputDefinition(name, wdlType, _) =>
-        OptionalInputDefinition(name, wdlType)
-    }
-  }
-
-  def translate(o: TAT.OutputDefinition): OutputDefinition = {
-    OutputDefinition(o.name, o.wdlType, o.expr)
-  }
-
-  def isOptional(inputDef: InputDefinition): Boolean = {
-    inputDef match {
-      case _: RequiredInputDefinition                       => false
-      case _: OverridableInputDefinitionWithConstantDefault => true
-      case _: OverridableInputDefinitionWithDynamicDefault  => true
-      case _: OptionalInputDefinition                       => true
-    }
-  }
-
   // Deep search for all calls in a graph
   def deepFindCalls(nodes: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
     nodes
@@ -253,8 +237,8 @@ object Block {
   //   foo.y + 3    Vector(foo.y)   [withMember = false]
   //   foo.y + 3    Vector(foo)     [withMember = true]
   //
-  private def exprInputs(expr: TAT.Expr, withMember: Boolean = true): Vector[InputDefinition] = {
-    def inner(expr: TAT.Expr): Vector[InputDefinition] = {
+  private def exprInputs(expr: TAT.Expr, withMember: Boolean = true): Vector[BlockInput] = {
+    def inner(expr: TAT.Expr): Vector[BlockInput] = {
       expr match {
         case _: TAT.ValueNull      => Vector.empty
         case _: TAT.ValueNone      => Vector.empty
@@ -267,9 +251,9 @@ object Block {
         case TAT.ExprIdentifier(id, wdlType, _) =>
           val outputDef = wdlType match {
             case optType: WdlTypes.T_Optional =>
-              OptionalInputDefinition(id, optType)
+              OptionalBlockInput(id, optType)
             case _ =>
-              RequiredInputDefinition(id, wdlType)
+              RequiredBlockInput(id, wdlType)
           }
           Vector(outputDef)
 
@@ -297,12 +281,6 @@ object Block {
         case TAT.ExprPlaceholderSep(sep: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(sep) ++ inner(value)
 
-        // operators on one argument
-        case oper1: TAT.ExprOperator1 => inner(oper1.value)
-
-        // operators on two arguments
-        case oper2: TAT.ExprOperator2 => inner(oper2.a) ++ inner(oper2.b)
-
         // Access an array element at [index]
         case TAT.ExprAt(value, index, _, _) =>
           inner(value) ++ inner(index)
@@ -329,21 +307,23 @@ object Block {
         // It may also be the case that the bug is with construction of the environment rather
         // than here with the closure.
         case TAT.ExprGetName(expr, _, _, _)
-            if !withMember && unwrapOptional(expr.wdlType).isInstanceOf[WdlTypes.T_Struct] =>
+            if !withMember && TUtils.unwrapOptional(expr.wdlType).isInstanceOf[WdlTypes.T_Struct] =>
           inner(expr)
 
         // Access a field of an identifier
         //   Int z = eliminateDuplicate.fields
         case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
-          Vector(RequiredInputDefinition(s"${id}.${fieldName}", wdlType))
+          Vector(RequiredBlockInput(s"${id}.${fieldName}", wdlType))
 
         // Access a field of the result of an expression
         case TAT.ExprGetName(expr, fieldName, wdlType, _) =>
           inner(expr) match {
-            case Vector(i: InputDefinition) =>
-              Vector(RequiredInputDefinition(s"${i.name}.${fieldName}", wdlType))
+            case Vector(i: BlockInput) =>
+              Vector(RequiredBlockInput(s"${i.name}.${fieldName}", wdlType))
             case _ =>
-              throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
+              throw new Exception(
+                  s"Unhandled ExprGetName construction ${TUtils.prettyFormatExpr(expr)}"
+              )
           }
 
         case other =>
@@ -353,7 +333,7 @@ object Block {
     inner(expr)
   }
 
-  private def callInputs(call: TAT.Call): Vector[InputDefinition] = {
+  private def callInputs(call: TAT.Call): Vector[BlockInput] = {
     // What the callee expects
     call.callee.input.flatMap {
       case (name: String, (_: WdlTypes.T, optional: Boolean)) =>
@@ -362,17 +342,17 @@ object Block {
         (actualInput, optional) match {
           case (None, false) =>
             // A required input that will have to be provided at runtime
-            Vector.empty[InputDefinition]
+            Vector.empty[BlockInput]
           case (Some(expr), false) =>
             // required input that is provided
             exprInputs(expr)
           case (None, true) =>
             // a missing optional input, doesn't have to be provided
-            Vector.empty[InputDefinition]
+            Vector.empty[BlockInput]
           case (Some(expr), true) =>
             // an optional input
-            exprInputs(expr).map { inpDef: InputDefinition =>
-              OptionalInputDefinition(inpDef.name, inpDef.wdlType)
+            exprInputs(expr).map { inpDef: BlockInput =>
+              OptionalBlockInput(inpDef.name, inpDef.wdlType)
             }
         }
     }.toVector
@@ -380,12 +360,12 @@ object Block {
 
   // keep track of the inputs, outputs, and local definitions when
   // traversing a block of workflow elements (declarations, calls, scatters, and conditionals)
-  private case class BlockContext(inputs: Map[String, InputDefinition],
-                                  outputs: Map[String, OutputDefinition]) {
+  private case class BlockContext(inputs: Map[String, BlockInput],
+                                  outputs: Map[String, TAT.OutputDefinition]) {
 
     // remove from a list of potential inputs those that are locally defined.
-    def addInputs(newIdentifiedInputs: Vector[InputDefinition]): BlockContext = {
-      val reallyNew = newIdentifiedInputs.filter { x: InputDefinition =>
+    def addInputs(newIdentifiedInputs: Vector[BlockInput]): BlockContext = {
+      val reallyNew = newIdentifiedInputs.filter { x: BlockInput =>
         !((inputs.keys.toSet contains x.name) ||
           (outputs.keys.toSet contains x.name))
       }
@@ -394,7 +374,7 @@ object Block {
       }.toMap)
     }
 
-    def addOutputs(newOutputs: Vector[OutputDefinition]): BlockContext = {
+    def addOutputs(newOutputs: Vector[TAT.OutputDefinition]): BlockContext = {
       this.copy(outputs = outputs ++ newOutputs.map { x =>
         x.name -> x
       }.toMap)
@@ -429,8 +409,9 @@ object Block {
             }
             val declOutputs =
               decl.expr match {
-                case None       => Vector.empty
-                case Some(expr) => Vector(OutputDefinition(decl.name, decl.wdlType, expr))
+                case None => Vector.empty
+                case Some(expr) =>
+                  Vector(TAT.OutputDefinition(decl.name, decl.wdlType, expr, decl.loc))
               }
             ctx
               .addInputs(declInputs)
@@ -440,7 +421,10 @@ object Block {
             val callOutputs = call.callee.output.map {
               case (name, wdlType) =>
                 val fqn = call.actualName + "." + name
-                OutputDefinition(fqn, wdlType, TAT.ExprIdentifier(fqn, wdlType, call.loc))
+                TAT.OutputDefinition(fqn,
+                                     wdlType,
+                                     TAT.ExprIdentifier(fqn, wdlType, call.loc),
+                                     call.loc)
             }.toVector
             ctx
               .addInputs(callInputs(call))
@@ -452,8 +436,8 @@ object Block {
 
             // make outputs optional
             val subBlockOutputs = subBlock.outputs.map {
-              case OutputDefinition(name, wdlType, expr) =>
-                OutputDefinition(name, makeOptional(wdlType), expr)
+              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
+                TAT.OutputDefinition(name, TUtils.makeOptional(wdlType), expr, loc)
             }
             ctx
               .addInputs(subBlock.inputs)
@@ -466,8 +450,8 @@ object Block {
 
             // make outputs arrays
             val subBlockOutputs = subBlock.outputs.map {
-              case OutputDefinition(name, wdlType, expr) =>
-                OutputDefinition(name, WdlTypes.T_Array(wdlType, nonEmpty = false), expr)
+              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
+                TAT.OutputDefinition(name, WdlTypes.T_Array(wdlType, nonEmpty = false), expr, loc)
             }
             val ctx2 = ctx
               .addInputs(subBlock.inputs)
@@ -524,11 +508,11 @@ object Block {
   // The outputs have expressions, and we need to figure out which
   // variables they refer to. This will allow the calculations to proceeed
   // inside a stand alone applet.
-  def outputClosure(outputs: Vector[OutputDefinition]): Map[String, WdlTypes.T] = {
+  def outputClosure(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = {
     // create inputs from all the expressions that go into outputs
     outputs
       .flatMap {
-        case OutputDefinition(_, _, expr) => Vector(expr)
+        case TAT.OutputDefinition(_, _, expr, _) => Vector(expr)
       }
       .flatMap(e => exprInputs(e, withMember = false))
       .foldLeft(Map.empty[String, WdlTypes.T]) {
@@ -542,7 +526,7 @@ object Block {
   def allOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, WdlTypes.T] = {
     val b = makeBlock(elements)
     b.outputs.map {
-      case OutputDefinition(name, wdlType, _) =>
+      case TAT.OutputDefinition(name, wdlType, _, _) =>
         name -> wdlType
     }.toMap
   }
@@ -550,7 +534,7 @@ object Block {
   // split a part of a workflow
   def split(
       statements: Vector[TAT.WorkflowElement]
-  ): (Vector[InputDefinition], Vector[Block], Vector[OutputDefinition]) = {
+  ): (Vector[BlockInput], Vector[Block], Vector[TAT.OutputDefinition]) = {
     val top: Block = makeBlock(statements)
     val subBlocks = splitToBlocks(statements)
     (top.inputs, subBlocks, top.outputs)
@@ -562,57 +546,32 @@ object Block {
     splitToBlocks(wf.body)
   }
 
-  // Does this output require evaluation? If so, we will need to create
-  // another applet for this.
-  def isSimpleOutput(outputNode: OutputDefinition, definedVars: Set[String]): Boolean = {
-    if (definedVars.contains(outputNode.name)) {
-      // the environment has a stage with this output node - we can get it by linking
-      true
-    } else {
-      // check if the expression can be resolved without evaluation (i.e. is a constant
-      // or a reference to a defined variable
-      outputNode.expr match {
-        // A constant or a reference to a variable
-        case expr if WdlValueAnalysis.isTrivialExpression(expr)      => true
-        case TAT.ExprIdentifier(id, _, _) if definedVars contains id => true
+  // A trivial expression has no operators, it is either (1) a
+  // constant, (2) a single identifier, or (3) an access to a call
+  // field.
+  //
+  // For example, `5`, `['a', 'b', 'c']`, and `true` are trivial.
+  // 'x + y'  is not.
+  def isTrivialExpression(expr: TAT.Expr): Boolean = {
+    expr match {
+      case expr if TUtils.isPrimitiveValue(expr) => true
+      case _: TAT.ExprIdentifier                 => true
 
-        // for example, c1 is call, and the output section is:
-        //
-        // output {
-        //    Int? result1 = c1.result
-        //    Int? result2 = c2.result
-        // }
-        // We don't need a special output applet+stage.
-        case TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _) =>
-          val fqn = s"$id2.$id"
-          definedVars contains fqn
+      // A collection of constants
+      case TAT.ExprPair(l, r, _, _)   => Vector(l, r).forall(TUtils.isPrimitiveValue)
+      case TAT.ExprArray(value, _, _) => value.forall(TUtils.isPrimitiveValue)
+      case TAT.ExprMap(value, _, _) =>
+        value.forall {
+          case (k, v) => TUtils.isPrimitiveValue(k) && TUtils.isPrimitiveValue(v)
+        }
+      case TAT.ExprObject(value, _, _) => value.values.forall(TUtils.isPrimitiveValue)
 
-        case _ => false
-      }
+      // Access a field in a call or a struct
+      //   Int z = eliminateDuplicate.fields
+      case TAT.ExprGetName(_: TAT.ExprIdentifier, _, _, _) => true
+
+      case _ => false
     }
-  }
-
-  // is an output used directly as an input? For example, in the
-  // small workflow below, 'lane' is used in such a manner.
-  //
-  // This makes a difference, because in locked dx:workflows, it is
-  // not possible to access a workflow input directly from a workflow
-  // output. It is only allowed to access a stage input/output.
-  //
-  // workflow inner {
-  //   input {
-  //      String lane
-  //   }
-  //   output {
-  //      String blah = lane
-  //   }
-  // }
-  def inputsUsedAsOutputs(inputNodes: Vector[InputDefinition],
-                          outputNodes: Vector[OutputDefinition]): Set[String] = {
-    // Figure out all the variables needed to calculate the outputs
-    val outputs: Set[String] = outputClosure(outputNodes).keySet
-    val inputs: Set[String] = inputNodes.map(_.name).toSet
-    inputs.intersect(outputs)
   }
 
   // A block of nodes that represents a call with no subexpressions. These
@@ -628,7 +587,7 @@ object Block {
       return false
     nodes.head match {
       case call: TAT.Call if trivialExpressionsOnly =>
-        call.inputs.values.forall(expr => WdlValueAnalysis.isTrivialExpression(expr))
+        call.inputs.values.forall(expr => isTrivialExpression(expr))
       case _: TAT.Call =>
         // any input expression is allowed
         true

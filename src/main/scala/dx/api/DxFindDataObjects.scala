@@ -2,7 +2,7 @@ package dx.api
 
 import spray.json._
 
-case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int] = None) {
+case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None) {
   private def parseDescribe(jsv: JsValue,
                             dxobj: DxDataObject,
                             dxProject: DxProject): DxObjectDescribe = {
@@ -88,7 +88,7 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int] = None) {
       case _: DxFile =>
         val archivalState = jsv.asJsObject.fields.get("archivalState") match {
           case None              => throw new Exception("'archivalState' field is missing")
-          case Some(JsString(x)) => DxArchivalState.fromString(x)
+          case Some(JsString(x)) => DxArchivalState.withNameIgnoreCase(x)
           case Some(other)       => throw new Exception(s"malformed archivalState field ${other}")
         }
         DxFileDescribe(

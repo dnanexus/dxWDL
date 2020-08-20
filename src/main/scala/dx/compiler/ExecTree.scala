@@ -4,27 +4,27 @@ import dx.api.DxWorkflow
 import dx.api.Field
 import dx.core.util.CompressionUtils
 import Native.ExecRecord
-import IR._
+import dx.compiler.ir._
 import spray.json._
 
 /**
   * Describe the workflow in a tree representation
   */
-case class Tree(execDict: Map[String, ExecRecord]) {
-  private def kindToString(kind: AppletKind): String = {
+case class ExecTree(execDict: Map[String, ExecRecord]) {
+  private def kindToString(kind: ExecutableKind): String = {
     kind match {
-      case _: AppletKindNative               => "Native"
-      case _: AppletKindTask                 => "Task"
-      case _: AppletKindWfFragment           => "Fragment"
-      case AppletKindWfInputs                => "Inputs"
-      case AppletKindWfOutputs               => "Outputs"
-      case AppletKindWfCustomReorgOutputs    => "Reorg outputs"
-      case AppletKindWorkflowOutputReorg     => "Output Reorg"
-      case AppletKindWorkflowCustomReorg(id) => s"Custom reorg ${id}"
+      case _: ExecutableKindNative               => "Native"
+      case _: ExecutableKindWfFragment           => "Fragment"
+      case ExecutableKindTask                    => "Task"
+      case ExecutableKindWfInputs                => "Inputs"
+      case ExecutableKindWfOutputs               => "Outputs"
+      case ExecutableKindWfCustomReorgOutputs    => "Reorg outputs"
+      case ExecutableKindWorkflowOutputReorg     => "Output Reorg"
+      case ExecutableKindWorkflowCustomReorg(id) => s"Custom reorg ${id}"
     }
   }
 
-  def fromWorkflowIR(wf: IR.Workflow): JsValue = {
+  def fromWorkflowIR(wf: Workflow): JsValue = {
     val vec = wf.stages.map { stage =>
       val calleeRecord = execDict(stage.calleeName)
       val jsv: JsValue = apply(calleeRecord)
@@ -36,12 +36,12 @@ case class Tree(execDict: Map[String, ExecRecord]) {
 
   def apply(primary: Native.ExecRecord): JsValue = {
     primary.callable match {
-      case apl: IR.Applet if primary.links.isEmpty =>
+      case apl: Application if primary.links.isEmpty =>
         JsObject("name" -> JsString(apl.name),
                  "id" -> JsString(primary.dxExec.id),
                  "kind" -> JsString(kindToString(apl.kind)))
 
-      case apl: IR.Applet =>
+      case apl: Application =>
         // applet that calls other applets/workflows at runtime.
         // recursively describe all called elements.
         val links: Vector[JsValue] = primary.links.map { eli =>
@@ -53,7 +53,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
                  "kind" -> JsString(kindToString(apl.kind)),
                  "executables" -> JsArray(links))
 
-      case wf: IR.Workflow =>
+      case wf: Workflow =>
         val vec = wf.stages.map { stage =>
           val calleeRecord = execDict(stage.calleeName)
           val jsv: JsValue = apply(calleeRecord)
@@ -68,7 +68,7 @@ case class Tree(execDict: Map[String, ExecRecord]) {
   }
 }
 
-object Tree {
+object ExecTree {
   val CANNOT_FIND_EXEC_TREE = "Unable to find exec tree from"
   val INDENT = 3
   val LAST_ELEM = s"└${"─" * INDENT}"

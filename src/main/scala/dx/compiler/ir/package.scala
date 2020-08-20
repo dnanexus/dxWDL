@@ -2,8 +2,9 @@ package dx.compiler
 
 package object ir {
   // stages that the compiler uses in generated DNAx workflows
-  val COMMON = "common"
-  val OUTPUT_SECTION = "outputs"
-  val REORG = "reorg"
-  val CUSTOM_REORG_CONFIG = "reorg_config"
+  val CommonStage = "common"
+  val EvalStage = "eval"
+  val OutputSection = "outputs"
+  val Reorg = "reorg"
+  val CustomReorgConfig = "reorg_config"
 }

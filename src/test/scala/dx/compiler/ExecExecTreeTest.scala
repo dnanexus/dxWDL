@@ -17,7 +17,7 @@ import wdlTools.util.Logger
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class ExecTreeTest extends AnyFlatSpec with Matchers {
+class ExecExecTreeTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
@@ -124,7 +124,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case _           => throw new Exception("unexpected")
     }
 
-    val treeJs = Tree.fromDxWorkflow(wf)
+    val treeJs = ExecTree.fromDxWorkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
         id shouldBe wf.id
@@ -182,7 +182,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception(s"tree representation is wrong")
     }
 
-    val prettyTree = Tree.generateTreeFromJson(treeJs.asJsObject)
+    val prettyTree = ExecTree.generateTreeFromJson(treeJs.asJsObject)
 
     // This generated tree now looks different. Also, the Tree code
     // doesn't give good names to the scatter nested below "(i in [1, 4, 9])".

@@ -1,12 +1,13 @@
 package dx.exec
 
 import dx.api.DxApi
-import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
+import dx.core.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
 import spray.json.{JsString, JsValue}
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Bindings
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
@@ -16,7 +17,7 @@ case class WfOutputs(wf: TAT.Workflow,
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
-    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(env))
+    evaluator.applyExprAndCoerce(expr, wdlType, Bindings(env))
   }
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -31,8 +32,7 @@ case class WfOutputs(wf: TAT.Workflow,
 
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
-    val wfOutputs = wf.outputs.map(Block.translate)
-    val allInputs = Block.outputClosure(wfOutputs)
+    val allInputs = Block.outputClosure(wf.outputs)
     val envInitialFilled: Map[String, WdlValues.V] = allInputs.flatMap {
       case (name, wdlType) =>
         (envInitial.get(name), wdlType) match {
@@ -51,8 +51,8 @@ case class WfOutputs(wf: TAT.Workflow,
     // the environment, so they can be referenced by expressions in the next
     // lines.
     var envFull = envInitialFilled
-    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wfOutputs.map {
-      case Block.OutputDefinition(name, wdlType, expr) =>
+    val outputs: Map[String, (WdlTypes.T, WdlValues.V)] = wf.outputs.map {
+      case TAT.OutputDefinition(name, wdlType, expr, _) =>
         val value = evaluateWdlExpression(expr, wdlType, envFull)
         envFull += (name -> value)
         name -> (wdlType, value)
@@ -70,7 +70,7 @@ case class WfOutputs(wf: TAT.Workflow,
       .toMap
 
     if (addStatus) {
-      outputFields + (REORG_STATUS -> JsString(REORG_STATUS_COMPLETE))
+      outputFields + (ReorgStatus -> JsString(ReorgStatusCompleted))
     } else {
       outputFields
     }

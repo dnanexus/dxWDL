@@ -43,7 +43,7 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
 
     // Make sure they are all in the live state. Archived files cannot be accessed.
     files.map(_.describe()).foreach { desc =>
-      if (desc.archivalState != DxArchivalState.LIVE)
+      if (desc.archivalState != DxArchivalState.Live)
         throw new Exception(
             s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
         )

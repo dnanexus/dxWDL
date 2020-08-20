@@ -508,7 +508,7 @@ case class TaskRunner(task: TAT.Task,
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
     val outputs: Map[String, JsValue] = task.outputs.flatMap { outDef: TAT.OutputDefinition =>
-      val wvl = WdlVarLinks(outDef.wdlType, DxlExec(dxSubJob, outDef.name))
+      val wvl = WdlVarLinks(outDef.wdlType, DxLinkExec(dxSubJob, outDef.name))
       wdlVarLinksConverter.genFields(wvl, outDef.name)
     }.toMap
     outputs

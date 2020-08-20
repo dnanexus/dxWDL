@@ -1,7 +1,7 @@
 package dx.api
 
 object DxPath {
-  val DX_URL_PREFIX = "dx://"
+  val DxUriPrefix = "dx://"
 
   case class DxPathComponents(name: String,
                               folder: Option[String],
@@ -9,13 +9,13 @@ object DxPath {
                               objFullName: String,
                               sourcePath: String)
 
-  // TODO: use RuntimeExceptions for assertions
   def parse(dxPath: String): DxPathComponents = {
     // strip the prefix
-    if (!dxPath.startsWith(DX_URL_PREFIX)) {
-      throw new Exception(s"Path ${dxPath} does not start with prefix ${DX_URL_PREFIX}")
+    val s = if (dxPath.startsWith(DxUriPrefix)) {
+      dxPath.substring(DxUriPrefix.length)
+    } else {
+      dxPath
     }
-    val s = dxPath.substring(DX_URL_PREFIX.length)
 
     // take out the project, if it is specified
     val components = s.split(":").toList

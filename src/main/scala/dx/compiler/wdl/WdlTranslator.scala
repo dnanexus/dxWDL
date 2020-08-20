@@ -2,19 +2,12 @@ package dx.compiler.wdl
 
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxFile}
-import dx.compiler.ir.{
-  Bundle,
-  Callable,
-  Extras,
-  Parameter,
-  ReorgAttributes,
-  RuntimeAttributes,
-  Translator
-}
+import dx.api.{DxApi, DxFile, DxProject}
+import dx.compiler.ir.{Bundle, Callable, Extras, Parameter, ReorgAttributes, Translator}
 import dx.core.io.DxFileDescCache
 import dx.core.languages.wdl.{Block, Utils => WdlUtils}
 import spray.json.JsValue
+import wdlTools.eval.WdlValues
 import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, Logger}
@@ -24,17 +17,17 @@ import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, 
   * TODO: remove limitation that two callables cannot have the same name
   * TODO: rewrite sortByDependencies using a graph data structure
   */
-case class WdlTranslator(extras: Option[Extras] = None,
-                         fileResolver: FileSourceResolver = FileSourceResolver.get,
+case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
                          regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
+                         fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
-    extends Translator(dxApi, logger) {
+    extends Translator(fileResolver, dxApi, logger) {
 
   override protected def translateInput(parameter: Parameter,
                                         jsv: JsValue,
                                         dxName: String,
-                                        encodeDots: Boolean): Map[String, JsValue] = ???
+                                        encodeDots: Boolean): Map[String, JsValue] = {}
 
   // check the declarations in [graph], and make sure they
   // do not contain the reserved '___' substring.
@@ -235,7 +228,6 @@ case class WdlTranslator(extras: Option[Extras] = None,
     val (tDoc, typeAliases) =
       WdlUtils.parseSource(sourceAbsPath, sourceFileResolver, regime, logger)
     val wdlBundle: WdlBundle = flattenDepthFirst(tDoc)
-    val irTypeAliases = typeAliases.view.mapValues(Utils.wdlToIRType).toMap
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()
     val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle, logger2)
@@ -245,7 +237,7 @@ case class WdlTranslator(extras: Option[Extras] = None,
     }
     // load defaults from extras
     val defaultRuntimeAttrs =
-      extras.map(_.defaultRuntimeAttributes).getOrElse(RuntimeAttributes.empty)
+      extras.map(_.defaultRuntimeAttributes).getOrElse(Map.empty)
     val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
       case (Some(attr), None)    => attr
       case (Some(attr), Some(b)) => attr.copy(enabled = b)
@@ -253,17 +245,25 @@ case class WdlTranslator(extras: Option[Extras] = None,
       case (None, None)          => ReorgAttributes(enabled = false)
     }
     // translate callables
-    val callableTranslator = WdlCallableTranslator(
+    val callableTranslator = CallableTranslator(
         wdlBundle,
-        irTypeAliases,
+        typeAliases,
         locked,
         defaultRuntimeAttrs,
         reorgAttrs,
         dxApi,
+        sourceFileResolver,
         logger
     )
-    val sortedCallables = depOrder.flatMap(callableTranslator.translateCallable)
-    val allCallables: Map[String, Callable] = sortedCallables.map(c => c.name -> c).toMap
+    val (allCallables, sortedCallables) =
+      depOrder.foldLeft((Map.empty[String, Callable], Vector.empty[Callable])) {
+        case ((allCallables, sortedCallables), callable) =>
+          val translatedCallables = callableTranslator.translateCallable(callable, allCallables)
+          (
+              allCallables ++ translatedCallables.map(c => c.name -> c).toMap,
+              sortedCallables ++ translatedCallables
+          )
+      }
     val allCallablesSortedNames = sortedCallables.map(_.name).distinct
     val primaryCallable = wdlBundle.primaryCallable.map { callable =>
       allCallables(getUnqualifiedName(callable.name))
@@ -276,7 +276,8 @@ case class WdlTranslator(extras: Option[Extras] = None,
   }
 
   override protected def filterFiles(
-      fields: Map[String, JsValue]
+      fields: Map[String, JsValue],
+      dxProject: DxProject
   ): (Map[String, DxFile], Vector[DxFile]) = ???
 
   override protected def embedDefaults(bundle: Bundle,

@@ -3,330 +3,364 @@ package dx.compiler
 import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.ConfigFactory
-import dx.InvalidInputException
-import dx.api.{DxApi, DxProject}
-import dx.compiler.wdl.WdlDxNativeInterface
+import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
+import dx.compiler.ExecTreeFormat.ExecTreeFormat
+import dx.compiler.Main.CompilerFlag.CompilerFlag
+import dx.compiler.ir.{Bundle, LanguageSupport}
+import dx.compiler.wdl.WdlLanguageSupportFactory
 import dx.core.getVersion
-import dx.core.io.DxPathConfig
+import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.languages.Language
+import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
 import spray.json._
-import wdlTools.syntax.WdlVersion
-import wdlTools.util.{JsUtils, Logger, TraceLevel}
+import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
 
 /**
   * Compiler CLI.
   */
 object Main {
-  private val DEFAULT_RUNTIME_TRACE_LEVEL: Int = TraceLevel.Verbose
+  private val DefaultRuntimeTraceLevel: Int = TraceLevel.Verbose
 
-  private def initLogger(options: OptionsMap): Unit = {
-    val verboseKeys: Set[String] = options.get("verboseKey") match {
-      case None                 => Set.empty
-      case Some(modulesToTrace) => modulesToTrace.toSet
+  private case class LanguageOptionSpec() extends OptionSpec {
+
+    /**
+      * Parses a language argument. Accepts the following:
+      *  'cwl'
+      *  'cwlv1.2'
+      *  'cwl 1.2'
+      *  'draft2' -> WDL draft2
+      */
+    override def parseValues(name: String, values: Vector[String], curValue: Option[Opt]): Opt = {
+      if (curValue.nonEmpty) {
+        throw OptionParseException(s"Option ${name} specified multiple times")
+      }
+      val language = values match {
+        case Vector(language) =>
+          Language.parse(Some(language))
+        case Vector(language, version) =>
+          Language.parse(Some(version), Some(language))
+        case _ =>
+          throw OptionParseException(s"Unexpected value ${values} to option ${name}")
+      }
+      SingleValueOption[Language](language)
     }
-    val traceLevel: Int = getTraceLevel(
-        options.get("runtimeDebugLevel"),
-        if (options.contains("verbose")) TraceLevel.Verbose else TraceLevel.None
-    )
-    val logger = Logger(quiet = options.contains("quiet"), traceLevel = traceLevel, verboseKeys)
-    Logger.set(logger)
   }
 
-  // parse extra command line arguments
-  private def parseCmdlineOptions(arglist: List[String]): OptionsMap = {
-    val keywordValueIsList = Set("inputs", "imports", "verboseKey")
-    val options = splitCmdLine(arglist).foldLeft(Map.empty[String, Vector[String]]) {
-      case (_, Nil) => throw new Exception("Empty command line option")
-      case (accu, keyOrg :: subargs) =>
-        val keyword = normKeyword(keyOrg)
-        val (nKeyword: String, value: String) = keyword match {
-          case "apps" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "archive" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "compileMode" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "defaults" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "destination" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "execTree" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "extras" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "fatalValidationWarnings" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "folder" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "force" | "f" | "overwrite" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            ("force", "")
-          case "help" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "input" | "inputs" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "imports" | "p" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            ("imports", subargs.head)
-          case "language" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "leaveWorkflowsOpen" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "locked" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "o" | "output" | "outputFile" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            ("outputFile", subargs.head)
-          case "path" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "project" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "projectWideReuse" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "q" | "quiet" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            ("quiet", "")
-          case "r" | "recursive" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            ("recursive", "")
-          case "reorg" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "runtimeDebugLevel" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case "streamAllFiles" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            ("streamAllFiles", "")
-          case "verbose" =>
-            checkNumberOfArguments(keyword, 0, subargs)
-            (keyword, "")
-          case "verboseKey" =>
-            checkNumberOfArguments(keyword, 1, subargs)
-            (keyword, subargs.head)
-          case _ =>
-            throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
-        }
-        if (accu.contains(nKeyword) && keywordValueIsList.contains(nKeyword)) {
-          // append to the already existing verbose flags
-          val newValue: Vector[String] = value +: accu(nKeyword)
-          accu + (nKeyword -> newValue)
-        } else {
-          // either the first time we've seen this key, or overwrite the previous value
-          accu + (nKeyword -> Vector(value))
-        }
+  private val SimpleOptions: OptionSpecs = Map(
+      "help" -> FlagOptionSpec.Default,
+      "quiet" -> FlagOptionSpec.Default,
+      "verbose" -> FlagOptionSpec.Default,
+      "verboseKey" -> StringOptionSpec.List
+  )
+
+  private def parseCommandLine(
+      args: Vector[String],
+      spec: OptionSpecs,
+      deprecated: Set[String] = Set.empty
+  ): Either[Termination, Options] = {
+    if (args.isEmpty) {
+      return Left(BadUsageTermination("WDL file to compile is missing"))
     }
-    initLogger(options)
-    options
+    val options =
+      try {
+        splitCommandLine(args, SimpleOptions ++ spec, deprecated)
+      } catch {
+        case e: OptionParseException =>
+          return Left(BadUsageTermination("Error parsing command line options", Some(e)))
+      }
+    if (options.getFlag("help")) {
+      return Left(BadUsageTermination())
+    }
+    Right(options)
+  }
+
+  private val CommonOptions: OptionSpecs = Map(
+      "destination" -> StringOptionSpec.One,
+      "force" -> FlagOptionSpec.Default,
+      "f" -> FlagOptionSpec.Default.copy(alias = Some("force")),
+      "overwrite" -> FlagOptionSpec.Default.copy(alias = Some("force")),
+      "folder" -> StringOptionSpec.One,
+      "project" -> StringOptionSpec.One,
+      "language" -> LanguageOptionSpec()
+  )
+
+  private def initCommon(options: Options): FileSourceResolver = {
+    val logger = initLogger(options)
+    val imports: Vector[Path] = options.getList[Path]("imports")
+    val fileResolver = FileSourceResolver.create(
+        imports,
+        Vector(DxFileAccessProtocol()),
+        logger
+    )
+    FileSourceResolver.set(fileResolver)
+    fileResolver
+  }
+
+  private def getLanguageSupport(
+      options: Options,
+      fileResolver: FileSourceResolver,
+      sourceFile: Option[Path] = None,
+      defaultValue: Option[Language] = None
+  ): LanguageSupport[_] = {
+    val supportedLanguages = Vector(
+        WdlLanguageSupportFactory(fileResolver)
+    )
+    val languageOpt = options.getValue[Language]("language").orElse(defaultValue)
+    val extrasPath = options.getValue[Path]("extras")
+    languageOpt match {
+      case Some(language) =>
+        supportedLanguages
+          .collectFirst { factory =>
+            factory.create(language, extrasPath) match {
+              case Some(support) => support
+            }
+          }
+          .getOrElse(
+              throw OptionParseException(s"Language ${language} is not supported")
+          )
+      case None if sourceFile.isDefined =>
+        supportedLanguages
+          .collectFirst { factory =>
+            factory.create(sourceFile.get, extrasPath) match {
+              case Some(support) => support
+            }
+          }
+          .getOrElse(
+              throw OptionParseException(
+                  s"Could not detect language from source file ${sourceFile}"
+              )
+          )
+      case _ =>
+        throw OptionParseException("Could not determine language")
+    }
   }
 
   // compile
 
-  case class SuccessIR(bundle: IR.Bundle,
-                       override val message: String = "Intermediate representation")
+  case class SuccessIR(bundle: Bundle, override val message: String = "Intermediate representation")
       extends SuccessfulTermination
 
-  object CompilerAction extends Enumeration {
-    type CompilerAction = Value
-    val Compile, Config, DXNI, Version, Describe = Value
+  case class SuccessPrettyTree(pretty: String) extends SuccessfulTermination {
+    def message: String = pretty
+  }
+  case class SuccessJsonTree(jsValue: JsValue) extends SuccessfulTermination {
+    lazy val message: String = jsValue match {
+      case JsNull => ""
+      case _      => jsValue.prettyPrint
+    }
   }
 
-  private def pathOptions(options: OptionsMap): (DxProject, String) = {
-    var folderOpt: Option[String] = options.get("folder") match {
-      case None            => None
-      case Some(Vector(f)) => Some(f)
-      case other           => throw new Exception(s"Unexpected value for 'folder': ${other}")
-    }
-    var projectOpt: Option[String] = options.get("project") match {
-      case None            => None
-      case Some(Vector(p)) => Some(p)
-      case other           => throw new Exception(s"Unexpected value for 'project': ${other}")
-    }
-    val destinationOpt: Option[String] = options.get("destination") match {
-      case None            => None
-      case Some(Vector(d)) => Some(d)
-      case Some(other)     => throw new Exception(s"Invalid path syntex <${other}>")
-    }
+  object CompilerAction extends Enum {
+    type CompilerAction = Value
+    val Compile, Config, DxNI, Version, Describe = Value
+  }
 
-    // There are three possible syntaxes:
-    //    project-id:/folder
-    //    project-id:
-    //    /folder
-    destinationOpt match {
-      case None => ()
-      case Some(d) if d contains ":" =>
-        val vec = d.split(":")
-        vec.length match {
-          case 1 if d.endsWith(":") =>
-            projectOpt = Some(vec(0))
-          case 2 =>
-            projectOpt = Some(vec(0))
-            folderOpt = Some(vec(1))
-          case _ => throw new Exception(s"Invalid path syntex <${d}>")
-        }
-      case Some(d) if d.startsWith("/") =>
-        folderOpt = Some(d)
-      case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
-    }
+  object CompilerFlag extends Enum {
+    type CompilerFlag = Value
+    val All, IR, NativeWithoutRuntimeAsset = Value
+  }
 
-    // Use the current dx path, if nothing else was
-    // specified
-    val (projectRaw, folderRaw) = (projectOpt, folderOpt) match {
-      case (None, _)          => throw new Exception("project is unspecified")
-      case (Some(p), None)    => (p, "/")
-      case (Some(p), Some(d)) => (p, d)
-    }
+  private case class CompileModeOptionSpec()
+      extends SingleValueOptionSpec[CompilerFlag](choices = CompilerFlag.values) {
+    override def parseValue(value: String): CompilerFlag =
+      CompilerFlag.withNameIgnoreCase(value)
+  }
 
-    if (folderRaw.isEmpty) {
-      throw new Exception(s"Cannot specify empty folder")
-    }
-    if (!folderRaw.startsWith("/")) {
-      throw new Exception(s"Folder must start with '/'")
-    }
+  private case class ExecTreeFormatOptionSpec()
+      extends SingleValueOptionSpec[ExecTreeFormat](choices = ExecTreeFormat.values) {
+    override def parseValue(value: String): ExecTreeFormat =
+      ExecTreeFormat.withNameIgnoreCase(value)
+  }
 
-    val dxFolder = folderRaw
+  private def CompileOptions: OptionSpecs = Map(
+      "archive" -> FlagOptionSpec.Default,
+      "compileMode" -> CompileModeOptionSpec(),
+      "defaults" -> PathOptionSpec.MustExist,
+      "execTree" -> ExecTreeFormatOptionSpec(),
+      "extras" -> PathOptionSpec.MustExist,
+      "inputs" -> PathOptionSpec.ListMustExist,
+      "input" -> PathOptionSpec.ListMustExist.copy(alias = Some("inputs")),
+      "locked" -> FlagOptionSpec.Default,
+      "leaveWorkflowsOpen" -> FlagOptionSpec.Default,
+      "imports" -> PathOptionSpec.ListMustExist,
+      "p" -> PathOptionSpec.ListMustExist.copy(alias = Some("imports")),
+      "projectWideReuse" -> FlagOptionSpec.Default,
+      "reorg" -> FlagOptionSpec.Default,
+      "runtimeDebugLevel" -> IntOptionSpec.One.copy(choices = Set(0, 1, 2)),
+      "streamAllFiles" -> FlagOptionSpec.Default
+  )
+
+  private val DeprecatedCompileOptions = Set(
+      "fatalValidationWarnings"
+  )
+
+  private def resolveDestination(
+      project: String,
+      folder: Option[String] = None,
+      path: Option[String] = None
+  ): (DxProject, Either[String, DxDataObject]) = {
     val dxProject =
       try {
-        DxApi.get.resolveProject(projectRaw)
+        DxApi.get.resolveProject(project)
       } catch {
-        case e: Exception =>
-          Logger.get.error(e.getMessage)
+        case t: Throwable =>
           throw new Exception(
-              s"""|Could not find project ${projectRaw}, you probably need to be logged into
-                  |the platform""".stripMargin
+              s"""|Could not find project ${project}, you probably need to be logged into
+                  |the platform""".stripMargin,
+              t
           )
       }
+    val folderOrPath = (folder, path) match {
+      case (Some(f), None) =>
+        // Validate the folder.
+        // TODO: check for folder existance rather than listing the contents, which could
+        //   be very large.
+        dxProject.listFolder(f)
+        Left(f)
+      case (None, Some(p)) =>
+        // validate the file
+        val dataObj = DxApi.get.resolveOnePath(p, Some(dxProject))
+        Right(dataObj)
+      case _ =>
+        throw OptionParseException("must specify exactly one of (folder, path)")
+    }
     Logger.get.trace(s"""|project ID: ${dxProject.id}
-                         |folder: ${dxFolder}""".stripMargin)
-    (dxProject, dxFolder)
+                         |path: ${folderOrPath}""".stripMargin)
+    (dxProject, folderOrPath)
   }
 
-  // Get basic information about the dx environment, and process
-  // the compiler flags
-  private def compilerOptions(options: OptionsMap): CompilerOptions = {
-    val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-      case None                                                 => CompilerFlag.All
-      case Some(Vector(x)) if x.toLowerCase == "IR".toLowerCase => CompilerFlag.IR
-      case Some(Vector(x)) if x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase =>
-        CompilerFlag.NativeWithoutRuntimeAsset
-      case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
+  private def resolveDestination(project: String, folder: String): (DxProject, String) = {
+    resolveDestination(project, Some(folder)) match {
+      case (dxProject, Left(folder)) => (dxProject, folder)
+      case _                         => throw new Exception("expected folder")
     }
-    val defaults: Option[Path] = options.get("defaults") match {
-      case None            => None
-      case Some(Vector(p)) => Some(Paths.get(p))
-      case _               => throw new Exception("defaults specified twice")
+  }
+
+  // There are three possible syntaxes:
+  //    project-id:/folder
+  //    project-id:
+  //    /folder
+  private def getDestination(options: Options): (DxProject, String) = {
+    val destinationOpt: Option[String] = options.getValue[String]("destination")
+    val folderOpt: Option[String] = options.getValue[String]("folder")
+    val projectOpt: Option[String] = options.getValue[String]("project")
+    val destRegexp = "(.+):(.*)".r
+    val (project, folder) = (destinationOpt, projectOpt, folderOpt) match {
+      case (Some(destRegexp(project, folder)), _, _) if folder.startsWith("/") =>
+        (project, folder)
+      case (Some(destRegexp(project, emptyFolder)), _, Some(folder)) if emptyFolder.trim.isEmpty =>
+        (project, folder)
+      case (Some(destRegexp(project, emptyFolder)), _, None) if emptyFolder.trim.isEmpty =>
+        (project, "/")
+      case (Some(destRegexp(_, folder)), _, None) =>
+        throw OptionParseException(s"Invalid folder <${folder}>")
+      case (Some(folder), Some(project), _) if folder.startsWith("/") =>
+        (project, folder)
+      case (Some(folder), None, _) if folder.startsWith("/") =>
+        throw OptionParseException("Project is unspecified")
+      case (Some(other), _, _) =>
+        throw OptionParseException(s"Invalid destination <${other}>")
+      case (None, Some(project), Some(folder)) =>
+        (project, folder)
+      case (None, Some(project), None) =>
+        (project, "/")
+      case _ =>
+        throw OptionParseException("Project is unspecified")
     }
-    val extras = options.get("extras") match {
-      case None => None
-      case Some(Vector(p)) =>
-        Some(Extras.parse(JsUtils.jsFromFile(Paths.get(p))))
-      case _ => throw new Exception("extras specified twice")
-    }
-    val inputs: Vector[Path] = options.get("inputs") match {
-      case None     => Vector.empty
-      case Some(pl) => pl.map(p => Paths.get(p))
-    }
-    val imports: Vector[Path] = options.get("imports") match {
-      case None     => Vector.empty
-      case Some(pl) => pl.map(p => Paths.get(p))
-    }
-    val treePrinter: Option[TreePrinter] = options.get("execTree") match {
-      case None => None
-      case Some(treeType) =>
-        treeType.head.toLowerCase match {
-          case "json" =>
-            Some(JsonTreePrinter)
-          case "pretty" =>
-            Some(PrettyTreePrinter)
-          case other =>
-            throw new Exception(s"--execTree must be either json or pretty, found $other")
+    resolveDestination(project, folder)
+  }
+
+  private[compiler] def compile(args: Vector[String]): Termination = {
+    val sourceFile: Path = args.headOption
+      .map(Paths.get(_))
+      .getOrElse(
+          throw OptionParseException(
+              "Missing required positional argument <WDL file>"
+          )
+      )
+    val options: Options =
+      parseCommandLine(args.tail, CommonOptions ++ CompileOptions, DeprecatedCompileOptions) match {
+        case Left(termination) => return termination
+        case Right(options)    => options
+      }
+    val fileResolver = initCommon(options)
+    // language-specific features
+    val languageSupport = getLanguageSupport(options, fileResolver, Some(sourceFile))
+    // Extras parsing is language-specific
+    val extras = languageSupport.getExtras
+    if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
+      Set("reorg", "locked").foreach { opt =>
+        if (options.contains(opt)) {
+          throw OptionParseException(
+              s"ERROR: cannot provide --reorg option when ${opt} is specified in extras."
+          )
         }
-    }
-    val runtimeTraceLevel =
-      getTraceLevel(options.get("runtimeDebugLevel"), DEFAULT_RUNTIME_TRACE_LEVEL)
-    if (extras.isDefined) {
-      if (extras.contains("reorg") && (options contains "reorg")) {
-        throw new InvalidInputException(
-            "ERROR: cannot provide --reorg option when reorg is specified in extras."
-        )
-      }
-      if (extras.contains("reorg") && (options contains "locked")) {
-        throw new InvalidInputException(
-            "ERROR: cannot provide --locked option when reorg is specified in extras."
-        )
       }
     }
-    CompilerOptions(
-        options contains "archive",
-        compileMode,
-        defaults,
-        extras,
-        options contains "fatalValidationWarnings",
-        options contains "force",
-        imports,
-        inputs,
-        options contains "leaveWorkflowsOpen",
-        options contains "locked",
-        options contains "projectWideReuse",
-        options contains "reorg",
-        options contains "streamAllFiles",
-        // options contains "execTree",
-        treePrinter,
-        runtimeTraceLevel
-    )
-  }
-
-  def compile(args: Seq[String]): Termination = {
-    if (args.isEmpty)
-      return BadUsageTermination("WDL file to compile is missing")
-    val sourceFile = Paths.get(args.head)
-    val options =
-      try {
-        parseCmdlineOptions(args.tail.toList)
-      } catch {
-        case e: Throwable =>
-          return BadUsageTermination(exception = Some(e))
-      }
-    if (options contains "help")
-      return BadUsageTermination()
+    // other non-flag options
+    val compileMode: CompilerFlag =
+      options.getValueOrElse[CompilerFlag]("compileMode", CompilerFlag.All)
+    val (dxProject, folder) = getDestination(options)
+    val defaults: Option[Path] = options.getValue[Path]("defaults")
+    val inputs: Vector[Path] = options.getList[Path]("inputs")
+    val execTreeFormat: Option[ExecTreeFormat] = options.getValue[ExecTreeFormat]("execTree")
+    val runtimeTraceLevel: Int =
+      options.getValueOrElse[Int]("runtimeDebugLevel", DefaultRuntimeTraceLevel)
+    // flags
+    val Vector(
+        archive,
+        force,
+        leaveWorkflowsOpen,
+        locked,
+        projectWideReuse,
+        reorg,
+        streamAllFiles
+    ) = Vector(
+        "archive",
+        "force",
+        "leaveWorkflowsOpen",
+        "locked",
+        "projectWideReuse",
+        "reorg",
+        "streamAllFiles"
+    ).map(options.getFlag(_))
 
     try {
-      val cOpt = compilerOptions(options)
-      val top = Top(cOpt)
-      val (dxProject, folder) = pathOptions(options)
-      cOpt.compileMode match {
-        case CompilerFlag.IR =>
-          val ir: IR.Bundle = top.applyOnlyIR(sourceFile, dxProject)
-          SuccessIR(ir)
-
-        case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
-          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles)
-          val (retval, treeDesc) =
-            top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
-          treeDesc match {
-            case None =>
-              Success(retval)
-            case Some(treePretty) =>
-              SuccessTree(treePretty)
-          }
+      // generate IR
+      val translator = languageSupport.getTranslator
+      val bundle = translator.apply(
+          sourceFile,
+          dxProject,
+          inputs,
+          defaults,
+          locked,
+          if (reorg) Some(true) else None
+      )
+      if (compileMode == CompilerFlag.IR) {
+        return SuccessIR(bundle)
+      }
+      // compile to native
+      val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
+      val dxPathConfig = DxPathConfig.apply(baseDNAxDir, streamAllFiles)
+      val compiler = Compiler(
+          includeAsset,
+          extras,
+          execTreeFormat,
+          runtimeTraceLevel,
+          archive,
+          force,
+          leaveWorkflowsOpen,
+          locked,
+          projectWideReuse,
+          dxPathConfig,
+          fileResolver
+      )
+      val (retval, treeDesc) = compiler.apply(bundle, folder, dxProject)
+      treeDesc match {
+        case None                   => Success(retval)
+        case Some(Left(treePretty)) => SuccessPrettyTree(treePretty)
+        case Some(Right(treeJs))    => SuccessJsonTree(treeJs)
       }
     } catch {
       case e: Throwable =>
@@ -336,170 +370,127 @@ object Main {
 
   // DxNI
 
-  def dxni(args: Seq[String]): Termination = {
-    val options =
-      try {
-        parseCmdlineOptions(args.toList)
-      } catch {
-        case e: Throwable =>
-          return BadUsageTermination(exception = Some(e))
-      }
+  private def DxNIOptions: OptionSpecs = Map(
+      "appsOnly" -> FlagOptionSpec.Default,
+      "apps" -> FlagOptionSpec.Default.copy(alias = Some("appsOnly")),
+      "path" -> StringOptionSpec.One,
+      "outputFile" -> PathOptionSpec.Default,
+      "output" -> PathOptionSpec.Default.copy(alias = Some("outputFile")),
+      "o" -> PathOptionSpec.Default.copy(alias = Some("outputFile")),
+      "recursive" -> FlagOptionSpec.Default,
+      "r" -> FlagOptionSpec.Default.copy(alias = Some("recursive"))
+  )
 
-    if (options.contains("help")) {
-      return BadUsageTermination()
+  private[compiler] def dxni(args: Vector[String]): Termination = {
+    val options = parseCommandLine(args, CommonOptions ++ DxNIOptions) match {
+      case Left(termination) => return termination
+      case Right(options)    => options
     }
-
-    try {
-      val language = options.get("language") match {
-        case None              => Language.Default
-        case Some(Vector(buf)) => Language.parse(Some(buf))
-        case _                 => throw new Exception("only one language can be specified")
-      }
-      val dxni = language match {
-        case Language.WDLvDraft2 =>
-          Logger.get.warning("Upgrading draft-2 input to verion 1.0")
-          WdlDxNativeInterface(WdlVersion.V1)
-        case Language.WDLv1_0 =>
-          WdlDxNativeInterface(WdlVersion.V1)
-        case _ =>
-          throw new Exception(s"DxNI not supported for language ${language}")
-      }
-      val outputFile: Path = options.get("outputFile") match {
-        case None            => throw new Exception("output file not specified")
-        case Some(Vector(p)) => Paths.get(p)
-        case _               => throw new Exception("only one output file can be specified")
-      }
-      val project: String = options.get("project") match {
-        case None            => throw new Exception("no project specified")
-        case Some(Vector(p)) => p
-        case _               => throw new Exception("project specified multiple times")
-      }
-      val dxProject =
-        try {
-          DxApi.get.resolveProject(project)
-        } catch {
-          case e: Exception =>
-            Logger.get.error(e.getMessage)
-            throw new Exception(
-                s"""|Could not find project ${project}, you probably need to be logged into
-                    |the platform""".stripMargin
-            )
-        }
-      val folder = options.get("folder") match {
-        case None             => None
-        case Some(Vector(fl)) =>
-          // Validate the folder. It would have been nicer to be able
-          // to check if a folder exists, instead of validating by
-          // listing its contents, which could be very large.
-          try {
-            dxProject.listFolder(fl)
-          } catch {
-            case e: Throwable =>
-              throw new Exception(s"err when validating folder ${fl} : ${e}")
-          }
-          Some(fl)
-        case Some(_) => throw new Exception("folder specified multiple times")
-      }
-      val path: Option[String] = options.get("path") match {
-        case None            => None
-        case Some(Vector(p)) => Some(p)
-        case Some(_)         => throw new Exception("path specified multiple times")
-      }
-      val folderOrPath: Either[String, String] = (folder, path) match {
-        case (None, None)       => Left("/") // use the root folder as the default
-        case (Some(fl), None)   => Left(fl)
-        case (None, Some(p))    => Right(p)
-        case (Some(_), Some(_)) => throw new Exception("both folder and path specified")
-      }
-      val recursive = options.contains("recursive")
-      val force = options.contains("force")
-      val apps = options.contains("apps")
+    val fileResolver = initCommon(options)
+    val languageSupport =
+      getLanguageSupport(options, fileResolver, defaultValue = Some(Language.WdlDefault))
+    val dxni = languageSupport.getDxNativeInterface
+    val outputFile: Path = options.getRequiredValue[Path]("outputFile")
+    // flags
+    val Vector(
+        appsOnly,
+        force,
+        recursive
+    ) = Vector(
+        "appsOnly",
+        "force",
+        "recursive"
+    ).map(options.getFlag(_))
+    if (appsOnly) {
       try {
-        if (apps) {
-          dxni.apply(dxProject, folderOrPath, outputFile, recursive, force)
-        } else {
-          dxni.applyApplets(dxProject, folderOrPath, outputFile, recursive, force)
+        dxni.apply(outputFile, force)
+        Success()
+      } catch {
+        case e: Throwable => Failure(exception = Some(e))
+      }
+    } else {
+      val project: String = options.getRequiredValue[String]("project")
+      val folderOpt = options.getValue[String]("folder")
+      val pathOpt = options.getValue[String]("path")
+      val (dxProject, folderOrFile) = resolveDestination(project, folderOpt, pathOpt)
+      try {
+        folderOrFile match {
+          case Left(folder) =>
+            dxni.apply(outputFile,
+                       dxProject,
+                       folder = Some(folder),
+                       recursive = recursive,
+                       force = force)
+          case Right(applet: DxApplet) =>
+            dxni.apply(outputFile,
+                       dxProject,
+                       applet = Some(applet),
+                       recursive = recursive,
+                       force = force)
+          case _ =>
+            throw OptionParseException(
+                s"Invalid folder/path ${folderOrFile}"
+            )
         }
         Success()
       } catch {
         case e: Throwable => Failure(exception = Some(e))
       }
-    } catch {
-      case e: Throwable => BadUsageTermination(exception = Some(e))
     }
   }
 
   // describe
 
-  case class SuccessTree(pretty: Either[String, JsValue]) extends SuccessfulTermination {
-    lazy val message: String = {
-      pretty match {
-        case Left(str)                 => str
-        case Right(js) if js != JsNull => js.prettyPrint
-      }
+  private def DescribeOptions: OptionSpecs = Map(
+      "pretty" -> FlagOptionSpec.Default
+  )
+
+  private[compiler] def describe(args: Vector[String]): Termination = {
+    val workflowId = args.headOption.getOrElse(
+        throw OptionParseException(
+            "Missing required positional argument <WDL file>"
+        )
+    )
+    val options = parseCommandLine(args.tail, DescribeOptions) match {
+      case Left(termination) => return termination
+      case Right(options)    => options
     }
-  }
-
-  def describe(args: Seq[String]): Termination = {
-    if (args.isEmpty) {
-      return BadUsageTermination("Workflow ID is not provided")
-    }
-
-    val acceptedKeywords = Set("pretty", "help")
-    val options =
-      try {
-        splitCmdLine(args.tail.toList).foldLeft(Map.empty[String, Vector[String]]) {
-          case (accu, Nil) => accu
-          case (accu, keyOrg :: subargs) =>
-            val keyword = normKeyword(keyOrg)
-            if (acceptedKeywords.contains(keyword)) {
-              checkNumberOfArguments(keyword, 0, subargs)
-              accu + (keyword -> Vector(""))
-            } else {
-              throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
-            }
-        }
-      } catch {
-        case e: Throwable =>
-          return BadUsageTermination(exception = Some(e))
-      }
-
-    if (options contains "help") {
-      return BadUsageTermination()
-    }
-
     try {
-      val workflowId = args.head
       val wf = DxApi.get.workflow(workflowId)
-      val execTreeJS = Tree.fromDxWorkflow(wf)
-      if (options contains "pretty") {
-        val prettyTree = Tree.generateTreeFromJson(execTreeJS.asJsObject)
-        SuccessTree(Left(prettyTree))
+      val execTreeJS = ExecTree.fromDxWorkflow(wf)
+      if (options.getFlag("pretty")) {
+        val prettyTree = ExecTree.generateTreeFromJson(execTreeJS.asJsObject)
+        SuccessPrettyTree(prettyTree)
       } else {
-        SuccessTree(Right(execTreeJS))
+        SuccessJsonTree(execTreeJS)
       }
     } catch {
       case e: Throwable => BadUsageTermination(exception = Some(e))
     }
   }
 
-  // public API
-
-  def dispatchCommand(args: Seq[String]): Termination = {
+  private[compiler] def dispatchCommand(args: Vector[String]): Termination = {
     if (args.isEmpty) {
       return BadUsageTermination()
     }
-    val action = CompilerAction.values.find(x => normKey(x.toString) == normKey(args.head))
-    action match {
-      case None => BadUsageTermination()
-      case Some(x) =>
-        x match {
-          case CompilerAction.Compile  => compile(args.tail)
-          case CompilerAction.Describe => describe(args.tail)
-          case CompilerAction.Config   => Success(ConfigFactory.load().toString)
-          case CompilerAction.DXNI     => dxni(args.tail)
-          case CompilerAction.Version  => Success(getVersion)
-        }
+    val action =
+      try {
+        CompilerAction.withNameIgnoreCase(args.head.replaceAll("_", ""))
+      } catch {
+        case _: NoSuchElementException =>
+          return BadUsageTermination()
+      }
+    try {
+      action match {
+        case CompilerAction.Compile  => compile(args.tail)
+        case CompilerAction.Describe => describe(args.tail)
+        case CompilerAction.DxNI     => dxni(args.tail)
+        case CompilerAction.Config   => Success(ConfigFactory.load().toString)
+        case CompilerAction.Version  => Success(getVersion)
+      }
+    } catch {
+      case e: Throwable =>
+        BadUsageTermination(exception = Some(e))
     }
   }
 
@@ -507,11 +498,17 @@ object Main {
     s"""|java -jar dxWDL.jar <action> <parameters> [options]
         |
         |Actions:
+        |  version
+        |    Prints the dxWDL version
+        |  
+        |  config
+        |    Prints the current dxWDL configuration
+        |  
         |  describe <DxWorkflow ID>
         |    Generate the execution tree as JSON for a given dnanexus workflow ID.
         |    Workflow needs to be have been previoulsy compiled by dxWDL.
         |    options
-        |      -pretty                Print exec tree in pretty format
+        |      -pretty                Print exec tree in pretty format instead of JSON
         |
         |  compile <WDL file>
         |    Compile a wdl file into a dnanexus workflow.
@@ -522,12 +519,12 @@ object Main {
         |      -archive               Archive older versions of applets
         |      -compileMode <string>  Compilation mode, a debugging flag
         |      -defaults <string>     File with Cromwell formatted default values (JSON)
-        |      -destination <string>  Output path on the platform for workflow
         |      -execTree [json,pretty] Write out a json representation of the workflow
         |      -extras <string>       JSON formatted file with extra options, for example
         |                             default runtime options for tasks.
         |      -inputs <string>       File with Cromwell formatted inputs
         |      -locked                Create a locked-down workflow
+        |      -leaveWorkflowsOpen    Leave created workflows open (otherwise they are closed)
         |      -p | -imports <string> Directory to search for imported WDL files
         |      -projectWideReuse      Look for existing applets/workflows in the entire project
         |                             before generating new ones. The normal search scope is the
@@ -544,22 +541,24 @@ object Main {
         |    tasks in a local file. Allows calling existing platform executables
         |    without modification. Default is to look for applets.
         |    options:
-        |      -apps                  Search only for global apps.
+        |      -appsOnly              Search only for global apps.
+        |      -path <string>         Path to a specific applet
         |      -o <string>            Destination file for WDL task definitions
         |      -r | recursive         Recursive search
-        |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0)
         |
         |Common options
-        |    -destination             Full platform path (project:/folder)
+        |    -help                    Print this help message and exit
+        |    -destination <string>    Full platform path (project:/folder)
         |    -f | force               Delete existing applets/workflows
         |    -folder <string>         Platform folder
         |    -project <string>        Platform project
+        |    -language <string> [ver] Which language to use? (wdl or cwl; can optionally specify version)
         |    -quiet                   Do not print warnings or informational outputs
         |    -verbose                 Print detailed progress reports
-        |    -verboseKey [module]     Detailed information for a specific module
+        |    -verboseKey <module>     Detailed information for a specific module
         |""".stripMargin
 
   def main(args: Seq[String]): Unit = {
-    terminate(dispatchCommand(args), Some(usageMessage))
+    terminate(dispatchCommand(args.toVector), Some(usageMessage))
   }
 }

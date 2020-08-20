@@ -1,19 +1,20 @@
 package dx.compiler.ir
 
+import dx.api.DiskType.DiskType
 import dx.api.DxFile
 
 /**
   * Representation of the parts of dxapp.json `runSpec` that can be specified.
   */
-object Runtime {
+object RunSpec {
   sealed abstract class Requirement
-  final case class RestartRequirement(max: Option[Int] = None,
-                                      default: Option[Int] = None,
-                                      errors: Map[String, Int] = Map.empty)
+  final case class RestartRequirement(max: Option[Long] = None,
+                                      default: Option[Long] = None,
+                                      errors: Map[String, Long] = Map.empty)
       extends Requirement
-  final case class TimeoutRequirement(days: Option[Int] = None,
-                                      hours: Option[Int] = None,
-                                      minutes: Option[Int] = None)
+  final case class TimeoutRequirement(days: Option[Long] = None,
+                                      hours: Option[Long] = None,
+                                      minutes: Option[Long] = None)
       extends Requirement
   final case class IgnoreReuseRequirement(value: Boolean) extends Requirement
   final case class AccessRequirement(network: Vector[String] = Vector.empty,
@@ -22,6 +23,7 @@ object Runtime {
                                      developer: Option[Boolean] = None,
                                      projectCreation: Option[Boolean] = None)
       extends Requirement
+  final case class StreamingRequirement(value: Boolean) extends Requirement
 
   /**
     * Specification of instance type.
@@ -30,7 +32,7 @@ object Runtime {
     *  Static:  instance type is known at compile time. We can start the
     *           job directly on the correct instance type.
     *  Dynamic: WDL specifies a calculation for the instance type, based
-    *           on information known only at runtime. The generated applet
+    *           on information known only at runtime. The generated app(let)
     *           will need to evalulate the expressions at runtime, and then
     *           start another job on the correct instance type.
     */
@@ -38,9 +40,10 @@ object Runtime {
   case object DefaultInstanceType extends InstanceType
   case class StaticInstanceType(
       dxInstanceType: Option[String],
-      memoryMB: Option[Int],
-      diskGB: Option[Int],
-      cpu: Option[Int],
+      memoryMB: Option[Long],
+      diskGB: Option[Long],
+      diskType: Option[DiskType],
+      cpu: Option[Long],
       gpu: Option[Boolean]
   ) extends InstanceType
   case object DynamicInstanceType extends InstanceType
@@ -55,5 +58,5 @@ object Runtime {
   sealed trait ContainerImage
   case object NoImage extends ContainerImage
   case object NetworkDockerImage extends ContainerImage
-  case class DxFileDockerImage(url: String, tarball: DxFile) extends ContainerImage
+  case class DxFileDockerImage(uri: String, tarball: DxFile) extends ContainerImage
 }

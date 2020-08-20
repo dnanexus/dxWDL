@@ -58,7 +58,7 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dx.exec
 
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.languages.wdl.{DxlExec, ExecLinkInfo, WdlVarLinks, WdlVarLinksConverter}
+import dx.core.languages.wdl.{DxLinkExec, ExecLinkInfo, WdlVarLinks, WdlVarLinksConverter}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
@@ -91,7 +91,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     // is exactly the same as the parent, we can immediately exit the parent job.
     exportTypes.map {
       case (eVarName, wdlType) =>
-        eVarName -> WdlVarLinks(wdlType, DxlExec(dxSubJob, eVarName))
+        eVarName -> WdlVarLinks(wdlType, DxLinkExec(dxSubJob, eVarName))
     }
   }
 

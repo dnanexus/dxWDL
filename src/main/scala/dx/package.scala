@@ -13,6 +13,4 @@ class PermissionDeniedException(message: String) extends Exception(message) {
   }
 }
 
-class InvalidInputException(s: String) extends Exception(s)
-
 class IllegalArgumentException(s: String) extends Exception(s)

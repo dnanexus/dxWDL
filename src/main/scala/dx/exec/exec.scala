@@ -1,6 +1,7 @@
 package dx
 
 import java.nio.file.Path
+import wdlTools.util.Enum
 
 package object exec {
   val DXFUSE_MAX_MEMORY_CONSUMPTION: Int = 300 * 1024 * 1024 // how much memory dxfuse takes
@@ -11,7 +12,7 @@ package object exec {
   // Different ways of using the mini-workflow runner.
   //   Launch:     there are WDL calls, lanuch the dx:executables.
   //   Collect:    the dx:exucutables are done, collect the results.
-  object RunnerWfFragmentMode extends Enumeration {
+  object RunnerWfFragmentMode extends Enum {
     type RunnerWfFragmentMode = Value
     val Launch, Collect = Value
   }

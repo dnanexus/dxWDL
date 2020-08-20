@@ -26,7 +26,8 @@ price       comparative price
   */
 package dx.api
 
-import wdlTools.util.JsUtils
+import dx.api.DiskType.DiskType
+import wdlTools.util.{Enum, JsUtils}
 import spray.json._
 
 // Instance Type on the platform. For example:
@@ -39,14 +40,32 @@ case class DxInstanceType(name: String,
                           memoryMB: Int,
                           diskGB: Int,
                           cpu: Int,
-                          price: Float,
+                          gpu: Boolean,
                           os: Vector[(String, String)],
-                          gpu: Boolean) {
+                          diskType: Option[DiskType] = None,
+                          price: Option[Float] = None)
+    extends Ordered[DxInstanceType] {
+
+  def compare(that: DxInstanceType): Int = {
+    // if prices are available, choose the cheapest instance. Otherwise,
+    // choose one with minimal resources.
+    val costDiff = if (price.isDefined) {
+      compareByPrice(that)
+    } else {
+      compareByResources(that)
+    }
+    costDiff match {
+      case 0 => -compareByType(that)
+      case _ => costDiff
+    }
+  }
+
   // Does this instance satisfy the requirements?
   def satisfies(memReq: Option[Long],
                 diskReq: Option[Long],
                 cpuReq: Option[Long],
-                gpuReq: Option[Boolean]): Boolean = {
+                gpuReq: Option[Boolean],
+                diskType: Option[DiskType]): Boolean = {
     memReq match {
       case Some(x) => if (memoryMB < x) return false
       case None    => ()
@@ -63,16 +82,24 @@ case class DxInstanceType(name: String,
       case Some(flag) => if (flag != gpu) return false
       case None       => ()
     }
+    (this.diskType, diskType) match {
+      case (Some(dt1), Some(dt2)) if dt1 != dt2 => return false
+      case _                                    => ()
+    }
     true
   }
 
   def compareByPrice(that: DxInstanceType): Int = {
     // compare by price
-    if (this.price < that.price)
-      return -1
-    if (this.price > that.price)
-      return 1
-    0
+    (this.price, that.price) match {
+      case (Some(p1), Some(p2)) =>
+        p1 - p2 match {
+          case 0          => 0
+          case i if i > 0 => Math.ceil(i).toInt
+          case i          => Math.floor(i).toInt
+        }
+      case _ => 0
+    }
   }
 
   // Compare based on resource sizes. This is a partial ordering.
@@ -118,66 +145,56 @@ case class DxInstanceType(name: String,
 
 // support automatic conversion to/from JsValue
 object DxInstanceType extends DefaultJsonProtocol {
-  implicit val dxInstanceTypeFormat: RootJsonFormat[DxInstanceType] = jsonFormat7(
+  implicit val diskType: RootJsonFormat[DiskType] = jsonFormat1(DiskType.withNameIgnoreCase)
+  implicit val dxInstanceTypeFormat: RootJsonFormat[DxInstanceType] = jsonFormat8(
       DxInstanceType.apply
   )
 }
 
+object DiskType extends Enum {
+  type DiskType = Value
+  val HDD, SSD = Value
+}
+
 // Request for an instance type
-case class InstanceTypeReq(dxInstanceType: Option[String],
-                           memoryMB: Option[Long],
-                           diskGB: Option[Long],
-                           cpu: Option[Long],
-                           gpu: Option[Boolean])
+case class InstanceTypeRequest(dxInstanceType: Option[String] = None,
+                               memoryMB: Option[Long] = None,
+                               diskGB: Option[Long] = None,
+                               diskType: Option[DiskType] = None,
+                               cpu: Option[Long] = None,
+                               gpu: Option[Boolean] = None)
 
 case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanceType]) {
-  // if prices are available, choose the cheapest instance. Otherwise,
-  // choose one with minimal resources.
-  private def lteq(x: DxInstanceType, y: DxInstanceType): Boolean = {
-    val costDiff =
-      if (pricingAvailable) {
-        x.compareByPrice(y)
-      } else {
-        x.compareByResources(y)
-      }
-    if (costDiff != 0)
-      return costDiff <= 0
 
-    // cost is the same, compare by instance type. Better is HIGHER
-    x.compareByType(y) >= 0
-  }
-
-  // Calculate the dx instance type that fits best, based on
-  // runtime specifications.
-  //
-  // memory:    minimal amount of RAM, specified in MB
-  // diskSpace: minimal amount of disk space, specified in GB
-  // numCores:  minimal number of cores
-  //
-  // Solving this in an optimal way is a hard problem. The approximation
-  // we use here is:
-  // 1) discard all instances that do not have enough resources
-  // 2) choose the cheapest instance
+  /**
+    * Calculate the dx instance type that fits best, based on runtime specifications.
+    * Solving this in an optimal way is a hard problem. The approximation we use here is:
+    *  1) discard all instances that do not have enough resources
+    *  2) choose the cheapest instance
+    *
+    * @param memoryMB minimal amount of RAM, specified in MB
+    * @param diskGB minimal amount of disk space, specified in GB
+    * @param cpu minimal number of CPU cores
+    * @param gpu whether GPU is required
+    * @param diskType HDD or SSD
+    * @return instance type name
+    */
   def chooseAttrs(memoryMB: Option[Long],
                   diskGB: Option[Long],
                   cpu: Option[Long],
-                  gpu: Option[Boolean]): String = {
+                  gpu: Option[Boolean],
+                  diskType: Option[DiskType]): String = {
     // discard all instances that are too weak
-    val sufficient: Vector[DxInstanceType] =
-      instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu))
-    if (sufficient.isEmpty)
+    val filteredAndSorted: Vector[DxInstanceType] =
+      instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu, diskType)).sortWith(_ < _)
+    if (filteredAndSorted.isEmpty) {
       throw new Exception(
           s"""|No instances found that match the requirements
               |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu""".stripMargin
             .replaceAll("\n", " ")
       )
-    val initialGuess = sufficient.head
-    val bestInstance = sufficient.tail.foldLeft(initialGuess) {
-      case (bestSoFar, x) =>
-        if (lteq(x, bestSoFar)) x
-        else bestSoFar
     }
-    bestInstance.name
+    filteredAndSorted.head.name
   }
 
   def chooseShortcut(iType: String): String = {
@@ -195,14 +212,11 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
   }
 
   // The cheapest available instance, this is normally also the smallest.
-  private def calcMinimalInstanceType(iTypes: Set[DxInstanceType]): DxInstanceType = {
-    if (iTypes.isEmpty)
+  private def calcMinimalInstanceType(instanceTypes: Set[DxInstanceType]): DxInstanceType = {
+    if (instanceTypes.isEmpty) {
       throw new Exception("empty list")
-    iTypes.tail.foldLeft(iTypes.head) {
-      case (best, elem) =>
-        if (lteq(elem, best)) elem
-        else best
     }
+    instanceTypes.toVector.sortWith(_ < _).head
   }
 
   // A fast but cheap instance type. Used to run WDL expression
@@ -239,13 +253,13 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     }
   }
 
-  def apply(iType: InstanceTypeReq): String = {
-    iType.dxInstanceType match {
-      case None =>
-        chooseAttrs(iType.memoryMB, iType.diskGB, iType.cpu, iType.gpu)
-      case Some(dxIType) =>
+  def apply(iType: InstanceTypeRequest): String = {
+    iType match {
+      case InstanceTypeRequest(Some(dxInstanceType), _, _, _, _, _) =>
         // Shortcut the entire calculation, and provide the dx instance type directly
-        chooseShortcut(dxIType)
+        chooseShortcut(dxInstanceType)
+      case InstanceTypeRequest(None, memoryMB, diskGB, diskType, cpu, gpu) =>
+        chooseAttrs(memoryMB, diskGB, cpu, gpu, diskType)
     }
   }
 
@@ -293,9 +307,15 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
         val numCores = JsUtils.getInt(jsValue, Some("numCores"))
         val memoryMB = JsUtils.getInt(jsValue, Some("totalMemoryMB"))
         val diskSpaceGB = JsUtils.getInt(jsValue, Some("ephemeralStorageGB"))
+        val diskType = iName.toLowerCase match {
+          case s if s.contains("_ssd") => Some(DiskType.SSD)
+          case s if s.contains("_hdd") => Some(DiskType.HDD)
+          case _                       => None
+        }
         val os = getSupportedOSes(jsValue)
-        val gpu = iName contains "_gpu"
-        val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
+        val gpu = iName.toLowerCase.contains("_gpu")
+        val dxInstanceType =
+          DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, gpu, os, diskType)
         iName -> dxInstanceType
     }
   }
@@ -341,9 +361,10 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
                                iType.memoryMB,
                                iType.diskGB,
                                iType.cpu,
-                               hourlyRate,
+                               iType.gpu,
                                iType.os,
-                               iType.gpu)
+                               iType.diskType,
+                               Some(hourlyRate))
             )
         }
     }.toVector
@@ -439,18 +460,17 @@ case class InstanceTypeDbQuery(dxApi: DxApi) {
   // engineered. We do not want to risk disclosing the real price list. Leaking the
   // relative ordering of instances, but not actual prices, is considered ok.
   def opaquePrices(db: InstanceTypeDB): InstanceTypeDB = {
-    if (db.instances.isEmpty)
-      return db
     // check if there is no pricing information
-    if (!db.pricingAvailable)
+    if (db.instances.isEmpty || !db.pricingAvailable) {
       return db
-
+    }
     // sort the prices from low to high, and then replace
     // with rank.
-    val sortedInstances = db.instances.sortWith(_.price < _.price)
+    val sortedInstances = db.instances.sortWith(_.price.get < _.price.get)
     val (_, opaqueInstances) = sortedInstances.foldLeft((1.0, Vector.empty[DxInstanceType])) {
       case ((crntPrice, accu), instance) =>
-        val instanceOpq = instance.copy(price = crntPrice.toFloat)
+        val opaquePrice = Some(crntPrice.toFloat)
+        val instanceOpq = instance.copy(price = opaquePrice)
         (crntPrice + 1, accu :+ instanceOpq)
     }
     InstanceTypeDB(pricingAvailable = true, opaqueInstances)

@@ -1,9 +1,10 @@
 package dx.api
 
 import spray.json._
+import wdlTools.util.Enum
 
 // Extra fields for describe
-object Field extends Enumeration {
+object Field extends Enum {
   type Field = Value
   val Access, Analysis, App, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories,
       Created, Description, Details, DeveloperNotes, Executable, Folder, Id, IgnoreReuse, Inputs,

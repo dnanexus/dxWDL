@@ -4,6 +4,8 @@ import java.nio.file.Path
 
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
+import wdlTools.eval.Coercion
+import wdlTools.eval.WdlValues.V
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.{
@@ -13,7 +15,7 @@ import wdlTools.types.{
   WdlTypes,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{FileSource, FileSourceResolver, Logger}
+import wdlTools.util.{Bindings, FileSource, FileSourceResolver, Logger}
 
 object Utils {
   val locPlaceholder: SourceLocation = SourceLocation.empty
@@ -21,9 +23,9 @@ object Utils {
   // A self contained WDL workflow
   def getWdlVersion(language: Language): WdlVersion = {
     language match {
-      case Language.WDLvDraft2 => WdlVersion.Draft_2
-      case Language.WDLv1_0    => WdlVersion.V1
-      case Language.WDLv2_0    => WdlVersion.V2
+      case Language.WdlVDraft2 => WdlVersion.Draft_2
+      case Language.WdlV1_0    => WdlVersion.V1
+      case Language.WdlV2_0    => WdlVersion.V2
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
     }
@@ -89,7 +91,7 @@ object Utils {
   def parseSource(path: Path,
                   fileResolver: FileSourceResolver = FileSourceResolver.get,
                   regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
-                  logger: Logger = Logger.get): (TAT.Document, Map[String, WdlTypes.T_Struct]) = {
+                  logger: Logger = Logger.get): (TAT.Document, Bindings[WdlTypes.T_Struct]) = {
     val sourceCode = fileResolver.fromPath(path)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
@@ -100,7 +102,7 @@ object Utils {
                   sourceCode: FileSource,
                   fileResolver: FileSourceResolver = FileSourceResolver.get,
                   regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
-                  logger: Logger = Logger.get): (TAT.Document, Map[String, WdlTypes.T_Struct]) = {
+                  logger: Logger = Logger.get): (TAT.Document, Bindings[WdlTypes.T_Struct]) = {
     try {
       val doc = parser.parseDocument(sourceCode)
       val (tDoc, ctx) =
@@ -118,4 +120,20 @@ object Utils {
         throw te
     }
   }
+}
+
+case class ValueMap(values: Map[String, V]) {
+  def contains(id: String): Boolean = values.contains(id)
+
+  def get(id: String, wdlTypes: Vector[WdlTypes.T] = Vector.empty): Option[V] = {
+    (values.get(id), wdlTypes) match {
+      case (None, _)         => None
+      case (value, Vector()) => value
+      case (Some(value), _)  => Some(Coercion.coerceToFirst(wdlTypes, value))
+    }
+  }
+}
+
+object ValueMap {
+  lazy val empty: ValueMap = ValueMap(Map.empty)
 }

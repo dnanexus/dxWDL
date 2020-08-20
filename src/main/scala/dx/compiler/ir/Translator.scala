@@ -2,7 +2,7 @@ package dx.compiler.ir
 
 import java.nio.file.{Path, Paths}
 
-import dx.api.{DxApi, DxFile}
+import dx.api.{DxApi, DxFile, DxProject}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
@@ -12,7 +12,9 @@ import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
   * @param dxApi DxApi
   * @param logger Logger
   */
-abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
+abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.get,
+                          dxApi: DxApi = DxApi.get,
+                          logger: Logger = Logger.get) {
   private class Fields(name: String, fields: Map[String, JsValue]) {
     private var retrievedKeys: Set[String] = Set.empty
 
@@ -92,23 +94,23 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
   // Build a dx input file, based on the JSON input file and the workflow
   //
   // The general idea here is to figure out the ancestry of each
-  // applet/call/workflow input. This provides the fully-qualified-name (fqn)
+  // app(let)/call/workflow input. This provides the fully-qualified-name (fqn)
   // of each IR variable. Then we check if the fqn is defined in
   // the input file.
   private def dxFromInputJson(bundle: Bundle, inputs: Map[String, JsValue]): JsObject = {
     val inputFields = InputFile(inputs)
 
-    def handleTask(applet: Applet): Unit = {
-      applet.inputs.foreach { parameter =>
-        val fqn = s"${applet.name}.${parameter.name}"
+    def handleTask(application: Application): Unit = {
+      application.inputs.foreach { parameter =>
+        val fqn = s"${application.name}.${parameter.name}"
         val dxName = s"${parameter.name}"
         inputFields.checkAndBind(fqn, dxName, parameter)
       }
     }
 
     // If there is one task, we can generate one input file for it.
-    val tasks: Vector[Applet] = bundle.allCallables.collect {
-      case (_, callable: Applet) => callable
+    val tasks: Vector[Application] = bundle.allCallables.collect {
+      case (_, callable: Application) => callable
     }.toVector
 
     bundle.primaryCallable match {
@@ -119,7 +121,7 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
         handleTask(tasks.head)
       case None =>
         throw new Exception(s"Cannot generate one input file for ${tasks.size} tasks")
-      case Some(task: Applet) =>
+      case Some(task: Application) =>
         handleTask(task)
 
       case Some(wf: Workflow) if wf.locked =>
@@ -147,7 +149,7 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
         }
 
         // filter out auxiliary stages
-        val auxStages = Set(s"stage-${COMMON}", s"stage-${OUTPUT_SECTION}", s"stage-${REORG}")
+        val auxStages = Set(s"stage-${CommonStage}", s"stage-${OutputSection}", s"stage-${Reorg}")
         val middleStages = wf.stages.filter { stg =>
           !(auxStages contains stg.id.getId)
         }
@@ -184,13 +186,15 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
                                   reorgEnabled: Option[Boolean]): Bundle
 
   /**
-    * Given a mapping of field name to value, selects just the file-type fields.
+    * Given a mapping of field name to value, selects just the file-type fields
+    * and returns them as DxFiles.
     * @param fields all input + default fields
     * @return tuple of (pathToFile, allFiles), where pathToFile is a mapping of the
-    *          original path value to the resolved DxFile, and allFiles is all of the
-    *           input + default DxFiles.
+    *         original path value to the resolved DxFile, and allFiles is all of the
+    *         input + default DxFiles.
     */
-  protected def filterFiles(fields: Map[String, JsValue]): (Map[String, DxFile], Vector[DxFile])
+  protected def filterFiles(fields: Map[String, JsValue],
+                            dxProject: DxProject): (Map[String, DxFile], Vector[DxFile])
 
   /**
     * Updates `bundle` with default values.
@@ -208,6 +212,7 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
                               defaults: Map[String, JsValue]): Bundle
 
   def apply(source: Path,
+            dxProject: DxProject,
             inputs: Vector[Path] = Vector.empty,
             defaults: Option[Path] = None,
             locked: Boolean = false,
@@ -233,19 +238,16 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
       // Scan the JSON inputs files for dx:files, and batch describe them. This
       // reduces the number of API calls.
       val inputAndDefaultFields = (jsInputs.values.flatten ++ jsDefaults).toMap
-      val (pathToDxFile, dxFiles) = filterFiles(inputAndDefaultFields)
+      val (pathToDxFile, dxFiles) = filterFiles(inputAndDefaultFields, dxProject)
       // lookup platform files in bulk
       val allFiles = dxApi.fileBulkDescribe(dxFiles)
       val dxFileDescCache = DxFileDescCache(allFiles)
       // update bundle with default values
       val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-      val fileResolver = FileSourceResolver.create(
-          userProtocols = Vector(dxProtocol),
-          logger = logger
-      )
+      val fileResolverWithCache = fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
       embedDefaults(
           bundle,
-          fileResolver,
+          fileResolverWithCache,
           pathToDxFile,
           dxFileDescCache,
           jsDefaults

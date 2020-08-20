@@ -220,7 +220,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
     val dxObj = dxApi.resolveOnePath(
-        s"${DxPath.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
+        s"${DxPath.DxUriPrefix}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
     dxObj shouldBe a[DxApplet]
     val applet = dxObj.asInstanceOf[DxApplet]
@@ -490,11 +490,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     file_a.dx_type shouldBe Some(IOParameterTypeConstraintString("fastq"))
     file_b.dx_type shouldBe Some(
         IOParameterTypeConstraintOper(
-            ConstraintOper.AND,
+            ConstraintOper.And,
             Vector(
                 IOParameterTypeConstraintString("fastq"),
                 IOParameterTypeConstraintOper(
-                    ConstraintOper.OR,
+                    ConstraintOper.Or,
                     Vector(
                         IOParameterTypeConstraintString("Read1"),
                         IOParameterTypeConstraintString("Read2")
@@ -665,7 +665,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.developerNotes shouldBe Some("Check out my sick bash expression! Three dolla signs!!!")
     desc.properties match {
       case Some(m) =>
-        (m -- Set(VERSION_PROP, CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+        (m -- Set(VersionProperty, ChecksumProperty)) shouldBe Map("foo" -> "bar")
       case _ => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("Adds two int together")
@@ -862,7 +862,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
     desc.properties match {
       case Some(m) =>
-        (m -- Set(VERSION_PROP, CHECKSUM_PROP)) shouldBe Map("foo" -> "bar")
+        (m -- Set(VersionProperty, ChecksumProperty)) shouldBe Map("foo" -> "bar")
       case _ => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("A workflow that defines some metadata")
@@ -1020,7 +1020,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 1
-    reorgInput.fields.keys shouldBe Set(core.REORG_STATUS)
+    reorgInput.fields.keys shouldBe Set(core.ReorgStatus)
   }
 
   // ignore for now as the test will fail in staging
@@ -1066,7 +1066,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 2
-    reorgInput.fields.keys shouldBe Set(core.REORG_STATUS, REORG_CONFIG)
+    reorgInput.fields.keys shouldBe Set(core.ReorgStatus, ReorgConfig)
   }
 
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {

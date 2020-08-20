@@ -1,7 +1,5 @@
 package dx.compiler
 
-object SourceNode {
-  trait DocumentSourceNode
-  trait TaskSourceNode
-  trait WorkflowSourceNode
-}
+trait DocumentSource
+trait ApplicationSource
+trait WorkflowSource

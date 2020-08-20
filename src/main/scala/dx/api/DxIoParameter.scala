@@ -1,49 +1,50 @@
 package dx.api
 
 import spray.json._
+import wdlTools.util.Enum
 
-object DxIOClass extends Enumeration {
+object DxIOClass extends Enum {
   type DxIOClass = Value
-  val INT, FLOAT, STRING, BOOLEAN, FILE, ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS,
-      ARRAY_OF_BOOLEANS, ARRAY_OF_FILES, HASH, OTHER = Value
+  val Int, Float, String, Boolean, File, IntArray, FloatArray, StringArray, BooleanArray, FileArray,
+      Hash, Other = Value
 
   def fromString(s: String): DxIOClass.Value = {
-    s match {
+    s.toLowerCase match {
       // primitives
-      case "int"     => INT
-      case "float"   => FLOAT
-      case "string"  => STRING
-      case "boolean" => BOOLEAN
-      case "file"    => FILE
+      case "int"     => Int
+      case "float"   => Float
+      case "string"  => String
+      case "boolean" => Boolean
+      case "file"    => File
 
       // arrays of primitives
-      case "array:int"     => ARRAY_OF_INTS
-      case "array:float"   => ARRAY_OF_FLOATS
-      case "array:string"  => ARRAY_OF_STRINGS
-      case "array:boolean" => ARRAY_OF_BOOLEANS
-      case "array:file"    => ARRAY_OF_FILES
+      case "array:int"     => IntArray
+      case "array:float"   => FloatArray
+      case "array:string"  => StringArray
+      case "array:boolean" => BooleanArray
+      case "array:file"    => FileArray
 
       // hash
-      case "hash" => HASH
+      case "hash" => Hash
 
       // we don't deal with anything else
-      case _ => OTHER
+      case _ => Other
     }
   }
 }
 
 object DxIOSpec {
-  val NAME = "name"
-  val CLASS = "class"
-  val OPTIONAL = "optional"
-  val DEFAULT = "default"
-  val CHOICES = "choices"
-  val GROUP = "group"
-  val HELP = "help"
-  val LABEL = "label"
-  val PATTERNS = "patterns"
-  val SUGGESTIONS = "suggestions"
-  val TYPE = "type"
+  val Name = "name"
+  val Class = "class"
+  val Optional = "optional"
+  val Default = "default"
+  val Choices = "choices"
+  val Group = "group"
+  val Help = "help"
+  val Label = "label"
+  val Patterns = "patterns"
+  val Suggestions = "suggestions"
+  val Type = "type"
 }
 
 // Types for the IO spec pattern section
@@ -75,13 +76,13 @@ final case class IOParameterSuggestionFile(name: Option[String],
 
 // Types for the IO 'type' section
 object DxConstraint {
-  val AND = "$and"
-  val OR = "$or"
+  val And = "$and"
+  val Or = "$or"
 }
 
-object ConstraintOper extends Enumeration {
+object ConstraintOper extends Enum {
   type ConstraintOper = Value
-  val AND, OR = Value
+  val And, Or = Value
 }
 
 sealed abstract class IOParameterTypeConstraint
@@ -117,7 +118,7 @@ case class IOParameter(
 
 object IOParameter {
   def parseIoParam(dxApi: DxApi, jsv: JsValue): IOParameter = {
-    val ioParam = jsv.asJsObject.getFields(DxIOSpec.NAME, DxIOSpec.CLASS) match {
+    val ioParam = jsv.asJsObject.getFields(DxIOSpec.Name, DxIOSpec.Class) match {
       case Seq(JsString(name), JsString(klass)) =>
         val ioClass = DxIOClass.fromString(klass)
         IOParameter(name, ioClass, optional = false)
@@ -125,27 +126,27 @@ object IOParameter {
         throw new Exception(s"Malformed io spec ${other}")
     }
 
-    val optFlag = jsv.asJsObject.fields.get(DxIOSpec.OPTIONAL) match {
+    val optFlag = jsv.asJsObject.fields.get(DxIOSpec.Optional) match {
       case Some(JsBoolean(b)) => b
       case None               => false
     }
 
-    val group = jsv.asJsObject.fields.get(DxIOSpec.GROUP) match {
+    val group = jsv.asJsObject.fields.get(DxIOSpec.Group) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val help = jsv.asJsObject.fields.get(DxIOSpec.HELP) match {
+    val help = jsv.asJsObject.fields.get(DxIOSpec.Help) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val label = jsv.asJsObject.fields.get(DxIOSpec.LABEL) match {
+    val label = jsv.asJsObject.fields.get(DxIOSpec.Label) match {
       case Some(JsString(s)) => Some(s)
       case _                 => None
     }
 
-    val patterns = jsv.asJsObject.fields.get(DxIOSpec.PATTERNS) match {
+    val patterns = jsv.asJsObject.fields.get(DxIOSpec.Patterns) match {
       case Some(JsArray(a)) =>
         Some(IOParameterPatternArray(a.flatMap {
           case JsString(s) => Some(s)
@@ -177,7 +178,7 @@ object IOParameter {
       case _ => None
     }
 
-    val choices = jsv.asJsObject.fields.get(DxIOSpec.CHOICES) match {
+    val choices = jsv.asJsObject.fields.get(DxIOSpec.Choices) match {
       case Some(JsArray(a)) =>
         Some(a.map {
           case JsObject(fields) =>
@@ -195,7 +196,7 @@ object IOParameter {
       case _ => None
     }
 
-    val suggestions = jsv.asJsObject.fields.get(DxIOSpec.SUGGESTIONS) match {
+    val suggestions = jsv.asJsObject.fields.get(DxIOSpec.Suggestions) match {
       case Some(JsArray(a)) =>
         Some(a.map {
           case JsObject(fields) =>
@@ -224,12 +225,12 @@ object IOParameter {
       case _ => None
     }
 
-    val dx_type = jsv.asJsObject.fields.get(DxIOSpec.TYPE) match {
+    val dx_type = jsv.asJsObject.fields.get(DxIOSpec.Type) match {
       case Some(v: JsValue) => Some(ioParamTypeFromJs(v))
       case _                => None
     }
 
-    val default = jsv.asJsObject.fields.get(DxIOSpec.DEFAULT) match {
+    val default = jsv.asJsObject.fields.get(DxIOSpec.Default) match {
       case Some(v: JsValue) =>
         try {
           Some(ioParamDefaultFromJs(dxApi, v))
@@ -261,10 +262,10 @@ object IOParameter {
           throw new Exception("Constraint hash must have exactly one '$and' or '$or' key")
         }
         fields.head match {
-          case (DxConstraint.AND, JsArray(array)) =>
-            IOParameterTypeConstraintOper(ConstraintOper.AND, array.map(ioParamTypeFromJs))
-          case (DxConstraint.OR, JsArray(array)) =>
-            IOParameterTypeConstraintOper(ConstraintOper.OR, array.map(ioParamTypeFromJs))
+          case (DxConstraint.And, JsArray(array)) =>
+            IOParameterTypeConstraintOper(ConstraintOper.And, array.map(ioParamTypeFromJs))
+          case (DxConstraint.Or, JsArray(array)) =>
+            IOParameterTypeConstraintOper(ConstraintOper.Or, array.map(ioParamTypeFromJs))
           case _ =>
             throw new Exception(
                 "Constraint must have key '$and' or '$or' and an array value"

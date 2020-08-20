@@ -22,7 +22,7 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
     val dxFiles = file2LocalMapping.keys.toVector
     val fileDescs = dxApi.fileBulkDescribe(dxFiles)
     fileDescs.map(_.describe()).foreach { desc =>
-      if (desc.archivalState != DxArchivalState.LIVE)
+      if (desc.archivalState != DxArchivalState.Live)
         throw new Exception(
             s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
         )

@@ -2,25 +2,17 @@ package dx.api
 
 import dx.AppInternalException
 import spray.json._
+import wdlTools.util.Enum
 
 case class DxFilePart(state: String, size: Long, md5: String)
 
-object DxArchivalState extends Enumeration {
+object DxArchivalState extends Enum {
   type DxArchivalState = Value
-  val LIVE, ARCHIVAL, ARCHIVED, UNARCHIVING = Value
-
-  def fromString(s: String): DxArchivalState.Value = {
-    s match {
-      case "live"        => LIVE
-      case "archival"    => ARCHIVAL
-      case "archived"    => ARCHIVED
-      case "unarchiving" => UNARCHIVING
-    }
-  }
+  val Live, Archival, Archived, Unarchiving = Value
 
   def fromString(jsv: JsValue): DxArchivalState.Value = {
     jsv match {
-      case JsString(s) => fromString(s)
+      case JsString(s) => withNameIgnoreCase(s)
       case other       => throw new Exception(s"Archival state is not a string type ${other}")
     }
   }
@@ -97,10 +89,10 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
     val logicalName = s"${desc.folder}/${desc.name}"
     project match {
       case None =>
-        s"${DxPath.DX_URL_PREFIX}${getId}::${logicalName}"
+        s"${DxPath.DxUriPrefix}${getId}::${logicalName}"
       case Some(proj) =>
         val projId = proj.getId
-        s"${DxPath.DX_URL_PREFIX}${projId}:${getId}::${logicalName}"
+        s"${DxPath.DxUriPrefix}${projId}:${getId}::${logicalName}"
     }
   }
 }
@@ -124,7 +116,7 @@ object DxFile {
                        created.toLong,
                        modified.toLong,
                        0,
-                       DxArchivalState.fromString(archivalState),
+                       DxArchivalState.withNameIgnoreCase(archivalState),
                        None,
                        None,
                        None)

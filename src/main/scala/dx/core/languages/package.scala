@@ -1,26 +1,28 @@
 package dx.core.languages
 
 import wdlTools.syntax.WdlVersion
+import wdlTools.util.Enum
 
-object Language extends Enumeration {
+object Language extends Enum {
   type Language = Value
-  val WDLvDraft2, WDLv1_0, WDLv2_0, CWLv1_2 = Value
-  val Default: Language = WDLv1_0
+  val WdlVDraft2, WdlV1_0, WdlV2_0, CwlV1_2 = Value
+  val WdlDefault: Language = WdlV1_0
+  val CwlDefault: Language = CwlV1_2
 
   def toWdlVersion(value: Value): WdlVersion = {
     value match {
-      case WDLvDraft2 => WdlVersion.Draft_2
-      case WDLv1_0    => WdlVersion.V1
-      case WDLv2_0    => WdlVersion.V2
+      case WdlVDraft2 => WdlVersion.Draft_2
+      case WdlV1_0    => WdlVersion.V1
+      case WdlV2_0    => WdlVersion.V2
       case other      => throw new Exception(s"${other} is not a wdl version")
     }
   }
 
   def fromWdlVersion(version: WdlVersion): Value = {
     version match {
-      case WdlVersion.Draft_2 => Language.WDLvDraft2
-      case WdlVersion.V1      => Language.WDLv1_0
-      case WdlVersion.V2      => Language.WDLv2_0
+      case WdlVersion.Draft_2 => Language.WdlVDraft2
+      case WdlVersion.V1      => Language.WdlV1_0
+      case WdlVersion.V2      => Language.WdlV2_0
       case other              => throw new Exception(s"Unsupported dielect ${other}")
     }
   }
@@ -37,26 +39,26 @@ object Language extends Enumeration {
     * @return
     */
   def parse(version: Option[String], hint: Option[String] = None): Value = {
-    version match {
-      case None => Default
-      case Some(buf) =>
-        (normalizeVersion(buf), hint.map(normalizeVersion)) match {
-          case ("wdl draft2", _)                        => Language.WDLvDraft2
-          case ("draft2", Some("wdl"))                  => Language.WDLvDraft2
-          case ("wdl draft3" | "wdl 10", _)             => Language.WDLv1_0
-          case ("draft3" | "10", Some("wdl"))           => Language.WDLv1_0
-          case ("wdl development" | "wdl 20", _)        => Language.WDLv2_0
-          case ("development" | "20", Some("wdl"))      => Language.WDLv2_0
-          case ("cwl v120dev4", _)                      => Language.CWLv1_2
-          case (v, _) if v.startsWith("cwl v120")       => Language.CWLv1_2
-          case (v, Some("cwl")) if v.startsWith("v120") => Language.CWLv1_2
-        }
-      case other => throw new Exception(s"Unrecognized/unsupported language ${other}")
+    (version.map(normalizeVersion), hint.map(normalizeVersion)) match {
+      case (None, Some("wdl"))                            => WdlDefault
+      case (None, Some("cwl"))                            => CwlDefault
+      case (Some("wdl"), _)                               => WdlDefault
+      case (Some("cwl"), _)                               => CwlDefault
+      case (Some("wdl draft2"), _)                        => Language.WdlVDraft2
+      case (Some("draft2"), Some("wdl"))                  => Language.WdlVDraft2
+      case (Some("wdl draft3" | "wdl 10"), _)             => Language.WdlV1_0
+      case (Some("draft3" | "10"), Some("wdl"))           => Language.WdlV1_0
+      case (Some("wdl development") | "wdl 20", _)        => Language.WdlV2_0
+      case (Some("development" | "20"), Some("wdl"))      => Language.WdlV2_0
+      case (Some(v), _) if v.startsWith("cwl v120")       => Language.CwlV1_2
+      case (Some(v), Some("cwl")) if v.startsWith("v120") => Language.CwlV1_2
+      case other =>
+        throw new Exception(s"Unrecognized/unsupported language ${other}")
     }
   }
 }
 
-object IORef extends Enumeration {
+object IORef extends Enum {
   type IORef = Value
   val Input, Output = Value
 }

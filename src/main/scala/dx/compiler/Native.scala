@@ -10,8 +10,8 @@ import dx.api._
 import dx.compiler.IR.{CVar, SArg}
 import dx.core.languages.IORef
 import dx.core.languages.wdl.{
-  DxlStage,
-  DxlWorkflowInput,
+  DxLinkStage,
+  DxLinkWorkflowInput,
   ExecLinkInfo,
   TypeSerialization,
   WdlVarLinks,
@@ -103,8 +103,8 @@ case class Native(dxWDLrtId: Option[String],
       case IR.ConstraintReprString(s) => JsString(s)
       case IR.ConstraintReprOper(oper, constraints) =>
         val dxOper = oper match {
-          case ConstraintOper.AND => DxConstraint.AND
-          case ConstraintOper.OR  => DxConstraint.OR
+          case ConstraintOper.And => DxConstraint.And
+          case ConstraintOper.Or  => DxConstraint.Or
           case _                  => throw new Exception(s"Invalid operation ${oper}")
         }
         JsObject(Map(dxOper -> JsArray(constraints.map(jsValueFromConstraint))))
@@ -117,7 +117,7 @@ case class Native(dxWDLrtId: Option[String],
       case IR.DefaultReprInteger(i)   => JsNumber(i)
       case IR.DefaultReprFloat(f)     => JsNumber(f)
       case IR.DefaultReprBoolean(b)   => JsBoolean(b)
-      case IR.DefaultReprFile(f)      => dxApi.resolveDxUrlFile(f).getLinkAsJson
+      case IR.DefaultReprFile(f)      => dxApi.resolveDxUriFile(f).getLinkAsJson
       case IR.DefaultReprArray(array) => JsArray(array.map(jsValueFromDefault))
     }
   }
@@ -153,15 +153,15 @@ case class Native(dxWDLrtId: Option[String],
         case Some(attributes) => {
           attributes.flatMap {
             case IR.IOAttrGroup(text) =>
-              Some(DxIOSpec.GROUP -> JsString(text))
+              Some(DxIOSpec.Group -> JsString(text))
             case IR.IOAttrHelp(text) =>
-              Some(DxIOSpec.HELP -> JsString(text))
+              Some(DxIOSpec.Help -> JsString(text))
             case IR.IOAttrLabel(text) =>
-              Some(DxIOSpec.LABEL -> JsString(text))
+              Some(DxIOSpec.Label -> JsString(text))
             case IR.IOAttrPatterns(patternRepr) =>
               patternRepr match {
                 case IR.PatternsReprArray(patterns) =>
-                  Some(DxIOSpec.PATTERNS -> JsArray(patterns.map(JsString(_))))
+                  Some(DxIOSpec.Patterns -> JsArray(patterns.map(JsString(_))))
                 // If we have the alternative patterns object, extrac the values, if any at all
                 case IR.PatternsReprObj(name, klass, tags) =>
                   val attrs: Map[String, JsValue] = Vector(
@@ -172,17 +172,17 @@ case class Native(dxWDLrtId: Option[String],
                       if (klass.isDefined) Some("class" -> JsString(klass.get)) else None
                   ).flatten.toMap
                   // If all three keys for the object version of patterns are None, return None
-                  if (attrs.isEmpty) None else Some(DxIOSpec.PATTERNS -> JsObject(attrs))
+                  if (attrs.isEmpty) None else Some(DxIOSpec.Patterns -> JsObject(attrs))
               }
             case IR.IOAttrChoices(choices) =>
-              Some(DxIOSpec.CHOICES -> JsArray(choices.map {
+              Some(DxIOSpec.Choices -> JsArray(choices.map {
                 case IR.ChoiceReprString(value)  => JsString(value)
                 case IR.ChoiceReprInteger(value) => JsNumber(value)
                 case IR.ChoiceReprFloat(value)   => JsNumber(value)
                 case IR.ChoiceReprBoolean(value) => JsBoolean(value)
                 case IR.ChoiceReprFile(value, name) => {
                   // TODO: support project and record choices
-                  val dxLink = dxApi.resolveDxUrlFile(value).getLinkAsJson
+                  val dxLink = dxApi.resolveDxUriFile(value).getLinkAsJson
                   if (name.isDefined) {
                     JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
                   } else {
@@ -191,7 +191,7 @@ case class Native(dxWDLrtId: Option[String],
                 }
               }))
             case IR.IOAttrSuggestions(suggestions) =>
-              Some(DxIOSpec.SUGGESTIONS -> JsArray(suggestions.map {
+              Some(DxIOSpec.Suggestions -> JsArray(suggestions.map {
                 case IR.SuggestionReprString(value)  => JsString(value)
                 case IR.SuggestionReprInteger(value) => JsNumber(value)
                 case IR.SuggestionReprFloat(value)   => JsNumber(value)
@@ -199,7 +199,7 @@ case class Native(dxWDLrtId: Option[String],
                 case IR.SuggestionReprFile(value, name, project, path) => {
                   // TODO: support project and record suggestions
                   val dxLink: Option[JsValue] = value match {
-                    case Some(str) => Some(dxApi.resolveDxUrlFile(str).getLinkAsJson)
+                    case Some(str) => Some(dxApi.resolveDxUriFile(str).getLinkAsJson)
                     case None      => None
                   }
                   if (name.isDefined || project.isDefined || path.isDefined) {
@@ -220,11 +220,11 @@ case class Native(dxWDLrtId: Option[String],
                 }
               }))
             case IR.IOAttrType(constraint) =>
-              Some(DxIOSpec.TYPE -> jsValueFromConstraint(constraint))
+              Some(DxIOSpec.Type -> jsValueFromConstraint(constraint))
             case IR.IOAttrDefault(value) if !hasDefault =>
               // The default was specified in parameter_meta and was not specified in the
               // parameter declaration
-              Some(DxIOSpec.DEFAULT -> jsValueFromDefault(value))
+              Some(DxIOSpec.Default -> jsValueFromDefault(value))
             case _ => None
           }.toMap
         }
@@ -332,7 +332,7 @@ case class Native(dxWDLrtId: Option[String],
       case Some(DockerRegistry(registry, username, credentials)) =>
         // check that the credentials file is a valid platform path
         try {
-          val dxFile = dxApi.resolveDxUrlFile(credentials)
+          val dxFile = dxApi.resolveDxUriFile(credentials)
           dxApi.logger.ignore(dxFile)
         } catch {
           case e: Throwable =>
@@ -345,7 +345,7 @@ case class Native(dxWDLrtId: Option[String],
         }
 
         // strip the URL from the dx:// prefix, so we can use dx-download directly
-        val credentialsWithoutPrefix = credentials.substring(DxPath.DX_URL_PREFIX.length)
+        val credentialsWithoutPrefix = credentials.substring(DxPath.DxUriPrefix.length)
         s"""|
             |# if we need to set up a private docker registry,
             |# download the credentials file and login. Do not expose the
@@ -530,7 +530,7 @@ case class Native(dxWDLrtId: Option[String],
         genBashScriptCmd("workflowOutputReorg")
       case IR.AppletKindTask(_) =>
         instanceType match {
-          case IR.InstanceTypeDefault | IR.InstanceTypeConst(_, _, _, _, _) =>
+          case IR.InstanceTypeDefault | _: IR.InstanceTypeConst =>
             s"""|${dockerPreamble}
                 |
                 |set -e -o pipefail -x
@@ -593,8 +593,8 @@ case class Native(dxWDLrtId: Option[String],
         case other                 => throw new Exception(s"Bad properties json value ${other}")
       }
     val props = preExistingProps ++ Map(
-        VERSION_PROP -> JsString(getVersion),
-        CHECKSUM_PROP -> JsString(digest)
+        VersionProperty -> JsString(getVersion),
+        ChecksumProperty -> JsString(digest)
     )
 
     // Add properties and attributes we don't want to fall under the checksum
@@ -851,8 +851,8 @@ case class Native(dxWDLrtId: Option[String],
                           bashScript: String): (JsValue, Map[String, JsValue]) = {
     // find the dxWDL asset
     val instanceType: String = applet.instanceType match {
-      case x: IR.InstanceTypeConst =>
-        val xDesc = InstanceTypeReq(x.dxInstanceType, x.memoryMB, x.diskGB, x.cpu, x.gpu)
+      case IR.InstanceTypeConst(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu) =>
+        val xDesc = InstanceTypeRequest(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu)
         instanceTypeDB.apply(xDesc)
       case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
         instanceTypeDB.defaultInstanceType
@@ -866,7 +866,7 @@ case class Native(dxWDLrtId: Option[String],
                 JsObject("instanceType" -> JsString(instanceType))
           ),
         "distribution" -> JsString("Ubuntu"),
-        "release" -> JsString(DEFAULT_UBUNTU_VERSION)
+        "release" -> JsString(DefaultUbuntuVersion)
     )
 
     // Add default timeout
@@ -875,7 +875,7 @@ case class Native(dxWDLrtId: Option[String],
           None,
           None,
           None,
-          Some(DxTimeout(Some(DEFAULT_APPLET_TIMEOUT_IN_DAYS), Some(0), Some(0)))
+          Some(DxTimeout(Some(DefaultAppletTimeoutInDays), Some(0), Some(0)))
       ).toRunSpecJson
 
     // Start with the default dx-attribute section, and override
@@ -1244,11 +1244,12 @@ case class Native(dxWDLrtId: Option[String],
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgLink(dxStage, argName) =>
-            val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+            val wvl =
+              WdlVarLinks(cVar.wdlType, DxLinkStage(dxStage, IORef.Output, argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgWorkflowInput(argName, _) =>
-            val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
+            val wvl = WdlVarLinks(cVar.wdlType, DxLinkWorkflowInput(argName.dxVarName))
             val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
         }
@@ -1298,13 +1299,13 @@ case class Native(dxWDLrtId: Option[String],
       case IR.SArgConst(wdlValue) =>
         Vector(wdlVarLinksConverter.genConstantField(wdlValue, cVar.dxVarName))
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxLinkStage(dxStage, IORef.Output, argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean) =>
         // TODO: if dynamicDefault is true, link to the value of the workflow input
         //  (either the user-specified value or the result of evaluting the expression)
         //  - right now this only links to the user-specified value
-        val wvl = WdlVarLinks(cVar.wdlType, DxlWorkflowInput(argName.dxVarName))
+        val wvl = WdlVarLinks(cVar.wdlType, DxLinkWorkflowInput(argName.dxVarName))
         wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
       case other =>
         throw new Exception(s"Bad value for sArg ${other}")
@@ -1525,7 +1526,7 @@ case class Native(dxWDLrtId: Option[String],
       wf: IR.Workflow,
       execDict: Map[String, Native.ExecRecord]
   ): Map[String, JsString] = {
-    val jsonTreeString = Tree(execDict).fromWorkflowIR(wf).toString
+    val jsonTreeString = ExecTree(execDict).fromWorkflowIR(wf).toString
     val compressedTree = CompressionUtils.gzipAndBase64Encode(jsonTreeString)
     Map("execTree" -> JsString(compressedTree))
   }

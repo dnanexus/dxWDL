@@ -866,11 +866,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                 Vector(
                     IR.IOAttrType(
                         IR.ConstraintReprOper(
-                            ConstraintOper.AND,
+                            ConstraintOper.And,
                             Vector(
                                 IR.ConstraintReprString("fastq"),
                                 IR.ConstraintReprOper(
-                                    ConstraintOper.OR,
+                                    ConstraintOper.Or,
                                     Vector(
                                         IR.ConstraintReprString("Read1"),
                                         IR.ConstraintReprString("Read2")

@@ -11,7 +11,7 @@ import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.util.{JsUtils, Logger}
 
-case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
+case class DxExecPolicy(restartOn: Option[Map[String, Long]], maxRestarts: Option[Long]) {
   def toJson: Map[String, JsValue] = {
     val restartOnFields = restartOn match {
       case None => Map.empty
@@ -32,7 +32,7 @@ case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option
   }
 }
 
-case class DxTimeout(days: Option[Int], hours: Option[Int], minutes: Option[Int]) {
+case class DxTimeout(days: Option[Long], hours: Option[Long], minutes: Option[Long]) {
   def toJson: Map[String, JsValue] = {
     val daysField: Map[String, JsValue] = days match {
       case None    => Map.empty
@@ -173,34 +173,6 @@ case class DxDetails(upstreamProjects: Option[Vector[DxLicense]]) {
   }
 }
 
-// The available fields are:
-//    dx_instance_type
-//    memory
-//    disks
-//    cpu
-//    docker
-case class RuntimeAttributes(value: Map[String, Value])
-
-// support automatic conversion to/from JsValue
-object RuntimeAttributes extends DefaultJsonProtocol {
-  lazy val empty: RuntimeAttributes = RuntimeAttributes(Map.empty)
-
-  implicit object RuntimeAttributesFormat extends RootJsonFormat[RuntimeAttributes] {
-    def read(jsValues: JsValue): RuntimeAttributes = {
-      val m = jsValues.asJsObject.fields.map { case (k, v) => k -> Value.fromJsPrimitive(v) }
-      RuntimeAttributes(m)
-    }
-
-    def write(irValues: RuntimeAttributes): JsValue = {
-      val fields = irValues.value.map {
-        case (k, v) =>
-          k -> Value.toJsPrimitive(v)
-      }
-      JsObject(fields)
-    }
-  }
-}
-
 case class DxAppJson(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
   def getRunSpecJson: Map[String, JsValue] = {
     val runSpecJson: Map[String, JsValue] = runSpec match {
@@ -225,13 +197,13 @@ case class ReorgAttributes(enabled: Boolean = true,
                            appUri: Option[String] = None,
                            reorgConfigFile: Option[String] = None)
 
-case class Extras(defaultRuntimeAttributes: RuntimeAttributes,
-                  defaultTaskDxAttributes: Option[DxAppJson],
-                  perTaskDxAttributes: Map[String, DxAppJson],
-                  dockerRegistry: Option[DockerRegistry],
-                  customReorgAttributes: Option[ReorgAttributes],
-                  ignoreReuse: Option[Boolean],
-                  delayWorkspaceDestruction: Option[Boolean]) {
+case class Extras[T](defaultRuntimeAttributes: Map[String, T],
+                     defaultTaskDxAttributes: Option[DxAppJson],
+                     perTaskDxAttributes: Map[String, DxAppJson],
+                     dockerRegistry: Option[DockerRegistry],
+                     customReorgAttributes: Option[ReorgAttributes],
+                     ignoreReuse: Option[Boolean],
+                     delayWorkspaceDestruction: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
     defaultTaskDxAttributes match {
       case None => DxAccess.empty
@@ -263,10 +235,10 @@ case class Extras(defaultRuntimeAttributes: RuntimeAttributes,
   }
 }
 
-case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
-  private val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
-  private val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
-  private val EXTRA_ATTRS = Set(
+abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
+  private val DockerRegistryAttrs = Set("username", "registry", "credentials")
+  private val CustomReorgAttrs = Set("app_id", "conf")
+  private val ExtraAttrs = Set(
       "default_runtime_attributes",
       "default_task_dx_attributes",
       "per_task_dx_attributes",
@@ -275,28 +247,31 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       "ignoreReuse",
       "delayWorkspaceDestruction"
   )
-  private val RUNTIME_ATTRS =
+  private val RuntimeAttrs =
     Set("dx_instance_type", "memory", "disks", "cpu", "docker", "docker_registry", "custom_reorg")
-  private val RUN_SPEC_ATTRS =
+  private val RunSpecAttrs =
     Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
-  private val RUN_SPEC_ACCESS_ATTRS =
+  private val RunSpecAccessAttrs =
     Set("network", "project", "allProjects", "developer", "projectCreation")
-  private val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
-  private val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
-  private val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set("ExecutionError",
-                                                          "UnresponsiveWorker",
-                                                          "JMInternalError",
-                                                          "AppInternalError",
-                                                          "JobTimeoutExceeded",
-                                                          "*")
-  private val TASK_DX_ATTRS = Set("runSpec", "details")
-  private val DX_DETAILS_ATTRS = Set("upstreamProjects")
-  private val PER_TASK_KEY = "per_task_dx_attributes"
+  private val RunSpecTimeoutAttrs = Set("days", "hours", "minutes")
+  private val RunSpecExecPolicyAttrs = Set("restartOn", "maxRestarts")
+  private val RunSpecExecPolicyRestartOnAttrs = Set(
+      "ExecutionError",
+      "UnresponsiveWorker",
+      "JMInternalError",
+      "AppInternalError",
+      "JobTimeoutExceeded",
+      "*"
+  )
+  private val TaskDxAttrs = Set("runSpec", "details")
+  private val DxDetailsAttrs = Set("upstreamProjects")
+  private val PerTaskKey = "per_task_dx_attributes"
 
-  private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
+  private def checkedParseIntField(fields: Map[String, JsValue],
+                                   fieldName: String): Option[Long] = {
     fields.get(fieldName) match {
       case None                => None
-      case Some(JsNumber(bnm)) => Some(bnm.intValue)
+      case Some(JsNumber(bnm)) => Some(bnm.longValue)
       case Some(other)         => throw new Exception(s"Malformed ${fieldName} (${other})")
     }
   }
@@ -360,41 +335,36 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
   }
 
   private def checkedParseMapStringInt(fields: Map[String, JsValue],
-                                       fieldName: String): Option[Map[String, Int]] = {
+                                       fieldName: String): Option[Map[String, Long]] = {
     val m = checkedParseObjectField(fields, fieldName)
     if (m == JsNull) {
       return None
     }
     val m1 = m.asJsObject.fields.map {
-      case (name, JsNumber(nmb)) => name -> nmb.intValue
+      case (name, JsNumber(nmb)) => name -> nmb.longValue
       case (name, other)         => throw new Exception(s"Malformed ${fieldName} (${name} -> ${other})")
     }
     Some(m1)
   }
 
-  private def parseWdlRuntimeAttrs(jsv: JsValue): RuntimeAttributes = {
-    if (jsv == JsNull)
-      return RuntimeAttributes(Map.empty)
-    val fields = jsv.asJsObject.fields
-    for (k <- fields.keys) {
-      if (!(RUNTIME_ATTRS contains k))
-        logger.warning(
-            s"""|Unsupported runtime attribute ${k},
-                |we currently support ${RUNTIME_ATTRS}
-                |""".stripMargin.replaceAll("\n", "")
-        )
-    }
+  protected def deserialize(jsValue: JsValue): T
 
-    def wdlValueFromJsValue(jsValue: JsValue): Value = {
-      Value.fromJsPrimitive(jsValue)
+  protected def parseRuntimeAttrs(jsv: JsValue): Map[String, T] = {
+    jsv match {
+      case JsNull => Map.empty
+      case JsObject(fields) =>
+        val (supported, unsupported) = fields.partition {
+          case (key, _) => RuntimeAttrs.contains(key)
+        }
+        if (unsupported.nonEmpty) {
+          logger.warning(
+              s"""|Unsupported runtime attribute(s) ${unsupported.mkString(",")},
+                  |we currently support ${RuntimeAttrs}
+                  |""".stripMargin.replaceAll("\n", "")
+          )
+        }
+        supported.view.mapValues(deserialize).toMap
     }
-    val attrs = fields
-      .filter { case (key, _) => RUNTIME_ATTRS contains key }
-      .map {
-        case (name, jsValue) =>
-          name -> wdlValueFromJsValue(jsValue)
-      }
-    RuntimeAttributes(attrs)
   }
 
   private def parseExecutionPolicy(jsv: JsValue): Option[DxExecPolicy] = {
@@ -403,11 +373,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !RUN_SPEC_EXEC_POLICY_ATTRS.contains(k) => k
+      case k if !RunSpecExecPolicyAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runSpec.access attribute(s) ${invalid},
-                              |we currently support ${RUN_SPEC_EXEC_POLICY_ATTRS}
+                              |we currently support ${RunSpecExecPolicyAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     val restartOn = checkedParseMapStringInt(fields, "restartOn")
@@ -415,7 +385,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       case None => ()
       case Some(restartOnPolicy) =>
         for (k <- restartOnPolicy.keys)
-          if (!(RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS contains k))
+          if (!(RunSpecExecPolicyRestartOnAttrs contains k))
             throw new Exception(s"unknown field ${k} in restart policy")
     }
     val maxRestarts = checkedParseIntField(fields, "maxRestarts")
@@ -428,11 +398,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !RUN_SPEC_ACCESS_ATTRS.contains(k) => k
+      case k if !RunSpecAccessAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runSpec.access attribute(s) ${invalid},
-                              |we currently support ${RUN_SPEC_ACCESS_ATTRS}
+                              |we currently support ${RunSpecAccessAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     Some(
@@ -470,11 +440,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val subFields = subObj.asJsObject.fields
     val invalid = subFields.keys.collect {
-      case k if !RUN_SPEC_TIMEOUT_ATTRS.contains(k) => k
+      case k if !RunSpecTimeoutAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runSpec.timeoutPolicy attribute(s) ${invalid},
-                              |we currently support ${RUN_SPEC_TIMEOUT_ATTRS}
+                              |we currently support ${RunSpecTimeoutAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     Some(
@@ -490,11 +460,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !RUN_SPEC_ATTRS.contains(k) => k
+      case k if !RunSpecAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runSpec attribute(s) ${invalid},
-                              |we currently support ${RUN_SPEC_ATTRS}
+                              |we currently support ${RunSpecAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
 
     }
@@ -530,11 +500,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !DX_DETAILS_ATTRS.contains(k) => k
+      case k if !DxDetailsAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported details attribute(s) ${invalid},
-                              |we currently support ${DX_DETAILS_ATTRS}
+                              |we currently support ${DxDetailsAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     Some(DxDetails(parseUpstreamProjects(fields.get("upstreamProjects"))))
@@ -546,11 +516,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !TASK_DX_ATTRS.contains(k) => k
+      case k if !TaskDxAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runtime attribute(s) ${invalid},
-                              |we currently support ${TASK_DX_ATTRS}
+                              |we currently support ${TaskDxAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
@@ -564,11 +534,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !DOCKER_REGISTRY_ATTRS.contains(k) => k
+      case k if !DockerRegistryAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported docker registry attribute(s) ${invalid},
-                              |we currently support ${DOCKER_REGISTRY_ATTRS}
+                              |we currently support ${DockerRegistryAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
 
     }
@@ -590,11 +560,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     }
     val fields = jsv.asJsObject.fields
     val invalid = fields.keys.collect {
-      case k if !CUSTOM_REORG_ATTRS.contains(k) => k
+      case k if !CustomReorgAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute(s) ${invalid},
-                                             |we currently support ${CUSTOM_REORG_ATTRS}
+                                             |we currently support ${CustomReorgAttrs}
                                              |""".stripMargin.replaceAll("\n", ""))
     }
     val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
@@ -666,26 +636,26 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     Some(ReorgAttributes(appUri = Some(reorgAppId), reorgConfigFile = reorgConf))
   }
 
-  def parse(path: Path): Extras = {
+  def parse(path: Path): Extras[T] = {
     parse(JsUtils.jsFromFile(path))
   }
 
-  def parse(jsv: JsValue): Extras = {
+  def parse(jsv: JsValue): Extras[T] = {
     val fields = jsv match {
       case JsObject(fields) => fields
       case _                => throw new Exception(s"malformed extras JSON ${jsv}")
     }
     val invalid = fields.keys.collect {
-      case k if !EXTRA_ATTRS.contains(k) => k
+      case k if !ExtraAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported extra option(s) ${invalid},
-                              |we currently support ${EXTRA_ATTRS}
+                              |we currently support ${ExtraAttrs}
                               |""".stripMargin.replaceAll("\n", ""))
     }
     // parse the individual task dx attributes
     val perTaskDxAttrs: Map[String, DxAppJson] =
-      checkedParseObjectField(fields, PER_TASK_KEY) match {
+      checkedParseObjectField(fields, PerTaskKey) match {
         case JsNull =>
           Map.empty
         case jsObj =>
@@ -701,8 +671,8 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
           }
       }
 
-    Extras(
-        parseWdlRuntimeAttrs(
+    Extras[T](
+        parseRuntimeAttrs(
             checkedParseObjectField(fields, "default_runtime_attributes")
         ),
         parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes")),

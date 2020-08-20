@@ -48,11 +48,11 @@ object DxUtils {
   def dxDataObjectToUri(dxObj: DxDataObject): String = {
     dxObj match {
       case DxFile(_, _, Some(container)) =>
-        s"${DxPath.DX_URL_PREFIX}${container.id}:${dxObj.id}"
+        s"${DxPath.DxUriPrefix}${container.id}:${dxObj.id}"
       case DxRecord(_, _, Some(container)) =>
-        s"${DxPath.DX_URL_PREFIX}${container.id}:${dxObj.id}"
+        s"${DxPath.DxUriPrefix}${container.id}:${dxObj.id}"
       case _ =>
-        s"${DxPath.DX_URL_PREFIX}${dxObj.id}"
+        s"${DxPath.DxUriPrefix}${dxObj.id}"
     }
   }
 

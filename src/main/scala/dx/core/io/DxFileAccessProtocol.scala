@@ -4,14 +4,14 @@ import java.nio.charset.Charset
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxFileDescribe, DxProject}
-import wdlTools.util.{AbstractFileSource, FileAccessProtocol, FileSource, RealFileSource, Util}
+import wdlTools.util.{AbstractFileSource, FileAccessProtocol, FileSource, FileUtils, RealFileSource}
 
 import scala.io.Source
 
 case class DxFileSource(value: String, dxFile: DxFile, dxApi: DxApi, override val encoding: Charset)
     extends AbstractFileSource(encoding)
     with RealFileSource {
-  override lazy val localPath: Path = Util.getPath(dxFile.describe().name)
+  override lazy val localPath: Path = FileUtils.getPath(dxFile.describe().name)
 
   override lazy val size: Long = dxFile.describe().size
 
@@ -95,15 +95,15 @@ object DxFileDescCache {
   * @param dxFileCache Vector of DxFiles that have already been described (matching is done by file+project IDs)
   * @param encoding character encoding, for resolving binary data.
   */
-case class DxFileAccessProtocol(dxApi: DxApi,
+case class DxFileAccessProtocol(dxApi: DxApi = DxApi.get,
                                 dxFileCache: DxFileDescCache = DxFileDescCache.empty,
-                                encoding: Charset = Util.DefaultEncoding)
+                                encoding: Charset = FileUtils.DefaultEncoding)
     extends FileAccessProtocol {
   val prefixes = Vector(DxFileAccessProtocol.DX_URI_PREFIX)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
 
   private def resolveFileUri(uri: String): DxFile = {
-    dxApi.resolveDxUrlFile(uri.split("::")(0))
+    dxApi.resolveDxUriFile(uri.split("::")(0))
   }
 
   override def resolve(uri: String): DxFileSource = {

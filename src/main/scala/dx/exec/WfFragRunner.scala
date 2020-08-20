@@ -44,7 +44,7 @@ import dx.core.getVersion
 import dx.core.io.{DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl._
 import spray.json._
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, TraceLevel}
 
@@ -84,9 +84,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, (WdlTypes.T, WdlValues.V)]): WdlValues.V = {
-    // strip the types
-    val envStripped = env.map { case (k, (_, v)) => k -> v }
-    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(envStripped))
+    evaluator.applyExprAndCoerce(expr, wdlType, Eval.createBindingsFromEnv(env))
   }
 
   private def getCallLinkInfo(call: TAT.Call): ExecLinkInfo = {
@@ -331,7 +329,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     val allConst = instanceAttrs.forall { attrName =>
       attributes.get(attrName) match {
         case None       => true
-        case Some(expr) => WdlValueAnalysis.isExpressionConst(WdlTypes.T_String, expr)
+        case Some(expr) => evaluator.isConst(expr, WdlTypes.T_String)
       }
     }
     if (allConst)
@@ -487,7 +485,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     linkInfo.outputs.map {
       case (varName, wdlType) =>
         val oName = s"${callName}.${varName}"
-        oName -> WdlVarLinks(wdlType, DxlExec(dxExec, varName))
+        oName -> WdlVarLinks(wdlType, DxLinkExec(dxExec, varName))
     }
   }
 
@@ -612,7 +610,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             case WdlTypes.T_Optional(_) => wdlType
             case _                      => WdlTypes.T_Optional(wdlType)
           }
-          varName -> WdlVarLinks(optionalType, DxlExec(dxExec, varName))
+          varName -> WdlVarLinks(optionalType, DxLinkExec(dxExec, varName))
       }
     }
   }
@@ -762,7 +760,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] =
-      block.inputs.flatMap { inputDef: Block.InputDefinition =>
+      block.inputs.flatMap { inputDef: BlockInput =>
         envInitial.get(inputDef.name) match {
           case None =>
             None

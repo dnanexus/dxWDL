@@ -9,11 +9,11 @@ import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
-import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
+import wdlTools.util.{Enum, FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 import spray.json._
 
 object Main {
-  object ExecAction extends Enumeration {
+  object ExecAction extends Enum {
     type ExecAction = Value
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
         TaskCheckInstanceType, TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value

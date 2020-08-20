@@ -1,0 +1,423 @@
+package dx.compiler.wdl
+
+import dx.api.ConstraintOper
+import dx.compiler.ir.{Callable, Parameter, Value}
+import wdlTools.eval.Meta
+import wdlTools.eval.WdlValues._
+import wdlTools.syntax.WdlVersion
+import wdlTools.types.WdlTypes._
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Adjuncts
+
+private object MetaUtils {
+  // strip muli-layer array types and get the member
+  //
+  // examples:
+  // input             output
+  // Array[T]          T
+  // Array[Array[T]]   T
+  @scala.annotation.tailrec
+  def unwrapWdlArrayType(wdlType: T): T = {
+    wdlType match {
+      case T_Array(t, _) => unwrapWdlArrayType(t)
+      case x             => x
+    }
+  }
+}
+
+object MetaTranslator {
+  val Categories = "categories"
+  val Description = "description"
+  val Details = "details"
+  val DeveloperNotes = "developer_notes"
+  val Properties = "properties"
+  val Summary = "summary"
+  val Tags = "tags"
+  val Title = "title"
+  val Types = "types"
+  val Version = "version"
+  val OpenSource = "open_source"
+  val CallNames = "call_names"
+  val RunOnSingleNode = "run_on_single_node"
+}
+
+abstract class MetaTranslator(wdlVersion: WdlVersion,
+                              metaSection: Option[TAT.MetaSection],
+                              adjunctFiles: Vector[Adjuncts.AdjunctFile]) {
+  private lazy val meta: Meta = Meta.create(wdlVersion, metaSection)
+
+  protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+    (name, value) match {
+      case (MetaTranslator.Title, V_String(text))       => Some(Callable.TitleAttribute(text))
+      case (MetaTranslator.Description, V_String(text)) => Some(Callable.DescriptionAttribute(text))
+      case (MetaTranslator.Summary, V_String(text))     => Some(Callable.SummaryAttribute(text))
+      case (MetaTranslator.DeveloperNotes, V_String(text)) =>
+        Some(Callable.DeveloperNotesAttribute(text))
+      case (MetaTranslator.Version, V_String(text)) => Some(Callable.VersionAttribute(text))
+      case (MetaTranslator.Details, V_Object(fields)) =>
+        Some(Callable.DetailsAttribute(fields.map {
+          case (name, wdlValue) => name -> Utils.wdlToIRValue(wdlValue)
+        }))
+      case (MetaTranslator.Categories, V_Array(array)) =>
+        Some(Callable.CategoriesAttribute(array.map {
+          case V_String(text) => text
+          case other          => throw new Exception(s"Invalid category: ${other}")
+        }))
+      case (MetaTranslator.Types, V_Array(array)) =>
+        Some(Callable.TypesAttribute(array.map {
+          case V_String(text) => text
+          case other          => throw new Exception(s"Invalid type: ${other}")
+        }))
+      case (MetaTranslator.Tags, V_Array(array)) =>
+        Some(Callable.TagsAttribute(array.map {
+          case V_String(text) => text
+          case other          => throw new Exception(s"Invalid tag: ${other}")
+        }))
+      case (MetaTranslator.Properties, V_Object(fields)) =>
+        Some(Callable.PropertiesAttribute(fields.view.mapValues {
+          case V_String(text) => text
+          case other          => throw new Exception(s"Invalid property value: ${other}")
+        }.toMap))
+      case _ => None
+    }
+  }
+
+  def translate: Vector[Callable.Attribute] = {
+    val attrs = metaSection match {
+      case None => Vector.empty
+      case Some(TAT.MetaSection(kvs, _)) =>
+        kvs.keySet
+          .collect { name =>
+            val value = meta.get(name)
+            translate(name, value.get)
+          }
+          .flatten
+          .toVector
+    }
+
+    val adjunctAttrs: Vector[Callable.Attribute] = adjunctFiles.collect {
+      case Adjuncts.Readme(text) if !meta.contains(MetaTranslator.Description) =>
+        Callable.DescriptionAttribute(text)
+      case Adjuncts.DeveloperNotes(text) if !meta.contains(MetaTranslator.DeveloperNotes) =>
+        Callable.DeveloperNotesAttribute(text)
+    }
+
+    attrs ++ adjunctAttrs
+  }
+}
+
+case class ApplicationMetaTranslator(wdlVersion: WdlVersion,
+                                     metaSection: Option[TAT.MetaSection],
+                                     adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
+    extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
+  override protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+    (name, value) match {
+      case (MetaTranslator.OpenSource, V_Boolean(b)) => Some(Callable.OpenSourceAttribute(b))
+      case _                                         => super.translate(name, value)
+    }
+  }
+}
+
+case class WorkflowMetaTranslator(wdlVersion: WdlVersion,
+                                  metaSection: Option[TAT.MetaSection],
+                                  adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
+    extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
+  override protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+    (name, value) match {
+      case (MetaTranslator.CallNames, V_Object(fields)) =>
+        Some(Callable.CallNamesAttribute(fields.view.mapValues {
+          case V_String(text) => text
+          case other          => throw new Exception(s"Invalid call name value: $other")
+        }.toMap))
+      case (MetaTranslator.RunOnSingleNode, V_Boolean(b)) =>
+        Some(Callable.RunOnSingleNodeAttribute(b))
+      case _ =>
+        super.translate(name, value)
+    }
+  }
+}
+
+object ParameterMetaTranslator {
+  // Keywords for string pattern matching in WDL parameter_meta
+  val Choices = "choices"
+  val Default = "default"
+  val Description = "description" // accepted as a synonym to 'help'
+  val Group = "group"
+  val Help = "help"
+  val Label = "label"
+  val Patterns = "patterns"
+  val Suggestions = "suggestions"
+  val Type = "dx_type"
+  val ConstraintAnd = "and"
+  val ConstraintOr = "or"
+
+  // Convert a patterns WDL object value to IR
+  private def metaPatternsObjToIR(obj: Map[String, V]): Parameter.Patterns = {
+    val name = obj.get("name") match {
+      case Some(V_Array(array)) =>
+        array.map {
+          case V_String(s) => s
+          case _           => throw new Exception("Expected MetaValueString")
+        }
+      case _ =>
+        Vector.empty
+    }
+    val klass = obj.get("class") match {
+      case Some(V_String(value)) => Some(value)
+      case _                     => None
+    }
+    val tag = obj.get("tag") match {
+      case Some(V_Array(array)) =>
+        array.map {
+          case V_String(s) => s
+          case _           => throw new Exception("Expected MetaValueString")
+        }
+      case _ =>
+        Vector.empty
+    }
+    // Even if all were None, create the IR.IOAttrPatterns object
+    // The all none is handled in the native generation
+    Parameter.PatternsObject(name, klass, tag)
+  }
+
+  private def metaChoiceValueToIR(wdlType: T,
+                                  value: V,
+                                  name: Option[V] = None): Parameter.Choice = {
+    (wdlType, value) match {
+      case (T_String, V_String(str)) =>
+        Parameter.StringChoice(value = str)
+      case (T_Int, V_Int(i)) =>
+        Parameter.IntChoice(value = i)
+      case (T_Float, V_Float(f)) =>
+        Parameter.FloatChoice(value = f)
+      case (T_Boolean, V_Boolean(b)) =>
+        Parameter.BooleanChoice(value = b)
+      case (T_File, V_String(str)) =>
+        val nameStr: Option[String] = name match {
+          case Some(V_String(str)) => Some(str)
+          case _                   => None
+        }
+        Parameter.FileChoice(value = str, name = nameStr)
+      case _ =>
+        throw new Exception(
+            "Choices keyword is only valid for primitive- and file-type parameters, and types must "
+              + "match between parameter and choices"
+        )
+    }
+  }
+
+  // A choices array may contain either raw values or (for data object types) annotated values,
+  // which are hashes with required 'value' key and optional 'name' key. Each value must be of the
+  // same type as the parameter, unless the parameter is an array, in which case choice values must
+  // be of the same type as the array's contained type. For now, we only allow choices for
+  // primitive- and file-type parameters, because there could be ambiguity (e.g. if a choice has a
+  // 'value' key, should we treat it as a raw map value or as an annotated value?).
+  //
+  // choices: [true, false]
+  // OR
+  // choices: [{name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
+  private def metaChoicesArrayToIR(array: Vector[V], wdlType: T): Vector[Parameter.Choice] = {
+    if (array.isEmpty) {
+      Vector.empty
+    } else {
+      array.map {
+        case V_Object(fields) if !fields.contains("value") =>
+          throw new Exception("Annotated choice must have a 'value' key")
+        case V_Object(fields) =>
+          metaChoiceValueToIR(
+              wdlType = wdlType,
+              value = fields("value"),
+              name = fields.get("name")
+          )
+        case rawElement: V =>
+          metaChoiceValueToIR(wdlType = wdlType, value = rawElement)
+        case _ =>
+          throw new Exception(
+              "Choices array must contain only raw values or annotated values (hash with "
+                + "optional 'name' and required 'value' keys)"
+          )
+      }
+    }
+  }
+
+  private def createSuggestionFileIR(file: Option[String],
+                                     name: Option[V],
+                                     project: Option[V],
+                                     path: Option[V]): Parameter.FileSuggestion = {
+    val nameStr: Option[String] = name match {
+      case Some(V_String(str)) => Some(str)
+      case _                   => None
+    }
+    val projectStr: Option[String] = project match {
+      case Some(V_String(str)) => Some(str)
+      case _                   => None
+    }
+    val pathStr: Option[String] = path match {
+      case Some(V_String(str)) => Some(str)
+      case _                   => None
+    }
+    Parameter.FileSuggestion(file, nameStr, projectStr, pathStr)
+  }
+
+  private def metaSuggestionValueToIR(wdlType: T,
+                                      value: Option[V],
+                                      name: Option[V] = None,
+                                      project: Option[V] = None,
+                                      path: Option[V] = None): Parameter.Suggestion = {
+    (wdlType, value) match {
+      case (T_String, Some(V_String(s)))   => Parameter.StringSuggestion(s)
+      case (T_Int, Some(V_Int(i)))         => Parameter.IntSuggestion(i)
+      case (T_Float, Some(V_Float(f)))     => Parameter.FloatSuggestion(f)
+      case (T_Boolean, Some(V_Boolean(b))) => Parameter.BooleanSuggestion(value = b)
+      case (T_File, Some(V_File(file))) =>
+        createSuggestionFileIR(Some(file), name, project, path)
+      case (T_File, None) =>
+        val s = createSuggestionFileIR(None, name, project, path)
+        if (s.project.isEmpty || s.path.isEmpty) {
+          throw new Exception(
+              "If 'value' is not defined for a file-type suggestion, then both 'project' and 'path' "
+                + "must be defined"
+          )
+        }
+        s
+      case _ =>
+        throw new Exception(
+            "Suggestion keyword is only valid for primitive- and file-type parameters, and types "
+              + "must match between parameter and suggestions"
+        )
+    }
+  }
+
+  // A suggestions array may contain either raw values or (for data object types) annotated values,
+  // which are hashes. Each value must be of the same type as the parameter, unless the parameter
+  // is an array, in which case choice values must be of the same type as the array's contained
+  // type. For now, we only allow choices for primitive- and file-type parameters, because there
+  // could be ambiguity (e.g. if a choice has a 'value' key, should we treat it as a raw map value
+  // or as an annotated value?).
+  //
+  // suggestions: [true, false]
+  // OR
+  // suggestions: [
+  //  {name: 'file1', value: "dx://file-XXX"}, {name: 'file2', value: "dx://file-YYY"}]
+  private def metaSuggestionsArrayToIR(array: Vector[V],
+                                       wdlType: T): Vector[Parameter.Suggestion] = {
+    if (array.isEmpty) {
+      Vector()
+    } else {
+      array.map {
+        case V_Object(fields) =>
+          metaSuggestionValueToIR(
+              wdlType = wdlType,
+              name = fields.get("name"),
+              value = fields.get("value"),
+              project = fields.get("project"),
+              path = fields.get("path")
+          )
+        case rawElement: V =>
+          metaSuggestionValueToIR(wdlType = wdlType, value = Some(rawElement))
+        case _ =>
+          throw new Exception(
+              "Suggestions array must contain only raw values or annotated (hash) values"
+          )
+      }
+    }
+  }
+
+  private def metaConstraintToIR(constraint: V): Parameter.Constraint = {
+    constraint match {
+      case V_Object(obj) if obj.size != 1 =>
+        throw new Exception("Constraint hash must have exactly one 'and' or 'or' key")
+      case V_Object(obj) =>
+        obj.head match {
+          case (ConstraintAnd, V_Array(array)) =>
+            Parameter.CompoundConstraint(ConstraintOper.And, array.map(metaConstraintToIR))
+          case (ConstraintOr, V_Array(array)) =>
+            Parameter.CompoundConstraint(ConstraintOper.Or, array.map(metaConstraintToIR))
+          case _ =>
+            throw new Exception(
+                "Constraint must have key 'and' or 'or' and an array value"
+            )
+        }
+      case V_String(s) =>
+        Parameter.StringConstraint(s)
+      case _ =>
+        throw new Exception("'dx_type' constraints must be either strings or hashes")
+    }
+  }
+
+  private def metaDefaultToIR(value: V, wdlType: T): Value = {
+    value match {
+      case _: Value.VHash =>
+        throw new Exception(
+            "Default keyword is only valid for primitive-, file-, and array-type parameters, and "
+              + "types must match between parameter and default"
+        )
+      case _ =>
+        Utils.wdlToIRValue(value, wdlType)
+    }
+  }
+
+  // Extract the parameter_meta info from the WDL structure
+  // The parameter's T is passed in since some parameter metadata values are required to
+  // have the same type as the parameter.
+  def translate(paramMeta: Option[V], wdlType: T): Vector[Parameter.Attribute] = {
+    paramMeta match {
+      case None => Vector.empty
+      // If the parameter metadata is a string, treat it as help
+      case Some(V_String(text)) => Vector(Parameter.HelpAttribute(text))
+      case Some(V_Object(obj)) => {
+        // Whether to use 'description' in place of help
+        val noHelp = !obj.contains(Help)
+        // Use flatmap to get the parameter metadata keys if they exist
+        obj.flatMap {
+          case (Group, V_String(text)) => Some(Parameter.GroupAttribute(text))
+          case (Help, V_String(text))  => Some(Parameter.HelpAttribute(text))
+          // Use 'description' in place of 'help' if the former is present and the latter is not
+          case (Description, V_String(text)) if noHelp =>
+            Some(Parameter.HelpAttribute(text))
+          case (Label, V_String(text)) => Some(Parameter.LabelAttribute(text))
+          // Try to parse the patterns key
+          // First see if it's an array
+          case (Patterns, V_Array(array)) =>
+            val patterns = array.map {
+              case V_String(s) => s
+              case _           => throw new Exception("Expected MetaValueString")
+            }
+            Some(Parameter.PatternsAttribute(Parameter.PatternsArray(patterns)))
+          // See if it's an object, and if it is, parse out the optional key, class, and tag keys
+          // Note all three are optional
+          case (Patterns, V_Object(obj)) =>
+            Some(Parameter.PatternsAttribute(metaPatternsObjToIR(obj)))
+          // Try to parse the choices key, which will be an array of either values or objects
+          case (Choices, V_Array(array)) =>
+            val wt = MetaUtils.unwrapWdlArrayType(wdlType)
+            Some(Parameter.ChoicesAttribute(metaChoicesArrayToIR(array, wt)))
+          case (Suggestions, V_Array(array)) =>
+            val wt = MetaUtils.unwrapWdlArrayType(wdlType)
+            Some(Parameter.SuggestionsAttribute(metaSuggestionsArrayToIR(array, wt)))
+          case (Type, dxType: V) =>
+            val wt = MetaUtils.unwrapWdlArrayType(wdlType)
+            wt match {
+              case T_File => Some(Parameter.TypeAttribute(metaConstraintToIR(dxType)))
+              case _      => throw new Exception("'dx_type' can only be specified for File parameters")
+            }
+          case (Default, default: V) =>
+            Some(Parameter.DefaultAttribute(metaDefaultToIR(default, wdlType)))
+          case _ => None
+        }.toVector
+      }
+      case _ =>
+        // TODO: or throw exception?
+        Vector.empty
+    }
+  }
+}
+
+case class ParameterMetaTranslator(wdlVersion: WdlVersion, metaSection: Option[TAT.MetaSection]) {
+  private lazy val meta: Meta = Meta.create(wdlVersion, metaSection)
+
+  def translate(name: String, parameterType: T): Vector[Parameter.Attribute] = {
+    val metaValue = meta.get(name)
+    ParameterMetaTranslator.translate(metaValue, parameterType)
+  }
+}

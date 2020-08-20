@@ -763,19 +763,21 @@ case class DxApi(logger: Logger = Logger.get,
   }
 
   // More accurate types
-  def resolveDxUrlRecord(buf: String): DxRecord = {
-    val dxObj = resolveOnePath(buf)
-    if (!dxObj.isInstanceOf[DxRecord]) {
-      throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+  def resolveDxUriRecord(buf: String): DxRecord = {
+    resolveOnePath(buf) match {
+      case dxrec: DxRecord =>
+        dxrec
+      case other =>
+        throw new Exception(s"Found dx:object of the wrong type ${other}")
     }
-    dxObj.asInstanceOf[DxRecord]
   }
 
-  def resolveDxUrlFile(buf: String): DxFile = {
-    val dxObj = resolveOnePath(buf)
-    if (!dxObj.isInstanceOf[DxFile]) {
-      throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+  def resolveDxUriFile(uri: String): DxFile = {
+    resolveOnePath(uri) match {
+      case dxfile: DxFile =>
+        dxfile
+      case other =>
+        throw new Exception(s"Found dx:object of the wrong type ${other}")
     }
-    dxObj.asInstanceOf[DxFile]
   }
 }

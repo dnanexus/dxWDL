@@ -72,17 +72,6 @@ case class ParseSource(dxApi: DxApi) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(importDirs: Vector[Path]): TypeOptions = {
-    val dxProtocol = DxFileAccessProtocol(dxApi)
-    val fileResolver = FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
-    TypeOptions(
-        fileResolver = fileResolver,
-        logger = logger,
-        followImports = true,
-        typeChecking = WdlTypeCheckingRegime.Strict
-    )
-  }
-
   // recurse into the imported packages
   //
   // Check the uniqueness of tasks, Workflows, and Types
@@ -108,12 +97,18 @@ case class ParseSource(dxApi: DxApi) {
     retval
   }
 
+  private def createFileResolver(importDirs: Vector[Path] = Vector.empty): FileSourceResolver = {
+    val dxProtocol = DxFileAccessProtocol(dxApi)
+    FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
+  }
+
   private def parseWdlFromPath(path: Path, importDirs: Vector[Path]): (TAT.Document, Context) = {
     val srcDir = path.getParent
-    val opts = makeOptions(importDirs :+ srcDir)
-    val parsers = Parsers(opts)
-    val doc = parsers.parseDocument(opts.fileResolver.fromPath(path))
-    TypeInfer(opts).apply(doc)
+    val fileResolver = createFileResolver(importDirs :+ srcDir)
+    val parsers = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
+    val doc = parsers.parseDocument(fileResolver.fromPath(path))
+    TypeInfer(regime = WdlTypeCheckingRegime.Strict, fileResolver = fileResolver, logger = logger)
+      .apply(doc)
   }
 
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
@@ -160,15 +155,14 @@ case class ParseSource(dxApi: DxApi) {
      flatInfo.adjunctFiles)
   }
 
-  private def parseWdlFromString(
-      src: String,
-      opts: TypeOptions = makeOptions(Vector.empty)
-  ): (TAT.Document, Context) = {
+  private def parseWdlFromString(src: String): (TAT.Document, Context) = {
     val sourceCode = StringFileSource(src)
     try {
-      val parser = Parsers(opts).getParser(sourceCode)
-      val doc = parser.parseDocument(sourceCode)
-      TypeInfer(opts).apply(doc)
+      val fileResolver = createFileResolver()
+      val parsers = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
+      val doc = parsers.parseDocument(sourceCode)
+      TypeInfer(regime = WdlTypeCheckingRegime.Strict, fileResolver = fileResolver, logger = logger)
+        .apply(doc)
     } catch {
       case se: SyntaxException =>
         System.out.println("WDL code is syntactically invalid ----- ")

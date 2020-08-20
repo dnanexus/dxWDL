@@ -6,6 +6,7 @@ import dx.compiler.ir.Parameter.Attribute
 trait Parameter {
   val name: String
   val dxType: Type
+  val optional: Boolean
   val defaultValue: Option[Value]
   val attributes: Vector[Attribute] = Vector.empty
 
@@ -141,22 +142,6 @@ object Parameter {
       extends Constraint
 
   /**
-    * Compile-time representation of the dxapp IO spec 'default' value.
-    * The default value can be specified when defining the parameter. If it is not (for example,
-    * if the parameter is optional and a separate variable is defined using select_first()), then
-    * the default value can be specified in paramter_meta and will be used when the dxapp.json
-    * is generated.
-   **/
-  sealed abstract class DefaultValue
-  final case class IntDefaultValue(value: Long) extends DefaultValue
-  final case class FloatDefaultValue(value: Double) extends DefaultValue
-  final case class BooleanDefaultValue(value: Boolean) extends DefaultValue
-  final case class StringDefaultValue(value: String) extends DefaultValue
-  final case class FileDefaultValue(value: String) extends DefaultValue
-  final case class DirectoryDefaultValue(value: String) extends DefaultValue
-  final case class ArrayDefaultValue(array: Vector[DefaultValue]) extends DefaultValue
-
-  /**
     * Compile time representaiton of supported parameter_meta section
     * information for the dxapp IO spec.
     */
@@ -168,5 +153,5 @@ object Parameter {
   final case class ChoicesAttribute(choices: Vector[Choice]) extends Attribute
   final case class SuggestionsAttribute(suggestions: Vector[Suggestion]) extends Attribute
   final case class TypeAttribute(constraint: Constraint) extends Attribute
-  final case class DefaultAttribute(value: DefaultValue) extends Attribute
+  final case class DefaultAttribute(value: Value) extends Attribute
 }
