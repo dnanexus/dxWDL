@@ -2,11 +2,9 @@ package dx.compiler.wdl
 
 import dx.api.{DxApi, DxUtils, DxWorkflowStage}
 import dx.compiler.ir.RunSpec.{DefaultInstanceType, DxFileDockerImage, NoImage}
-import dx.compiler.ir.Type.{TFile, TString}
-import dx.compiler.ir.Value._
 import dx.compiler.ir.{
   Application,
-  Callable,
+  CallableAttributes,
   CommonStage,
   CustomReorgConfig,
   EmptyInput,
@@ -27,10 +25,13 @@ import dx.compiler.ir.{
   Stage,
   StageInput,
   StaticInput,
-  Type,
   Workflow,
   WorkflowInput
 }
+import dx.core.ir.Type
+import dx.core.ir.Type._
+import dx.core.ir.Value._
+import dx.core.languages.wdl
 import dx.core.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{
   Block,
@@ -76,7 +77,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
     private def translateInput(input: TAT.InputDefinition): Parameter = {
       val wdlType = input.wdlType
-      val (irType, optional) = Utils.wdlToIRType(wdlType)
+      val (irType, optional) = wdl.Utils.toIRType(wdlType)
       val attrs = parameterMeta.translate(input.name, wdlType)
 
       input match {
@@ -97,7 +98,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
             WdlParameter(name,
                          irType,
                          optional,
-                         Some(Utils.wdlToIRValue(defaultValue, wdlType)),
+                         Some(wdl.Utils.toIRValue(defaultValue, wdlType)),
                          attrs)
           } catch {
             // This is a task "input" parameter definition of the form:
@@ -116,11 +117,11 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
     private def translateOutput(output: TAT.OutputDefinition): Parameter = {
       val wdlType = output.wdlType
-      val (irType, optional) = Utils.wdlToIRType(wdlType)
+      val (irType, optional) = wdl.Utils.toIRType(wdlType)
       val defaultValue = {
         try {
           val wdlValue = evaluator.applyConstAndCoerce(output.expr, wdlType)
-          Some(Utils.wdlToIRValue(wdlValue, wdlType))
+          Some(wdl.Utils.toIRValue(wdlValue, wdlType))
         } catch {
           case _: EvalException => None
         }
@@ -290,7 +291,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       */
     private def buildWorkflowInput(input: BlockInput): (Parameter, Boolean) = {
       val wdlType = input.wdlType
-      val (irType, optional) = Utils.wdlToIRType(wdlType)
+      val (irType, optional) = wdl.Utils.toIRType(wdlType)
       val attr = parameterMeta.translate(input.name, input.wdlType)
       input match {
         case RequiredBlockInput(name, _) =>
@@ -302,7 +303,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           (WdlParameter(name,
                         irType,
                         optional,
-                        Some(Utils.wdlToIRValue(defaultValue, wdlType)),
+                        Some(wdl.Utils.toIRValue(defaultValue, wdlType)),
                         attr),
            false)
         case OverridableBlockInputWithDynamicDefault(name, _, _) =>
@@ -385,10 +386,10 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           EmptyInput
         case Some(expr) =>
           // first try to treat it as a constant
-          val wdlType = Utils.irToWdlType(param.dxType, param.optional)
+          val wdlType = wdl.Utils.fromIRType(param.dxType, param.optional)
           try {
             val value = evaluator.applyConstAndCoerce(expr, wdlType)
-            StaticInput(Utils.wdlToIRValue(value, wdlType))
+            StaticInput(wdl.Utils.toIRValue(value, wdlType))
           } catch {
             case _: EvalException =>
               expr match {
@@ -638,7 +639,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // will output these cVars.
       val outputVars = outputs.map {
         case (fqn, wdlType) =>
-          val (irType, optional) = Utils.wdlToIRType(wdlType)
+          val (irType, optional) = wdl.Utils.toIRType(wdlType)
           WdlParameter(fqn, irType, optional)
       }.toVector
 
@@ -680,7 +681,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         case Block.ScatterFullBlock(_, scatter) =>
           // add the iteration variable to the inner environment
           val (varType, optional) = scatter.expr.wdlType match {
-            case WdlTypes.T_Array(t, _) => Utils.wdlToIRType(t)
+            case WdlTypes.T_Array(t, _) => wdl.Utils.toIRType(t)
             case _ =>
               throw new Exception("scatter doesn't have an array expression")
           }
@@ -787,7 +788,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     }
 
     private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition, env: CallEnv): LinkedVar = {
-      val (irType, optional) = Utils.wdlToIRType(output.wdlType)
+      val (irType, optional) = wdl.Utils.toIRType(output.wdlType)
       val param = WdlParameter(output.name, irType, optional)
       val stageInput: StageInput = if (env.contains(output.name)) {
         env(output.name)._2
@@ -795,7 +796,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         try {
           // try to evaluate the output as a constant
           val v = evaluator.applyConstAndCoerce(output.expr, output.wdlType)
-          StaticInput(Utils.wdlToIRValue(v, output.wdlType))
+          StaticInput(wdl.Utils.toIRValue(v, output.wdlType))
         } catch {
           case _: EvalException =>
             output.expr match {
@@ -849,11 +850,11 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           val value =
             try {
               val v = evaluator.applyConstAndCoerce(expr, wdlType)
-              Some(Utils.wdlToIRValue(v, wdlType))
+              Some(wdl.Utils.toIRValue(v, wdlType))
             } catch {
               case _: EvalException => None
             }
-          val (irType, optional) = Utils.wdlToIRType(wdlType)
+          val (irType, optional) = wdl.Utils.toIRType(wdlType)
           WdlParameter(name, irType, optional, value)
       }
       // Determine kind of application. If a custom reorg app is used and this is a top-level
@@ -921,7 +922,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val closureInputParams: Vector[Parameter] = closureInputs.map {
         case (name, (wdlType, false)) =>
           // no default value
-          val (irType, optional) = Utils.wdlToIRType(wdlType)
+          val (irType, optional) = wdl.Utils.toIRType(wdlType)
           if (optional) {
             throw new Exception(s"Required input ${name} cannot have optional type ${wdlType}")
           }
@@ -930,7 +931,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           // there is a default value. This input is de facto optional.
           // We change the type of the Parameter and make sure it is optional.
           // no default value
-          val (irType, _) = Utils.wdlToIRType(wdlType)
+          val (irType, _) = wdl.Utils.toIRType(wdlType)
           WdlParameter(name, irType, optional = true)
       }.toVector
       val allWfInputParameters = wfInputParams ++ closureInputParams
@@ -942,10 +943,10 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         val commonStageInputs = allWfInputParameters.map(p => WorkflowInput(p))
         val inputOutputs: Vector[Parameter] = inputs.map {
           case OverridableBlockInputWithDynamicDefault(name, wdlType, _) =>
-            val (nonOptType, _) = Utils.wdlToIRType(wdlType)
+            val (nonOptType, _) = wdl.Utils.toIRType(wdlType)
             WdlParameter(name, nonOptType)
           case i: BlockInput =>
-            val (irType, optional) = Utils.wdlToIRType(i.wdlType)
+            val (irType, optional) = wdl.Utils.toIRType(i.wdlType)
             WdlParameter(i.name, irType, optional)
         }
         val closureOutputs: Vector[Parameter] = closureInputParams

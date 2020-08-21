@@ -2,28 +2,28 @@ package dx.compiler.ir
 
 import dx.api.DiskType.DiskType
 import dx.api.DxFile
+import dx.core.ir.RuntimeRequirement
 
 /**
   * Representation of the parts of dxapp.json `runSpec` that can be specified.
   */
 object RunSpec {
-  sealed abstract class Requirement
   final case class RestartRequirement(max: Option[Long] = None,
                                       default: Option[Long] = None,
                                       errors: Map[String, Long] = Map.empty)
-      extends Requirement
+      extends RuntimeRequirement
   final case class TimeoutRequirement(days: Option[Long] = None,
                                       hours: Option[Long] = None,
                                       minutes: Option[Long] = None)
-      extends Requirement
-  final case class IgnoreReuseRequirement(value: Boolean) extends Requirement
+      extends RuntimeRequirement
+  final case class IgnoreReuseRequirement(value: Boolean) extends RuntimeRequirement
   final case class AccessRequirement(network: Vector[String] = Vector.empty,
                                      project: Option[String] = None,
                                      allProjects: Option[String] = None,
                                      developer: Option[Boolean] = None,
                                      projectCreation: Option[Boolean] = None)
-      extends Requirement
-  final case class StreamingRequirement(value: Boolean) extends Requirement
+      extends RuntimeRequirement
+  final case class StreamingRequirement(value: Boolean) extends RuntimeRequirement
 
   /**
     * Specification of instance type.

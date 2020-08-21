@@ -2,7 +2,7 @@ package dx.exec
 
 import dx.api.DxApi
 import dx.core.{ReorgStatus, ReorgStatusCompleted}
-import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
+import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlDxLinkSerde}
 import dx.core.getVersion
 import spray.json.{JsString, JsValue}
 import wdlTools.eval.{Eval, WdlValues}
@@ -11,7 +11,7 @@ import wdlTools.util.Bindings
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
-                     wdlVarLinksConverter: WdlVarLinksConverter,
+                     wdlVarLinksConverter: WdlDxLinkSerde,
                      dxApi: DxApi,
                      evaluator: Eval) {
   private def evaluateWdlExpression(expr: TAT.Expr,
@@ -62,8 +62,8 @@ case class WfOutputs(wf: TAT.Workflow,
     val outputFields: Map[String, JsValue] = outputs
       .map {
         case (outputVarName, (wdlType, wdlValue)) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
-          wdlVarLinksConverter.genFields(wvl, outputVarName)
+          val wvl = wdlVarLinksConverter.createLink(wdlType, wdlValue)
+          wdlVarLinksConverter.createFields(wvl, outputVarName)
       }
       .toVector
       .flatten

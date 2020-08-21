@@ -1,32 +1,29 @@
 package dx.exec
 
 import dx.api.{DxApi, DxFile}
-import dx.core.languages.wdl.{ExecLinkInfo, TypeSerialization, WdlVarLinksConverter}
+import dx.core.languages.wdl.{WdlExecutableLink, TypeSerialization, WdlDxLinkSerde}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes
 
 case class WfFragInput(blockPath: Vector[Int],
                        env: Map[String, (WdlTypes.T, WdlValues.V)],
-                       execLinkInfo: Map[String, ExecLinkInfo])
+                       execLinkInfo: Map[String, WdlExecutableLink])
 
 case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
-                             wdlVarLinksConverter: WdlVarLinksConverter,
+                             wdlVarLinksConverter: WdlDxLinkSerde,
                              dxApi: DxApi) {
-  private def revTransformVarName(varName: String): String = {
-    varName.replaceAll("___", "\\.")
-  }
 
   private def loadWorkflowMetaInfo(
       metaInfo: Map[String, JsValue]
-  ): (Map[String, ExecLinkInfo], Vector[Int], Map[String, WdlTypes.T]) = {
+  ): (Map[String, WdlExecutableLink], Vector[Int], Map[String, WdlTypes.T]) = {
     // meta information used for running workflow fragments
-    val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
+    val execLinkInfo: Map[String, WdlExecutableLink] = metaInfo.get("execLinkInfo") match {
       case None => Map.empty
       case Some(JsObject(fields)) =>
         fields.map {
           case (key, ali) =>
-            key -> ExecLinkInfo.readJson(dxApi, ali, typeAliases)
+            key -> WdlExecutableLink.readJson(dxApi, ali, typeAliases)
         }
       case other => throw new Exception(s"Bad value ${other}")
     }
@@ -44,7 +41,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
         fields.map {
           case (key, JsString(value)) =>
             // Transform back to a fully qualified name with dots
-            val orgKeyName = revTransformVarName(key)
+            val orgKeyName = WdlDxLinkSerde.decodeDots(key)
             val wdlType = TypeSerialization(typeAliases).fromString(value)
             orgKeyName -> wdlType
           case other => throw new Exception(s"Bad value ${other}")
@@ -60,7 +57,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
   //    look to the WDL code as if all previous code had been evaluated.
   def loadInputs(inputs: JsValue, metaInfo: JsValue): WfFragInput = {
     val regularFields: Map[String, JsValue] = inputs.asJsObject.fields
-      .filter { case (fieldName, _) => !fieldName.endsWith(WdlVarLinksConverter.FLAT_FILES_SUFFIX) }
+      .filter { case (fieldName, _) => !fieldName.endsWith(WdlDxLinkSerde.FlatFilesSuffix) }
 
     // Extract the meta information needed to setup the closure for the subblock
     val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo.asJsObject.fields)
@@ -68,7 +65,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
     // What remains are inputs from other stages. Convert from JSON to WDL values
     val env: Map[String, (WdlTypes.T, WdlValues.V)] = regularFields.map {
       case (name, jsValue) =>
-        val fqn = revTransformVarName(name)
+        val fqn = WdlDxLinkSerde.decodeDots(name)
         val wdlType = fqnDictTypes.get(fqn) match {
           case None =>
             throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
@@ -84,7 +81,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
   // find all the dx:files that are referenced from the inputs
   def findRefDxFiles(inputs: JsValue, metaInfo: JsValue): Vector[DxFile] = {
     val regularFields: Map[String, JsValue] = inputs.asJsObject.fields
-      .filter { case (fieldName, _) => !fieldName.endsWith(WdlVarLinksConverter.FLAT_FILES_SUFFIX) }
+      .filter { case (fieldName, _) => !fieldName.endsWith(WdlDxLinkSerde.FlatFilesSuffix) }
 
     val (_, _, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo.asJsObject.fields)
 
@@ -92,7 +89,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
     regularFields
       .map {
         case (name, jsValue) =>
-          val fqn = revTransformVarName(name)
+          val fqn = WdlDxLinkSerde.decodeDots(name)
           if (!fqnDictTypes.contains(fqn)) {
             throw new Exception(
                 s"Did not find variable ${fqn} (${name}) in the block environment"

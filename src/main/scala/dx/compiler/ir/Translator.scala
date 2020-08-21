@@ -4,6 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import dx.api.{DxApi, DxFile, DxProject}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.core.ir.{Application, Bundle, Callable, Parameter, Workflow}
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
 
@@ -12,9 +13,7 @@ import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
   * @param dxApi DxApi
   * @param logger Logger
   */
-abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.get,
-                          dxApi: DxApi = DxApi.get,
-                          logger: Logger = Logger.get) {
+abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
   private class Fields(name: String, fields: Map[String, JsValue]) {
     private var retrievedKeys: Set[String] = Set.empty
 
@@ -50,15 +49,16 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
     * @param parameter input parameter
     * @param jsv input JsValue
     * @param dxName DNAnexus field name
-    * @param encodeDots whether to convert dots in the field name
+    * @param encodeName whether to convert dots in the field name
     * @return
     */
   protected def translateInput(parameter: Parameter,
                                jsv: JsValue,
                                dxName: String,
-                               encodeDots: Boolean): Map[String, JsValue]
+                               fileResolver: FileSourceResolver,
+                               encodeName: Boolean): Map[String, JsValue]
 
-  private case class InputFile(fields: Map[String, JsValue]) {
+  private case class InputFile(fields: Map[String, JsValue], fileResolver: FileSourceResolver) {
     private val inputFields: Fields = new Fields("input", fields)
     private var dxFields: Map[String, JsValue] = Map.empty
 
@@ -72,7 +72,7 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
           // We found the variable declaration, the others
           // are variable uses.
           logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
-          dxFields ++= translateInput(parameter, jsv, dxName, encodeDots = false)
+          dxFields ++= translateInput(parameter, jsv, dxName, fileResolver, encodeName = false)
       }
     }
 
@@ -97,8 +97,10 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
   // app(let)/call/workflow input. This provides the fully-qualified-name (fqn)
   // of each IR variable. Then we check if the fqn is defined in
   // the input file.
-  private def dxFromInputJson(bundle: Bundle, inputs: Map[String, JsValue]): JsObject = {
-    val inputFields = InputFile(inputs)
+  private def dxFromInputJson(bundle: Bundle,
+                              inputs: Map[String, JsValue],
+                              fileResolver: FileSourceResolver): JsObject = {
+    val inputFields = InputFile(inputs, fileResolver)
 
     def handleTask(application: Application): Unit = {
       application.inputs.foreach { parameter =>
@@ -183,7 +185,8 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
     */
   protected def translateDocument(source: Path,
                                   locked: Boolean,
-                                  reorgEnabled: Option[Boolean]): Bundle
+                                  reorgEnabled: Option[Boolean],
+                                  fileResolver: FileSourceResolver): Bundle
 
   /**
     * Given a mapping of field name to value, selects just the file-type fields
@@ -217,9 +220,12 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
             defaults: Option[Path] = None,
             locked: Boolean = false,
             reorgEnabled: Option[Boolean] = None,
-            writeDxInputsFile: Boolean = true): Bundle = {
+            writeDxInputsFile: Boolean = true,
+            fileResolver: FileSourceResolver = FileSourceResolver.get): Bundle = {
+    val sourceAbsPath = FileUtils.absolutePath(source)
+    val sourceFileResolver = fileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
     // generate IR
-    val bundle: Bundle = translateDocument(source, locked, reorgEnabled)
+    val bundle: Bundle = translateDocument(source, locked, reorgEnabled, sourceFileResolver)
     val jsDefaults =
       defaults
         .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
@@ -232,19 +238,19 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
     val jsInputs = inputs
       .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
       .toMap
+    // Scan the JSON inputs files for dx:files, and batch describe them. This
+    // reduces the number of API calls.
+    val inputAndDefaultFields = (jsInputs.values.flatten ++ jsDefaults).toMap
+    val (pathToDxFile, dxFiles) = filterFiles(inputAndDefaultFields, dxProject)
+    // lookup platform files in bulk
+    val allFiles = dxApi.fileBulkDescribe(dxFiles)
+    val dxFileDescCache = DxFileDescCache(allFiles)
+    // update bundle with default values
+    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
+    val fileResolverWithCache = sourceFileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
     val finalBundle = if (jsDefaults.isEmpty) {
       bundle
     } else {
-      // Scan the JSON inputs files for dx:files, and batch describe them. This
-      // reduces the number of API calls.
-      val inputAndDefaultFields = (jsInputs.values.flatten ++ jsDefaults).toMap
-      val (pathToDxFile, dxFiles) = filterFiles(inputAndDefaultFields, dxProject)
-      // lookup platform files in bulk
-      val allFiles = dxApi.fileBulkDescribe(dxFiles)
-      val dxFileDescCache = DxFileDescCache(allFiles)
-      // update bundle with default values
-      val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-      val fileResolverWithCache = fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
       embedDefaults(
           bundle,
           fileResolverWithCache,
@@ -258,7 +264,7 @@ abstract class Translator(fileResolver: FileSourceResolver = FileSourceResolver.
       jsInputs.foreach {
         case (path, jsValues) =>
           logger.trace(s"Translating WDL input file ${path}")
-          val dxInputs = dxFromInputJson(finalBundle, jsValues)
+          val dxInputs = dxFromInputJson(finalBundle, jsValues, fileResolverWithCache)
           val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
           val dxInputFile = path.getParent match {
             case null   => Paths.get(fileName)

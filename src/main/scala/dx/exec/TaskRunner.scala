@@ -27,6 +27,7 @@ import dx.exec
 import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest}
 import dx.core.languages.wdl._
 import dx.core.getVersion
+import dx.core.ir.ParameterLinkExec
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.exec.DockerUtils
@@ -37,8 +38,8 @@ import wdlTools.util.{
   FileSourceResolver,
   FileUtils,
   RealFileSource,
-  TraceLevel,
-  SysUtils
+  SysUtils,
+  TraceLevel
 }
 
 case class TaskRunner(task: TAT.Task,
@@ -47,7 +48,7 @@ case class TaskRunner(task: TAT.Task,
                       instanceTypeDB: InstanceTypeDB,
                       dxPathConfig: DxPathConfig,
                       fileResolver: FileSourceResolver,
-                      wdlVarLinksConverter: WdlVarLinksConverter,
+                      wdlVarLinksConverter: WdlDxLinkSerde,
                       jobInputOutput: JobInputOutput,
                       defaultRuntimeAttrs: Option[WdlRuntimeAttrs],
                       delayWorkspaceDestruction: Option[Boolean],
@@ -399,8 +400,8 @@ case class TaskRunner(task: TAT.Task,
     val outputFields: Map[String, JsValue] = outputs
       .map {
         case (outputVarName, (wdlType, wdlValue)) =>
-          val wvl = wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
-          wdlVarLinksConverter.genFields(wvl, outputVarName)
+          val wvl = wdlVarLinksConverter.createLink(wdlType, wdlValue)
+          wdlVarLinksConverter.createFields(wvl, outputVarName)
       }
       .toVector
       .flatten
@@ -508,8 +509,8 @@ case class TaskRunner(task: TAT.Task,
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
     val outputs: Map[String, JsValue] = task.outputs.flatMap { outDef: TAT.OutputDefinition =>
-      val wvl = WdlVarLinks(outDef.wdlType, DxLinkExec(dxSubJob, outDef.name))
-      wdlVarLinksConverter.genFields(wvl, outDef.name)
+      val wvl = WdlDxLink(outDef.wdlType, ParameterLinkExec(dxSubJob, outDef.name))
+      wdlVarLinksConverter.createFields(wvl, outDef.name)
     }.toMap
     outputs
   }

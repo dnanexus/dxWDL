@@ -6,7 +6,7 @@ import dx.compiler.ExecTreeFormat.ExecTreeFormat
 import dx.compiler.Main.CompilerFlag
 import dx.compiler.ir.{Bundle, Extras}
 import dx.core.io.DxPathConfig
-import dx.core.languages.wdl.WdlVarLinksConverter
+import dx.core.languages.wdl.WdlDxLinkSerde
 import spray.json.JsValue
 import wdlTools.util.{Enum, FileSourceResolver, Logger}
 
@@ -96,7 +96,7 @@ case class Compiler(includeAsset: Boolean,
       folder: String,
       dxProject: DxProject,
       runtimePathConfig: DxPathConfig,
-      wdlVarLinksConverter: WdlVarLinksConverter
+      wdlVarLinksConverter: WdlDxLinkSerde
   ): Native.Results = {
     val dxWDLrtId: Option[String] = compileMode match {
       case CompilerFlag.IR =>
@@ -155,7 +155,7 @@ case class Compiler(includeAsset: Boolean,
     // (1) the instance price list and database
     // (2) the output location of applets and workflows
     val wdlVarLinksConverter =
-      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
+      WdlDxLinkSerde(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
     val cResults =
       compileNative(bundle2, folder, dxProject, runtimePathConfig, wdlVarLinksConverter)
     cResults.primaryCallable match {

@@ -3,6 +3,7 @@ package dx.api
 import spray.json._
 
 object DxUtils {
+  val DxLinkKey = "$dnanexus_link"
   private val dataObjectClasses =
     Set("applet", "database", "dbcluster", "file", "record", "workflow")
   private val containerClasses = Set("container", "project")
@@ -62,16 +63,14 @@ object DxUtils {
     dxExec match {
       case _: DxJob =>
         JsObject(
-            "$dnanexus_link" -> JsObject("field" -> JsString(fieldName),
-                                         "job" -> JsString(dxExec.id))
+            DxLinkKey -> JsObject("field" -> JsString(fieldName), "job" -> JsString(dxExec.id))
         )
       case _: DxAnalysis =>
         JsObject(
-            "$dnanexus_link" -> JsObject("field" -> JsString(fieldName),
-                                         "analysis" -> JsString(dxExec.id))
+            DxLinkKey -> JsObject("field" -> JsString(fieldName), "analysis" -> JsString(dxExec.id))
         )
       case _ =>
-        throw new Exception(s"makeEBOR can't work with ${dxExec.id}")
+        throw new Exception(s"Cannot create EBOR for execution ${dxExec.id}")
     }
   }
 }

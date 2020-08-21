@@ -1,7 +1,11 @@
 package dx
 
 import java.nio.file.Path
-import wdlTools.util.Enum
+
+import dx.core.io.DxPathConfig
+import wdlTools.eval.{Eval, EvalPaths}
+import wdlTools.syntax.WdlVersion
+import wdlTools.util.{Enum, FileSourceResolver, Logger}
 
 package object exec {
   val DXFUSE_MAX_MEMORY_CONSUMPTION: Int = 300 * 1024 * 1024 // how much memory dxfuse takes
@@ -25,5 +29,15 @@ package object exec {
     val jobErrorPath = homeDir.resolve("job_error.json")
     val jobInfoPath = homeDir.resolve("dnanexus-job.json")
     (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
+  }
+
+  def createEvaluator(dxPathConfig: DxPathConfig,
+                      fileResolver: FileSourceResolver,
+                      wdlVersion: WdlVersion): Eval = {
+    val evalPaths = EvalPaths(
+        dxPathConfig.homeDir,
+        dxPathConfig.tmpDir
+    )
+    Eval(evalPaths, Some(wdlVersion), fileResolver, Logger.Quiet)
   }
 }

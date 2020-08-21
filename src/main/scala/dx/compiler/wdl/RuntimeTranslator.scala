@@ -2,7 +2,9 @@ package dx.compiler.wdl
 
 import dx.api.{DxApi, DxPath, DxUtils, InstanceTypeRequest}
 import dx.compiler.ir.RunSpec._
-import dx.compiler.ir.{ExecutableKind, ExecutableKindNative, ExecutableType, Value}
+import dx.compiler.ir.{ExecutableKind, ExecutableKindNative, ExecutableType}
+import dx.core.ir.Value
+import dx.core.languages.wdl
 import dx.core.languages.wdl.{DxRuntimeHint, Runtime}
 import wdlTools.eval.WdlValues._
 import wdlTools.eval.{Eval, EvalException, Hints, Meta}
@@ -83,9 +85,9 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
     try {
       (runtime.get(id), wdlType) match {
         case (Some(value), None) =>
-          Some(Utils.wdlToIRValue(value))
+          Some(wdl.Utils.toIRValue(value))
         case (Some(value), Some(t)) =>
-          Some(Utils.wdlToIRValue(value, t))
+          Some(wdl.Utils.toIRValue(value, t))
       }
     } catch {
       case _: EvalException =>

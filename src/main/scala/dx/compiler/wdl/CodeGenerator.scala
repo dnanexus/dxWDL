@@ -1,7 +1,7 @@
 package dx.compiler.wdl
 
-import dx.compiler.ir.{Application, Callable, ExecutableKindTask}
-import dx.core.languages.Language
+import dx.compiler.ir.{Application, CallableAttributes, ExecutableKindTask}
+import dx.core.languages.{Language, wdl}
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
@@ -191,14 +191,14 @@ case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
       callable.inputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = Utils.irToWdlType(parameter.dxType, parameter.optional)
+          val wdlType = wdl.Utils.fromIRType(parameter.dxType, parameter.optional)
           parameter.defaultValue match {
             case None =>
               TAT.RequiredInputDefinition(parameter.name, wdlType, SourceLocation.empty)
             case Some(value) =>
               TAT.OverridableInputDefinitionWithDefault(parameter.name,
                                                         wdlType,
-                                                        Utils.irValueToExpr(value),
+                                                        wdl.Utils.irValueToExpr(value),
                                                         SourceLocation.empty)
           }
         }
@@ -207,7 +207,7 @@ case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
       callable.outputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = Utils.irToWdlType(parameter.dxType, parameter.optional)
+          val wdlType = wdl.Utils.fromIRType(parameter.dxType, parameter.optional)
           val defaultVal = genDefaultValueOfType(wdlType)
           TAT.OutputDefinition(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }

@@ -6,7 +6,7 @@ import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
+import dx.core.languages.wdl.{Evaluator, ParseSource, WdlDxLinkSerde}
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
 import wdlTools.util.{Enum, FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
@@ -49,8 +49,8 @@ object Main {
     dxPathConfig.createCleanDirs()
 
     val wdlVarLinksConverter =
-      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
-    val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+      WdlDxLinkSerde(dxApi, fileResolver, dxFileDescCache, typeAliases)
+    val evaluator = createEvaluator(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput =
       JobInputOutput(dxPathConfig,
                      fileResolver,
@@ -145,8 +145,8 @@ object Main {
     val (wf, taskDir, typeAliases, document) =
       ParseSource(dxApi).parseWdlWorkflow(wdlSourceCode)
     val wdlVarLinksConverter =
-      WdlVarLinksConverter(dxApi, fileResolver, dxFileDescCache, typeAliases)
-    val evaluator = Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+      WdlDxLinkSerde(dxApi, fileResolver, dxFileDescCache, typeAliases)
+    val evaluator = createEvaluator(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput = JobInputOutput(dxPathConfig,
                                         fileResolver,
                                         dxFileDescCache,

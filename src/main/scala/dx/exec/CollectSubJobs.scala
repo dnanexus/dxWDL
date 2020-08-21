@@ -58,7 +58,7 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dx.exec
 
 import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.languages.wdl.{DxLinkExec, ExecLinkInfo, WdlVarLinks, WdlVarLinksConverter}
+import dx.core.languages.wdl.{ParameterLinkExec, WdlExecutableLink, WdlDxLink, WdlDxLinkSerde}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
@@ -73,10 +73,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
-                          wdlVarLinksConverter: WdlVarLinksConverter) {
+                          wdlVarLinksConverter: WdlDxLinkSerde) {
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
-             exportTypes: Map[String, WdlTypes.T]): Map[String, WdlVarLinks] = {
+             exportTypes: Map[String, WdlTypes.T]): Map[String, WdlDxLink] = {
     assert(childJobs.nonEmpty)
 
     // Run a sub-job with the "collect" entry point.
@@ -91,7 +91,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     // is exactly the same as the parent, we can immediately exit the parent job.
     exportTypes.map {
       case (eVarName, wdlType) =>
-        eVarName -> WdlVarLinks(wdlType, DxLinkExec(dxSubJob, eVarName))
+        eVarName -> WdlDxLink(wdlType, ParameterLinkExec(dxSubJob, eVarName))
     }
   }
 
@@ -176,7 +176,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                                childJobsComplete: Vector[ChildExecDesc]): WdlValues.V = {
     val vec: Vector[WdlValues.V] =
       childJobsComplete.flatMap { childExec =>
-        val dxName = WdlVarLinksConverter.transformVarName(name)
+        val dxName = WdlDxLinkSerde.encodeDots(name)
         val fieldValue = childExec.outputs.get(dxName)
         (wdlType, fieldValue) match {
           case (WdlTypes.T_Optional(_), None) =>
@@ -196,7 +196,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
 
   // aggregate call results
   def aggregateResults(call: TAT.Call,
-                       childJobsComplete: Vector[ChildExecDesc]): Map[String, WdlVarLinks] = {
+                       childJobsComplete: Vector[ChildExecDesc]): Map[String, WdlDxLink] = {
     call.callee.output.map {
       case (oName, wdlType) =>
         val fullName = s"${call.actualName}.${oName}"
@@ -204,7 +204,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
 
         // We get an array from collecting the values of a particular field
         val arrayType = WdlTypes.T_Array(wdlType, nonEmpty = false)
-        val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
+        val wvl = wdlVarLinksConverter.createLink(arrayType, value)
         fullName -> wvl
     }
   }
@@ -212,16 +212,16 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   // collect results from a sub-workflow generated for the sole purpose of calculating
   // a sub-block.
   def aggregateResultsFromGeneratedSubWorkflow(
-      execLinkInfo: ExecLinkInfo,
+      execLinkInfo: WdlExecutableLink,
       childJobsComplete: Vector[ChildExecDesc]
-  ): Map[String, WdlVarLinks] = {
+  ): Map[String, WdlDxLink] = {
     execLinkInfo.outputs.map {
       case (name, wdlType) =>
         val value: WdlValues.V = collectCallField(name, wdlType, childJobsComplete)
 
         // We get an array from collecting the values of a particular field
         val arrayType = WdlTypes.T_Array(wdlType, nonEmpty = false)
-        val wvl = wdlVarLinksConverter.importFromWDL(arrayType, value)
+        val wvl = wdlVarLinksConverter.createLink(arrayType, value)
         name -> wvl
     }
   }

@@ -1,10 +1,29 @@
-package dx.compiler.ir
+package dx.core.ir
 
 import dx.api.DxWorkflowStage
 import dx.compiler.{DocumentSource, WorkflowSource}
-import dx.compiler.ir.ExecutableType.ExecutableType
 import dx.compiler.ir.RunSpec.{ContainerImage, InstanceType}
+import dx.core.ir.ExecutableType.ExecutableType
+import dx.core.ir.Level.Level
 import wdlTools.util.Enum
+
+trait ParameterAttribute
+
+trait Parameter {
+  def name: String
+  def dxType: Type
+  def optional: Boolean
+  def defaultValue: Option[Value]
+  def attributes: Vector[ParameterAttribute]
+
+  /**
+    * Get a DNAnexus-compliant parameter name. For example, DNAnexus does not allow dots
+    * in variable names, so convert them to underscores.
+    */
+  def dxName: String
+}
+
+trait CallableAttribute
 
 /**
   * A unified type representing a workflow, app, or applet.
@@ -16,25 +35,7 @@ trait Callable {
   def name: String
   def inputVars: Vector[Parameter]
   def outputVars: Vector[Parameter]
-}
-
-object Callable {
-  sealed abstract class Attribute
-  final case class TitleAttribute(text: String) extends Attribute
-  final case class DescriptionAttribute(text: String) extends Attribute
-  final case class SummaryAttribute(text: String) extends Attribute
-  final case class DeveloperNotesAttribute(text: String) extends Attribute
-  final case class VersionAttribute(text: String) extends Attribute
-  final case class DetailsAttribute(details: Map[String, Value]) extends Attribute
-  final case class CategoriesAttribute(categories: Vector[String]) extends Attribute
-  final case class TypesAttribute(types: Vector[String]) extends Attribute
-  final case class TagsAttribute(tags: Vector[String]) extends Attribute
-  final case class PropertiesAttribute(properties: Map[String, String]) extends Attribute
-  // attributes specific to applications
-  final case class OpenSourceAttribute(isOpenSource: Boolean) extends Attribute
-  // attributes specific to workflow
-  final case class CallNamesAttribute(mapping: Map[String, String]) extends Attribute
-  final case class RunOnSingleNodeAttribute(value: Boolean) extends Attribute
+  def attributes: Vector[CallableAttribute]
 }
 
 /**
@@ -82,6 +83,8 @@ case object ExecutableKindWfCustomReorgOutputs extends ExecutableKind
 case object ExecutableKindWorkflowOutputReorg extends ExecutableKind
 case class ExecutableKindWorkflowCustomReorg(id: String) extends ExecutableKind
 
+trait RuntimeRequirement
+
 /**
   * An app or applet.
   * @param name name of application
@@ -101,8 +104,8 @@ case class Application(name: String,
                        container: ContainerImage,
                        kind: ExecutableKind,
                        document: DocumentSource,
-                       attributes: Vector[Callable.Attribute] = Vector.empty,
-                       requirements: Vector[RunSpec.Requirement] = Vector.empty)
+                       attributes: Vector[CallableAttribute] = Vector.empty,
+                       requirements: Vector[RuntimeRequirement] = Vector.empty)
     extends Callable {
   def inputVars: Vector[Parameter] = inputs
   def outputVars: Vector[Parameter] = outputs
@@ -148,8 +151,8 @@ case class Workflow(name: String,
                     stages: Vector[Stage],
                     document: WorkflowSource,
                     locked: Boolean,
-                    level: Level.Value,
-                    meta: Vector[Callable.Attribute] = Vector.empty)
+                    level: Level,
+                    attributes: Vector[CallableAttribute] = Vector.empty)
     extends Callable {
   def inputVars: Vector[Parameter] = inputs.map { case (cVar, _)   => cVar }
   def outputVars: Vector[Parameter] = outputs.map { case (cVar, _) => cVar }

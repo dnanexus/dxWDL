@@ -1,7 +1,9 @@
 package dx.compiler.wdl
 
 import dx.api.ConstraintOper
-import dx.compiler.ir.{Callable, Parameter, Value}
+import dx.compiler.ir.{CallableAttributes, Parameter}
+import dx.core.ir.Value
+import dx.core.languages.wdl
 import wdlTools.eval.Meta
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.WdlVersion
@@ -46,35 +48,38 @@ abstract class MetaTranslator(wdlVersion: WdlVersion,
                               adjunctFiles: Vector[Adjuncts.AdjunctFile]) {
   private lazy val meta: Meta = Meta.create(wdlVersion, metaSection)
 
-  protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+  protected def translate(name: String, value: V): Option[CallableAttributes.Attribute] = {
     (name, value) match {
-      case (MetaTranslator.Title, V_String(text))       => Some(Callable.TitleAttribute(text))
-      case (MetaTranslator.Description, V_String(text)) => Some(Callable.DescriptionAttribute(text))
-      case (MetaTranslator.Summary, V_String(text))     => Some(Callable.SummaryAttribute(text))
+      case (MetaTranslator.Title, V_String(text)) => Some(CallableAttributes.TitleAttribute(text))
+      case (MetaTranslator.Description, V_String(text)) =>
+        Some(CallableAttributes.DescriptionAttribute(text))
+      case (MetaTranslator.Summary, V_String(text)) =>
+        Some(CallableAttributes.SummaryAttribute(text))
       case (MetaTranslator.DeveloperNotes, V_String(text)) =>
-        Some(Callable.DeveloperNotesAttribute(text))
-      case (MetaTranslator.Version, V_String(text)) => Some(Callable.VersionAttribute(text))
+        Some(CallableAttributes.DeveloperNotesAttribute(text))
+      case (MetaTranslator.Version, V_String(text)) =>
+        Some(CallableAttributes.VersionAttribute(text))
       case (MetaTranslator.Details, V_Object(fields)) =>
-        Some(Callable.DetailsAttribute(fields.map {
-          case (name, wdlValue) => name -> Utils.wdlToIRValue(wdlValue)
+        Some(CallableAttributes.DetailsAttribute(fields.map {
+          case (name, wdlValue) => name -> wdl.Utils.toIRValue(wdlValue)
         }))
       case (MetaTranslator.Categories, V_Array(array)) =>
-        Some(Callable.CategoriesAttribute(array.map {
+        Some(CallableAttributes.CategoriesAttribute(array.map {
           case V_String(text) => text
           case other          => throw new Exception(s"Invalid category: ${other}")
         }))
       case (MetaTranslator.Types, V_Array(array)) =>
-        Some(Callable.TypesAttribute(array.map {
+        Some(CallableAttributes.TypesAttribute(array.map {
           case V_String(text) => text
           case other          => throw new Exception(s"Invalid type: ${other}")
         }))
       case (MetaTranslator.Tags, V_Array(array)) =>
-        Some(Callable.TagsAttribute(array.map {
+        Some(CallableAttributes.TagsAttribute(array.map {
           case V_String(text) => text
           case other          => throw new Exception(s"Invalid tag: ${other}")
         }))
       case (MetaTranslator.Properties, V_Object(fields)) =>
-        Some(Callable.PropertiesAttribute(fields.view.mapValues {
+        Some(CallableAttributes.PropertiesAttribute(fields.view.mapValues {
           case V_String(text) => text
           case other          => throw new Exception(s"Invalid property value: ${other}")
         }.toMap))
@@ -82,7 +87,7 @@ abstract class MetaTranslator(wdlVersion: WdlVersion,
     }
   }
 
-  def translate: Vector[Callable.Attribute] = {
+  def translate: Vector[CallableAttributes.Attribute] = {
     val attrs = metaSection match {
       case None => Vector.empty
       case Some(TAT.MetaSection(kvs, _)) =>
@@ -95,11 +100,11 @@ abstract class MetaTranslator(wdlVersion: WdlVersion,
           .toVector
     }
 
-    val adjunctAttrs: Vector[Callable.Attribute] = adjunctFiles.collect {
+    val adjunctAttrs: Vector[CallableAttributes.Attribute] = adjunctFiles.collect {
       case Adjuncts.Readme(text) if !meta.contains(MetaTranslator.Description) =>
-        Callable.DescriptionAttribute(text)
+        CallableAttributes.DescriptionAttribute(text)
       case Adjuncts.DeveloperNotes(text) if !meta.contains(MetaTranslator.DeveloperNotes) =>
-        Callable.DeveloperNotesAttribute(text)
+        CallableAttributes.DeveloperNotesAttribute(text)
     }
 
     attrs ++ adjunctAttrs
@@ -110,10 +115,11 @@ case class ApplicationMetaTranslator(wdlVersion: WdlVersion,
                                      metaSection: Option[TAT.MetaSection],
                                      adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
     extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
-  override protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+  override protected def translate(name: String, value: V): Option[CallableAttributes.Attribute] = {
     (name, value) match {
-      case (MetaTranslator.OpenSource, V_Boolean(b)) => Some(Callable.OpenSourceAttribute(b))
-      case _                                         => super.translate(name, value)
+      case (MetaTranslator.OpenSource, V_Boolean(b)) =>
+        Some(CallableAttributes.OpenSourceAttribute(b))
+      case _ => super.translate(name, value)
     }
   }
 }
@@ -122,15 +128,15 @@ case class WorkflowMetaTranslator(wdlVersion: WdlVersion,
                                   metaSection: Option[TAT.MetaSection],
                                   adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
     extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
-  override protected def translate(name: String, value: V): Option[Callable.Attribute] = {
+  override protected def translate(name: String, value: V): Option[CallableAttributes.Attribute] = {
     (name, value) match {
       case (MetaTranslator.CallNames, V_Object(fields)) =>
-        Some(Callable.CallNamesAttribute(fields.view.mapValues {
+        Some(CallableAttributes.CallNamesAttribute(fields.view.mapValues {
           case V_String(text) => text
           case other          => throw new Exception(s"Invalid call name value: $other")
         }.toMap))
       case (MetaTranslator.RunOnSingleNode, V_Boolean(b)) =>
-        Some(Callable.RunOnSingleNodeAttribute(b))
+        Some(CallableAttributes.RunOnSingleNodeAttribute(b))
       case _ =>
         super.translate(name, value)
     }
@@ -353,7 +359,7 @@ object ParameterMetaTranslator {
               + "types must match between parameter and default"
         )
       case _ =>
-        Utils.wdlToIRValue(value, wdlType)
+        wdl.Utils.toIRValue(value, wdlType)
     }
   }
 

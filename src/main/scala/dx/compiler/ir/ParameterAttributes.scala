@@ -1,52 +1,40 @@
 package dx.compiler.ir
 
 import dx.api.ConstraintOper
-import dx.compiler.ir.Parameter.Attribute
+import dx.core.ir.{ParameterAttribute, Value}
 
-trait Parameter {
-  val name: String
-  val dxType: Type
-  val optional: Boolean
-  val defaultValue: Option[Value]
-  val attributes: Vector[Attribute] = Vector.empty
-
-  /**
-    * Get a DNAnexus-compliant parameter name. For example, DNAnexus does not allow dots
-    * in variable names, so convert them to underscores.
-    */
-  def dxName: String
-}
-
-// These types correspond to attributes of inputSpec/outputSpec from dxapp.json.
-// These attributes can be used in the parameter_meta section of task WDL, and
-// will be parsed out and used when generating the native app.
-//  Example:
-//
-//  task {
-//    inputs {
-//      File sorted_bams
-//    }
-//    parameter_meta {
-//      sorted_bams: {
-//        label: "Sorted mappings",
-//        help: "A set of coordinate-sorted BAM files to be merged.",
-//        patterns: ["*.bam"]
-//      }
-//    }
-//  }
-//
-//  will be turned into:
-//
-//  "inputSpec": {
-//    "myparam": {
-//      "name": "sorted_bams",
-//      "label": "Sorted mappings",
-//      "help": "A set of coordinate-sorted BAM files to be merged.",
-//      "class": "array:file",
-//      "patterns": ["*.bam"]
-//    }
-//  }
-object Parameter {
+/**
+  * These types correspond to attributes of inputSpec/outputSpec from dxapp.json.
+  * These attributes can be used in the parameter_meta section of task WDL, and
+  * will be parsed out and used when generating the native app.
+  * Example:
+  *
+  * task {
+  *   inputs {
+  *     File sorted_bams
+  *   }
+  *   parameter_meta {
+  *     sorted_bams: {
+  *       label: "Sorted mappings",
+  *       help: "A set of coordinate-sorted BAM files to be merged.",
+  *       patterns: ["*.bam"]
+  *     }
+  *   }
+  * }
+  *
+  * will be turned into:
+  *
+  * "inputSpec": {
+  *   "myparam": {
+  *     "name": "sorted_bams",
+  *     "label": "Sorted mappings",
+  *     "help": "A set of coordinate-sorted BAM files to be merged.",
+  *     "class": "array:file",
+  *     "patterns": ["*.bam"]
+  *   }
+  * }
+  */
+object ParameterAttributes {
 
   /**
     * Compile time representation of the dxapp IO spec patterns.
@@ -145,13 +133,12 @@ object Parameter {
     * Compile time representaiton of supported parameter_meta section
     * information for the dxapp IO spec.
     */
-  sealed abstract class Attribute
-  final case class GroupAttribute(text: String) extends Attribute
-  final case class HelpAttribute(text: String) extends Attribute
-  final case class LabelAttribute(text: String) extends Attribute
-  final case class PatternsAttribute(patternRepr: Patterns) extends Attribute
-  final case class ChoicesAttribute(choices: Vector[Choice]) extends Attribute
-  final case class SuggestionsAttribute(suggestions: Vector[Suggestion]) extends Attribute
-  final case class TypeAttribute(constraint: Constraint) extends Attribute
-  final case class DefaultAttribute(value: Value) extends Attribute
+  final case class GroupAttribute(text: String) extends ParameterAttribute
+  final case class HelpAttribute(text: String) extends ParameterAttribute
+  final case class LabelAttribute(text: String) extends ParameterAttribute
+  final case class PatternsAttribute(patternRepr: Patterns) extends ParameterAttribute
+  final case class ChoicesAttribute(choices: Vector[Choice]) extends ParameterAttribute
+  final case class SuggestionsAttribute(suggestions: Vector[Suggestion]) extends ParameterAttribute
+  final case class TypeAttribute(constraint: Constraint) extends ParameterAttribute
+  final case class DefaultAttribute(value: Value) extends ParameterAttribute
 }

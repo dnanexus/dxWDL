@@ -10,13 +10,14 @@ case class DxWorkflowStage(id: String) {
 
   def getInputReference(inputName: String): JsValue = {
     JsObject(
-        "$dnanexus_link" -> JsObject("stage" -> JsString(id), "inputField" -> JsString(inputName))
+        DxUtils.DxLinkKey -> JsObject("stage" -> JsString(id), "inputField" -> JsString(inputName))
     )
   }
 
   def getOutputReference(outputName: String): JsValue = {
     JsObject(
-        "$dnanexus_link" -> JsObject("stage" -> JsString(id), "outputField" -> JsString(outputName))
+        DxUtils.DxLinkKey -> JsObject("stage" -> JsString(id),
+                                      "outputField" -> JsString(outputName))
     )
   }
 }

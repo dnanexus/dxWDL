@@ -58,10 +58,10 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
   def getLinkAsJson: JsValue = {
     project match {
       case None =>
-        JsObject("$dnanexus_link" -> JsString(id))
+        JsObject(DxUtils.DxLinkKey -> JsString(id))
       case Some(p) =>
         JsObject(
-            "$dnanexus_link" -> JsObject(
+            DxUtils.DxLinkKey -> JsObject(
                 "project" -> JsString(p.id),
                 "id" -> JsString(id)
             )
@@ -160,16 +160,16 @@ object DxFile {
   // Parse a dnanexus file descriptor. Examples:
   //
   // {
-  //   "$dnanexus_link": {
+  //   DxUtils.DxLinkKey: {
   //     "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
   //     "id": "file-BKQGkgQ0b06xG5560GGQ001B"
   //   },
-  //   "$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"
+  //   DxUtils.DxLinkKey: "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"
   // }
   def fromJsValue(dxApi: DxApi, jsValue: JsValue): DxFile = {
     val innerObj = jsValue match {
-      case JsObject(fields) if fields.contains("$dnanexus_link") =>
-        fields("$dnanexus_link")
+      case JsObject(fields) if fields.contains(DxUtils.DxLinkKey) =>
+        fields(DxUtils.DxLinkKey)
       case _ =>
         throw new AppInternalException(
             s"An object with key '$$dnanexus_link' is expected, not $jsValue"
@@ -204,7 +204,7 @@ object DxFile {
   def isDxFile(jsValue: JsValue): Boolean = {
     jsValue match {
       case JsObject(fields) =>
-        fields.get("$dnanexus_link") match {
+        fields.get(DxUtils.DxLinkKey) match {
           case Some(JsString(s)) if s.startsWith("file-") => true
           case Some(JsObject(linkFields)) =>
             linkFields.get("id") match {

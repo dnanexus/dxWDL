@@ -6,7 +6,7 @@ import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{Block, Evaluator, ExecLinkInfo, ParseSource, WdlVarLinksConverter}
+import dx.core.languages.wdl.{Block, Evaluator, WdlExecutableLink, ParseSource, WdlDxLinkSerde}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -43,9 +43,9 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val (wf, taskDir, typeAliases, document) =
       ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
     val wdlVarLinksConverter =
-      WdlVarLinksConverter(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
+      WdlDxLinkSerde(dxApi, fileResolver, DxFileDescCache.empty, typeAliases)
     val evaluator =
-      Evaluator.make(dxPathConfig, fileResolver, document.version.value)
+      createEvaluator(dxPathConfig, fileResolver, document.version.value)
     val jobInputOutput = JobInputOutput(dxPathConfig,
                                         fileResolver,
                                         DxFileDescCache.empty,
@@ -60,7 +60,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         typeAliases,
         document,
         instanceTypeDB,
-        Map.empty[String, ExecLinkInfo],
+        Map.empty[String, WdlExecutableLink],
         dxPathConfig,
         fileResolver,
         wdlVarLinksConverter,
@@ -87,7 +87,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                             fileResolver: FileSourceResolver,
                             language: Language.Value): WdlValues.V = {
     // build an object capable of evaluating WDL expressions
-    val evaluator = Evaluator.make(dxPathConfig, fileResolver, Language.toWdlVersion(language))
+    val evaluator = createEvaluator(dxPathConfig, fileResolver, Language.toWdlVersion(language))
     evaluator.applyExpr(expr, EvalContext(env))
   }
 

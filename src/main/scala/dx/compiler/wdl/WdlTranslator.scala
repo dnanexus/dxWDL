@@ -3,14 +3,14 @@ package dx.compiler.wdl
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.compiler.ir.{Bundle, Callable, Extras, Parameter, ReorgAttributes, Translator}
+import dx.compiler.ir.{Bundle, CallableAttributes, Extras, Parameter, ReorgAttributes, Translator}
 import dx.core.io.DxFileDescCache
-import dx.core.languages.wdl.{Block, Utils => WdlUtils}
+import dx.core.languages.wdl.{Block, WdlDxLinkSerde, Utils => WdlUtils}
 import spray.json.JsValue
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
-import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, Logger}
+import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
 
 /**
   * Compiles WDL to IR.
@@ -19,22 +19,25 @@ import wdlTools.util.{Adjuncts, FileSourceResolver, FileUtils, LocalFileSource, 
   */
 case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
                          regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
-                         fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
-    extends Translator(fileResolver, dxApi, logger) {
+    extends Translator(dxApi, logger) {
 
   override protected def translateInput(parameter: Parameter,
                                         jsv: JsValue,
                                         dxName: String,
-                                        encodeDots: Boolean): Map[String, JsValue] = {}
+                                        fileResolver: FileSourceResolver,
+                                        encodeName: Boolean): Map[String, JsValue] = {}
 
-  // check the declarations in [graph], and make sure they
-  // do not contain the reserved '___' substring.
-  def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
+  /**
+    * Check that a declaration name is not any dx-reserved names.
+    */
+  private def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
     decls.foreach {
-      case TAT.Declaration(name, _, _, _) if name.contains("___") =>
-        throw new Exception(s"Variable ${name} is using the reserved substring ___")
+      case TAT.Declaration(name, _, _, _) if name == WdlDxLinkSerde.ComplexValueKey =>
+        throw new Exception(
+            s"Variable ${name} is reserved by DNAnexus and cannot be used as a variable name "
+        )
     }
   }
 
@@ -222,11 +225,10 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
 
   override protected def translateDocument(source: Path,
                                            locked: Boolean,
-                                           reorgEnabled: Option[Boolean]): Bundle = {
-    val sourceAbsPath = FileUtils.absolutePath(source)
-    val sourceFileResolver = fileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
+                                           reorgEnabled: Option[Boolean],
+                                           fileResolver: FileSourceResolver): Bundle = {
     val (tDoc, typeAliases) =
-      WdlUtils.parseSource(sourceAbsPath, sourceFileResolver, regime, logger)
+      WdlUtils.parseSource(source, fileResolver, regime, logger)
     val wdlBundle: WdlBundle = flattenDepthFirst(tDoc)
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()

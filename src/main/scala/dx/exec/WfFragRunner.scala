@@ -53,10 +53,10 @@ case class WfFragRunner(wf: TAT.Workflow,
                         typeAliases: Map[String, WdlTypes.T],
                         document: TAT.Document,
                         instanceTypeDB: InstanceTypeDB,
-                        execLinkInfo: Map[String, ExecLinkInfo],
+                        execLinkInfo: Map[String, WdlExecutableLink],
                         dxPathConfig: DxPathConfig,
                         fileResolver: FileSourceResolver,
-                        wdlVarLinksConverter: WdlVarLinksConverter,
+                        wdlVarLinksConverter: WdlDxLinkSerde,
                         jobInputOutput: JobInputOutput,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
@@ -87,7 +87,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     evaluator.applyExprAndCoerce(expr, wdlType, Eval.createBindingsFromEnv(env))
   }
 
-  private def getCallLinkInfo(call: TAT.Call): ExecLinkInfo = {
+  private def getCallLinkInfo(call: TAT.Call): WdlExecutableLink = {
     val calleeName = call.callee.name
     execLinkInfo.get(calleeName) match {
       case None =>
@@ -186,7 +186,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   }
 
   private def processOutputs(env: Map[String, (WdlTypes.T, WdlValues.V)],
-                             fragResults: Map[String, WdlVarLinks],
+                             fragResults: Map[String, WdlDxLink],
                              exportedVars: Set[String]): Map[String, JsValue] = {
     dxApi.logger.traceLimited(
         s"""|processOutputs
@@ -200,7 +200,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     // convert the WDL values to WVLs
     val envWvl = env.map {
       case (name, (wdlType, value)) =>
-        name -> wdlVarLinksConverter.importFromWDL(wdlType, value)
+        name -> wdlVarLinksConverter.createLink(wdlType, value)
     }
 
     // filter anything that should not be exported.
@@ -214,7 +214,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     exportedWvls
       .foldLeft(Map.empty[String, JsValue]) {
         case (accu, (varName, wvl)) =>
-          val fields = wdlVarLinksConverter.genFields(wvl, varName)
+          val fields = wdlVarLinksConverter.createFields(wvl, varName)
           accu ++ fields.toMap
       }
   }
@@ -269,7 +269,7 @@ case class WfFragRunner(wf: TAT.Workflow,
    }
     */
   private def buildCallInputs(callName: String,
-                              linkInfo: ExecLinkInfo,
+                              linkInfo: WdlExecutableLink,
                               env: Map[String, (WdlTypes.T, WdlValues.V)]): JsValue = {
     dxApi.logger.traceLimited(
         s"""|buildCallInputs (${callName})
@@ -300,13 +300,13 @@ case class WfFragRunner(wf: TAT.Workflow,
     val wvlInputs = inputs.map {
       case (name, wdlValue) =>
         val wdlType = linkInfo.inputs(name)
-        name -> wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
+        name -> wdlVarLinksConverter.createLink(wdlType, wdlValue)
     }
     dxApi.logger.traceLimited(s"wvlInputs = ${wvlInputs}", minLevel = TraceLevel.VVerbose)
 
     val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
-        val fields = wdlVarLinksConverter.genFields(wvl, varName)
+        val fields = wdlVarLinksConverter.createFields(wvl, varName)
         accu ++ fields.toMap
     }
     dxApi.logger.traceLimited(s"WfFragRunner: buildCallInputs(m) = ${JsObject(m).prettyPrint}",
@@ -367,7 +367,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     }
   }
 
-  private def execDNAxExecutable(execLink: ExecLinkInfo,
+  private def execDNAxExecutable(execLink: WdlExecutableLink,
                                  dbgName: String,
                                  callInputs: JsValue,
                                  instanceType: Option[String]): (Int, DxExecution) = {
@@ -445,12 +445,12 @@ case class WfFragRunner(wf: TAT.Workflow,
     )
     val wvlInputs = callInputs.map {
       case (name, (wdlType, wdlValue)) =>
-        name -> wdlVarLinksConverter.importFromWDL(wdlType, wdlValue)
+        name -> wdlVarLinksConverter.createLink(wdlType, wdlValue)
     }
 
     val callInputsJs = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
       case (accu, (varName, wvl)) =>
-        val fields = wdlVarLinksConverter.genFields(wvl, varName)
+        val fields = wdlVarLinksConverter.createFields(wvl, varName)
         accu ++ fields.toMap
     }
     val callInputsJSON = JsObject(callInputsJs)
@@ -479,13 +479,13 @@ case class WfFragRunner(wf: TAT.Workflow,
 
   // create promises to this call. This allows returning
   // from the parent job immediately.
-  private def genPromisesForCall(call: TAT.Call, dxExec: DxExecution): Map[String, WdlVarLinks] = {
+  private def genPromisesForCall(call: TAT.Call, dxExec: DxExecution): Map[String, WdlDxLink] = {
     val linkInfo = getCallLinkInfo(call)
     val callName = call.actualName
     linkInfo.outputs.map {
       case (varName, wdlType) =>
         val oName = s"${callName}.${varName}"
-        oName -> WdlVarLinks(wdlType, DxLinkExec(dxExec, varName))
+        oName -> WdlDxLink(wdlType, ParameterLinkExec(dxExec, varName))
     }
   }
 
@@ -551,7 +551,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       cnNode: TAT.Conditional,
       call: TAT.Call,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
-  ): Map[String, WdlVarLinks] = {
+  ): Map[String, WdlDxLink] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -559,17 +559,17 @@ case class WfFragRunner(wf: TAT.Workflow,
       // evaluate the call inputs, and add to the environment
       val callInputs = evalCallInputs(call, env)
       val (_, dxExec) = execCall(call, callInputs, None)
-      val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
+      val callResults: Map[String, WdlDxLink] = genPromisesForCall(call, dxExec)
 
       // Add optional modifier to the return types.
       callResults.map {
-        case (key, WdlVarLinks(wdlType, dxl)) =>
+        case (key, WdlDxLink(wdlType, dxl)) =>
           // be careful not to make double optionals
           val optionalType = wdlType match {
             case WdlTypes.T_Optional(_) => wdlType
             case _                      => WdlTypes.T_Optional(wdlType)
           }
-          key -> WdlVarLinks(optionalType, dxl)
+          key -> WdlDxLink(optionalType, dxl)
       }
     }
   }
@@ -588,7 +588,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def execConditionalSubblock(
       cnNode: TAT.Conditional,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
-  ): Map[String, WdlVarLinks] = {
+  ): Map[String, WdlDxLink] = {
     if (!evalCondition(cnNode, env)) {
       // Condition is false, no need to execute the call
       Map.empty
@@ -610,7 +610,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             case WdlTypes.T_Optional(_) => wdlType
             case _                      => WdlTypes.T_Optional(wdlType)
           }
-          varName -> WdlVarLinks(optionalType, DxLinkExec(dxExec, varName))
+          varName -> WdlDxLink(optionalType, ParameterLinkExec(dxExec, varName))
       }
     }
   }
@@ -678,7 +678,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   // Launch a subjob to collect and marshal the call results.
   // Remove the declarations already calculated
   private def collectScatter(sct: TAT.Scatter,
-                             childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
+                             childJobs: Vector[DxExecution]): Map[String, WdlDxLink] = {
     val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(sct.body)
     val resultArrayTypes = resultTypes.map {
       case (k, t) =>
@@ -696,7 +696,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       sctNode: TAT.Scatter,
       call: TAT.Call,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
-  ): Map[String, WdlVarLinks] = {
+  ): Map[String, WdlDxLink] = {
     val (_, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
@@ -715,7 +715,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def execScatterSubblock(
       sctNode: TAT.Scatter,
       env: Map[String, (WdlTypes.T, WdlValues.V)]
-  ): Map[String, WdlVarLinks] = {
+  ): Map[String, WdlDxLink] = {
     val (_, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // There must be exactly one sub-workflow
@@ -772,7 +772,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     val catg = Block.categorize(block)
     val env = evalExpressions(catg.nodes, envInitialFilled) ++ envInitialFilled
 
-    val fragResults: Map[String, WdlVarLinks] = runMode match {
+    val fragResults: Map[String, WdlDxLink] = runMode match {
       case RunnerWfFragmentMode.Launch =>
         // The last node could be a call or a block. All the other nodes
         // are expressions.

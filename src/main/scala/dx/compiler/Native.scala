@@ -8,18 +8,20 @@ import java.security.MessageDigest
 
 import dx.api._
 import dx.compiler.IR.{CVar, SArg}
+import dx.compiler.ir.{DockerRegistry, DxAccess, DxExecPolicy, DxRunSpec, DxTimeout, Extras}
 import dx.core.languages.IORef
 import dx.core.languages.wdl.{
-  DxLinkStage,
-  DxLinkWorkflowInput,
-  ExecLinkInfo,
+  ParameterLinkStage,
+  ParameterLinkWorkflowInput,
   TypeSerialization,
-  WdlVarLinks,
-  WdlVarLinksConverter
+  WdlDxLink,
+  WdlDxLinkSerde,
+  WdlExecutableLink
 }
 import dx.core.io.DxPathConfig
 import dx.core.util.CompressionUtils
-import dx.core.getVersion
+import dx.core.{getVersion, ir}
+import dx.core.ir.{ParameterLinkStage, ParameterLinkWorkflowInput}
 import wdlTools.generators.code.WdlV1Generator
 
 import scala.collection.immutable.TreeMap
@@ -30,7 +32,9 @@ import wdlTools.util.{FileUtils, JsUtils, Logger, TraceLevel}
 
 // The end result of the compiler
 object Native {
-  case class ExecRecord(callable: IR.Callable, dxExec: DxExecutable, links: Vector[ExecLinkInfo])
+  case class ExecRecord(callable: IR.Callable,
+                        dxExec: DxExecutable,
+                        links: Vector[WdlExecutableLink])
   case class Results(primaryCallable: Option[ExecRecord], execDict: Map[String, ExecRecord])
 }
 
@@ -43,7 +47,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  wdlVarLinksConverter: WdlVarLinksConverter,
+                  wdlVarLinksConverter: WdlDxLinkSerde,
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   rtTraceLevel: Int,
@@ -93,7 +97,7 @@ case class Native(dxWDLrtId: Option[String],
         Some(
             JsObject(
                 "name" -> JsString(name),
-                "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
+                "id" -> JsObject(DxUtils.DxLinkKey -> JsString(dxFile.id))
             )
         )
     }
@@ -141,8 +145,8 @@ case class Native(dxWDLrtId: Option[String],
     val defaultVals: Map[String, JsValue] = cVar.default match {
       case None => Map.empty
       case Some(wdlValue) =>
-        val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wdlValue)
-        wdlVarLinksConverter.genFields(wvl, name).toMap
+        val wvl = wdlVarLinksConverter.createLink(cVar.wdlType, wdlValue)
+        wdlVarLinksConverter.createFields(wvl, name).toMap
     }
 
     // Create the IO Attributes
@@ -278,11 +282,11 @@ case class Native(dxWDLrtId: Option[String],
           ),
           JsObject(
               Map(
-                  "name" -> JsString(name + WdlVarLinksConverter.FLAT_FILES_SUFFIX),
+                  "name" -> JsString(name + WdlDxLinkSerde.FlatFilesSuffix),
                   "class" -> JsString("array:file"),
                   "optional" -> JsBoolean(true)
               )
-                ++ jsMapFromDefault(name + WdlVarLinksConverter.FLAT_FILES_SUFFIX)
+                ++ jsMapFromDefault(name + WdlDxLinkSerde.FlatFilesSuffix)
                 ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           )
       )
@@ -680,14 +684,14 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Create linking information for a dx:executable
-  private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): ExecLinkInfo = {
+  private def genLinkInfo(irCall: IR.Callable, dxObj: DxExecutable): WdlExecutableLink = {
     val callInputDefs: Map[String, WdlTypes.T] = irCall.inputVars.map {
       case CVar(name, wdlType, _, _) => name -> wdlType
     }.toMap
     val callOutputDefs: Map[String, WdlTypes.T] = irCall.outputVars.map {
       case CVar(name, wdlType, _, _) => name -> wdlType
     }.toMap
-    ExecLinkInfo(irCall.name, callInputDefs, callOutputDefs, dxObj)
+    WdlExecutableLink(irCall.name, callInputDefs, callOutputDefs, dxObj)
   }
 
   private def apiParseReplyID(repJs: JsObject): String = {
@@ -1036,9 +1040,11 @@ case class Native(dxWDLrtId: Option[String],
   // For applets that call other applets, we pass a directory
   // of the callees, so they could be found a runtime. This is
   // equivalent to linking, in a standard C compiler.
-  private def appletNewReq(applet: IR.Applet,
-                           bashScript: String,
-                           aplLinks: Map[String, ExecLinkInfo]): (String, Map[String, JsValue]) = {
+  private def appletNewReq(
+      applet: IR.Applet,
+      bashScript: String,
+      aplLinks: Map[String, WdlExecutableLink]
+  ): (String, Map[String, JsValue]) = {
     logger2.trace(s"Building /applet/new request for ${applet.name}")
 
     val inputSpec: Vector[JsValue] = applet.inputs
@@ -1049,7 +1055,7 @@ case class Native(dxWDLrtId: Option[String],
     val linkInfo: Map[String, JsValue] =
       aplLinks.map {
         case (name, ali) =>
-          name -> ExecLinkInfo.writeJson(ali, typeAliases)
+          name -> WdlExecutableLink.writeJson(ali, typeAliases)
       }
 
     val metaInfo: Map[String, JsValue] =
@@ -1107,7 +1113,7 @@ case class Native(dxWDLrtId: Option[String],
     // this applet is copied, we need to maintain referential integrity.
     val dxLinks = aplLinks.map {
       case (name, execLinkInfo) =>
-        ("link_" + name) -> JsObject("$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
+        ("link_" + name) -> JsObject(DxUtils.DxLinkKey -> JsString(execLinkInfo.dxExec.getId))
     }
 
     val (runSpec: JsValue, runSpecDetails: Map[String, JsValue]) =
@@ -1183,7 +1189,7 @@ case class Native(dxWDLrtId: Option[String],
   private def buildAppletIfNeeded(
       applet: IR.Applet,
       execDict: Map[String, Native.ExecRecord]
-  ): (DxApplet, Vector[ExecLinkInfo]) = {
+  ): (DxApplet, Vector[WdlExecutableLink]) = {
     logger2.trace(s"Compiling applet ${applet.name}")
 
     // limit the applet dictionary, only to actual dependencies
@@ -1192,7 +1198,7 @@ case class Native(dxWDLrtId: Option[String],
       case _                                    => Vector.empty
     }
 
-    val aplLinks: Map[String, ExecLinkInfo] = calls.map { tName =>
+    val aplLinks: Map[String, WdlExecutableLink] = calls.map { tName =>
       val Native.ExecRecord(irCall, dxObj, _) = execDict(tName)
       tName -> genLinkInfo(irCall, dxObj)
     }.toMap
@@ -1240,17 +1246,17 @@ case class Native(dxWDLrtId: Option[String],
             // in a value at runtime.
             m
           case IR.SArgConst(wValue) =>
-            val wvl = wdlVarLinksConverter.importFromWDL(cVar.wdlType, wValue)
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+            val wvl = wdlVarLinksConverter.createLink(cVar.wdlType, wValue)
+            val fields = wdlVarLinksConverter.createFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgLink(dxStage, argName) =>
             val wvl =
-              WdlVarLinks(cVar.wdlType, DxLinkStage(dxStage, IORef.Output, argName.dxVarName))
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+              WdlDxLink(cVar.wdlType, ParameterLinkStage(dxStage, IORef.Output, argName.dxVarName))
+            val fields = wdlVarLinksConverter.createFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
           case IR.SArgWorkflowInput(argName, _) =>
-            val wvl = WdlVarLinks(cVar.wdlType, DxLinkWorkflowInput(argName.dxVarName))
-            val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+            val wvl = WdlDxLink(cVar.wdlType, ParameterLinkWorkflowInput(argName.dxVarName))
+            val fields = wdlVarLinksConverter.createFields(wvl, cVar.dxVarName)
             m ++ fields.toMap
         }
     }
@@ -1297,16 +1303,17 @@ case class Native(dxWDLrtId: Option[String],
 
     val outputSources: Vector[(String, JsValue)] = sArg match {
       case IR.SArgConst(wdlValue) =>
-        Vector(wdlVarLinksConverter.genConstantField(wdlValue, cVar.dxVarName))
+        Vector(wdlVarLinksConverter.createConstantField(wdlValue, cVar.dxVarName))
       case IR.SArgLink(dxStage, argName: CVar) =>
-        val wvl = WdlVarLinks(cVar.wdlType, DxLinkStage(dxStage, IORef.Output, argName.dxVarName))
-        wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+        val wvl =
+          WdlDxLink(cVar.wdlType, ir.ParameterLinkStage(dxStage, IORef.Output, argName.dxVarName))
+        wdlVarLinksConverter.createFields(wvl, cVar.dxVarName)
       case IR.SArgWorkflowInput(argName: CVar, dynamicDefault: Boolean) =>
         // TODO: if dynamicDefault is true, link to the value of the workflow input
         //  (either the user-specified value or the result of evaluting the expression)
         //  - right now this only links to the user-specified value
-        val wvl = WdlVarLinks(cVar.wdlType, DxLinkWorkflowInput(argName.dxVarName))
-        wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
+        val wvl = WdlDxLink(cVar.wdlType, ir.ParameterLinkWorkflowInput(argName.dxVarName))
+        wdlVarLinksConverter.createFields(wvl, cVar.dxVarName)
       case other =>
         throw new Exception(s"Bad value for sArg ${other}")
     }
@@ -1399,8 +1406,8 @@ case class Native(dxWDLrtId: Option[String],
     val hidden = wf.level == IR.Level.Sub
 
     // links through applets that run workflow fragments
-    val transitiveDependencies: Vector[ExecLinkInfo] =
-      wf.stages.foldLeft(Vector.empty[ExecLinkInfo]) {
+    val transitiveDependencies: Vector[WdlExecutableLink] =
+      wf.stages.foldLeft(Vector.empty[WdlExecutableLink]) {
         case (accu, stg) =>
           val Native.ExecRecord(_, _, dependencies) = execDict(stg.calleeName)
           accu ++ dependencies
@@ -1437,7 +1444,7 @@ case class Native(dxWDLrtId: Option[String],
     // need to be cloned when copying workflows.
     val dxLinks: Map[String, JsValue] = transitiveDependencies.map { execLinkInfo =>
       ("link_" + execLinkInfo.name) -> JsObject(
-          "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId)
+          DxUtils.DxLinkKey -> JsString(execLinkInfo.dxExec.getId)
       )
     }.toMap
 
