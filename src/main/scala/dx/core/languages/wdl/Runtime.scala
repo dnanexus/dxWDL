@@ -5,7 +5,10 @@ import wdlTools.eval.WdlValues._
 import wdlTools.eval.{
   Eval,
   EvalException,
+  Hints,
   Runtime => WdlRuntime,
+  RuntimeAttributes,
+  VBindings,
   RuntimeAttributes => WdlRuntimeAttributes,
   Utils => EUtils
 }
@@ -25,16 +28,16 @@ object Runtime {
       extends DxRuntimeHint(Some("dx_instance_type"), "instance_type", Vector(T_String))
 }
 
-case class Runtime(wdlVersion: WdlVersion,
-                   runtimeSection: Option[TAT.RuntimeSection],
-                   hintsSection: Option[TAT.MetaSection],
-                   evaluator: Eval,
-                   defaultAttrs: Map[String, V] = Map.empty) {
-  private lazy val runtimeAttrs: WdlRuntimeAttributes =
-    WdlRuntimeAttributes.create(runtimeSection,
-                                hintsSection,
-                                evaluator,
-                                defaultValues = defaultAttrs)
+case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
+                                      runtimeSection: Option[TAT.RuntimeSection],
+                                      hintsSection: Option[TAT.MetaSection],
+                                      evaluator: Eval,
+                                      defaultAttrs: VBindings[B]) {
+  private lazy val runtimeAttrs: WdlRuntimeAttributes[B] = {
+    val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator))
+    val hints = hintsSection.map(h => Hints.create(Some(h)))
+    RuntimeAttributes[B](runtime, hints, defaultAttrs)
+  }
 
   def get(id: String): Option[V] = runtimeAttrs.get(id)
 

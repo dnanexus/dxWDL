@@ -2,12 +2,10 @@ package dx.compiler.wdl
 
 import dx.api.{DxApi, DxPath, DxUtils, InstanceTypeRequest}
 import dx.compiler.ir.RunSpec._
-import dx.compiler.ir.{ExecutableKind, ExecutableKindNative, ExecutableType}
-import dx.core.ir.Value
-import dx.core.languages.wdl
-import dx.core.languages.wdl.{DxRuntimeHint, Runtime}
+import dx.core.ir.{ExecutableKind, ExecutableKindNative, ExecutableType, RuntimeRequirement, Value}
+import dx.core.languages.wdl.{DxRuntimeHint, Runtime, Utils => WdlUtils}
 import wdlTools.eval.WdlValues._
-import wdlTools.eval.{Eval, EvalException, Hints, Meta}
+import wdlTools.eval.{Eval, EvalException, Hints, Meta, VBindings}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -70,24 +68,56 @@ object RuntimeTranslator {
   val AllKey = "All"
 }
 
+case class IrToWdlValueBindings(
+    values: Map[String, Value],
+    allowNonstandardCoercions: Boolean = false,
+    private var cache: Map[String, V] = Map.empty
+) extends VBindings[IrToWdlValueBindings] {
+  override protected val elementType: String = "value"
+
+  override def contains(name: String): Boolean = values.contains(name)
+
+  override def keySet: Set[String] = values.keySet
+
+  private def resolve(name: String): Unit = {
+    if (!cache.contains(name) && values.contains(name)) {
+      cache += (name -> WdlUtils.fromIRValue(values(name)))
+    }
+  }
+
+  override def get(name: String): Option[V] = {
+    resolve(name)
+    cache.get(name)
+  }
+
+  override lazy val toMap: Map[String, V] = {
+    values.keySet.diff(cache.keySet).foreach(resolve)
+    cache
+  }
+
+  override protected def copyFrom(values: Map[String, V]): IrToWdlValueBindings = {
+    copy(cache = cache ++ values)
+  }
+}
+
 case class RuntimeTranslator(wdlVersion: WdlVersion,
                              runtimeSection: Option[TAT.RuntimeSection],
                              hintsSection: Option[TAT.MetaSection],
                              metaSection: Option[TAT.MetaSection],
-                             defaultAttrs: Map[String, V],
+                             defaultAttrs: Map[String, Value],
                              evaluator: Eval,
                              dxApi: DxApi = DxApi.get) {
   private lazy val runtime =
-    Runtime(wdlVersion, runtimeSection, hintsSection, evaluator, defaultAttrs)
+    Runtime(wdlVersion, runtimeSection, hintsSection, evaluator, IrToWdlValueBindings(defaultAttrs))
   private lazy val meta: Meta = Meta.create(wdlVersion, metaSection)
 
   def translate(id: String, wdlType: Option[T] = None): Option[Value] = {
     try {
       (runtime.get(id), wdlType) match {
         case (Some(value), None) =>
-          Some(wdl.Utils.toIRValue(value))
+          Some(WdlUtils.toIRValue(value))
         case (Some(value), Some(t)) =>
-          Some(wdl.Utils.toIRValue(value, t))
+          Some(WdlUtils.toIRValue(value, t))
       }
     } catch {
       case _: EvalException =>
@@ -294,7 +324,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
       }
   }
 
-  def translateRequirements: Vector[Requirement] = {
+  def translateRequirements: Vector[RuntimeRequirement] = {
     Vector(
         translateAccess,
         translateIgnoreReuse,

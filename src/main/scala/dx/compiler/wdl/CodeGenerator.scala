@@ -1,14 +1,15 @@
 package dx.compiler.wdl
 
-import dx.compiler.ir.{Application, CallableAttributes, ExecutableKindTask}
-import dx.core.languages.{Language, wdl}
+import dx.core.ir.{Application, Callable, ExecutableKindTask}
+import dx.core.languages.Language
+import dx.core.languages.wdl.{Utils => WdlUtils}
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.{GraphUtils, TypeGraph, WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{Bindings, Logger, StringFileSource}
+import wdlTools.util.{DefaultBindings, Logger, StringFileSource}
 
-case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
+case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
                          wdlVersion: WdlVersion,
                          logger: Logger = Logger.get) {
   // A self contained WDL workflow
@@ -23,7 +24,7 @@ case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
 
   private lazy val typeAliasDefinitions: Vector[TAT.StructDefinition] = {
     // Determine dependency order
-    val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases.all)
+    val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases.toMap)
     val dependencyOrder = GraphUtils.toOrderedVector(typeAliasGraph)
     // create struct definitions
     dependencyOrder.map { name =>
@@ -191,14 +192,14 @@ case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
       callable.inputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = wdl.Utils.fromIRType(parameter.dxType, parameter.optional)
+          val wdlType = WdlUtils.fromIRType(parameter.dxType)
           parameter.defaultValue match {
             case None =>
               TAT.RequiredInputDefinition(parameter.name, wdlType, SourceLocation.empty)
             case Some(value) =>
               TAT.OverridableInputDefinitionWithDefault(parameter.name,
                                                         wdlType,
-                                                        wdl.Utils.irValueToExpr(value),
+                                                        WdlUtils.irValueToExpr(value),
                                                         SourceLocation.empty)
           }
         }
@@ -207,7 +208,7 @@ case class CodeGenerator(typeAliases: Bindings[WdlTypes.T_Struct],
       callable.outputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = wdl.Utils.fromIRType(parameter.dxType, parameter.optional)
+          val wdlType = WdlUtils.fromIRType(parameter.dxType)
           val defaultVal = genDefaultValueOfType(wdlType)
           TAT.OutputDefinition(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }

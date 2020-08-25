@@ -7,6 +7,7 @@ import java.nio.file.Path
 
 import dx.api.{DxAccessLevel, DxApi, DxApp, DxApplet, Field}
 import dx.core.io.DxFileAccessProtocol
+import dx.core.ir.{Value, ValueSerde}
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.util.{JsUtils, Logger}
@@ -197,13 +198,13 @@ case class ReorgAttributes(enabled: Boolean = true,
                            appUri: Option[String] = None,
                            reorgConfigFile: Option[String] = None)
 
-case class Extras[T](defaultRuntimeAttributes: Map[String, T],
-                     defaultTaskDxAttributes: Option[DxAppJson],
-                     perTaskDxAttributes: Map[String, DxAppJson],
-                     dockerRegistry: Option[DockerRegistry],
-                     customReorgAttributes: Option[ReorgAttributes],
-                     ignoreReuse: Option[Boolean],
-                     delayWorkspaceDestruction: Option[Boolean]) {
+case class Extras(defaultRuntimeAttributes: Map[String, Value],
+                  defaultTaskDxAttributes: Option[DxAppJson],
+                  perTaskDxAttributes: Map[String, DxAppJson],
+                  dockerRegistry: Option[DockerRegistry],
+                  customReorgAttributes: Option[ReorgAttributes],
+                  ignoreReuse: Option[Boolean],
+                  delayWorkspaceDestruction: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
     defaultTaskDxAttributes match {
       case None => DxAccess.empty
@@ -235,7 +236,7 @@ case class Extras[T](defaultRuntimeAttributes: Map[String, T],
   }
 }
 
-abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
+case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
   private val DockerRegistryAttrs = Set("username", "registry", "credentials")
   private val CustomReorgAttrs = Set("app_id", "conf")
   private val ExtraAttrs = Set(
@@ -347,9 +348,7 @@ abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger
     Some(m1)
   }
 
-  protected def deserialize(jsValue: JsValue): T
-
-  protected def parseRuntimeAttrs(jsv: JsValue): Map[String, T] = {
+  protected def parseRuntimeAttrs(jsv: JsValue): Map[String, Value] = {
     jsv match {
       case JsNull => Map.empty
       case JsObject(fields) =>
@@ -363,7 +362,7 @@ abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger
                   |""".stripMargin.replaceAll("\n", "")
           )
         }
-        supported.view.mapValues(deserialize).toMap
+        supported.view.mapValues(ValueSerde.deserialize).toMap
     }
   }
 
@@ -636,11 +635,11 @@ abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger
     Some(ReorgAttributes(appUri = Some(reorgAppId), reorgConfigFile = reorgConf))
   }
 
-  def parse(path: Path): Extras[T] = {
+  def parse(path: Path): Extras = {
     parse(JsUtils.jsFromFile(path))
   }
 
-  def parse(jsv: JsValue): Extras[T] = {
+  def parse(jsv: JsValue): Extras = {
     val fields = jsv match {
       case JsObject(fields) => fields
       case _                => throw new Exception(s"malformed extras JSON ${jsv}")
@@ -671,7 +670,7 @@ abstract class ExtrasParser[T](dxApi: DxApi = DxApi.get, logger: Logger = Logger
           }
       }
 
-    Extras[T](
+    Extras(
         parseRuntimeAttrs(
             checkedParseObjectField(fields, "default_runtime_attributes")
         ),

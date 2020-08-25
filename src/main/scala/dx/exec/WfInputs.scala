@@ -1,15 +1,33 @@
 package dx.exec
 
 import dx.api.DxApi
-import dx.core.languages.wdl.{PrettyPrintApprox, WdlDxLinkSerde}
+import dx.core.languages.wdl.{PrettyPrintApprox, ParameterLinkSerde}
 import dx.core.getVersion
 import spray.json.JsValue
-import wdlTools.eval.{Context => EvalContext, Eval, WdlValues}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.eval.{Eval, WdlValues}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
+
+object WfInputs {
+  def prettyPrintInputs(inputs: Vector[TAT.InputDefinition]): String = {
+    inputs
+      .map {
+        case TAT.RequiredInputDefinition(iName, wdlType, _) =>
+          s"${TUtils.prettyFormatType(wdlType)} ${iName}"
+
+        case TAT.OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _) =>
+          s"${TUtils.prettyFormatType(wdlType)} ${iName} = ${TUtils.prettyFormatExpr(defaultExpr)}"
+
+        case TAT.OptionalInputDefinition(iName, wdlType, _) =>
+          s"${TUtils.prettyFormatType(wdlType)} ${iName}"
+
+      }
+      .mkString("\n")
+  }
+}
 
 case class WfInputs(wf: TAT.Workflow,
                     document: TAT.Document,
-                    wdlVarLinksConverter: WdlDxLinkSerde,
+                    wdlVarLinksConverter: ParameterLinkSerde,
                     dxApi: DxApi,
                     evaluator: Eval) {
   def apply(inputs: Map[String, (WdlTypes.T, WdlValues.V)]): Map[String, JsValue] = {
@@ -17,7 +35,7 @@ case class WfInputs(wf: TAT.Workflow,
     dxApi.logger.traceLimited(s"Environment: ${inputs}")
     dxApi.logger.traceLimited(
         s"""|Artificial applet for unlocked workflow inputs
-            |${PrettyPrintApprox.graphInputs(wf.inputs)}
+            |${WfInputs.prettyPrintInputs(wf.inputs)}
             |""".stripMargin
     )
 

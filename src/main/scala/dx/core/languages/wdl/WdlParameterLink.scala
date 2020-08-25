@@ -7,42 +7,45 @@
 package dx.core.languages.wdl
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
+import dx.api.{DxApi, DxFile, DxUtils}
 import dx.core.io.{DxFileDescCache, DxFileSource}
+import dx.core.ir.Type._
 import dx.core.ir.{
+  ParameterLink,
   ParameterLinkExec,
   ParameterLinkStage,
   ParameterLinkValue,
   ParameterLinkWorkflowInput,
-  Type
+  Type,
+  Value
 }
 import dx.core.languages.IORef
 import spray.json._
 import wdlTools.eval.WdlValues.V_Map
-import wdlTools.eval.{Coercion, EvalException, JsonSerde, WdlValues}
-import wdlTools.types.{WdlTypes, Utils => TUtils}
+import wdlTools.eval.{EvalException, JsonSerde, WdlValues}
+import wdlTools.types.WdlTypes
 import wdlTools.util.{FileSourceResolver, LocalFileSource, Logger}
 
-case class WdlDxLinkSerde(dxApi: DxApi,
-                          fileResolver: FileSourceResolver,
-                          dxFileDescCache: DxFileDescCache,
-                          typeAliases: Map[String, WdlTypes.T]) {
+case class ParameterLinkSerde(dxApi: DxApi,
+                              fileResolver: FileSourceResolver,
+                              dxFileDescCache: DxFileDescCache,
+                              typeAliases: Map[String, Type]) {
 
-  // Serialize a complex WDL value into a JSON value. The value could potentially point
+  // Serialize a complex value into a JSON value. The value could potentially point
   // to many files. The assumption is that files are already in the format of dxWDLs,
-  // requiring not upload/download or any special conversion.
-  private def serialize(wdlType: WdlTypes.T, wdlValue: WdlValues.V): JsValue = {
+  // so not requiring upload/download or any special conversion.
+  private def serialize(t: Type, v: Value): JsValue = {
     def handler(wdlValue: WdlValues.V): Option[JsValue] = {
       wdlValue match {
         case WdlValues.V_Optional(WdlValues.V_Optional(_)) =>
           Logger.error(s"""|jsFromWdlValue
-                           |    type=${wdlType}
+                           |    type=${t}
                            |    val=${wdlValue}
                            |""".stripMargin)
           throw new Exception("a nested optional type/value")
-        case WdlValues.V_String(s) if s.length > WdlDxLinkSerde.MaxStringLength =>
+        case WdlValues.V_String(s) if s.length > ParameterLinkSerde.MaxStringLength =>
           throw new AppInternalException(
-              s"string is longer than ${WdlDxLinkSerde.MaxStringLength}"
+              s"string is longer than ${ParameterLinkSerde.MaxStringLength}"
           )
         case WdlValues.V_File(path) =>
           fileResolver.resolve(path) match {
@@ -58,25 +61,22 @@ case class WdlDxLinkSerde(dxApi: DxApi,
           Some(
               JsObject("keys" -> JsArray(keys.toVector),
                        "values" ->
-
                          JsArray(values.toVector))
           )
         case _ => None
       }
     }
-    val coerced = Coercion.coerceTo(wdlType, wdlValue, allowNonstandardCoercions = true)
-    JsonSerde.serialize(coerced, Some(handler))
+    JsonSerde.serialize(v, Some(handler))
   }
 
   /**
     * Create a link from a WDL value.
-    * @param wdlType the WDL type
-    * @param wdlValue the WDL value
+    * @param t the WDL type
+    * @param v the WDL value
     * @return
     */
-  def createLink(wdlType: WdlTypes.T, wdlValue: WdlValues.V): WdlDxLink = {
-    val jsValue = serialize(wdlType, wdlValue)
-    WdlDxLink(wdlType, ParameterLinkValue(jsValue))
+  def createLink(t: Type, v: Value): ParameterLink = {
+    ParameterLinkValue(serialize(t, v), t)
   }
 
   /**
@@ -138,109 +138,63 @@ case class WdlDxLinkSerde(dxApi: DxApi,
   def unpackJobInput(name: String, wdlType: WdlTypes.T, jsv: JsValue): WdlValues.V = {
     val unpacked =
       jsv match {
-        case JsObject(fields) if fields.contains(WdlDxLinkSerde.ComplexValueKey) =>
+        case JsObject(fields) if fields.contains(ParameterLinkSerde.ComplexValueKey) =>
           // unpack the hash with which complex JSON values are
           // wrapped in dnanexus.
-          fields(WdlDxLinkSerde.ComplexValueKey)
+          fields(ParameterLinkSerde.ComplexValueKey)
         case _ => jsv
       }
     deserializeJobInput(name, wdlType, unpacked)
   }
-
-  // Is this a WDL type that maps to a native DX type?
-  private def isNativeDxType(wdlType: WdlTypes.T): Boolean = {
-    wdlType match {
-      // optional dx:native types
-      case WdlTypes.T_Optional(WdlTypes.T_Boolean)     => true
-      case WdlTypes.T_Optional(WdlTypes.T_Int)         => true
-      case WdlTypes.T_Optional(WdlTypes.T_Float)       => true
-      case WdlTypes.T_Optional(WdlTypes.T_String)      => true
-      case WdlTypes.T_Optional(WdlTypes.T_File)        => true
-      case WdlTypes.T_Array(WdlTypes.T_Boolean, false) => true
-      case WdlTypes.T_Array(WdlTypes.T_Int, false)     => true
-      case WdlTypes.T_Array(WdlTypes.T_Float, false)   => true
-      case WdlTypes.T_Array(WdlTypes.T_String, false)  => true
-      case WdlTypes.T_Array(WdlTypes.T_File, false)    => true
-
-      // compulsory dx:native types
-      case WdlTypes.T_Boolean                         => true
-      case WdlTypes.T_Int                             => true
-      case WdlTypes.T_Float                           => true
-      case WdlTypes.T_String                          => true
-      case WdlTypes.T_File                            => true
-      case WdlTypes.T_Array(WdlTypes.T_Boolean, true) => true
-      case WdlTypes.T_Array(WdlTypes.T_Int, true)     => true
-      case WdlTypes.T_Array(WdlTypes.T_Float, true)   => true
-      case WdlTypes.T_Array(WdlTypes.T_String, true)  => true
-      case WdlTypes.T_Array(WdlTypes.T_File, true)    => true
-
-      // A tricky, but important case, is `Array[File]+?`. This
-      // cannot be converted into a dx file array, unfortunately.
-      case _ => false
-    }
-  }
-
-  def createConstantField(wdlValue: WdlValues.V,
-                          bindName: String,
-                          encodeDots: Boolean = true): (String, JsValue) = {
-    val bindEncName =
-      if (encodeDots) {
-        WdlDxLinkSerde.encodeDots(bindName)
-      } else {
-        bindName
-      }
-    (bindEncName, JsonSerde.serialize(wdlValue))
-  }
-
   // create input/output fields that bind the variable name [bindName] to
   // this WdlVar
-  def createFields(wvl: WdlDxLink,
+  def createFields(link: ParameterLink,
                    bindName: String,
                    encodeDots: Boolean = true): Vector[(String, JsValue)] = {
 
     val encodedName =
       if (encodeDots) {
-        WdlDxLinkSerde.encodeDots(bindName)
+        ParameterLinkSerde.encodeDots(bindName)
       } else {
         bindName
       }
-    val wdlType = TUtils.unwrapOptional(wvl.wdlType)
-    if (isNativeDxType(wdlType)) {
+    val wdlType = Type.unwrapOptional(link.dxType)
+    if (ParameterLinkSerde.isNativeDxType(wdlType)) {
       // Types that are supported natively in DX
-      val jsv: JsValue = wvl.dxlink match {
-        case ParameterLinkValue(jsn) => jsn
-        case ParameterLinkStage(dxStage, ioRef, varEncName) =>
+      val jsv: JsValue = link match {
+        case ParameterLinkValue(jsn, _) => jsn
+        case ParameterLinkStage(dxStage, ioRef, varEncName, _) =>
           ioRef match {
             case IORef.Input =>
-              dxStage.getInputReference(WdlDxLinkSerde.encodeDots(varEncName))
+              dxStage.getInputReference(ParameterLinkSerde.encodeDots(varEncName))
             case IORef.Output =>
-              dxStage.getOutputReference(WdlDxLinkSerde.encodeDots(varEncName))
+              dxStage.getOutputReference(ParameterLinkSerde.encodeDots(varEncName))
           }
-        case ParameterLinkWorkflowInput(varEncName) =>
+        case ParameterLinkWorkflowInput(varEncName, _) =>
           JsObject(
               DxUtils.DxLinkKey -> JsObject(
-                  WdlDxLinkSerde.WorkflowInputFieldKey -> JsString(
-                      WdlDxLinkSerde.encodeDots(varEncName)
+                  ParameterLinkSerde.WorkflowInputFieldKey -> JsString(
+                      ParameterLinkSerde.encodeDots(varEncName)
                   )
               )
           )
-        case ParameterLinkExec(dxJob, varEncName) =>
-          DxUtils.dxExecutionToEbor(dxJob, WdlDxLinkSerde.encodeDots(varEncName))
+        case ParameterLinkExec(dxJob, varEncName, _) =>
+          DxUtils.dxExecutionToEbor(dxJob, ParameterLinkSerde.encodeDots(varEncName))
       }
       Vector((encodedName, jsv))
     } else {
       // Complex type requiring two fields: a JSON structure, and a flat array of files.
-      val fileArrayName = s"${encodedName}${WdlDxLinkSerde.FlatFilesSuffix}"
-      val mapValue = wvl.dxlink match {
-        case ParameterLinkValue(jsn) =>
+      val fileArrayName = s"${encodedName}${ParameterLinkSerde.FlatFilesSuffix}"
+      val mapValue = link match {
+        case ParameterLinkValue(jsn, _) =>
           // files that are embedded in the structure
           val jsFiles = dxApi.findFiles(jsn).map(_.getLinkAsJson)
           // Dx allows hashes as an input/output type. If the JSON value is
           // not a hash (JsObject), we need to add an outer layer to it.
-          val jsn1 = JsObject(WdlDxLinkSerde.ComplexValueKey -> jsn)
+          val jsn1 = JsObject(ParameterLinkSerde.ComplexValueKey -> jsn)
           Map(encodedName -> jsn1, fileArrayName -> JsArray(jsFiles))
-        case ParameterLinkStage(dxStage, ioRef, varName) =>
-          val varFileArrayName = s"${varName}${WdlDxLinkSerde.FlatFilesSuffix}"
+        case ParameterLinkStage(dxStage, ioRef, varName, _) =>
+          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
           ioRef match {
             case IORef.Input =>
               Map(
@@ -253,29 +207,29 @@ case class WdlDxLinkSerde(dxApi: DxApi,
                   fileArrayName -> dxStage.getOutputReference(varFileArrayName)
               )
           }
-        case ParameterLinkWorkflowInput(varName) =>
-          val varFileArrayName = s"${varName}${WdlDxLinkSerde.FlatFilesSuffix}"
+        case ParameterLinkWorkflowInput(varName, _) =>
+          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
           Map(
               encodedName ->
                 JsObject(
                     DxUtils.DxLinkKey -> JsObject(
-                        WdlDxLinkSerde.WorkflowInputFieldKey -> JsString(varName)
+                        ParameterLinkSerde.WorkflowInputFieldKey -> JsString(varName)
                     )
                 ),
               fileArrayName ->
                 JsObject(
                     DxUtils.DxLinkKey -> JsObject(
-                        WdlDxLinkSerde.WorkflowInputFieldKey -> JsString(varFileArrayName)
+                        ParameterLinkSerde.WorkflowInputFieldKey -> JsString(varFileArrayName)
                     )
                 )
           )
-        case ParameterLinkExec(dxJob, varName) =>
-          val varFileArrayName = s"${varName}${WdlDxLinkSerde.FlatFilesSuffix}"
+        case ParameterLinkExec(dxJob, varName, _) =>
+          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
           Map(
               encodedName -> DxUtils
-                .dxExecutionToEbor(dxJob, WdlDxLinkSerde.encodeDots(varName)),
+                .dxExecutionToEbor(dxJob, ParameterLinkSerde.encodeDots(varName)),
               fileArrayName -> DxUtils
-                .dxExecutionToEbor(dxJob, WdlDxLinkSerde.encodeDots(varFileArrayName))
+                .dxExecutionToEbor(dxJob, ParameterLinkSerde.encodeDots(varFileArrayName))
           )
       }
       mapValue.toVector
@@ -283,7 +237,7 @@ case class WdlDxLinkSerde(dxApi: DxApi,
   }
 }
 
-object WdlDxLinkSerde {
+object ParameterLinkSerde {
 
   /**
     * Key used to wrap a complex value in JSON.
@@ -309,5 +263,42 @@ object WdlDxLinkSerde {
 
   def decodeDots(varName: String): String = {
     varName.replaceAll(ComplexValueKey, "\\.")
+  }
+
+  def createConstantField(wdlValue: WdlValues.V,
+                          bindName: String,
+                          encodeDots: Boolean = true): (String, JsValue) = {
+    val bindEncName =
+      if (encodeDots) {
+        ParameterLinkSerde.encodeDots(bindName)
+      } else {
+        bindName
+      }
+    (bindEncName, JsonSerde.serialize(wdlValue))
+  }
+
+  // Is this a WDL type that maps to a primitive, non-optional native DX type?
+  def isNativeDxPrimitiveType(t: Type): Boolean = {
+    t match {
+      case TBoolean   => true
+      case TInt       => true
+      case TFloat     => true
+      case TString    => true
+      case TFile      => true
+      case TDirectory => true // ?
+      case THash      => true // ?
+      case _          => false
+    }
+  }
+
+  // Is this a WDL type that maps to a native DX type?
+  def isNativeDxType(t: Type): Boolean = {
+    t match {
+      case _ if isNativeDxPrimitiveType(t) => true
+      case TArray(inner, _)                => isNativeDxPrimitiveType(inner)
+      case TOptional(inner)                => isNativeDxPrimitiveType(inner)
+      case TOptional(TArray(inner, _))     => isNativeDxPrimitiveType(inner)
+      case _                               => false
+    }
   }
 }

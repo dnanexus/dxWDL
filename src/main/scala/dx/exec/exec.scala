@@ -11,6 +11,7 @@ package object exec {
   val DXFUSE_MAX_MEMORY_CONSUMPTION: Int = 300 * 1024 * 1024 // how much memory dxfuse takes
   val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
   val MAX_NUM_FILES_MOVE_LIMIT = 1000
+  // TODO: make this configurable - preferably read from a property on the applet
   val SCATTER_LIMIT = 500
 
   // Different ways of using the mini-workflow runner.

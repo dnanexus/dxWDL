@@ -6,7 +6,7 @@ import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.{Evaluator, ParseSource, WdlDxLinkSerde}
+import dx.core.languages.wdl.{Evaluator, ParseSource, ParameterLinkSerde}
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
 import wdlTools.util.{Enum, FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}

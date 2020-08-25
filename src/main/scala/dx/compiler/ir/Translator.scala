@@ -5,6 +5,7 @@ import java.nio.file.{Path, Paths}
 import dx.api.{DxApi, DxFile, DxProject}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import dx.core.ir.{Application, Bundle, Callable, Parameter, Workflow}
+import dx.core.languages.Language.Language
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
 
@@ -276,4 +277,10 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
     }
     finalBundle
   }
+}
+
+trait TranslatorFactory {
+  def create(language: Language, extras: Option[Extras]): Option[Translator]
+
+  def create(sourceFile: Path, extras: Option[Extras]): Option[Translator]
 }

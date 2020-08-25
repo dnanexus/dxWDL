@@ -18,12 +18,12 @@ class WdlDxLinksTest extends AnyFlatSpec with Matchers {
 
   def makeElement(t: WdlTypes.T, v: WdlValues.V): Element = Element("A", t, v)
 
-  def check(elem: Element, wvlConverter: WdlDxLinkSerde): Unit = {
+  def check(elem: Element, wvlConverter: ParameterLinkSerde): Unit = {
     val prefix = "XXX_"
     val wvl: WdlDxLink = wvlConverter.createLink(elem.wdlType, elem.wdlValue)
     val allDxFields1: Vector[(String, JsValue)] = wvlConverter.createFields(wvl, prefix + elem.name)
     val allDxFields2 = allDxFields1.filter {
-      case (key, _) => !key.endsWith(WdlDxLinkSerde.FlatFilesSuffix)
+      case (key, _) => !key.endsWith(ParameterLinkSerde.FlatFilesSuffix)
     }
     allDxFields2.size should be(1)
     val (name2, jsv) = allDxFields2.head
@@ -34,7 +34,7 @@ class WdlDxLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle primitive WDL elements" in {
-    val wvlConverter = WdlDxLinkSerde(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
+    val wvlConverter = ParameterLinkSerde(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     val testCases = Vector(
         // primitives
@@ -51,7 +51,7 @@ class WdlDxLinksTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle compound WDL types" in {
-    val wvlConverter = WdlDxLinkSerde(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
+    val wvlConverter = ParameterLinkSerde(dxApi, fileResolver, DxFileDescCache.empty, Map.empty)
 
     def makePair(x: Double, s: String): WdlValues.V = {
       WdlValues.V_Pair(WdlValues.V_Float(x), WdlValues.V_String(s))

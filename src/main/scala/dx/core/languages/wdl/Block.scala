@@ -711,4 +711,60 @@ object Block {
     }
     subBlock
   }
+
+  private def prettyPrintWorkflowElement(node: TAT.WorkflowElement, indent: String): String = {
+    node match {
+      case TAT.Scatter(varName, expr, body, _) =>
+        val collection = TUtils.prettyFormatExpr(expr)
+        val innerBlock = body
+          .map { node =>
+            prettyPrintWorkflowElement(node, indent + "  ")
+          }
+          .mkString("\n")
+        s"""|${indent}scatter (${varName} in ${collection}) {
+            |${innerBlock}
+            |${indent}}
+            |""".stripMargin
+
+      case TAT.Conditional(expr, body, _) =>
+        val innerBlock =
+          body
+            .map { node =>
+              prettyPrintWorkflowElement(node, indent + "  ")
+            }
+            .mkString("\n")
+        s"""|${indent}if (${TUtils.prettyFormatExpr(expr)}) {
+            |${innerBlock}
+            |${indent}}
+            |""".stripMargin
+
+      case call: TAT.Call =>
+        val inputNames = call.inputs
+          .map {
+            case (key, expr) =>
+              s"${key} = ${TUtils.prettyFormatExpr(expr)}"
+          }
+          .mkString(",")
+        val inputs =
+          if (inputNames.isEmpty) ""
+          else s"{ input: ${inputNames} }"
+        call.alias match {
+          case None =>
+            s"${indent}call ${call.fullyQualifiedName} ${inputs}"
+          case Some(al) =>
+            s"${indent}call ${call.fullyQualifiedName} as ${al} ${inputs}"
+        }
+
+      case TAT.Declaration(_, wdlType, None, _) =>
+        s"${indent} ${TUtils.prettyFormatType(wdlType)}"
+      case TAT.Declaration(_, wdlType, Some(expr), _) =>
+        s"${indent} ${TUtils.prettyFormatType(wdlType)} = ${TUtils.prettyFormatExpr(expr)}"
+    }
+  }
+
+  def prettyPrint(block: Block): String = {
+    block.nodes
+      .map { prettyPrintWorkflowElement(_, "    ") }
+      .mkString("\n")
+  }
 }

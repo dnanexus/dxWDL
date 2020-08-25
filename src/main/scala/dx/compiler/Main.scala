@@ -4,12 +4,13 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
-import dx.compiler.ExecTreeFormat.ExecTreeFormat
 import dx.compiler.Main.CompilerFlag.CompilerFlag
-import dx.compiler.ir.{Bundle, LanguageSupport}
-import dx.compiler.wdl.WdlLanguageSupportFactory
+import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
+import dx.compiler.ir.{Extras, ExtrasParser, Translator}
+import dx.compiler.wdl.{WdlDxNativeInterfaceFactory, WdlTranslatorFactory}
 import dx.core.getVersion
 import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.ir.Bundle
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
@@ -97,22 +98,22 @@ object Main {
     fileResolver
   }
 
-  private def getLanguageSupport(
+  private def getTranslator(
       options: Options,
+      extras: Option[Extras],
       fileResolver: FileSourceResolver,
       sourceFile: Option[Path] = None,
       defaultValue: Option[Language] = None
-  ): LanguageSupport[_] = {
-    val supportedLanguages = Vector(
-        WdlLanguageSupportFactory(fileResolver)
+  ): Translator = {
+    val translatorFactories = Vector(
+        WdlTranslatorFactory(fileResolver = fileResolver)
     )
     val languageOpt = options.getValue[Language]("language").orElse(defaultValue)
-    val extrasPath = options.getValue[Path]("extras")
     languageOpt match {
       case Some(language) =>
-        supportedLanguages
+        translatorFactories
           .collectFirst { factory =>
-            factory.create(language, extrasPath) match {
+            factory.create(language, extras) match {
               case Some(support) => support
             }
           }
@@ -120,9 +121,9 @@ object Main {
               throw OptionParseException(s"Language ${language} is not supported")
           )
       case None if sourceFile.isDefined =>
-        supportedLanguages
+        translatorFactories
           .collectFirst { factory =>
-            factory.create(sourceFile.get, extrasPath) match {
+            factory.create(sourceFile.get, extras) match {
               case Some(support) => support
             }
           }
@@ -165,6 +166,12 @@ object Main {
       extends SingleValueOptionSpec[CompilerFlag](choices = CompilerFlag.values) {
     override def parseValue(value: String): CompilerFlag =
       CompilerFlag.withNameIgnoreCase(value)
+  }
+
+  // Tree printer types for the execTree option
+  object ExecTreeFormat extends Enum {
+    type ExecTreeFormat = Value
+    val Json, Pretty = Value
   }
 
   private case class ExecTreeFormatOptionSpec()
@@ -285,10 +292,8 @@ object Main {
         case Right(options)    => options
       }
     val fileResolver = initCommon(options)
-    // language-specific features
-    val languageSupport = getLanguageSupport(options, fileResolver, Some(sourceFile))
-    // Extras parsing is language-specific
-    val extras = languageSupport.getExtras
+    val extras: Option[Extras] =
+      options.getValue[Path]("extras").map(extrasPath => ExtrasParser().parse(extrasPath))
     if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
       Set("reorg", "locked").foreach { opt =>
         if (options.contains(opt)) {
@@ -301,10 +306,9 @@ object Main {
     // other non-flag options
     val compileMode: CompilerFlag =
       options.getValueOrElse[CompilerFlag]("compileMode", CompilerFlag.All)
-    val (dxProject, folder) = getDestination(options)
+    val (project, folder) = getDestination(options)
     val defaults: Option[Path] = options.getValue[Path]("defaults")
     val inputs: Vector[Path] = options.getList[Path]("inputs")
-    val execTreeFormat: Option[ExecTreeFormat] = options.getValue[ExecTreeFormat]("execTree")
     val runtimeTraceLevel: Int =
       options.getValueOrElse[Int]("runtimeDebugLevel", DefaultRuntimeTraceLevel)
     // flags
@@ -328,10 +332,10 @@ object Main {
 
     try {
       // generate IR
-      val translator = languageSupport.getTranslator
+      val translator = getTranslator(options, extras, fileResolver, Some(sourceFile))
       val bundle = translator.apply(
           sourceFile,
-          dxProject,
+          project,
           inputs,
           defaults,
           locked,
@@ -344,23 +348,32 @@ object Main {
       val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
       val dxPathConfig = DxPathConfig.apply(baseDNAxDir, streamAllFiles)
       val compiler = Compiler(
-          includeAsset,
+          bundle,
+          project,
+          folder,
           extras,
-          execTreeFormat,
+          dxPathConfig,
           runtimeTraceLevel,
+          includeAsset,
           archive,
           force,
           leaveWorkflowsOpen,
           locked,
           projectWideReuse,
-          dxPathConfig,
           fileResolver
       )
-      val (retval, treeDesc) = compiler.apply(bundle, folder, dxProject)
-      treeDesc match {
-        case None                   => Success(retval)
-        case Some(Left(treePretty)) => SuccessPrettyTree(treePretty)
-        case Some(Right(treeJs))    => SuccessJsonTree(treeJs)
+      val results = compiler.apply
+      // generate the execution tree if requested
+      (results.primaryCallable, options.getValue[ExecTreeFormat]("execTree")) match {
+        case (Some(primary), Some(format)) =>
+          val treeJs = ExecTree(results.execDict).apply(primary)
+          format match {
+            case ExecTreeFormat.Json =>
+              SuccessJsonTree(treeJs)
+            case ExecTreeFormat.Pretty =>
+              SuccessPrettyTree(ExecTree.prettyPrint(treeJs.asJsObject))
+          }
+        case _ => Success(results.executableIds.mkString(","))
       }
     } catch {
       case e: Throwable =>
@@ -381,15 +394,51 @@ object Main {
       "r" -> FlagOptionSpec.Default.copy(alias = Some("recursive"))
   )
 
+  private def getDxNativeInterface(
+      options: Options,
+      fileResolver: FileSourceResolver,
+      sourceFile: Option[Path] = None,
+      defaultValue: Option[Language] = None
+  ): DxNativeInterface = {
+    val dxniFactories = Vector(
+        WdlDxNativeInterfaceFactory(fileResolver = fileResolver)
+    )
+    val languageOpt = options.getValue[Language]("language").orElse(defaultValue)
+    languageOpt match {
+      case Some(language) =>
+        dxniFactories
+          .collectFirst { factory =>
+            factory.create(language) match {
+              case Some(support) => support
+            }
+          }
+          .getOrElse(
+              throw OptionParseException(s"Language ${language} is not supported")
+          )
+      case None if sourceFile.isDefined =>
+        dxniFactories
+          .collectFirst { factory =>
+            factory.create(sourceFile.get) match {
+              case Some(support) => support
+            }
+          }
+          .getOrElse(
+              throw OptionParseException(
+                  s"Could not detect language from source file ${sourceFile}"
+              )
+          )
+      case _ =>
+        throw OptionParseException("Could not determine language")
+    }
+  }
+
   private[compiler] def dxni(args: Vector[String]): Termination = {
     val options = parseCommandLine(args, CommonOptions ++ DxNIOptions) match {
       case Left(termination) => return termination
       case Right(options)    => options
     }
     val fileResolver = initCommon(options)
-    val languageSupport =
-      getLanguageSupport(options, fileResolver, defaultValue = Some(Language.WdlDefault))
-    val dxni = languageSupport.getDxNativeInterface
+    val dxni = getDxNativeInterface(options, fileResolver, defaultValue = Some(Language.WdlDefault))
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
     // flags
     val Vector(
@@ -459,7 +508,7 @@ object Main {
       val wf = DxApi.get.workflow(workflowId)
       val execTreeJS = ExecTree.fromDxWorkflow(wf)
       if (options.getFlag("pretty")) {
-        val prettyTree = ExecTree.generateTreeFromJson(execTreeJS.asJsObject)
+        val prettyTree = ExecTree.prettyPrint(execTreeJS.asJsObject)
         SuccessPrettyTree(prettyTree)
       } else {
         SuccessJsonTree(execTreeJS)

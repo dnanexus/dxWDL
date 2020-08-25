@@ -6,7 +6,7 @@ import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.Language
-import dx.core.languages.wdl.{Evaluator, ParseSource, WdlDxLinkSerde, Bundle => WdlBundle}
+import dx.core.languages.wdl.{Evaluator, ParseSource, ParameterLinkSerde, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._

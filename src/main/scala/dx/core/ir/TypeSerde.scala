@@ -7,14 +7,14 @@ import wdlTools.util.JsUtils
 object TypeSerde {
   def serialize(t: Type): JsValue = {
     t match {
-      case TBoolean      => JsString("Boolean")
-      case TInt          => JsString("Int")
-      case TFloat        => JsString("Float")
-      case TString       => JsString("String")
-      case TFile         => JsString("File")
-      case TDirectory    => JsString("Directory")
-      case THash         => JsString("Hash")
-      case TSchema(name) => JsString(name)
+      case TBoolean         => JsString("Boolean")
+      case TInt             => JsString("Int")
+      case TFloat           => JsString("Float")
+      case TString          => JsString("String")
+      case TFile            => JsString("File")
+      case TDirectory       => JsString("Directory")
+      case THash            => JsString("Hash")
+      case TSchema(name, _) => JsString(name)
       case TArray(memberType, nonEmpty) =>
         JsObject(
             Map(
@@ -42,9 +42,17 @@ object TypeSerde {
   }
 
   def deserialize(jsValue: JsValue, typeAliases: Map[String, Type]): Type = {
+    def resolveType(name: String) = {
+      try {
+        simpleFromString(name)
+      } catch {
+        case _: UnknownTypeException if typeAliases.contains(name) =>
+          typeAliases(name)
+      }
+    }
     def inner(innerValue: JsValue): Type = {
       innerValue match {
-        case JsString(name) => simpleFromString(name)
+        case JsString(name) => resolveType(name)
         case JsObject(fields) =>
           val t = fields("name") match {
             case JsString("Array") =>
@@ -55,13 +63,7 @@ object TypeSerde {
               val keyType = inner(fields("keyType"))
               val valueType = inner(fields("valueType"))
               TMap(keyType, valueType)
-            case JsString(name) =>
-              simpleFromString(name) match {
-                case TSchema(_) if !typeAliases.contains(name) =>
-                  throw new Exception(s"Unknown type ${name}")
-                case TSchema(_) => typeAliases(name)
-                case other      => other
-              }
+            case JsString(name) => resolveType(name)
           }
           if (fields.get("optional").exists(JsUtils.getBoolean(_))) {
             TOptional(t)
@@ -78,14 +80,14 @@ object TypeSerde {
   // Array[Int] -> "Array[Int]"
   def toString(t: Type): String = {
     t match {
-      case TBoolean      => "Boolean"
-      case TInt          => "Int"
-      case TFloat        => "Float"
-      case TString       => "String"
-      case TFile         => "File"
-      case TDirectory    => "Directory"
-      case THash         => "Hash"
-      case TSchema(name) => name
+      case TBoolean         => "Boolean"
+      case TInt             => "Int"
+      case TFloat           => "Float"
+      case TString          => "String"
+      case TFile            => "File"
+      case TDirectory       => "Directory"
+      case THash            => "Hash"
+      case TSchema(name, _) => name
       case TArray(memberType, _) =>
         s"Array[${toString(memberType)}]"
       case TMap(keyType, valueType) =>
@@ -98,6 +100,8 @@ object TypeSerde {
         s"${toString(inner)}?"
     }
   }
+
+  case class UnknownTypeException(message: String) extends Exception(message)
 
   /**
     * Convert a String to a simple (non-compound) type, i.e. TArray and TMap
@@ -123,7 +127,8 @@ object TypeSerde {
         }
       case s if s.contains("[") =>
         throw new Exception(s"type ${s} is not primitive")
-      case name => TSchema(name)
+      case _ =>
+        throw UnknownTypeException(s"Unknown type ${s}")
     }
   }
 }

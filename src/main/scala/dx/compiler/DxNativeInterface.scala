@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import dx.api.{DxApi, DxApp, DxApplet, DxFindApps, DxFindDataObjects, DxProject}
 import dx.core.getVersion
+import dx.core.languages.Language.Language
 import wdlTools.util.FileUtils
 
 abstract class DxNativeInterface(dxApi: DxApi) {
@@ -114,4 +115,10 @@ abstract class DxNativeInterface(dxApi: DxApi) {
       writeToFile(doc, output, force)
     }
   }
+}
+
+trait DxNativeInterfaceFactory {
+  def create(language: Language): Option[DxNativeInterface]
+
+  def create(sourceFile: Path): Option[DxNativeInterface]
 }

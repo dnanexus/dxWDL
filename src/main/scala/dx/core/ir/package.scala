@@ -12,7 +12,6 @@ trait ParameterAttribute
 trait Parameter {
   def name: String
   def dxType: Type
-  def optional: Boolean
   def defaultValue: Option[Value]
   def attributes: Vector[ParameterAttribute]
 
@@ -83,6 +82,24 @@ case object ExecutableKindWfCustomReorgOutputs extends ExecutableKind
 case object ExecutableKindWorkflowOutputReorg extends ExecutableKind
 case class ExecutableKindWorkflowCustomReorg(id: String) extends ExecutableKind
 
+object ExecutableKind {
+  def toString(kind: ExecutableKind): String = {
+    kind match {
+      case _: ExecutableKindNative               => "Native"
+      case _: ExecutableKindWfFragment           => "Fragment"
+      case ExecutableKindTask                    => "Task"
+      case ExecutableKindWfInputs                => "Inputs"
+      case ExecutableKindWfOutputs               => "Outputs"
+      case ExecutableKindWfCustomReorgOutputs    => "Reorg outputs"
+      case ExecutableKindWorkflowOutputReorg     => "Output Reorg"
+      case ExecutableKindWorkflowCustomReorg(id) => s"Custom reorg ${id}"
+    }
+  }
+}
+
+/**
+  * Marker trait for runtime requirements.
+  */
 trait RuntimeRequirement
 
 /**

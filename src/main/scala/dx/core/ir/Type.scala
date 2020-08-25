@@ -50,5 +50,35 @@ object Type {
     * as VHash.
     * @param name type name
     */
-  case class TSchema(name: String) extends Type
+  case class TSchema(name: String, members: Map[String, Type]) extends Type
+
+  def isOptional(t: Type): Boolean = {
+    t match {
+      case _: TOptional => true
+      case _            => false
+    }
+  }
+
+  /**
+    * Makes a type optional.
+    * @param t the type
+    * @param force if true, then `t` will be made optional even if it is already optional.
+    * @return
+    */
+  def ensureOptional(t: Type, force: Boolean = false): TOptional = {
+    t match {
+      case t if force   => TOptional(t)
+      case t: TOptional => t
+      case _            => TOptional(t)
+    }
+  }
+
+  def unwrapOptional(t: Type, mustBeOptional: Boolean = false): Type = {
+    t match {
+      case TOptional(wrapped) => wrapped
+      case _ if mustBeOptional =>
+        throw new Exception(s"Type ${t} is not T_Optional")
+      case _ => t
+    }
+  }
 }

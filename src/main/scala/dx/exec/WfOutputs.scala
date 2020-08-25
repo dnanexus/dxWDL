@@ -2,16 +2,27 @@ package dx.exec
 
 import dx.api.DxApi
 import dx.core.{ReorgStatus, ReorgStatusCompleted}
-import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlDxLinkSerde}
+import dx.core.languages.wdl.{Block, PrettyPrintApprox, ParameterLinkSerde}
 import dx.core.getVersion
 import spray.json.{JsString, JsValue}
 import wdlTools.eval.{Eval, WdlValues}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
 import wdlTools.util.Bindings
+
+object WfOutputs {
+  def prettyPrintOutputs(outputs: Vector[TAT.OutputDefinition]): String = {
+    outputs
+      .map {
+        case TAT.OutputDefinition(name, wdlType, expr, _) =>
+          s"${TUtils.prettyFormatType(wdlType)} ${name} = ${TUtils.prettyFormatExpr(expr)}"
+      }
+      .mkString("\n")
+  }
+}
 
 case class WfOutputs(wf: TAT.Workflow,
                      document: TAT.Document,
-                     wdlVarLinksConverter: WdlDxLinkSerde,
+                     wdlVarLinksConverter: ParameterLinkSerde,
                      dxApi: DxApi,
                      evaluator: Eval) {
   private def evaluateWdlExpression(expr: TAT.Expr,
@@ -26,7 +37,7 @@ case class WfOutputs(wf: TAT.Workflow,
     dxApi.logger.traceLimited(s"Environment: ${envInitial}")
     dxApi.logger.traceLimited(
         s"""|Evaluating workflow outputs
-            |${PrettyPrintApprox.graphOutputs(wf.outputs)}
+            |${WfOutputs.prettyPrintOutputs(wf.outputs)}
             |""".stripMargin
     )
 

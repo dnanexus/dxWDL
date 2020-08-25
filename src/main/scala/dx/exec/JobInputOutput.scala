@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import dx.AppInternalException
 import dx.api.{DxApi, DxFile}
 import dx.core.io._
-import dx.core.languages.wdl.WdlDxLinkSerde
+import dx.core.languages.wdl.ParameterLinkSerde
 import spray.json.{JsNull, JsValue}
 import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
@@ -14,7 +14,7 @@ import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource, RealFileS
 case class JobInputOutput(dxPathConfig: DxPathConfig,
                           fileResolver: FileSourceResolver,
                           dxFileDescCache: DxFileDescCache,
-                          wdlVarLinksConverter: WdlDxLinkSerde,
+                          wdlVarLinksConverter: ParameterLinkSerde,
                           dxApi: DxApi,
                           evaluator: Eval) {
   private val DISAMBIGUATION_DIRS_MAX_NUM = 200
@@ -30,7 +30,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
   def loadInputs(inputs: JsValue, callable: TAT.Callable): Map[TAT.InputDefinition, WdlValues.V] = {
     // Discard auxiliary fields
     val fields: Map[String, JsValue] = inputs.asJsObject.fields
-      .filter { case (fieldName, _) => !fieldName.endsWith(WdlDxLinkSerde.FlatFilesSuffix) }
+      .filter { case (fieldName, _) => !fieldName.endsWith(ParameterLinkSerde.FlatFilesSuffix) }
 
     // Get the declarations matching the input fields.
     // Create a mapping from each key to its WDL value

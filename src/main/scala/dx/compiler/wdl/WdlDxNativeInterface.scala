@@ -1,9 +1,13 @@
 package dx.compiler.wdl
 
+import java.nio.file.Path
+
 import dx.api.{DxApi, DxApp, DxAppDescribe, DxApplet, DxAppletDescribe, DxIOClass}
-import dx.compiler.DxNativeInterface
+import dx.compiler.{DxNativeInterface, DxNativeInterfaceFactory}
+import dx.core.languages.Language
+import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{ParseSource, Utils, VersionSupport}
-import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
+import wdlTools.syntax.{CommentMap, Parsers, SourceLocation, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.WdlTypes.T_Task
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
@@ -50,7 +54,7 @@ case class WdlDxNativeInterface(wdlVersion: WdlVersion,
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
-            val expr = Utils.genDefaultValueOfType(wdlType)
+            val expr = Utils.getDefaultValueOfType(wdlType)
             TAT.OutputDefinition(name, wdlType, expr, loc)
         }.toVector,
         TAT.CommandSection(Vector.empty, loc),
@@ -236,6 +240,48 @@ case class WdlDxNativeInterface(wdlVersion: WdlVersion,
       wdl.codeGenerator.generateDocument(doc)
     } else {
       Vector.empty
+    }
+  }
+}
+
+case class WdlDxNativeInterfaceFactory(fileResolver: FileSourceResolver = FileSourceResolver.get,
+                                       dxApi: DxApi = DxApi.get,
+                                       logger: Logger = Logger.get)
+    extends DxNativeInterfaceFactory {
+  private def create(wdlVersion: WdlVersion): DxNativeInterface = {
+    wdlVersion match {
+      case WdlVersion.Draft_2 =>
+        Logger.get.warning("Upgrading draft-2 input to verion 1.0")
+        WdlDxNativeInterface(WdlVersion.V1,
+                             fileResolver = fileResolver,
+                             dxApi = dxApi,
+                             logger = logger)
+      case WdlVersion.V1 =>
+        WdlDxNativeInterface(WdlVersion.V1)
+      case _ =>
+        throw new Exception(s"DxNI not supported for WDL version ${wdlVersion}")
+    }
+  }
+
+  override def create(language: Language): Option[DxNativeInterface] = {
+    try {
+      val wdlVersion = Language.toWdlVersion(language)
+      Some(create(wdlVersion))
+    } catch {
+      case _: Throwable => None
+    }
+  }
+
+  override def create(sourceFile: Path): Option[DxNativeInterface] = {
+    try {
+      val fileSource = fileResolver.fromPath(sourceFile)
+      try {
+        val parsers = Parsers(followImports = false, fileResolver)
+        val wdlVersion = parsers.getWdlVersion(fileSource)
+        Some(create(wdlVersion))
+      } catch {
+        case _: Throwable => None
+      }
     }
   }
 }

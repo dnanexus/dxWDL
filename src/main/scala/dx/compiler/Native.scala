@@ -15,13 +15,13 @@ import dx.core.languages.wdl.{
   ParameterLinkWorkflowInput,
   TypeSerialization,
   WdlDxLink,
-  WdlDxLinkSerde,
+  ParameterLinkSerde,
   WdlExecutableLink
 }
 import dx.core.io.DxPathConfig
 import dx.core.util.CompressionUtils
 import dx.core.{getVersion, ir}
-import dx.core.ir.{ParameterLinkStage, ParameterLinkWorkflowInput}
+import dx.core.ir.{Callable, ExecutableLink, ParameterLinkStage, ParameterLinkWorkflowInput}
 import wdlTools.generators.code.WdlV1Generator
 
 import scala.collection.immutable.TreeMap
@@ -31,12 +31,7 @@ import wdlTools.types.WdlTypes
 import wdlTools.util.{FileUtils, JsUtils, Logger, TraceLevel}
 
 // The end result of the compiler
-object Native {
-  case class ExecRecord(callable: IR.Callable,
-                        dxExec: DxExecutable,
-                        links: Vector[WdlExecutableLink])
-  case class Results(primaryCallable: Option[ExecRecord], execDict: Map[String, ExecRecord])
-}
+object Native {}
 
 // An overall design principal here, is that the json requests
 // have to be deterministic. This is because the checksums rely
@@ -44,10 +39,10 @@ object Native {
 case class Native(dxWDLrtId: Option[String],
                   folder: String,
                   dxProject: DxProject,
-                  dxObjDir: DxObjectDirectory,
+                  dxObjDir: DxDataObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  wdlVarLinksConverter: WdlDxLinkSerde,
+                  wdlVarLinksConverter: ParameterLinkSerde,
                   typeAliases: Map[String, WdlTypes.T],
                   extras: Option[Extras],
                   rtTraceLevel: Int,
@@ -56,51 +51,8 @@ case class Native(dxWDLrtId: Option[String],
                   archive: Boolean,
                   locked: Boolean,
                   dxApi: DxApi = DxApi.get) {
-  private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
+
   private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
-  private lazy val appCompileDirPath: Path = {
-    val p = Files.createTempDirectory("dxWDL_Compile")
-    sys.addShutdownHook({
-      FileUtils.deleteRecursive(p)
-    })
-    p
-  }
-
-  // Are we setting up a private docker registry?
-  private val dockerRegistryInfo: Option[DockerRegistry] = extras match {
-    case None => None
-    case Some(extras) =>
-      extras.dockerRegistry match {
-        case None    => None
-        case Some(x) => Some(x)
-      }
-  }
-
-  lazy val runtimeLibrary: Option[JsValue] =
-    dxWDLrtId match {
-      case None     => None
-      case Some(id) =>
-        // Open the archive
-        // Extract the archive from the details field
-        val record = dxApi.record(id)
-        val desc = record.describe(Set(Field.Details))
-        val details = desc.details.get
-        val dxLink = details.asJsObject.fields.get("archiveFileId") match {
-          case Some(x) => x
-          case None =>
-            throw new Exception(
-                s"record does not have an archive field ${details}"
-            )
-        }
-        val dxFile = DxFile.fromJsValue(dxApi, dxLink)
-        val name = dxFile.describe().name
-        Some(
-            JsObject(
-                "name" -> JsString(name),
-                "id" -> JsObject(DxUtils.DxLinkKey -> JsString(dxFile.id))
-            )
-        )
-    }
 
   private def jsValueFromConstraint(constraint: IR.ConstraintRepr): JsValue = {
     constraint match {
@@ -282,11 +234,11 @@ case class Native(dxWDLrtId: Option[String],
           ),
           JsObject(
               Map(
-                  "name" -> JsString(name + WdlDxLinkSerde.FlatFilesSuffix),
+                  "name" -> JsString(name + ParameterLinkSerde.FlatFilesSuffix),
                   "class" -> JsString("array:file"),
                   "optional" -> JsBoolean(true)
               )
-                ++ jsMapFromDefault(name + WdlDxLinkSerde.FlatFilesSuffix)
+                ++ jsMapFromDefault(name + ParameterLinkSerde.FlatFilesSuffix)
                 ++ jsMapFromAttrs(attrs, defaultVals.contains(name))
           )
       )
@@ -667,7 +619,7 @@ case class Native(dxWDLrtId: Option[String],
         } else if (force) {
           // the dx:object exists, and needs to be removed. There
           // may be several versions, all are removed.
-          val objs = existingDxObjs.map(_.dxObj)
+          val objs = existingDxObjs.map(_.dataObj)
           dxApi.logger.trace(s"Removing old ${name} ${objs.map(_.id)}")
           dxProject.removeObjects(objs)
         } else {
@@ -679,7 +631,7 @@ case class Native(dxWDLrtId: Option[String],
       None
     } else {
       assert(existingDxObjs.size == 1)
-      Some(existingDxObjs.head.dxObj)
+      Some(existingDxObjs.head.dataObj)
     }
   }
 
@@ -1533,7 +1485,7 @@ case class Native(dxWDLrtId: Option[String],
       wf: IR.Workflow,
       execDict: Map[String, Native.ExecRecord]
   ): Map[String, JsString] = {
-    val jsonTreeString = ExecTree(execDict).fromWorkflowIR(wf).toString
+    val jsonTreeString = ExecTree(execDict).apply(wf).toString
     val compressedTree = CompressionUtils.gzipAndBase64Encode(jsonTreeString)
     Map("execTree" -> JsString(compressedTree))
   }

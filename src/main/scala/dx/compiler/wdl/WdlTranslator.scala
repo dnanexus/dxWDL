@@ -3,12 +3,15 @@ package dx.compiler.wdl
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.compiler.ir.{Bundle, CallableAttributes, Extras, Parameter, ReorgAttributes, Translator}
+import dx.compiler.ir.{Extras, ReorgAttributes, Translator, TranslatorFactory}
 import dx.core.io.DxFileDescCache
-import dx.core.languages.wdl.{Block, WdlDxLinkSerde, Utils => WdlUtils}
+import dx.core.ir.{Bundle, Callable, Parameter}
+import dx.core.languages.Language
+import dx.core.languages.Language.Language
+import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
 import spray.json.JsValue
-import wdlTools.eval.WdlValues
-import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
+import wdlTools.syntax.Parsers
+import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
 
@@ -17,7 +20,7 @@ import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
   * TODO: remove limitation that two callables cannot have the same name
   * TODO: rewrite sortByDependencies using a graph data structure
   */
-case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
+case class WdlTranslator(extras: Option[Extras] = None,
                          regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
@@ -34,7 +37,7 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
     */
   private def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
     decls.foreach {
-      case TAT.Declaration(name, _, _, _) if name == WdlDxLinkSerde.ComplexValueKey =>
+      case TAT.Declaration(name, _, _, _) if name == ParameterLinkSerde.ComplexValueKey =>
         throw new Exception(
             s"Variable ${name} is reserved by DNAnexus and cannot be used as a variable name "
         )
@@ -238,8 +241,7 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
       logger2.trace(s"all callables in dependency order: ${depOrder.map { _.name }}")
     }
     // load defaults from extras
-    val defaultRuntimeAttrs =
-      extras.map(_.defaultRuntimeAttributes).getOrElse(Map.empty)
+    val defaultRuntimeAttrs = extras.map(_.defaultRuntimeAttributes).getOrElse(Map.empty)
     val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
       case (Some(attr), None)    => attr
       case (Some(attr), Some(b)) => attr.copy(enabled = b)
@@ -254,7 +256,7 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
         defaultRuntimeAttrs,
         reorgAttrs,
         dxApi,
-        sourceFileResolver,
+        fileResolver,
         logger
     )
     val (allCallables, sortedCallables) =
@@ -274,6 +276,9 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
       logger2.trace(s"allCallables: ${allCallables.keys}")
       logger2.trace(s"allCallablesSorted: ${allCallablesSortedNames}")
     }
+    val irTypeAliases = typeAliases.toMap.map {
+      case (name, struct: WdlTypes.T_Struct) => name -> WdlUtils.toIRType(struct)
+    }
     Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
   }
 
@@ -288,4 +293,32 @@ case class WdlTranslator(extras: Option[Extras[WdlValues.V]] = None,
                                        dxFileDescCache: DxFileDescCache,
                                        defaults: Map[String, JsValue]): Bundle = ???
 
+}
+
+case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
+                                fileResolver: FileSourceResolver = FileSourceResolver.get,
+                                dxApi: DxApi = DxApi.get,
+                                logger: Logger = Logger.get)
+    extends TranslatorFactory {
+  override def create(language: Language, extras: Option[Extras]): Option[WdlTranslator] = {
+    try {
+      logger.ignore(Language.toWdlVersion(language))
+      Some(WdlTranslator(extras, regime, dxApi, logger))
+    } catch {
+      case _: Throwable => None
+    }
+  }
+
+  override def create(sourceFile: Path, extras: Option[Extras]): Option[WdlTranslator] = {
+    try {
+      val fileSource = fileResolver.fromPath(sourceFile)
+      try {
+        val parsers = Parsers(followImports = false, fileResolver)
+        logger.ignore(parsers.getWdlVersion(fileSource))
+        Some(WdlTranslator(extras, regime, dxApi, logger))
+      } catch {
+        case _: Throwable => None
+      }
+    }
+  }
 }
