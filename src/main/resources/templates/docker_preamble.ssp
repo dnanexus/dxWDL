@@ -1,0 +1,40 @@
+<% val registry: String %>
+<% val username: String %>
+<% val credentials: String %>
+<% val bashDollar: String = "$" %>
+# if we need to set up a private docker registry,
+# download the credentials file and login. Do not expose the
+# credentials to the logs or to stdout.
+
+export DOCKER_REGISTRY=${registry}
+export DOCKER_USERNAME=${username}
+export DOCKER_CREDENTIALS=${credentials}
+
+echo "Logging in to docker registry ${bashDollar}{DOCKER_REGISTRY}, as user ${bashDollar}{DOCKER_USERNAME}"
+
+# there has to be a single credentials file
+num_lines=${bashDollar}(dx ls ${bashDollar}{DOCKER_CREDENTIALS} | wc --lines)
+if [[ ${bashDollar}num_lines != 1 ]]; then
+echo "There has to be exactly one credentials file, found ${bashDollar}num_lines."
+dx ls -l ${bashDollar}{DOCKER_CREDENTIALS}
+exit 1
+fi
+dx download ${bashDollar}{DOCKER_CREDENTIALS} -o ${bashDollar}{HOME}/docker_credentials
+creds=${bashDollar}(cat ${bashDollar}{HOME}/docker_credentials)
+
+# Log into docker. Retry several times.
+set -e
+i=0
+while [[ ${bashDollar}i -le 5 ]]; do
+echo ${bashDollar}{creds} | docker login ${bashDollar}{DOCKER_REGISTRY} -u ${bashDollar}{DOCKER_USERNAME} --password-stdin
+rc=${bashDollar}?
+if [[ ${bashDollar}rc == 0 ]]; then
+break
+fi
+i=${bashDollar}((i + 1))
+sleep 3
+echo "retry docker login (${bashDollar}i)"
+done
+set +e
+
+rm -f ${bashDollar}{HOME}/docker_credentials

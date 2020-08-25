@@ -2,6 +2,7 @@ package dx.compiler.wdl
 
 import dx.api.ConstraintOper
 import dx.compiler.ir.{CallableAttributes, ParameterAttributes}
+import dx.core.ir.Value._
 import dx.core.ir.{CallableAttribute, ParameterAttribute, Value}
 import dx.core.languages.wdl
 import wdlTools.eval.Meta
@@ -191,19 +192,26 @@ object ParameterMetaTranslator {
                                   name: Option[V] = None): ParameterAttributes.Choice = {
     (wdlType, value) match {
       case (T_String, V_String(str)) =>
-        ParameterAttributes.StringChoice(value = str)
+        ParameterAttributes.SimpleChoice(VString(str))
       case (T_Int, V_Int(i)) =>
-        ParameterAttributes.IntChoice(value = i)
+        ParameterAttributes.SimpleChoice(VInt(i))
       case (T_Float, V_Float(f)) =>
-        ParameterAttributes.FloatChoice(value = f)
+        ParameterAttributes.SimpleChoice(VFloat(f))
       case (T_Boolean, V_Boolean(b)) =>
-        ParameterAttributes.BooleanChoice(value = b)
+        ParameterAttributes.SimpleChoice(VBoolean(b))
       case (T_File, V_String(str)) =>
         val nameStr: Option[String] = name match {
           case Some(V_String(str)) => Some(str)
           case _                   => None
         }
         ParameterAttributes.FileChoice(value = str, name = nameStr)
+      case (T_Directory, V_String(str)) =>
+        val nameStr: Option[String] = name match {
+          case Some(V_String(str)) => Some(str)
+          case _                   => None
+        }
+        ParameterAttributes.DirectoryChoice(value = str, name = nameStr)
+
       case _ =>
         throw new Exception(
             "Choices keyword is only valid for primitive- and file-type parameters, and types must "
@@ -247,46 +255,39 @@ object ParameterMetaTranslator {
     }
   }
 
-  private def createSuggestionFileIR(file: Option[String],
-                                     name: Option[V],
-                                     project: Option[V],
-                                     path: Option[V]): ParameterAttributes.FileSuggestion = {
-    val nameStr: Option[String] = name match {
-      case Some(V_String(str)) => Some(str)
-      case _                   => None
-    }
-    val projectStr: Option[String] = project match {
-      case Some(V_String(str)) => Some(str)
-      case _                   => None
-    }
-    val pathStr: Option[String] = path match {
-      case Some(V_String(str)) => Some(str)
-      case _                   => None
-    }
-    ParameterAttributes.FileSuggestion(file, nameStr, projectStr, pathStr)
-  }
-
   private def metaSuggestionValueToIR(wdlType: T,
                                       value: Option[V],
                                       name: Option[V] = None,
                                       project: Option[V] = None,
                                       path: Option[V] = None): ParameterAttributes.Suggestion = {
     (wdlType, value) match {
-      case (T_String, Some(V_String(s)))   => ParameterAttributes.StringSuggestion(s)
-      case (T_Int, Some(V_Int(i)))         => ParameterAttributes.IntSuggestion(i)
-      case (T_Float, Some(V_Float(f)))     => ParameterAttributes.FloatSuggestion(f)
-      case (T_Boolean, Some(V_Boolean(b))) => ParameterAttributes.BooleanSuggestion(value = b)
-      case (T_File, Some(V_File(file))) =>
-        createSuggestionFileIR(Some(file), name, project, path)
-      case (T_File, None) =>
-        val s = createSuggestionFileIR(None, name, project, path)
-        if (s.project.isEmpty || s.path.isEmpty) {
+      case (T_String, Some(V_String(s)))   => ParameterAttributes.SimpleSuggestion(VString(s))
+      case (T_Int, Some(V_Int(i)))         => ParameterAttributes.SimpleSuggestion(VInt(i))
+      case (T_Float, Some(V_Float(f)))     => ParameterAttributes.SimpleSuggestion(VFloat(f))
+      case (T_Boolean, Some(V_Boolean(b))) => ParameterAttributes.SimpleSuggestion(VBoolean(b))
+      case (T_File, file) =>
+        val s = ParameterAttributes.FileSuggestion(
+            file.map {
+              case V_File(path) => path
+            },
+            name.map {
+              case V_String(str) => str
+            },
+            project.map {
+              case V_String(str) => str
+            },
+            path.map {
+              case V_String(str) => str
+            }
+        )
+        if (s.name.isEmpty && (s.project.isEmpty || s.path.isEmpty)) {
           throw new Exception(
               "If 'value' is not defined for a file-type suggestion, then both 'project' and 'path' "
                 + "must be defined"
           )
         }
         s
+      // TODO: (T_Directory, dir)
       case _ =>
         throw new Exception(
             "Suggestion keyword is only valid for primitive- and file-type parameters, and types "
@@ -355,7 +356,7 @@ object ParameterMetaTranslator {
 
   private def metaDefaultToIR(value: V, wdlType: T): Value = {
     value match {
-      case _: Value.VHash =>
+      case _: VHash =>
         throw new Exception(
             "Default keyword is only valid for primitive-, file-, and array-type parameters, and "
               + "types must match between parameter and default"

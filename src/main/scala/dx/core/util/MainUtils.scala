@@ -118,7 +118,7 @@ object MainUtils {
   }
 
   abstract class SingleValueOptionSpec[T](override val alias: Option[String] = None,
-                                          choices: Set[T] = Set.empty,
+                                          choices: Vector[T] = Vector.empty,
                                           override val multiple: Boolean = false)
       extends OptionSpec {
     def parseValues(name: String, values: Vector[String], curValue: Option[Opt]): Opt = {
@@ -156,7 +156,7 @@ object MainUtils {
     * @param choices (optional) set of allowed values
     */
   case class StringOptionSpec(override val alias: Option[String] = None,
-                              choices: Set[String] = Set.empty,
+                              choices: Vector[String] = Vector.empty,
                               override val multiple: Boolean = false)
       extends SingleValueOptionSpec[String](alias, choices, multiple) {
     def parseValue(value: String): String = value
@@ -168,7 +168,7 @@ object MainUtils {
   }
 
   case class IntOptionSpec(override val alias: Option[String] = None,
-                           choices: Set[Int] = Set.empty,
+                           choices: Vector[Int] = Vector.empty,
                            override val multiple: Boolean = false)
       extends SingleValueOptionSpec[Int](alias, choices, multiple) {
     def parseValue(value: String): Int = value.toInt
@@ -270,14 +270,25 @@ object MainUtils {
 
   // logging
 
+  val SimpleOptions: OptionSpecs = Map(
+      "help" -> FlagOptionSpec.Default,
+      "quiet" -> FlagOptionSpec.Default,
+      "verbose" -> FlagOptionSpec.Default,
+      "verboseKey" -> StringOptionSpec.List,
+      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2))
+  )
+
   def initLogger(options: Options): Logger = {
     val verboseKeys: Set[String] = options.getList[String]("verboseKey").toSet
-    val defaultLevel = if (options.getFlag("verbose")) {
-      TraceLevel.Verbose
-    } else {
-      TraceLevel.None
-    }
-    val traceLevel: Int = options.getValueOrElse[Int]("runtimeDebugLevel", defaultLevel)
+    val traceLevel = options
+      .getValue[Int]("traceLevel")
+      .getOrElse(
+          if (options.getFlag("verbose")) {
+            TraceLevel.Verbose
+          } else {
+            TraceLevel.None
+          }
+      )
     val logger = Logger(quiet = options.getFlag("quiet"), traceLevel = traceLevel, verboseKeys)
     Logger.set(logger)
     logger

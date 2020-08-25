@@ -1,16 +1,14 @@
 package dx.compiler
 
-import dx.api.{DxExecutable, DxWorkflow, Field}
-import dx.core.ir.{Application, Callable, ExecutableKind, ExecutableLink, Workflow}
+import dx.api.{DxWorkflow, Field}
+import dx.core.ir.{Application, ExecutableKind, Workflow}
 import dx.core.util.CompressionUtils
 import spray.json._
-
-case class ExecRecord(callable: Callable, dxExec: DxExecutable, links: Vector[ExecutableLink])
 
 /**
   * Describe the workflow in a tree representation
   */
-case class ExecTree(execDict: Map[String, ExecRecord]) {
+case class ExecTree(execDict: Map[String, CompiledExecutable]) {
   def apply(workflow: Workflow): JsValue = {
     val vec = workflow.stages.map { stage =>
       val calleeRecord = execDict(stage.calleeName)
@@ -21,7 +19,7 @@ case class ExecTree(execDict: Map[String, ExecRecord]) {
     JsObject("name" -> JsString(workflow.name), "kind" -> JsString("workflow"), "stages" -> stages)
   }
 
-  def apply(primary: ExecRecord): JsValue = {
+  def apply(primary: CompiledExecutable): JsValue = {
     primary.callable match {
       case application: Application if primary.links.isEmpty =>
         JsObject("name" -> JsString(application.name),

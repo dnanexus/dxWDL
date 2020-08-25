@@ -1,6 +1,6 @@
 package dx.compiler.wdl
 
-import dx.core.ir.{Application, Callable, ExecutableKindTask}
+import dx.core.ir.{Application, Callable, ExecutableKindApplet}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Utils => WdlUtils}
 import wdlTools.eval.WdlValues
@@ -342,7 +342,15 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
               accu
             } else {
               val stub: TAT.Task = callable match {
-                case Application(_, _, _, _, _, ExecutableKindTask, WdlDocumentSource(doc), _, _) =>
+                case Application(_,
+                                 _,
+                                 _,
+                                 _,
+                                 _,
+                                 ExecutableKindApplet,
+                                 WdlDocumentSource(doc),
+                                 _,
+                                 _) =>
                   // This is a task, include its source instead of a header.
                   val tasks = doc.elements.collect {
                     case t: TAT.Task => t

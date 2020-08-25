@@ -1,0 +1,7 @@
+<% val command: String %>
+<% val rtTraceLevel: Int %>
+<% val streamAllFiles: Boolean %>
+<% val bashDollar: String = "$" %>
+main() {
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal ${command} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""} ${bashDollar}{HOME}
+}

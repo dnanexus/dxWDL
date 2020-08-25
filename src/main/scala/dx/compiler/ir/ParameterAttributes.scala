@@ -48,7 +48,7 @@ object ParameterAttributes {
     * 'patterns': ['*.sam', '*.bam'] // PatternsReprArray
     *
    **/
-  sealed abstract class Patterns
+  sealed trait Patterns
   final case class PatternsArray(patterns: Vector[String]) extends Patterns
   final case class PatternsObject(name: Vector[String] = Vector.empty,
                                   klass: Option[String] = None,
@@ -72,11 +72,8 @@ object ParameterAttributes {
     *
     *   choices: [true, false]  # => [true, false]
    **/
-  sealed abstract class Choice
-  final case class IntChoice(value: Long) extends Choice
-  final case class FloatChoice(value: Double) extends Choice
-  final case class StringChoice(value: String) extends Choice
-  final case class BooleanChoice(value: Boolean) extends Choice
+  sealed trait Choice
+  final case class SimpleChoice(value: Value) extends Choice
   final case class FileChoice(value: String, name: Option[String]) extends Choice
   final case class DirectoryChoice(value: String, name: Option[String]) extends Choice
 
@@ -97,11 +94,8 @@ object ParameterAttributes {
     *
     *   suggestions: [1, 2, 3]
    **/
-  sealed abstract class Suggestion
-  sealed case class IntSuggestion(value: Long) extends Suggestion
-  sealed case class FloatSuggestion(value: Double) extends Suggestion
-  sealed case class StringSuggestion(value: String) extends Suggestion
-  sealed case class BooleanSuggestion(value: Boolean) extends Suggestion
+  sealed trait Suggestion
+  sealed case class SimpleSuggestion(value: Value) extends Suggestion
   sealed case class FileSuggestion(
       value: Option[String],
       name: Option[String],
@@ -124,7 +118,7 @@ object ParameterAttributes {
     *
     *   type: { and: [ "fastq", { or: ["Read1", "Read2"] } ] }
    **/
-  sealed abstract class Constraint
+  sealed trait Constraint
   sealed case class StringConstraint(constraint: String) extends Constraint
   sealed case class CompoundConstraint(oper: ConstraintOper.Value, constraints: Vector[Constraint])
       extends Constraint
@@ -136,7 +130,7 @@ object ParameterAttributes {
   final case class GroupAttribute(text: String) extends ParameterAttribute
   final case class HelpAttribute(text: String) extends ParameterAttribute
   final case class LabelAttribute(text: String) extends ParameterAttribute
-  final case class PatternsAttribute(patternRepr: Patterns) extends ParameterAttribute
+  final case class PatternsAttribute(patterns: Patterns) extends ParameterAttribute
   final case class ChoicesAttribute(choices: Vector[Choice]) extends ParameterAttribute
   final case class SuggestionsAttribute(suggestions: Vector[Suggestion]) extends ParameterAttribute
   final case class TypeAttribute(constraint: Constraint) extends ParameterAttribute

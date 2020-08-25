@@ -1,22 +1,70 @@
 package dx.compiler
 
 import java.nio.file.{Files, Path}
+import java.security.MessageDigest
 
 import com.typesafe.config.{Config, ConfigFactory}
-import dx.api.{DxApi, DxFile, DxPath, DxProject, DxRecord, DxUtils, Field, InstanceTypeDbQuery}
-import dx.compiler.ir.{DockerRegistry, Extras}
+import dx.api.{
+  ConstraintOper,
+  DxApi,
+  DxAppDescribe,
+  DxApplet,
+  DxAppletDescribe,
+  DxConstraint,
+  DxDataObject,
+  DxExecutable,
+  DxFile,
+  DxIOSpec,
+  DxPath,
+  DxProject,
+  DxRecord,
+  DxUtils,
+  DxWorkflow,
+  DxWorkflowDescribe,
+  Field,
+  InstanceTypeDbQuery
+}
+import dx.compiler.ir.RunSpec.DynamicInstanceType
+import dx.compiler.ir.{DockerRegistry, Extras, ParameterAttributes}
+import dx.core.getVersion
 import dx.core.io.DxPathConfig
-import dx.core.ir.Bundle
-import dx.core.languages.wdl.ParameterLinkSerde
-import spray.json.{JsObject, JsString, JsValue}
-import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
+import dx.core.ir.{
+  Application,
+  Bundle,
+  Callable,
+  ExecutableKind,
+  ExecutableKindApplet,
+  ExecutableKindNative,
+  ExecutableKindWfFragment,
+  ExecutableKindWorkflowCustomReorg,
+  ExecutableLink,
+  ExecutableType,
+  Parameter,
+  ParameterAttribute,
+  Type,
+  Value,
+  Workflow
+}
+import dx.core.ir.Type._
+import dx.core.ir.Value._
+import dx.core.languages.wdl.{ParameterLinkSerde, WdlExecutableLink}
+import dx.core.util.CompressionUtils
+import spray.json._
+import wdlTools.generators.Renderer
+import wdlTools.types.WdlTypes
+import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 
 import scala.jdk.CollectionConverters._
 
-case class CompilerResults(primaryCallable: Option[ExecRecord], execDict: Map[String, ExecRecord]) {
+case class CompiledExecutable(callable: Callable,
+                              dxExec: DxExecutable,
+                              links: Vector[ExecutableLink] = Vector.empty)
+
+case class CompilerResults(primary: Option[CompiledExecutable],
+                           executables: Map[String, CompiledExecutable]) {
   def executableIds: Vector[String] = {
-    primaryCallable match {
-      case None      => execDict.values.map(_.dxExec.getId).toVector
+    primary match {
+      case None      => executables.values.map(_.dxExec.getId).toVector
       case Some(obj) => Vector(obj.dxExec.id)
     }
   }
@@ -29,7 +77,7 @@ case class CompilerResults(primaryCallable: Option[ExecRecord], execDict: Map[St
   * @param runtimeTraceLevel trace level to use at runtime
   * @param includeAsset whether to package the runtime asset with generated applications
   * @param archive whether to archive existing applications
-  * @param force whether to overwrite existing applications
+  * @param force whether to delete existing executables
   * @param leaveWorkflowsOpen whether to leave generated workflows in the open state
   * @param locked whether to generate locked workflows
   * @param projectWideReuse whether to allow project-wide reuse of applications
@@ -51,10 +99,11 @@ case class Compiler(extras: Option[Extras],
                     logger: Logger = Logger.get) {
   // logger for extra trace info
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
+
   // query interface for fetching instance types by user/org
   private lazy val instanceTypeDbQuery: InstanceTypeDbQuery = InstanceTypeDbQuery(dxApi)
-  // create a temp dir where applications will be compiled, and make sure it's
-  // deleted on shutdown
+
+  // temp dir where applications will be compiled - it is deleted on shutdown
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")
     sys.addShutdownHook({
@@ -62,17 +111,8 @@ case class Compiler(extras: Option[Extras],
     })
     p
   }
-  // Are we setting up a private docker registry?
-  private val dockerRegistryInfo: Option[DockerRegistry] = extras match {
-    case None => None
-    case Some(extras) =>
-      extras.dockerRegistry match {
-        case None    => None
-        case Some(x) => Some(x)
-      }
-  }
 
-  private def getDxWdlRuntimeRecord(project: DxProject): Option[DxRecord] = {
+  private def getAssetRecord(project: DxProject): Option[DxRecord] = {
     // get billTo and region from the project, then find the runtime asset
     // in the current region.
     val projectRegion = project.describe(Set(Field.Region)).region match {
@@ -116,7 +156,7 @@ case class Compiler(extras: Option[Extras],
     Some(dxAsset)
   }
 
-  private def getRuntimeAsset(record: DxRecord): JsValue = {
+  private def getAssetLink(record: DxRecord): JsValue = {
     // Extract the archive from the details field
     val desc = record.describe(Set(Field.Details))
     val dxLink =
@@ -135,6 +175,264 @@ case class Compiler(extras: Option[Extras],
     )
   }
 
+  private case class BundleCompiler(bundle: Bundle, project: DxProject, folder: String) {
+    val parameterLinkSerializer =
+      ParameterLinkSerde(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
+    // database of available instance types for the user/org that owns the project
+    val instanceTypeDb = instanceTypeDbQuery.query(project)
+    // directory of the currently existing applets - we don't want to build them
+    // if we don't have to.
+    val executableDir =
+      DxExecutableDirectory(bundle, project, folder, projectWideReuse, dxApi, logger)
+    val runtimeAssetRecord: Option[DxRecord] = if (includeAsset) {
+      getAssetRecord(project)
+    } else {
+      None
+    }
+    val runtimeAsset = runtimeAssetRecord.map(getAssetLink)
+
+    // Add a checksum to a request
+    private def checksumRequest(name: String,
+                                desc: Map[String, JsValue],
+                                project: DxProject,
+                                folder: String): (String, Map[String, JsValue]) = {
+      logger2.trace(
+          s"""|${name} -> checksum request
+              |fields = ${JsObject(desc).prettyPrint}
+
+              |""".stripMargin
+      )
+      // We need to sort the hash-tables. They are natually unsorted,
+      // causing the same object to have different checksums.
+      val digest =
+        CompressionUtils.md5Checksum(JsUtils.makeDeterministic(JsObject(desc)).prettyPrint)
+      // Add the checksum to the properies
+      val existingProperties: Map[String, JsValue] =
+        desc.get("properties") match {
+          case Some(JsObject(props)) => props
+          case None                  => Map.empty
+          case other =>
+            throw new Exception(s"Bad properties json value ${other}")
+        }
+      val updatedProperties = existingProperties ++
+        Map(
+            VersionProperty ->
+              JsString(getVersion),
+            ChecksumProperty -> JsString(digest)
+        )
+      // Add properties and attributes we don't want to fall under the checksum
+      // This allows, for example, moving the dx:executable, while
+      // still being able to reuse it.
+      val updatedRequest = desc ++ Map(
+          "project" -> JsString(project.id),
+          "folder" -> JsString(folder),
+          "parents" -> JsBoolean(true),
+          "properties" -> JsObject(updatedProperties)
+      )
+      (digest, updatedRequest)
+    }
+
+    /**
+      * Get an existing application if one exists with the given name and matching the
+      * given digest.
+      * @param name the application name
+      * @param digest the application digest
+      * @return the existing executable, or None if the executable does not exist, has
+      *         change, or a there are multiple executables that cannot be resolved
+      *         unambiguously to a single executable.
+      */
+    private def getExistingExecutable(name: String, digest: String): Option[DxDataObject] = {
+      // return the application if it already exists in the project
+      executableDir.lookupInProject(name, digest) match {
+        case None => ()
+        case Some(executable) =>
+          (executable.dxClass, executable.desc) match {
+            case ("App", _) =>
+              dxApi.logger.trace(s"Found existing version of app ${name}")
+            case ("Applet", Some(desc: DxAppletDescribe)) =>
+              dxApi.logger.trace(
+                  s"Found existing version of applet ${name} in folder ${desc.folder}"
+              )
+            case ("Workflow", Some(desc: DxWorkflowDescribe)) =>
+              dxApi.logger.trace(
+                  s"Found existing version of workflow ${name} in folder ${desc.folder}"
+              )
+            case other =>
+              throw new Exception(s"bad object ${other}")
+          }
+          return Some(executable.dataObj)
+      }
+
+      val existingExecutables = executableDir.lookup(name)
+
+      existingExecutables match {
+        case Vector() =>
+          // a rebuild is required and there are no existing executables to clean up
+          return None
+        case Vector(existingInfo) =>
+          // Check if applet code has changed
+          existingInfo.digest match {
+            case None =>
+              throw new Exception(s"There is an existing non-dxWDL applet ${name}")
+            case Some(existingDigest) if digest != existingDigest =>
+              dxApi.logger.trace(
+                  s"${existingInfo.dxClass} ${name} has changed, rebuild required"
+              )
+            case _ =>
+              dxApi.logger.trace(s"${existingInfo.dxClass} ${name} has not changed")
+              return Some(existingInfo.dataObj)
+          }
+        case v =>
+          dxApi.logger.warning(s"""|More than one ${v.head.dxClass} ${name} found in
+                                   |path ${project.id}:${folder}""".stripMargin)
+      }
+
+      if (archive) {
+        // archive the applet/workflow(s)
+        executableDir.archive(existingExecutables)
+      } else if (force) {
+        // remove all existing executables
+        executableDir.remove(existingExecutables)
+      } else {
+        val dxClass = existingExecutables.head.dxClass
+        throw new Exception(s"${dxClass} ${name} already exists in ${project.id}:${folder}")
+      }
+
+      None
+    }
+
+    private def getIdFromResponse(response: JsObject): String = {
+      response.fields.get("id") match {
+        case Some(JsString(x)) => x
+        case None              => throw new Exception("API call did not returnd an ID")
+        case other             => throw new Exception(s"API call returned invalid ID ${other}")
+      }
+    }
+
+    /**
+      * Builds an applet if it doesn't exist or has changed since the last
+      * compilation, otherwise returns the existing applet.
+      * @param applet the applet IR
+      * @param dependencyDict previously compiled executables that can be linked
+      * @return
+      */
+    private def maybeBuildApplet(
+        applet: Application,
+        dependencyDict: Map[String, CompiledExecutable]
+    ): (DxApplet, Vector[ExecutableLink]) = {
+      logger2.trace(s"Compiling applet ${applet.name}")
+      val appletCompiler =
+        ApplicationCompiler(runtimePathConfig,
+                            runtimeTraceLevel,
+                            extras.flatMap(_.dockerRegistry),
+                            parameterLinkSerializer,
+                            dxApi,
+                            logger2)
+      // limit the applet dictionary to actual dependencies
+      val dependencies: Map[String, ExecutableLink] = applet.kind match {
+        case ExecutableKindWfFragment(calls, _, _) =>
+          calls.map { tName =>
+            val CompiledExecutable(irCall, dxObj, _) = dependencyDict(tName)
+            tName -> genLinkInfo(irCall, dxObj)
+          }
+        case _ => Map.empty
+      }
+      // Calculate a checksum of the inputs that went into the making of the applet.
+      val (appletApiRequest, digest) = appletCompiler.apply(applet, dependencies)
+      // write the request to a file, in case we need it for debugging
+      if (logger2.traceLevel >= TraceLevel.Verbose) {
+        val requestFile = s"${applet.name}_req.json"
+        FileUtils.writeFileContent(appCompileDirPath.resolve(requestFile),
+                                   JsObject(appletApiRequest).prettyPrint)
+      }
+      // fetch existing applet or build a new one
+      val dxApplet = getExistingExecutable(applet.name, digest) match {
+        case Some(dxApplet: DxApplet) =>
+          // applet exists and it has not changed
+          dxApplet
+        case None =>
+          // build a new applet
+          val response = dxApi.appletNew(appletApiRequest)
+          val id = getIdFromResponse(response)
+          val dxApplet = dxApi.applet(id)
+          executableDir.insert(applet.name, dxApplet, digest)
+          dxApplet
+      }
+      (dxApplet, dependencies.values.toVector)
+    }
+
+    /**
+      * Builds a workflow if it doesn't exist or has changed since the last
+      * compilation, otherwise returns the existing workflow.
+      * @param workflow the workflow to compile
+      * @param dependencyDict previously compiled executables that can be linked
+      * @return
+      */
+    private def maybeBuildWorkflow(workflow: Workflow,
+                                   dependencyDict: Map[String, CompiledExecutable]): DxWorkflow = {
+      logger2.trace(s"Compiling workflow ${workflow.name}")
+      val workflowCompiler =
+        WorkflowCompiler(runtimePathConfig,
+                         runtimeTraceLevel,
+                         extras.flatMap(_.dockerRegistry),
+                         parameterLinkSerializer,
+                         dxApi,
+                         logger2)
+      val (workflowApiRequest, digest) = workflowCompiler.apply(workflow, dependencyDict)
+      getExistingExecutable(workflow.name, digest) match {
+        case Some(wf: DxWorkflow) =>
+          // workflow exists and has not changed
+          wf
+        case None =>
+          val response = dxApi.workflowNew(workflowApiRequest)
+          val id = getIdFromResponse(response)
+          val dxWorkflow = dxApi.workflow(id)
+          if (!leaveWorkflowsOpen) {
+            // Close the workflow
+            dxWorkflow.close()
+          }
+          executableDir.insert(workflow.name, dxWorkflow, digest)
+          dxWorkflow
+        case other =>
+          throw new Exception(s"expected a workflow, got ${other}")
+      }
+    }
+
+    def apply: CompilerResults = {
+      dxApi.logger.trace(
+          s"Generate dx:applets and dx:workflows for ${bundle} in ${project.id}${folder}"
+      )
+      val executables = bundle.dependencies.foldLeft(Map.empty[String, CompiledExecutable]) {
+        case (accu, name) =>
+          bundle.allCallables(name) match {
+            case application: Application =>
+              val execRecord = application.kind match {
+                case ExecutableKindNative(ExecutableType.App | ExecutableType.Applet,
+                                          Some(id),
+                                          _,
+                                          _,
+                                          _) =>
+                  // native applets do not depend on other data-objects
+                  CompiledExecutable(application, dxApi.executable(id))
+                case ExecutableKindWorkflowCustomReorg(id) =>
+                  CompiledExecutable(application, dxApi.executable(id))
+                case _ =>
+                  val (dxApplet, dependencies) = maybeBuildApplet(application, accu)
+                  CompiledExecutable(application, dxApplet, dependencies)
+              }
+              accu + (application.name -> execRecord)
+            case wf: Workflow =>
+              val dxWorkflow = maybeBuildWorkflow(wf, accu)
+              accu + (wf.name -> CompiledExecutable(wf, dxWorkflow))
+          }
+      }
+      val primary: Option[CompiledExecutable] = bundle.primaryCallable.flatMap { c =>
+        executables.get(c.name)
+      }
+      CompilerResults(primary, executables)
+    }
+  }
+
   /**
     * Compile the IR bundle to a native applet or workflow.
     * @param bundle the IR bundle
@@ -142,18 +440,6 @@ case class Compiler(extras: Option[Extras],
     * @param folder the destination folder
     */
   def apply(bundle: Bundle, project: DxProject, folder: String): CompilerResults = {
-    val wdlVarLinksConverter =
-      ParameterLinkSerde(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
-    // database of available instance types for the user/org that owns the project
-    val instanceTypeDb = instanceTypeDbQuery.query(project)
-    // directory of the currently existing applets - we don't want to build them
-    // if we don't have to.
-    val dataObjDir = DxDataObjectDirectory(bundle, project, folder, projectWideReuse, dxApi, logger)
-    val runtimeAssetRecord: Option[DxRecord] = if (includeAsset) {
-      getDxWdlRuntimeRecord(project)
-    } else {
-      None
-    }
-    val runtimeAsset = runtimeAssetRecord.map(getRuntimeAsset)
+    BundleCompiler(bundle, project, folder).apply
   }
 }

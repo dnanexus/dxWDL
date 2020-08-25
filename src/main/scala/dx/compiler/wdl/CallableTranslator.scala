@@ -133,7 +133,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val instanceType = runtime.translateInstanceType
       val kind = runtime.translateExecutableKind match {
         case Some(native) => native
-        case None         => ExecutableKindTask
+        case None         => ExecutableKindApplet
       }
       val requirements = runtime.translateRequirements
       val attributes = meta.translate

@@ -39,7 +39,7 @@ object Native {}
 case class Native(dxWDLrtId: Option[String],
                   folder: String,
                   dxProject: DxProject,
-                  dxObjDir: DxDataObjectDirectory,
+                  dxObjDir: DxExecutableDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
                   wdlVarLinksConverter: ParameterLinkSerde,
@@ -521,7 +521,7 @@ case class Native(dxWDLrtId: Option[String],
   }
 
   // Calculate the MD5 checksum of a string
-  private def chksum(s: String): String = {
+  private def md5Checksum(s: String): String = {
     val digest = MessageDigest.getInstance("MD5").digest(s.getBytes)
     digest.map("%02X" format _).mkString
   }
@@ -539,7 +539,7 @@ case class Native(dxWDLrtId: Option[String],
     // We need to sort the hash-tables. They are natually unsorted,
     // causing the same object to have different checksums.
     val jsDet = JsUtils.makeDeterministic(JsObject(fields))
-    val digest = chksum(jsDet.prettyPrint)
+    val digest = md5Checksum(jsDet.prettyPrint)
 
     // Add the checksum to the properies
     val preExistingProps: Map[String, JsValue] =
@@ -572,7 +572,7 @@ case class Native(dxWDLrtId: Option[String],
   //   Some(dxobject) : the right object is already on the platform
   private def isBuildRequired(name: String, digest: String): Option[DxDataObject] = {
     // Have we built this applet already, but placed it elsewhere in the project?
-    dxObjDir.lookupOtherVersions(name, digest) match {
+    dxObjDir.lookupInProject(name, digest) match {
       case None => ()
       case Some((dxObj, desc)) =>
         desc match {
@@ -615,7 +615,7 @@ case class Native(dxWDLrtId: Option[String],
       if (existingDxObjs.nonEmpty) {
         if (archive) {
           // archive the applet/workflow(s)
-          existingDxObjs.foreach(x => dxObjDir.archiveDxObject(x))
+          existingDxObjs.foreach(x => dxObjDir.archive(x))
         } else if (force) {
           // the dx:object exists, and needs to be removed. There
           // may be several versions, all are removed.

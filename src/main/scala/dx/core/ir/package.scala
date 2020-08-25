@@ -46,7 +46,18 @@ trait Callable {
 case class Bundle(primaryCallable: Option[Callable],
                   allCallables: Map[String, Callable],
                   dependencies: Vector[String],
-                  typeAliases: Map[String, Type])
+                  typeAliases: Map[String, Type]) {
+
+  override def toString: String = {
+    primaryCallable match {
+      case Some(c) => s"Bundle[${c.name}]"
+      case None if allCallables.size == 1 =>
+        s"Bundle[${allCallables.values.head.name}]"
+      case None =>
+        s"Bundle[${allCallables.values.head.name} and ${allCallables.size - 1} others]"
+    }
+  }
+}
 
 object ExecutableType extends Enum {
   type ExecutableType = Value
@@ -69,7 +80,7 @@ case class ExecutableKindNative(executableType: ExecutableType,
                                 project: Option[String] = None,
                                 path: Option[String] = None)
     extends ExecutableKind
-case object ExecutableKindTask extends ExecutableKind
+case object ExecutableKindApplet extends ExecutableKind
 case class ExecutableKindWfFragment(calls: Vector[String],
                                     blockPath: Vector[Int],
                                     fqnDictTypes: Map[String, Type])
@@ -83,11 +94,21 @@ case object ExecutableKindWorkflowOutputReorg extends ExecutableKind
 case class ExecutableKindWorkflowCustomReorg(id: String) extends ExecutableKind
 
 object ExecutableKind {
+  def getCommand(kind: ExecutableKind): Option[String] = {
+    kind match {
+      case ExecutableKindWfInputs             => Some("wfInputs")
+      case ExecutableKindWfOutputs            => Some("wfOutputs")
+      case ExecutableKindWfCustomReorgOutputs => Some("wfCustomReorgOutputs")
+      case ExecutableKindWorkflowOutputReorg  => Some("workflowOutputReorg")
+      case _                                  => None
+    }
+  }
+
   def toString(kind: ExecutableKind): String = {
     kind match {
       case _: ExecutableKindNative               => "Native"
       case _: ExecutableKindWfFragment           => "Fragment"
-      case ExecutableKindTask                    => "Task"
+      case ExecutableKindApplet                  => "Task"
       case ExecutableKindWfInputs                => "Inputs"
       case ExecutableKindWfOutputs               => "Outputs"
       case ExecutableKindWfCustomReorgOutputs    => "Reorg outputs"

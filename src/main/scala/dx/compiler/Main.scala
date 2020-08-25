@@ -48,13 +48,6 @@ object Main {
     }
   }
 
-  private val SimpleOptions: OptionSpecs = Map(
-      "help" -> FlagOptionSpec.Default,
-      "quiet" -> FlagOptionSpec.Default,
-      "verbose" -> FlagOptionSpec.Default,
-      "verboseKey" -> StringOptionSpec.List
-  )
-
   private def parseCommandLine(
       args: Vector[String],
       spec: OptionSpecs,
@@ -163,7 +156,7 @@ object Main {
   }
 
   private case class CompileModeOptionSpec()
-      extends SingleValueOptionSpec[CompilerFlag](choices = CompilerFlag.values) {
+      extends SingleValueOptionSpec[CompilerFlag](choices = CompilerFlag.values.toVector) {
     override def parseValue(value: String): CompilerFlag =
       CompilerFlag.withNameIgnoreCase(value)
   }
@@ -175,7 +168,7 @@ object Main {
   }
 
   private case class ExecTreeFormatOptionSpec()
-      extends SingleValueOptionSpec[ExecTreeFormat](choices = ExecTreeFormat.values) {
+      extends SingleValueOptionSpec[ExecTreeFormat](choices = ExecTreeFormat.values.toVector) {
     override def parseValue(value: String): ExecTreeFormat =
       ExecTreeFormat.withNameIgnoreCase(value)
   }
@@ -194,7 +187,7 @@ object Main {
       "p" -> PathOptionSpec.ListMustExist.copy(alias = Some("imports")),
       "projectWideReuse" -> FlagOptionSpec.Default,
       "reorg" -> FlagOptionSpec.Default,
-      "runtimeDebugLevel" -> IntOptionSpec.One.copy(choices = Set(0, 1, 2)),
+      "runtimeDebugLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2)),
       "streamAllFiles" -> FlagOptionSpec.Default
   )
 
@@ -348,9 +341,6 @@ object Main {
       val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
       val dxPathConfig = DxPathConfig.apply(baseDNAxDir, streamAllFiles)
       val compiler = Compiler(
-          bundle,
-          project,
-          folder,
           extras,
           dxPathConfig,
           runtimeTraceLevel,
@@ -362,11 +352,11 @@ object Main {
           projectWideReuse,
           fileResolver
       )
-      val results = compiler.apply
+      val results = compiler.apply(bundle, project, folder)
       // generate the execution tree if requested
-      (results.primaryCallable, options.getValue[ExecTreeFormat]("execTree")) match {
+      (results.primary, options.getValue[ExecTreeFormat]("execTree")) match {
         case (Some(primary), Some(format)) =>
-          val treeJs = ExecTree(results.execDict).apply(primary)
+          val treeJs = ExecTree(results.executables).apply(primary)
           format match {
             case ExecTreeFormat.Json =>
               SuccessJsonTree(treeJs)

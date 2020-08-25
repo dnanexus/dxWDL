@@ -1,0 +1,22 @@
+<% val dockerPreamble: String %>
+<% val rtTraceLevel: Int %>
+<% val streamAllFiles: Boolean %>
+<% val bashDollar: String = "$" %>
+set -exo pipefail
+${dockerPreamble}
+
+main() {
+    # check if this is the correct instance type
+    correctInstanceType=`java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""} ${bashDollar}{HOME}`
+    if [[ ${bashDollar}correctInstanceType == "true" ]]; then
+        body
+    else
+        # evaluate the instance type, and launch a sub job on it
+        java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal taskRelaunch -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""} ${bashDollar}{HOME}
+    fi
+}
+
+# We are on the correct instance type, run the task
+body() {
+${include("applet_script.ssp")}
+}
