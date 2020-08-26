@@ -12,8 +12,10 @@ case class DxAnalysisDescribe(project: String,
                               folder: String,
                               created: Long,
                               modified: Long,
+                              executableName: Option[String],
                               properties: Option[Map[String, String]],
-                              details: Option[JsValue])
+                              details: Option[JsValue],
+                              output: Option[JsValue])
     extends DxObjectDescribe
 
 case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject with DxExecution {
@@ -31,22 +33,7 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
                                           classOf[JsonNode],
                                           DxUtils.dxEnv)
     val descJs: JsValue = DxUtils.jsValueOfJsonNode(response)
-    val desc =
-      descJs.asJsObject.getFields("project", "id", "name", "folder", "created", "modified") match {
-        case Seq(JsString(project),
-                 JsString(id),
-                 JsString(name),
-                 JsString(folder),
-                 JsNumber(created),
-                 JsNumber(modified)) =>
-          DxAnalysisDescribe(project, id, name, folder, created.toLong, modified.toLong, None, None)
-        case _ =>
-          throw new Exception(s"Malformed JSON ${descJs}")
-      }
-
-    val details = descJs.asJsObject.fields.get("details")
-    val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-    desc.copy(details = details, properties = props)
+    DxAnalysis.parseDescJson(descJs.asJsObject)
   }
 
   def setProperties(props: Map[String, String]): Unit = {
@@ -66,6 +53,43 @@ case class DxAnalysis(id: String, project: Option[DxProject]) extends DxObject w
 }
 
 object DxAnalysis {
+  def parseDescJson(descJs: JsObject): DxAnalysisDescribe = {
+    val desc =
+      descJs.getFields("project", "id", "name", "folder", "created", "modified") match {
+        case Seq(JsString(project),
+                 JsString(id),
+                 JsString(name),
+                 JsString(folder),
+                 JsNumber(created),
+                 JsNumber(modified)) =>
+          DxAnalysisDescribe(project,
+                             id,
+                             name,
+                             folder,
+                             created.toLong,
+                             modified.toLong,
+                             None,
+                             None,
+                             None,
+                             None)
+        case _ =>
+          throw new Exception(s"Malformed JSON ${descJs}")
+      }
+
+    val executableName = descJs.fields.get("executableName") match {
+      case Some(JsString(x))   => Some(x)
+      case Some(JsNull) | None => None
+      case Some(other)         => throw new Exception(s"Invalid executable name ${other}")
+    }
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val output = descJs.fields.get("output")
+    desc.copy(details = details,
+              properties = props,
+              executableName = executableName,
+              output = output)
+  }
+
   def getInstance(id: String): DxAnalysis = {
     DxObject.getInstance(id, None) match {
       case j: DxAnalysis => j

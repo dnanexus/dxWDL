@@ -305,7 +305,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "build an interface to an applet specified by ID" taggedAs (NativeTestXX, EdgeTest) in {
     val dxObj = DxPath.resolveDxPath(
-      s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum")
+        s"${Utils.DX_URL_PREFIX}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
+    )
     dxObj shouldBe a[DxApplet]
     val applet = dxObj.asInstanceOf[DxApplet]
 
@@ -331,7 +332,6 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     tasks.keys shouldBe (Set("native_sum"))
   }
-
 
   it should "be able to include pattern information in inputSpec" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")

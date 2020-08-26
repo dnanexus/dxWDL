@@ -122,53 +122,6 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     childExecs.filter(_ != dxJob)
   }
 
-  // Describe all the scatter child jobs. Use a bulk-describe
-  // for efficiency.
-  private def describeChildExecs(execs: Vector[DxExecution]): Vector[ChildExecDesc] = {
-    val jobInfoReq: Vector[JsValue] = execs.map { job =>
-      JsObject(
-          "id" -> JsString(job.getId),
-          "describe" -> JsObject("outputs" -> JsBoolean(true),
-                                 "executableName" -> JsBoolean(true),
-                                 "properties" -> JsBoolean(true))
-      )
-    }
-    val req = JsObject("executions" -> JsArray(jobInfoReq))
-    System.err.println(s"bulk-describe request=${req}")
-    val retval: JsValue =
-      DxUtils.jsValueOfJsonNode(
-          DXAPI.systemDescribeExecutions(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
-      )
-    val results: Vector[JsValue] = retval.asJsObject.fields.get("results") match {
-      case Some(JsArray(x)) => x.toVector
-      case _                => throw new Exception(s"wrong type for executableName ${retval}")
-    }
-    (execs zip results).map {
-      case (dxExec, desc) =>
-        val fields = desc.asJsObject.fields.get("describe") match {
-          case Some(JsObject(fields)) => fields
-          case _                      => throw new Exception(s"result does not contains a describe field ${desc}")
-        }
-        val execName = fields.get("executableName") match {
-          case Some(JsString(name)) => name
-          case _                    => throw new Exception(s"wrong type for executableName ${desc}")
-        }
-        val seqNum = fields.get("properties") match {
-          case Some(obj) =>
-            obj.asJsObject.getFields("seq_number") match {
-              case Seq(JsString(seqNum)) => seqNum.toInt
-              case _                     => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
-            }
-          case _ => throw new Exception(s"wrong type for properties ${desc}")
-        }
-        val outputs = fields.get("output") match {
-          case None    => throw new Exception(s"No output field for a child job ${desc}")
-          case Some(o) => o
-        }
-        ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
-    }.toVector
-  }
-
   def executableFromSeqNum(): Vector[ChildExecDesc] = {
     // We cannot change the input fields, because this is a sub-job with the same
     // input/output spec as the parent scatter. Therefore, we need to computationally
