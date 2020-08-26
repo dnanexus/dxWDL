@@ -4,6 +4,8 @@ import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
+import scala.collection.AbstractIterator
+
 object DxFindExecutions {
   private def parseOneResult(value: JsValue): (DxExecution, DxObjectDescribe) = {
     val fields = value.asJsObject.fields
@@ -25,7 +27,7 @@ object DxFindExecutions {
 
   private def submitRequest(
       parentJob: Option[DxJob],
-      cursor: Option[JsValue],
+      cursor: JsValue,
       describe: Set[Field.Value],
       limit: Option[Int]
   ): (Vector[(DxExecution, DxObjectDescribe)], JsValue) = {
@@ -34,8 +36,8 @@ object DxFindExecutions {
       case Some(job) => Map("parentJob" -> JsString(job.getId))
     }
     val cursorField: Map[String, JsValue] = cursor match {
-      case None              => Map.empty
-      case Some(cursorValue) => Map("starting" -> cursorValue)
+      case JsNull      => Map.empty
+      case cursorValue => Map("starting" -> cursorValue)
     }
     val limitField: Map[String, JsValue] = limit match {
       case None    => Map.empty
@@ -63,19 +65,44 @@ object DxFindExecutions {
 
   def apply(parentJob: Option[DxJob],
             describe: Set[Field.Value] = Set.empty,
-            limit: Option[Int] = None): Vector[DxExecution] = {
+            limit: Option[Int] = None): Vector[(DxExecution, DxObjectDescribe)] = {
 
-    Iterator
-      .unfold[Vector[(DxExecution, DxObjectDescribe)], Option[JsValue]](Some(JsNull)) {
-        case None => None
-        case Some(cursor) =>
-          submitRequest(parentJob, cursor, describe, limit) match {
-            case (Vector(), _)     => None
-            case (results, JsNull) => Some(results, None)
-            case (results, next)   => Some(results, Some(next))
-          }
+    new UnfoldIterator[Vector[(DxExecution, DxObjectDescribe)], Option[JsValue]](Some(JsNull))({
+      case None => None
+      case Some(cursor: JsValue) =>
+        submitRequest(parentJob, cursor, describe, limit) match {
+          case (Vector(), _)     => None
+          case (results, JsNull) => Some(results, None)
+          case (results, next)   => Some(results, Some(next))
+        }
+    }).toVector.flatten
+  }
+}
+
+// copy the UnfoldIterator from scala 2.13
+private final class UnfoldIterator[A, S](init: S)(f: S => Option[(A, S)])
+    extends AbstractIterator[A] {
+  private[this] var state: S = init
+  private[this] var nextResult: Option[(A, S)] = null
+
+  override def hasNext: Boolean = {
+    if (nextResult eq null) {
+      nextResult = {
+        val res = f(state)
+        if (res eq null) throw new NullPointerException("null during unfold")
+        res
       }
-      .toVector
-      .flatten
+      state = null.asInstanceOf[S] // allow GC
+    }
+    nextResult.isDefined
+  }
+
+  override def next(): A = {
+    if (hasNext) {
+      val (value, newState) = nextResult.get
+      state = newState
+      nextResult = null
+      value
+    } else Iterator.empty.next()
   }
 }

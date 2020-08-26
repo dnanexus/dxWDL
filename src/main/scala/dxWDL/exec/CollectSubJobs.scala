@@ -58,8 +58,6 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus.DXAPI
-import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wom.callable.Callable._
 import wom.graph._
@@ -108,36 +106,34 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }.toMap
   }
 
-  private def findChildExecs(): Vector[DxExecution] = {
+  def executableFromSeqNum(): Vector[ChildExecDesc] = {
     // get the parent job
     val dxJob = DxJob(DxUtils.dxEnv.getJob())
     val parentJob: DxJob = dxJob.describe().parentJob.get
-
-    val childExecs: Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
-
+    val childExecs: Vector[(DxExecution, DxObjectDescribe)] =
+      DxFindExecutions.apply(Some(parentJob),
+                             Set(Field.Output, Field.ExecutableName, Field.Properties))
     // make sure the collect subjob is not included. Theoretically,
     // it should not be returned as a search result, becase we did
     // not explicitly ask for subjobs. However, let's make
     // sure.
-    childExecs.filter(_ != dxJob)
-  }
-
-  def executableFromSeqNum(): Vector[ChildExecDesc] = {
-    // We cannot change the input fields, because this is a sub-job with the same
-    // input/output spec as the parent scatter. Therefore, we need to computationally
-    // figure out:
-    //   1) child job-ids
-    //   2) field names
-    //   3) WDL types
-    val childExecs: Vector[DxExecution] = findChildExecs()
-    System.err.println(s"childExecs=${childExecs}")
-
-    // describe all the job outputs and which applet they were running
-    val execDescs: Vector[ChildExecDesc] = describeChildExecs(childExecs)
-    System.err.println(s"execDescs=${execDescs}")
-
-    // sort from low to high sequence number
-    execDescs.sortWith(_.seqNum < _.seqNum)
+    val descs = childExecs
+      .collect {
+        case (exec: DxJob, desc: DxJobDescribe) if exec.id != parentJob.id =>
+          ChildExecDesc(desc.executableName,
+                        desc.properties.get("seq_number").toInt,
+                        desc.output.get.asJsObject.fields,
+                        exec)
+        case (exec: DxAnalysis, desc: DxAnalysisDescribe) if exec.id != parentJob.id =>
+          ChildExecDesc(desc.executableName.get,
+                        desc.properties.get("seq_number").toInt,
+                        desc.output.get.asJsObject.fields,
+                        exec)
+        case other => throw new Exception(s"Invalid execution ${other}")
+      }
+      .sortWith(_.seqNum < _.seqNum)
+    System.err.println(s"execDescs=${descs}")
+    descs
   }
 
   // collect field [name] from all child jobs, by looking at their

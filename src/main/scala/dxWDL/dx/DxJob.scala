@@ -69,7 +69,7 @@ object DxJob {
 
     val details = descJs.fields.get("details")
     val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
-    val parentJob: Option[DxJob] = descJs.asJsObject.fields.get("parentJob") match {
+    val parentJob: Option[DxJob] = descJs.fields.get("parentJob") match {
       case None              => None
       case Some(JsNull)      => None
       case Some(JsString(x)) => Some(DxJob.getInstance(x))
