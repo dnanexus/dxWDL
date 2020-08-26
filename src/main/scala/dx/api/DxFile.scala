@@ -46,13 +46,7 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
                             Field.ArchivalState)
     val allFields = fields ++ defaultFields
     val descJs = dxApi.fileDescribe(id, projSpec + ("fields" -> DxObject.requestFields(allFields)))
-    // optional fields
-    val details = descJs.fields.get("details")
-    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
-    val parts = descJs.fields.get("parts").map(DxFile.parseFileParts)
-    DxFile
-      .parseJsonFileDesribe(descJs)
-      .copy(details = details, properties = props, parts = parts)
+    DxFile.parseDescribeJson(descJs)
   }
 
   def getLinkAsJson: JsValue = {
@@ -99,7 +93,7 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
 
 object DxFile {
   // Parse a JSON description of a file received from the platform
-  def parseJsonFileDesribe(descJs: JsObject): DxFileDescribe = {
+  def parseDescribeJson(descJs: JsObject): DxFileDescribe = {
     val desc = descJs
       .getFields("project", "id", "name", "folder", "created", "modified", "archivalState") match {
       case Seq(JsString(project),
@@ -124,15 +118,19 @@ object DxFile {
         throw new Exception(s"Malformed JSON ${descJs}")
     }
 
-    // populate the size field. It is missing from files that are in the open or closing
-    // states.
+    // populate the size field. It is missing from files that are in the open or closing states.
     val sizeRaw = descJs.fields.getOrElse("size", JsNumber(0))
     val size = sizeRaw match {
       case JsNumber(x) => x.toLong
       case other       => throw new Exception(s"size ${other} is not a number")
     }
 
-    desc.copy(size = size)
+    // optional fields
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val parts = descJs.fields.get("parts").map(DxFile.parseFileParts)
+
+    desc.copy(size = size, details = details, properties = props, parts = parts)
   }
 
   // Parse the parts from a description of a file

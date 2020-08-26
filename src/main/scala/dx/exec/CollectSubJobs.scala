@@ -57,11 +57,23 @@ Note: the compiler ensures that the scatter will call exactly one call.
   */
 package dx.exec
 
-import dx.api.{DxApi, DxExecution, DxFindExecutions, DxJob, InstanceTypeDB}
-import dx.core.languages.wdl.{ParameterLinkExec, WdlExecutableLink, WdlDxLink, ParameterLinkSerde}
+import dx.api.{
+  DxAnalysisDescribe,
+  DxApi,
+  DxExecution,
+  DxFindExecutions,
+  DxJob,
+  DxJobDescribe,
+  Field,
+  InstanceTypeDB
+}
+import dx.core.ir
+import dx.core.ir.ParameterLinkExec
+import dx.core.languages.wdl.{ParameterLinkExec, ParameterLinkSerde, WdlDxLink, WdlExecutableLink}
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.Logger
 
 case class ChildExecDesc(execName: String,
                          seqNum: Int,
@@ -73,6 +85,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           dxApi: DxApi,
+                          logger: Logger = Logger.get,
                           wdlVarLinksConverter: ParameterLinkSerde) {
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
@@ -91,82 +104,39 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     // is exactly the same as the parent, we can immediately exit the parent job.
     exportTypes.map {
       case (eVarName, wdlType) =>
-        eVarName -> WdlDxLink(wdlType, ParameterLinkExec(dxSubJob, eVarName))
+        eVarName -> WdlDxLink(wdlType, ir.ParameterLinkExec(dxSubJob, eVarName))
     }
   }
 
-  private def findChildExecs(): Vector[DxExecution] = {
+  def findChildExecs(): Vector[ChildExecDesc] = {
     // get the parent job
     val dxJob = dxApi.currentJob
     val parentJob: DxJob = dxJob.describe().parentJob.get
-    val childExecs: Vector[DxExecution] = DxFindExecutions(dxApi).apply(Some(parentJob))
+    val childExecs: Vector[DxExecution] = DxFindExecutions(dxApi)
+      .apply(Some(parentJob), Set(Field.Output, Field.ExecutableName, Field.Properties))
     // make sure the collect subjob is not included. Theoretically,
     // it should not be returned as a search result, becase we did
     // not explicitly ask for subjobs. However, let's make
     // sure.
-    childExecs.filter(_ != dxJob)
-  }
-
-  // Describe all the scatter child jobs. Use a bulk-describe
-  // for efficiency.
-  private def describeChildExecs(execs: Vector[DxExecution]): Vector[ChildExecDesc] = {
-    val jobInfoReq: Vector[JsValue] = execs.map { job =>
-      JsObject(
-          "id" -> JsString(job.getId),
-          "describe" -> JsObject("outputs" -> JsBoolean(true),
-                                 "executableName" -> JsBoolean(true),
-                                 "properties" -> JsBoolean(true))
-      )
-    }
-    val request = Map("executions" -> JsArray(jobInfoReq))
-    dxApi.logger.info(s"bulk-describe request=${request}")
-    val response: JsObject = dxApi.executionsDescribe(request)
-    val results: Vector[JsValue] = response.fields.get("results") match {
-      case Some(JsArray(x)) => x
-      case _                => throw new Exception(s"wrong type for executableName ${response}")
-    }
-    (execs zip results).map {
-      case (dxExec, desc) =>
-        val fields = desc.asJsObject.fields.get("describe") match {
-          case Some(JsObject(fields)) => fields
-          case _                      => throw new Exception(s"result does not contains a describe field ${desc}")
-        }
-        val execName = fields.get("executableName") match {
-          case Some(JsString(name)) => name
-          case _                    => throw new Exception(s"wrong type for executableName ${desc}")
-        }
-        val seqNum = fields.get("properties") match {
-          case Some(obj) =>
-            obj.asJsObject.getFields("seq_number") match {
-              case Seq(JsString(seqNum)) => seqNum.toInt
-              case _                     => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
-            }
-          case _ => throw new Exception(s"wrong type for properties ${desc}")
-        }
-        val outputs = fields.get("output") match {
-          case None    => throw new Exception(s"No output field for a child job ${desc}")
-          case Some(o) => o
-        }
-        ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
-    }
-  }
-
-  def executableFromSeqNum(): Vector[ChildExecDesc] = {
-    // We cannot change the input fields, because this is a sub-job with the same
-    // input/output spec as the parent scatter. Therefore, we need to computationally
-    // figure out:
-    //   1) child job-ids
-    //   2) field names
-    //   3) WDL types
-    val childExecs: Vector[DxExecution] = findChildExecs()
-    System.err.println(s"childExecs=${childExecs}")
-
-    // describe all the job outputs and which applet they were running
-    val execDescs: Vector[ChildExecDesc] = describeChildExecs(childExecs)
-    System.err.println(s"execDescs=${execDescs}")
-
-    // sort from low to high sequence number
-    execDescs.sortWith(_.seqNum < _.seqNum)
+    val descs = childExecs
+      .collect {
+        case exec if exec.id != parentJob.id =>
+          exec.describe() match {
+            case desc: DxJobDescribe =>
+              ChildExecDesc(desc.executableName,
+                            desc.properties.get("seq_number").toInt,
+                            desc.output.get.asJsObject.fields,
+                            exec)
+            case desc: DxAnalysisDescribe =>
+              ChildExecDesc(desc.executableName.get,
+                            desc.properties.get("seq_number").toInt,
+                            desc.output.get.asJsObject.fields,
+                            exec)
+          }
+      }
+      .sortWith(_.seqNum < _.seqNum)
+    logger.trace(s"execDescs=${descs}")
+    descs
   }
 
   // collect field [name] from all child jobs, by looking at their

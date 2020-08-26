@@ -40,8 +40,9 @@ import java.nio.file.Paths
 import dx.{AppInternalException, exec}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.getVersion
+import dx.core.{getVersion, ir}
 import dx.core.io.{DxFileDescCache, DxPathConfig}
+import dx.core.ir.ParameterLinkExec
 import dx.core.languages.wdl._
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues}
@@ -610,7 +611,7 @@ case class WfFragRunner(wf: TAT.Workflow,
             case WdlTypes.T_Optional(_) => wdlType
             case _                      => WdlTypes.T_Optional(wdlType)
           }
-          varName -> WdlDxLink(optionalType, ParameterLinkExec(dxExec, varName))
+          varName -> WdlDxLink(optionalType, ir.ParameterLinkExec(dxExec, varName))
       }
     }
   }
@@ -820,7 +821,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
       // A subjob that collects results from scatters
       case RunnerWfFragmentMode.Collect =>
-        val childJobsComplete = collectSubJobs.executableFromSeqNum()
+        val childJobsComplete = collectSubJobs.findChildExecs()
         catg match {
           case Block.ScatterOneCall(_, _, call) =>
             // scatter with a single call

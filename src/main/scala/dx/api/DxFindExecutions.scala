@@ -4,55 +4,74 @@ import spray.json._
 
 case class DxFindExecutions(dxApi: DxApi) {
   private def parseOneResult(value: JsValue): DxExecution = {
-    value.asJsObject.fields.get("id") match {
-      case None                                             => throw new Exception(s"field id not found in ${value.prettyPrint}")
-      case Some(JsString(id)) if id.startsWith("job-")      => dxApi.job(id)
-      case Some(JsString(id)) if id.startsWith("analysis-") => dxApi.analysis(id)
-      case Some(other)                                      => throw new Exception(s"malformed id field ${other.prettyPrint}")
+    val fields = value.asJsObject.fields
+    fields.get("id") match {
+      case Some(JsString(id)) if id.startsWith("job-") =>
+        val job = dxApi.job(id)
+        if (fields.contains("describe")) {
+          job.cacheDescribe(DxJob.parseDescribeJson(fields("describe").asJsObject, dxApi))
+        }
+        job
+      case Some(JsString(id)) if id.startsWith("analysis-") =>
+        val analysis = dxApi.analysis(id)
+        if (fields.contains("describe")) {
+          analysis.cacheDescribe(DxAnalysis.parseDescribeJson(fields("describe").asJsObject))
+        }
+        analysis
+      case Some(other) =>
+        throw new Exception(s"malformed id field ${other.prettyPrint}")
+      case None =>
+        throw new Exception(s"field id not found in ${value.prettyPrint}")
     }
   }
 
-  private def submitRequest(parentJob: Option[DxJob],
-                            cursor: Option[JsValue],
-                            limit: Option[Int]): (Vector[DxExecution], Option[JsValue]) = {
+  private def submitRequest(
+      parentJob: Option[DxJob],
+      cursor: JsValue,
+      describe: Set[Field.Value],
+      limit: Option[Int]
+  ): (Vector[DxExecution], JsValue) = {
     val parentField: Map[String, JsValue] = parentJob match {
       case None      => Map.empty
       case Some(job) => Map("parentJob" -> JsString(job.getId))
     }
     val cursorField: Map[String, JsValue] = cursor match {
-      case None              => Map.empty
-      case Some(cursorValue) => Map("starting" -> cursorValue)
+      case JsNull      => Map.empty
+      case cursorValue => Map("starting" -> cursorValue)
     }
     val limitField: Map[String, JsValue] = limit match {
       case None    => Map.empty
       case Some(i) => Map("limit" -> JsNumber(i))
     }
-    val repJs = dxApi.findExecutions(parentField ++ cursorField ++ limitField)
-
-    val next: Option[JsValue] = repJs.fields.get("next") match {
-      case None                  => None
-      case Some(JsNull)          => None
-      case Some(JsString(jobId)) => Some(JsString(jobId))
-      case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
+    val describeField: Map[String, JsValue] = if (describe.isEmpty) {
+      Map.empty
+    } else {
+      Map("describe" -> DxObject.requestFields(describe))
     }
+    val response = dxApi.findExecutions(parentField ++ cursorField ++ limitField ++ describeField)
     val results: Vector[DxExecution] =
-      repJs.fields.get("results") match {
-        case None                   => throw new Exception(s"missing results field ${repJs}")
+      response.fields.get("results") match {
         case Some(JsArray(results)) => results.map(parseOneResult)
         case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
+        case None                   => throw new Exception(s"missing results field ${response}")
       }
-
-    (results, next)
+    (results, response.fields("next"))
   }
 
-  def apply(parentJob: Option[DxJob]): Vector[DxExecution] = {
-    var allResults = Vector.empty[DxExecution]
-    var cursor: Option[JsValue] = None
-    do {
-      val (results, next) = submitRequest(parentJob, cursor, None)
-      allResults = allResults ++ results
-      cursor = next
-    } while (cursor.isDefined)
-    allResults
+  def apply(parentJob: Option[DxJob],
+            describe: Set[Field.Value] = Set.empty,
+            limit: Option[Int] = None): Vector[DxExecution] = {
+    Iterator
+      .unfold[Vector[DxExecution], Option[JsValue]](Some(JsNull)) {
+        case None => None
+        case Some(cursor) =>
+          submitRequest(parentJob, cursor, describe, limit) match {
+            case (Vector(), _)     => None
+            case (results, JsNull) => Some(results, None)
+            case (results, next)   => Some(results, Some(next))
+          }
+      }
+      .toVector
+      .flatten
   }
 }

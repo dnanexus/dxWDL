@@ -7,9 +7,10 @@ import wdlTools.util.Enum
 object Field extends Enum {
   type Field = Value
   val Access, Analysis, App, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories,
-      Created, Description, Details, DeveloperNotes, Executable, Folder, Id, IgnoreReuse, Inputs,
-      InputSpec, Modified, Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, Region,
-      RunSpec, Size, Stages, Summary, Tags, Title, Types, Version = Value
+      Created, Description, Details, DeveloperNotes, Executable, ExecutableName, Folder, Id,
+      IgnoreReuse, Inputs, InputSpec, Modified, Name, Output, Outputs, OutputSpec, ParentJob, Parts,
+      Project, Properties, Region, RunSpec, Size, Stages, Summary, Tags, Title, Types, Version =
+    Value
 }
 
 trait DxObjectDescribe {
@@ -28,7 +29,7 @@ trait DxObject {
 
   def getId: String = id
 
-  def describe(fields: Set[Field.Value]): DxObjectDescribe
+  def describe(fields: Set[Field.Value] = Set.empty): DxObjectDescribe
 }
 
 object DxObject {
@@ -66,6 +67,7 @@ object DxObject {
       case Field.DeveloperNotes         => "developerNotes"
       case Field.Details                => "details"
       case Field.Executable             => "executable"
+      case Field.ExecutableName         => "executableName"
       case Field.Folder                 => "folder"
       case Field.Id                     => "id"
       case Field.IgnoreReuse            => "ignoreReuse"
@@ -73,6 +75,7 @@ object DxObject {
       case Field.InputSpec              => "inputSpec"
       case Field.Modified               => "modified"
       case Field.Name                   => "name"
+      case Field.Output                 => "output"
       case Field.Outputs                => "outputs"
       case Field.OutputSpec             => "outputSpec"
       case Field.ParentJob              => "parentJob"
@@ -102,7 +105,10 @@ trait DxDataObject extends DxObject
 trait DxExecutable extends DxObject
 
 // Actual executions on the platform. There are jobs and analyses
-trait DxExecution extends DxObject
+trait DxExecution extends DxObject {
+  val id: String
+  val project: Option[DxProject]
+}
 
 // DxDataObject that caches its description
 abstract class CachingDxObject[T <: DxObjectDescribe] extends DxObject {
@@ -115,10 +121,10 @@ abstract class CachingDxObject[T <: DxObjectDescribe] extends DxObject {
   }
 
   def describe(fields: Set[Field.Value] = Set.empty): T = {
-    if (cachedDesc.nonEmpty) {
-      // TODO: check that all `fields` are present in desc
-    } else {
+    if (cachedDesc.isEmpty) {
       cachedDesc = Some(describeNoCache(fields))
+    } else {
+      // TODO: check that all `fields` are present in desc
     }
     cachedDesc.get
   }
