@@ -58,20 +58,27 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dxWDL.exec
 
 // DX bindings
+import com.dnanexus.DXAPI
+import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wom.callable.Callable._
 import wom.graph._
 import wom.types._
 import wom.values._
-
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
+
+import scala.collection.AbstractIterator
 
 case class ChildExecDesc(execName: String,
                          seqNum: Int,
                          outputs: Map[String, JsValue],
                          exec: DxExecution)
+
+object CollectSubJobs {
+  val SeqNumber = "seq_number"
+}
 
 case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           inputsRaw: JsValue,
@@ -80,14 +87,14 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           runtimeDebugLevel: Int,
                           typeAliases: Map[String, WomType]) {
   //private val verbose = runtimeDebugLevel >= 1
-  private val maxVerboseLevel = (runtimeDebugLevel == 2)
-  private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+  private val maxVerboseLevel = runtimeDebugLevel == 2
+  private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
   // Launch a subjob to collect the outputs
   def launch(childJobs: Vector[DxExecution],
              exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
-    assert(!childJobs.isEmpty)
+    assert(childJobs.nonEmpty)
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
@@ -103,37 +110,97 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     exportTypes.map {
       case (eVarName, womType) =>
         eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
-    }.toMap
+    }
+  }
+
+  private def parseOneResult(value: JsValue, excludeId: String): Option[ChildExecDesc] = {
+    val fields = value.asJsObject.fields
+    val (exec, desc) = fields.get("id") match {
+      case Some(JsString(id)) if id == excludeId =>
+        Utils.trace(verbose.on, s"Ignoring result for job ${id}")
+        return None
+      case Some(JsString(id)) if id.startsWith("job-") =>
+        val job = DxJob.getInstance(id)
+        val desc = fields("describe").asJsObject
+        (job, desc)
+      case Some(JsString(id)) if id.startsWith("analysis-") =>
+        val analysis = DxAnalysis.getInstance(id)
+        val desc = fields("describe").asJsObject
+        (analysis, desc)
+      case Some(other) =>
+        throw new Exception(s"malformed id field ${other.prettyPrint}")
+      case None =>
+        throw new Exception(s"field id not found in ${value.prettyPrint}")
+    }
+    Utils.trace(verbose.on, s"parsing desc ${desc} for ${exec}")
+    val (execName, properties, output) =
+      desc.getFields("executableName", "properties", "output") match {
+        case Seq(JsString(execName), properties, JsObject(output)) =>
+          (execName, DxObject.parseJsonProperties(properties), output)
+      }
+    val seqNum = properties(CollectSubJobs.SeqNumber).toInt
+    Some(ChildExecDesc(execName, seqNum, output, exec))
+  }
+
+  private def submitRequest(
+      parentJob: Option[DxJob],
+      cursor: JsValue,
+      excludeId: String,
+      limit: Option[Int]
+  ): (Vector[ChildExecDesc], JsValue) = {
+    val parentField: Map[String, JsValue] = parentJob match {
+      case None      => Map.empty
+      case Some(job) => Map("parentJob" -> JsString(job.getId))
+    }
+    val cursorField: Map[String, JsValue] = cursor match {
+      case JsNull      => Map.empty
+      case cursorValue => Map("starting" -> cursorValue)
+    }
+    val limitField: Map[String, JsValue] = limit match {
+      case None    => Map.empty
+      case Some(i) => Map("limit" -> JsNumber(i))
+    }
+    val describeField: Map[String, JsValue] = Map(
+        "describe" -> DxObject
+          .requestFields(Set(Field.Output, Field.ExecutableName, Field.Properties))
+    )
+    val request = JsObject(parentField ++ cursorField ++ limitField ++ describeField)
+    val response = DXAPI.systemFindExecutions(DxUtils.jsonNodeOfJsValue(request),
+                                              classOf[JsonNode],
+                                              DxUtils.dxEnv)
+    val responseJs: JsObject = DxUtils.jsValueOfJsonNode(response).asJsObject
+    val results: Vector[ChildExecDesc] =
+      responseJs.fields.get("results") match {
+        case Some(JsArray(results)) => results.flatMap(res => parseOneResult(res, excludeId))
+        case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
+        case None                   => throw new Exception(s"missing results field ${response}")
+      }
+    (results, responseJs.fields("next"))
+  }
+
+  private def findChildExecutions(parentJob: Option[DxJob],
+                                  excludeId: String,
+                                  limit: Option[Int] = None): Vector[ChildExecDesc] = {
+
+    new UnfoldIterator[Vector[ChildExecDesc], Option[JsValue]](Some(JsNull))({
+      case None => None
+      case Some(cursor: JsValue) =>
+        submitRequest(parentJob, cursor, excludeId, limit) match {
+          case (Vector(), _)     => None
+          case (results, JsNull) => Some(results, None)
+          case (results, next)   => Some(results, Some(next))
+        }
+    }).toVector.flatten.sortWith(_.seqNum < _.seqNum)
   }
 
   def executableFromSeqNum(): Vector[ChildExecDesc] = {
     // get the parent job
-    val dxJob = DxJob(DxUtils.dxEnv.getJob())
+    val dxJob = DxJob(DxUtils.dxEnv.getJob)
     val parentJob: DxJob = dxJob.describe().parentJob.get
-    val childExecs: Vector[(DxExecution, DxObjectDescribe)] =
-      DxFindExecutions.apply(Some(parentJob),
-                             Set(Field.Output, Field.ExecutableName, Field.Properties))
-    // make sure the collect subjob is not included. Theoretically,
-    // it should not be returned as a search result, becase we did
-    // not explicitly ask for subjobs. However, let's make
-    // sure.
-    val descs = childExecs
-      .collect {
-        case (exec: DxJob, desc: DxJobDescribe) if exec.id != parentJob.id =>
-          ChildExecDesc(desc.executableName,
-                        desc.properties.get("seq_number").toInt,
-                        desc.output.get.asJsObject.fields,
-                        exec)
-        case (exec: DxAnalysis, desc: DxAnalysisDescribe) if exec.id != parentJob.id =>
-          ChildExecDesc(desc.executableName.get,
-                        desc.properties.get("seq_number").toInt,
-                        desc.output.get.asJsObject.fields,
-                        exec)
-        case other => throw new Exception(s"Invalid execution ${other}")
-      }
-      .sortWith(_.seqNum < _.seqNum)
-    System.err.println(s"execDescs=${descs}")
-    descs
+    val childExecs: Vector[ChildExecDesc] =
+      findChildExecutions(Some(parentJob), dxJob.id)
+    Utils.trace(verbose.on, s"execExecs=${childExecs}")
+    childExecs
   }
 
   // collect field [name] from all child jobs, by looking at their
@@ -142,23 +209,22 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                                womType: WomType,
                                childJobsComplete: Vector[ChildExecDesc]): WomValue = {
     val vec: Vector[WomValue] =
-      childJobsComplete.flatMap {
-        case childExec =>
-          val dxName = Utils.transformVarName(name)
-          val fieldValue = childExec.outputs.get(dxName)
-          (womType, fieldValue) match {
-            case (WomOptionalType(_), None) =>
-              // Optional field that has not been returned
-              None
-            case (WomOptionalType(_), Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, womType, jsv))
-            case (_, None) =>
-              // Required output that is missing
-              throw new Exception(s"Could not find compulsory field <${name}> in results")
-            case (_, Some(jsv)) =>
-              Some(jobInputOutput.unpackJobInput(name, womType, jsv))
-          }
-      }.toVector
+      childJobsComplete.flatMap { childExec =>
+        val dxName = Utils.transformVarName(name)
+        val fieldValue = childExec.outputs.get(dxName)
+        (womType, fieldValue) match {
+          case (WomOptionalType(_), None) =>
+            // Optional field that has not been returned
+            None
+          case (WomOptionalType(_), Some(jsv)) =>
+            Some(jobInputOutput.unpackJobInput(name, womType, jsv))
+          case (_, None) =>
+            // Required output that is missing
+            throw new Exception(s"Could not find compulsory field <${name}> in results")
+          case (_, Some(jsv)) =>
+            Some(jobInputOutput.unpackJobInput(name, womType, jsv))
+        }
+      }
     WomArray(WomArrayType(womType), vec)
   }
 
@@ -185,6 +251,34 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         val value: WomValue = collectCallField(name, womType, childJobsComplete)
         val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
         name -> wvl
-    }.toMap
+    }
+  }
+}
+
+// copy the UnfoldIterator from scala 2.13
+private final class UnfoldIterator[A, S](init: S)(f: S => Option[(A, S)])
+    extends AbstractIterator[A] {
+  private[this] var state: S = init
+  private[this] var nextResult: Option[(A, S)] = null
+
+  override def hasNext: Boolean = {
+    if (nextResult eq null) {
+      nextResult = {
+        val res = f(state)
+        if (res eq null) throw new NullPointerException("null during unfold")
+        res
+      }
+      state = null.asInstanceOf[S] // allow GC
+    }
+    nextResult.isDefined
+  }
+
+  override def next(): A = {
+    if (hasNext) {
+      val (value, newState) = nextResult.get
+      state = newState
+      nextResult = null
+      value
+    } else Iterator.empty.next()
   }
 }

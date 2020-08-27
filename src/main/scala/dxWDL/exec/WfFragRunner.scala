@@ -405,7 +405,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             dbgName,
             callInputs,
             instanceType = instanceType,
-            properties = Map("seq_number" -> JsString(seqNum.toString)),
+            properties = Map(CollectSubJobs.SeqNumber -> JsString(seqNum.toString)),
             delayWorkspaceDestruction = delayWorkspaceDestruction
         )
         dxJob
@@ -415,7 +415,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             dbgName,
             callInputs,
             instanceType = instanceType,
-            properties = Map("seq_number" -> JsString(seqNum.toString)),
+            properties = Map(CollectSubJobs.SeqNumber -> JsString(seqNum.toString)),
             delayWorkspaceDestruction = delayWorkspaceDestruction
         )
         dxJob
@@ -425,7 +425,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                                      name = dbgName,
                                                      delayWorkspaceDestruction =
                                                        delayWorkspaceDestruction)
-        val props = Map("seq_number" -> seqNum.toString)
+        val props = Map(CollectSubJobs.SeqNumber -> seqNum.toString)
         dxAnalysis.setProperties(props)
         dxAnalysis
       } else {
