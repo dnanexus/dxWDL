@@ -1,20 +1,15 @@
 package dx.compiler
 
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 
 import com.typesafe.config.{Config, ConfigFactory}
 import dx.api.{
-  ConstraintOper,
   DxApi,
-  DxAppDescribe,
   DxApplet,
   DxAppletDescribe,
-  DxConstraint,
   DxDataObject,
   DxExecutable,
   DxFile,
-  DxIOSpec,
   DxPath,
   DxProject,
   DxRecord,
@@ -24,51 +19,15 @@ import dx.api.{
   Field,
   InstanceTypeDbQuery
 }
-import dx.compiler.ir.RunSpec.DynamicInstanceType
-import dx.compiler.ir.{DockerRegistry, Extras, ParameterAttributes}
 import dx.core.getVersion
 import dx.core.io.DxPathConfig
-import dx.core.ir.{
-  Application,
-  Bundle,
-  Callable,
-  ExecutableKind,
-  ExecutableKindApplet,
-  ExecutableKindNative,
-  ExecutableKindWfFragment,
-  ExecutableKindWorkflowCustomReorg,
-  ExecutableLink,
-  ExecutableType,
-  Parameter,
-  ParameterAttribute,
-  Type,
-  Value,
-  Workflow
-}
-import dx.core.ir.Type._
-import dx.core.ir.Value._
-import dx.core.languages.wdl.{ParameterLinkSerde, WdlExecutableLink}
+import dx.core.ir._
 import dx.core.util.CompressionUtils
+import dx.translator.Extras
 import spray.json._
-import wdlTools.generators.Renderer
-import wdlTools.types.WdlTypes
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 
 import scala.jdk.CollectionConverters._
-
-case class CompiledExecutable(callable: Callable,
-                              dxExec: DxExecutable,
-                              links: Vector[ExecutableLink] = Vector.empty)
-
-case class CompilerResults(primary: Option[CompiledExecutable],
-                           executables: Map[String, CompiledExecutable]) {
-  def executableIds: Vector[String] = {
-    primary match {
-      case None      => executables.values.map(_.dxExec.getId).toVector
-      case Some(obj) => Vector(obj.dxExec.id)
-    }
-  }
-}
 
 /**
   * Compile IR to native applets and workflows.
@@ -112,90 +71,87 @@ case class Compiler(extras: Option[Extras],
     p
   }
 
-  private def getAssetRecord(project: DxProject): Option[DxRecord] = {
-    // get billTo and region from the project, then find the runtime asset
-    // in the current region.
-    val projectRegion = project.describe(Set(Field.Region)).region match {
-      case Some(s) => s
-      case None    => throw new Exception(s"Cannot get region for project ${project}")
-    }
-    // Find the runtime dxWDL asset with the correct version. Look inside the
-    // project configured for this region. The regions live in dxWDL.conf
-    val config = ConfigFactory.load(DxWdlRuntimeConfigFile)
-    val regionToProjectOption: Vector[Config] =
-      config.getConfigList("dxWDL.region2project").asScala.toVector
-    val regionToProjectConf: Map[String, String] = regionToProjectOption.map { pair =>
-      val region = pair.getString("region")
-      val project = pair.getString("path")
-      region -> project
-    }.toMap
-    // The mapping from region to project name is list of (region, proj-name) pairs.
-    // Get the project for this region.
-    val destination = regionToProjectConf.get(projectRegion) match {
-      case None       => throw new Exception(s"Region ${projectRegion} is currently unsupported")
-      case Some(dest) => dest
-    }
-    val destRegexp = "(?:(.*):)?(.+)".r
-    val (regionalProjectName, folder) = destination match {
-      case destRegexp(null, project)   => (project, "/")
-      case destRegexp(project, folder) => (project, folder)
-      case _ =>
-        throw new Exception(s"Bad syntax for destination ${destination}")
-    }
-    val regionalProject = dxApi.resolveProject(regionalProjectName)
-    val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${DxWdlAsset}"
-    logger.trace(s"Looking for asset id at ${assetUri}")
-    val dxAsset = dxApi.resolveOnePath(assetUri, Some(regionalProject)) match {
-      case dxFile: DxRecord => dxFile
-      case other =>
-        throw new Exception(s"Found dx object of wrong type ${other} at ${assetUri}")
-    }
-    // We need the dxWDL runtime library cloned into this project, so it will
-    // be available to all subjobs we run.
-    dxApi.cloneAsset(dxAsset, project, DxWdlAsset, regionalProject)
-    Some(dxAsset)
-  }
-
-  private def getAssetLink(record: DxRecord): JsValue = {
-    // Extract the archive from the details field
-    val desc = record.describe(Set(Field.Details))
-    val dxLink =
-      try {
-        JsUtils.get(desc.details.get, Some("archiveFileId"))
-      } catch {
-        case _: Throwable =>
-          throw new Exception(
-              s"record does not have an archive field ${desc.details}"
-          )
-      }
-    val dxFile = DxFile.fromJsValue(dxApi, dxLink)
-    JsObject(
-        "name" -> JsString(dxFile.describe().name),
-        "id" -> JsObject(DxUtils.DxLinkKey -> JsString(dxFile.id))
-    )
-  }
-
   private case class BundleCompiler(bundle: Bundle, project: DxProject, folder: String) {
-    val parameterLinkSerializer =
-      ParameterLinkSerde(dxApi, fileResolver, dxFileDescCache, bundle2.typeAliases)
+    private val parameterLinkSerializer = ParameterLinkSerializer(fileResolver)
     // database of available instance types for the user/org that owns the project
-    val instanceTypeDb = instanceTypeDbQuery.query(project)
+    private val instanceTypeDb = instanceTypeDbQuery.query(project)
     // directory of the currently existing applets - we don't want to build them
     // if we don't have to.
-    val executableDir =
+    private val executableDir =
       DxExecutableDirectory(bundle, project, folder, projectWideReuse, dxApi, logger)
-    val runtimeAssetRecord: Option[DxRecord] = if (includeAsset) {
-      getAssetRecord(project)
+
+    private def getAssetRecord: Option[DxRecord] = {
+      // get billTo and region from the project, then find the runtime asset
+      // in the current region.
+      val projectRegion = project.describe(Set(Field.Region)).region match {
+        case Some(s) => s
+        case None    => throw new Exception(s"Cannot get region for project ${project}")
+      }
+      // Find the runtime dxWDL asset with the correct version. Look inside the
+      // project configured for this region. The regions live in dxWDL.conf
+      val config = ConfigFactory.load(DxWdlRuntimeConfigFile)
+      val regionToProjectOption: Vector[Config] =
+        config.getConfigList("dxWDL.region2project").asScala.toVector
+      val regionToProjectConf: Map[String, String] = regionToProjectOption.map { pair =>
+        val region = pair.getString("region")
+        val project = pair.getString("path")
+        region -> project
+      }.toMap
+      // The mapping from region to project name is list of (region, proj-name) pairs.
+      // Get the project for this region.
+      val destination = regionToProjectConf.get(projectRegion) match {
+        case None       => throw new Exception(s"Region ${projectRegion} is currently unsupported")
+        case Some(dest) => dest
+      }
+      val destRegexp = "(?:(.*):)?(.+)".r
+      val (regionalProjectName, folder) = destination match {
+        case destRegexp(null, project)   => (project, "/")
+        case destRegexp(project, folder) => (project, folder)
+        case _ =>
+          throw new Exception(s"Bad syntax for destination ${destination}")
+      }
+      val regionalProject = dxApi.resolveProject(regionalProjectName)
+      val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${DxWdlAsset}"
+      logger.trace(s"Looking for asset id at ${assetUri}")
+      val dxAsset = dxApi.resolveOnePath(assetUri, Some(regionalProject)) match {
+        case dxFile: DxRecord => dxFile
+        case other =>
+          throw new Exception(s"Found dx object of wrong type ${other} at ${assetUri}")
+      }
+      // We need the dxWDL runtime library cloned into this project, so it will
+      // be available to all subjobs we run.
+      dxApi.cloneAsset(dxAsset, project, DxWdlAsset, regionalProject)
+      Some(dxAsset)
+    }
+
+    private def getAssetLink(record: DxRecord): JsValue = {
+      // Extract the archive from the details field
+      val desc = record.describe(Set(Field.Details))
+      val dxLink =
+        try {
+          JsUtils.get(desc.details.get, Some("archiveFileId"))
+        } catch {
+          case _: Throwable =>
+            throw new Exception(
+                s"record does not have an archive field ${desc.details}"
+            )
+        }
+      val dxFile = DxFile.fromJsValue(dxApi, dxLink)
+      JsObject(
+          "name" -> JsString(dxFile.describe().name),
+          "id" -> JsObject(DxUtils.DxLinkKey -> JsString(dxFile.id))
+      )
+    }
+
+    private val runtimeAsset: Option[JsValue] = if (includeAsset) {
+      getAssetRecord.map(getAssetLink)
     } else {
       None
     }
-    val runtimeAsset = runtimeAssetRecord.map(getAssetLink)
 
     // Add a checksum to a request
     private def checksumRequest(name: String,
-                                desc: Map[String, JsValue],
-                                project: DxProject,
-                                folder: String): (String, Map[String, JsValue]) = {
+                                desc: Map[String, JsValue]): (Map[String, JsValue], String) = {
       logger2.trace(
           s"""|${name} -> checksum request
               |fields = ${JsObject(desc).prettyPrint}
@@ -229,7 +185,14 @@ case class Compiler(extras: Option[Extras],
           "parents" -> JsBoolean(true),
           "properties" -> JsObject(updatedProperties)
       )
-      (digest, updatedRequest)
+      (updatedRequest, digest)
+    }
+
+    // Create linking information for a dx:executable
+    private def createLinkForCall(irCall: Callable, dxObj: DxExecutable): ExecutableLink = {
+      val callInputs: Map[String, Type] = irCall.inputVars.map(p => p.name -> p.dxType).toMap
+      val callOutputs: Map[String, Type] = irCall.outputVars.map(p => p.name -> p.dxType).toMap
+      ExecutableLink(irCall.name, callInputs, callOutputs, dxObj)
     }
 
     /**
@@ -322,23 +285,31 @@ case class Compiler(extras: Option[Extras],
     ): (DxApplet, Vector[ExecutableLink]) = {
       logger2.trace(s"Compiling applet ${applet.name}")
       val appletCompiler =
-        ApplicationCompiler(runtimePathConfig,
-                            runtimeTraceLevel,
-                            extras.flatMap(_.dockerRegistry),
-                            parameterLinkSerializer,
-                            dxApi,
-                            logger2)
+        ApplicationCompiler(
+            bundle.typeAliases,
+            instanceTypeDb,
+            runtimeAsset,
+            runtimePathConfig,
+            runtimeTraceLevel,
+            extras,
+            parameterLinkSerializer,
+            dxApi,
+            logger2
+        )
       // limit the applet dictionary to actual dependencies
       val dependencies: Map[String, ExecutableLink] = applet.kind match {
         case ExecutableKindWfFragment(calls, _, _) =>
-          calls.map { tName =>
-            val CompiledExecutable(irCall, dxObj, _) = dependencyDict(tName)
-            tName -> genLinkInfo(irCall, dxObj)
-          }
+          calls.map { name =>
+            val CompiledExecutable(irCall, dxObj, _, _) = dependencyDict(name)
+            name -> createLinkForCall(irCall, dxObj)
+          }.toMap
         case _ => Map.empty
       }
       // Calculate a checksum of the inputs that went into the making of the applet.
-      val (appletApiRequest, digest) = appletCompiler.apply(applet, dependencies)
+      val (appletApiRequest, digest) = checksumRequest(
+          applet.name,
+          appletCompiler.apply(applet, dependencies)
+      )
       // write the request to a file, in case we need it for debugging
       if (logger2.traceLevel >= TraceLevel.Verbose) {
         val requestFile = s"${applet.name}_req.json"
@@ -368,23 +339,30 @@ case class Compiler(extras: Option[Extras],
       * @param dependencyDict previously compiled executables that can be linked
       * @return
       */
-    private def maybeBuildWorkflow(workflow: Workflow,
-                                   dependencyDict: Map[String, CompiledExecutable]): DxWorkflow = {
+    private def maybeBuildWorkflow(
+        workflow: Workflow,
+        dependencyDict: Map[String, CompiledExecutable]
+    ): (DxWorkflow, JsValue) = {
       logger2.trace(s"Compiling workflow ${workflow.name}")
       val workflowCompiler =
-        WorkflowCompiler(runtimePathConfig,
-                         runtimeTraceLevel,
-                         extras.flatMap(_.dockerRegistry),
-                         parameterLinkSerializer,
-                         dxApi,
-                         logger2)
-      val (workflowApiRequest, digest) = workflowCompiler.apply(workflow, dependencyDict)
-      getExistingExecutable(workflow.name, digest) match {
+        WorkflowCompiler(extras, parameterLinkSerializer, dxApi, logger2)
+      // Calculate a checksum of the inputs that went into the making of the applet.
+      val (workflowApiRequest, execTree) = workflowCompiler.apply(workflow, dependencyDict)
+      val (requestWithChecksum, digest) = checksumRequest(workflow.name, workflowApiRequest)
+      // Add properties we do not want to fall under the checksum.
+      // This allows, for example, moving the dx:executable, while
+      // still being able to reuse it.
+      val updatedRequest = requestWithChecksum ++ Map(
+          "project" -> JsString(project.id),
+          "folder" -> JsString(folder),
+          "parents" -> JsBoolean(true)
+      )
+      val dxWf = getExistingExecutable(workflow.name, digest) match {
         case Some(wf: DxWorkflow) =>
           // workflow exists and has not changed
           wf
         case None =>
-          val response = dxApi.workflowNew(workflowApiRequest)
+          val response = dxApi.workflowNew(updatedRequest)
           val id = getIdFromResponse(response)
           val dxWorkflow = dxApi.workflow(id)
           if (!leaveWorkflowsOpen) {
@@ -396,6 +374,7 @@ case class Compiler(extras: Option[Extras],
         case other =>
           throw new Exception(s"expected a workflow, got ${other}")
       }
+      (dxWf, execTree)
     }
 
     def apply: CompilerResults = {
@@ -422,8 +401,8 @@ case class Compiler(extras: Option[Extras],
               }
               accu + (application.name -> execRecord)
             case wf: Workflow =>
-              val dxWorkflow = maybeBuildWorkflow(wf, accu)
-              accu + (wf.name -> CompiledExecutable(wf, dxWorkflow))
+              val (dxWorkflow, execTree) = maybeBuildWorkflow(wf, accu)
+              accu + (wf.name -> CompiledExecutable(wf, dxWorkflow, execTree = Some(execTree)))
           }
       }
       val primary: Option[CompiledExecutable] = bundle.primaryCallable.flatMap { c =>

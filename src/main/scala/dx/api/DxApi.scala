@@ -32,6 +32,7 @@ object DxApi {
   * @param limit maximal number of objects in a single API request
   */
 case class DxApi(logger: Logger = Logger.get,
+                 version: String = "1.0.0",
                  dxEnv: DXEnvironment = DXEnvironment.create(),
                  limit: Int = DxApi.MAX_RESULTS_PER_CALL) {
   require(limit > 0 && limit <= DxApi.MAX_RESULTS_PER_CALL)

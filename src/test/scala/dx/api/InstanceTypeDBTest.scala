@@ -167,7 +167,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "pretty print" in {
     // Test pretty printing
-    dxApi.logger.ignore(dbFull.prettyPrint())
+    dxApi.logger.ignore(dbFull.prettyFormat())
   }
 
   it should "work on large instances (JIRA-1258)" in {

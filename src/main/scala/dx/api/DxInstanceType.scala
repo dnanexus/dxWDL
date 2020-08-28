@@ -263,16 +263,19 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
     }
   }
 
-  // sort the instances, and print them out
-  def prettyPrint(): String = {
+  /**
+    * Formats the database as a prettified String. Instance types are sorted.
+    * @return
+    */
+  def prettyFormat(): String = {
     var remain: Set[DxInstanceType] = instances.toSet
-    var sortediTypes: Vector[DxInstanceType] = Vector()
+    var sortedInstanceTypes: Vector[DxInstanceType] = Vector()
     while (remain.nonEmpty) {
       val smallest = calcMinimalInstanceType(remain)
-      sortediTypes = sortediTypes :+ smallest
+      sortedInstanceTypes = sortedInstanceTypes :+ smallest
       remain = remain - smallest
     }
-    sortediTypes.toJson.prettyPrint
+    sortedInstanceTypes.toJson.prettyPrint
   }
 }
 

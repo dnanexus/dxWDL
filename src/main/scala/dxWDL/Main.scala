@@ -6,7 +6,7 @@ import dx.core.util.MainUtils.normKey
 object Main extends App {
   val argsSeq = args.toSeq
   if (argsSeq.nonEmpty && normKey(argsSeq.head) == normKey("internal")) {
-    dx.exec.Main.main(argsSeq.tail)
+    dx.executor.Main.main(argsSeq.tail)
   } else {
     dx.compiler.Main.main(argsSeq)
   }

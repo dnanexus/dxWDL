@@ -75,6 +75,35 @@ object TypeSerde {
     inner(jsValue)
   }
 
+  def toNativeType(t: Type): (String, Boolean) = {
+    def inner(innerType: Type, array: Boolean = false): String = {
+      innerType match {
+        case o: TOptional =>
+          throw new Exception(s"nested optional type ${o}")
+        case TBoolean => "boolean"
+        case TInt     => "int"
+        case TFloat   => "float"
+        case TString  => "string"
+        case TFile    => "file"
+        //case TDirectory => "Directory"
+        // arrays of primitives translate to e.g. 'array:file' -
+        // everything else is a complex type represented as a hash
+        case TArray(memberType, _) if !array =>
+          inner(memberType, array = true) match {
+            case native if native == "hash" || native.startsWith("array") =>
+              "hash"
+            case primitiveType =>
+              s"array:${primitiveType}"
+          }
+        case _ => "hash"
+      }
+    }
+    t match {
+      case TOptional(innerType) => (inner(innerType), true)
+      case _                    => (inner(t), false)
+    }
+  }
+
   // Get a human readable type name
   // Int ->   "Int"
   // Array[Int] -> "Array[Int]"

@@ -1,13 +1,17 @@
 package dx.core.ir
 
+import wdlTools.eval.WdlValues
+
+import scala.annotation.tailrec
+
 sealed trait Type
 
 object Type {
   // Primitive types that are supported natively.
+  case object TBoolean extends Type
   case object TInt extends Type
   case object TFloat extends Type
   case object TString extends Type
-  case object TBoolean extends Type
   case object TFile extends Type
 
   /**
@@ -52,6 +56,20 @@ object Type {
     */
   case class TSchema(name: String, members: Map[String, Type]) extends Type
 
+  @tailrec
+  def isPrimitive(t: Type): Boolean = {
+    t match {
+      case TBoolean         => true
+      case TInt             => true
+      case TFloat           => true
+      case TString          => true
+      case TFile            => true
+      case TDirectory       => true
+      case TOptional(inner) => isPrimitive(inner)
+      case _                => false
+    }
+  }
+
   def isOptional(t: Type): Boolean = {
     t match {
       case _: TOptional => true
@@ -79,6 +97,13 @@ object Type {
       case _ if mustBeOptional =>
         throw new Exception(s"Type ${t} is not T_Optional")
       case _ => t
+    }
+  }
+
+  def isNestedOptional(t: Type): Boolean = {
+    t match {
+      case WdlValues.V_Optional(WdlValues.V_Optional(_)) => true
+      case _                                             => false
     }
   }
 }

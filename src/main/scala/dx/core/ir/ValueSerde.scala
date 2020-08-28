@@ -6,7 +6,7 @@ import spray.json._
 import wdlTools.types.WdlTypes.T_Optional
 import wdlTools.util.JsUtils
 
-object ValueSerde {
+object ValueSerde extends DefaultJsonProtocol {
 
   /**
     * Serializes a Value to JSON.
@@ -103,9 +103,9 @@ object ValueSerde {
     * @param handler an optional function for special handling of certain values
     * @return
     */
-  def deserialize(jsValue: JsValue,
-                  t: Type,
-                  handler: Option[(JsValue, Type) => Option[Value]] = None): Value = {
+  def deserializeWithType(jsValue: JsValue,
+                          t: Type,
+                          handler: Option[(JsValue, Type) => Option[Value]] = None): Value = {
     def inner(innerValue: JsValue, innerType: Type): Value = {
       val v = handler.flatMap(_(innerValue, innerType))
       if (v.isDefined) {
@@ -163,4 +163,14 @@ object ValueSerde {
     }
     inner(jsValue, t)
   }
+
+  def deserializeMap(m: Map[String, JsValue]): Map[String, Value] = {
+    m.map {
+      case (k, v) => k -> deserialize(v)
+    }
+  }
+
+  // support automatic conversion to/from JsValue
+  implicit val valueFormat: RootJsonFormat[Value] = jsonFormat1(deserialize)
+  implicit val valueMapFormat: RootJsonFormat[Map[String, Value]] = jsonFormat1(deserializeMap)
 }

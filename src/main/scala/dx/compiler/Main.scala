@@ -6,14 +6,14 @@ import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
 import dx.compiler.Main.CompilerFlag.CompilerFlag
 import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
-import dx.compiler.ir.{Extras, ExtrasParser, Translator}
-import dx.compiler.wdl.{WdlDxNativeInterfaceFactory, WdlTranslatorFactory}
+import dx.translator.wdl.{WdlDxNativeInterfaceFactory, WdlTranslatorFactory}
 import dx.core.getVersion
 import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.ir.Bundle
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
+import dx.translator.{Extras, ExtrasParser, Translator}
 import spray.json._
 import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
 
@@ -356,12 +356,15 @@ object Main {
       // generate the execution tree if requested
       (results.primary, options.getValue[ExecTreeFormat]("execTree")) match {
         case (Some(primary), Some(format)) =>
-          val treeJs = ExecTree(results.executables).apply(primary)
+          val treeJs = primary.execTree match {
+            case Some(execTree) => execTree
+            case None           => ExecutableTree(results.executables).apply(primary)
+          }
           format match {
             case ExecTreeFormat.Json =>
               SuccessJsonTree(treeJs)
             case ExecTreeFormat.Pretty =>
-              SuccessPrettyTree(ExecTree.prettyPrint(treeJs.asJsObject))
+              SuccessPrettyTree(ExecutableTree.prettyPrint(treeJs.asJsObject))
           }
         case _ => Success(results.executableIds.mkString(","))
       }
@@ -496,9 +499,9 @@ object Main {
     }
     try {
       val wf = DxApi.get.workflow(workflowId)
-      val execTreeJS = ExecTree.fromDxWorkflow(wf)
+      val execTreeJS = ExecutableTree.fromDxWorkflow(wf)
       if (options.getFlag("pretty")) {
-        val prettyTree = ExecTree.prettyPrint(execTreeJS.asJsObject)
+        val prettyTree = ExecutableTree.prettyPrint(execTreeJS.asJsObject)
         SuccessPrettyTree(prettyTree)
       } else {
         SuccessJsonTree(execTreeJS)

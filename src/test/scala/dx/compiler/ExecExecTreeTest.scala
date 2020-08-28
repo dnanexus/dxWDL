@@ -124,7 +124,7 @@ class ExecExecTreeTest extends AnyFlatSpec with Matchers {
       case _           => throw new Exception("unexpected")
     }
 
-    val treeJs = ExecTree.fromDxWorkflow(wf)
+    val treeJs = ExecutableTree.fromDxWorkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
         id shouldBe wf.id
@@ -182,7 +182,7 @@ class ExecExecTreeTest extends AnyFlatSpec with Matchers {
       case _ => throw new Exception(s"tree representation is wrong")
     }
 
-    val prettyTree = ExecTree.prettyPrint(treeJs.asJsObject)
+    val prettyTree = ExecutableTree.prettyPrint(treeJs.asJsObject)
 
     // This generated tree now looks different. Also, the Tree code
     // doesn't give good names to the scatter nested below "(i in [1, 4, 9])".

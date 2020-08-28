@@ -1,25 +1,60 @@
 package dx.core.ir
 
 import dx.api.DxWorkflowStage
-import dx.compiler.{DocumentSource, WorkflowSource}
-import dx.compiler.ir.RunSpec.{ContainerImage, InstanceType}
+import dx.translator.RunSpec.{ContainerImage, InstanceType}
 import dx.core.ir.ExecutableType.ExecutableType
 import dx.core.ir.Level.Level
+import dx.core.languages.wdl.ParameterLinkSerde.ComplexValueKey
 import wdlTools.util.Enum
 
 trait ParameterAttribute
 
-trait Parameter {
-  def name: String
-  def dxType: Type
-  def defaultValue: Option[Value]
-  def attributes: Vector[ParameterAttribute]
+/**
+  * Compile time representation of a variable. Used also as an applet argument.
+  *
+  * The fullyQualifiedName could contains dots. However dx does not allow dots
+  * in applet/workflow arugment names, this requires some kind of transform.
+  *
+  * The attributes are used to encode DNAx applet input/output specification
+  * fields, such as {help, suggestions, patterns}.
+  *
+  * @param name parameter name
+  * @param dxType parameter data type
+  * @param defaultValue default value
+  * @param attributes metadata
+  */
+case class Parameter(
+    name: String,
+    dxType: Type,
+    defaultValue: Option[Value] = None,
+    attributes: Vector[ParameterAttribute] = Vector.empty
+) {
+  // dx does not allow dots in variable names, so we
+  // convert them to underscores.
+  //
+  // TODO: check for collisions that are created this way.
+  def dxName: String = {
+    val nameNoDots = Parameter.encodeDots(name)
+    assert(!nameNoDots.contains("."))
+    nameNoDots
+  }
+}
+
+object Parameter {
 
   /**
-    * Get a DNAnexus-compliant parameter name. For example, DNAnexus does not allow dots
-    * in variable names, so convert them to underscores.
+    * Converts dots in parameter names to underscores.
+    * DNAnexus does not allow dots in variable names
+    * @param name parameter name
+    * @return
     */
-  def dxName: String
+  def encodeDots(name: String): String = {
+    name.replaceAll("\\.", ComplexValueKey)
+  }
+
+  def decodeDots(varName: String): String = {
+    varName.replaceAll(ComplexValueKey, "\\.")
+  }
 }
 
 trait CallableAttribute
@@ -81,9 +116,17 @@ case class ExecutableKindNative(executableType: ExecutableType,
                                 path: Option[String] = None)
     extends ExecutableKind
 case object ExecutableKindApplet extends ExecutableKind
+
+/**
+  * An applet that executes a workflow fragment.
+  * @param calls names of calls made in the fragment
+  * @param blockPath path to the block represented by this fragment
+  * @param inputs mapping of input name to type, where names are encoded
+  *               such that any dots are replaced with '\_\_\_'
+  */
 case class ExecutableKindWfFragment(calls: Vector[String],
                                     blockPath: Vector[Int],
-                                    fqnDictTypes: Map[String, Type])
+                                    inputs: Map[String, Type])
     extends ExecutableKind
 case object ExecutableKindWfInputs extends ExecutableKind
 // Output - default and custom reorg
@@ -156,9 +199,9 @@ case class Application(name: String,
   */
 sealed trait StageInput
 case object EmptyInput extends StageInput
-case class StaticInput(wdlValue: Value) extends StageInput
-case class LinkInput(stageId: DxWorkflowStage, argName: Parameter) extends StageInput
-case class WorkflowInput(argName: Parameter) extends StageInput
+case class StaticInput(value: Value) extends StageInput
+case class LinkInput(stageId: DxWorkflowStage, paramName: String) extends StageInput
+case class WorkflowInput(param: Parameter) extends StageInput
 
 // A stage can call an application or a workflow.
 //
