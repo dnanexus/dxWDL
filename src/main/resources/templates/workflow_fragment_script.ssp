@@ -2,9 +2,9 @@
 <% val streamAllFiles: Boolean %>
 <% val bashDollar: String = "$" %>
 main() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal wfFragment -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""} ${bashDollar}{HOME}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal wfFragment ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 }
 
 collect() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal collect -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""} ${bashDollar}{HOME}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal collect ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 }

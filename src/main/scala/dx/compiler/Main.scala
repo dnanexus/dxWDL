@@ -48,27 +48,6 @@ object Main {
     }
   }
 
-  private def parseCommandLine(
-      args: Vector[String],
-      spec: OptionSpecs,
-      deprecated: Set[String] = Set.empty
-  ): Either[Termination, Options] = {
-    if (args.isEmpty) {
-      return Left(BadUsageTermination("WDL file to compile is missing"))
-    }
-    val options =
-      try {
-        splitCommandLine(args, SimpleOptions ++ spec, deprecated)
-      } catch {
-        case e: OptionParseException =>
-          return Left(BadUsageTermination("Error parsing command line options", Some(e)))
-      }
-    if (options.getFlag("help")) {
-      return Left(BadUsageTermination())
-    }
-    Right(options)
-  }
-
   private val CommonOptions: OptionSpecs = Map(
       "destination" -> StringOptionSpec.One,
       "force" -> FlagOptionSpec.Default,
@@ -280,9 +259,11 @@ object Main {
           )
       )
     val options: Options =
-      parseCommandLine(args.tail, CommonOptions ++ CompileOptions, DeprecatedCompileOptions) match {
-        case Left(termination) => return termination
-        case Right(options)    => options
+      try {
+        parseCommandLine(args.tail, CommonOptions ++ CompileOptions, DeprecatedCompileOptions)
+      } catch {
+        case e: OptionParseException =>
+          return BadUsageTermination("Error parsing command line options", Some(e))
       }
     val fileResolver = initCommon(options)
     val extras: Option[Extras] =
@@ -426,10 +407,13 @@ object Main {
   }
 
   private[compiler] def dxni(args: Vector[String]): Termination = {
-    val options = parseCommandLine(args, CommonOptions ++ DxNIOptions) match {
-      case Left(termination) => return termination
-      case Right(options)    => options
-    }
+    val options =
+      try {
+        parseCommandLine(args, CommonOptions ++ DxNIOptions)
+      } catch {
+        case e: OptionParseException =>
+          return BadUsageTermination("Error parsing command line options", Some(e))
+      }
     val fileResolver = initCommon(options)
     val dxni = getDxNativeInterface(options, fileResolver, defaultValue = Some(Language.WdlDefault))
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
@@ -493,10 +477,13 @@ object Main {
             "Missing required positional argument <WDL file>"
         )
     )
-    val options = parseCommandLine(args.tail, DescribeOptions) match {
-      case Left(termination) => return termination
-      case Right(options)    => options
-    }
+    val options =
+      try {
+        parseCommandLine(args.tail, DescribeOptions, DeprecatedCompileOptions)
+      } catch {
+        case e: OptionParseException =>
+          return BadUsageTermination("Error parsing command line options", Some(e))
+      }
     try {
       val wf = DxApi.get.workflow(workflowId)
       val execTreeJS = ExecutableTree.fromDxWorkflow(wf)
@@ -589,7 +576,6 @@ object Main {
         |      -r | recursive         Recursive search
         |
         |Common options
-        |    -help                    Print this help message and exit
         |    -destination <string>    Full platform path (project:/folder)
         |    -f | force               Delete existing applets/workflows
         |    -folder <string>         Platform folder
@@ -601,6 +587,6 @@ object Main {
         |""".stripMargin
 
   def main(args: Seq[String]): Unit = {
-    terminate(dispatchCommand(args.toVector), Some(usageMessage))
+    terminate(dispatchCommand(args.toVector), usageMessage)
   }
 }

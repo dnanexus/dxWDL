@@ -207,13 +207,20 @@ object MainUtils {
   // it in code paths that run at compile time.
   lazy val baseDNAxDir: Path = Paths.get("/home/dnanexus")
 
+  private val SimpleOptions: OptionSpecs = Map(
+      "quiet" -> FlagOptionSpec.Default,
+      "verbose" -> FlagOptionSpec.Default,
+      "verboseKey" -> StringOptionSpec.List,
+      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2))
+  )
+
   // Split arguments into sub-lists, one per each option.
   // For example:
   //    --sort relaxed --reorg --compile-mode IR
   // =>
   //    [[--sort, relaxed], [--reorg], [--compile-mode, IR]]
   //
-  def splitCommandLine(args: Vector[String],
+  def parseCommandLine(args: Vector[String],
                        specs: OptionSpecs,
                        deprecated: Set[String] = Set.empty): Options = {
     def isOption(word: String): Boolean = word.startsWith("-")
@@ -233,6 +240,8 @@ object MainUtils {
       }
     }
 
+    val allSpecs = SimpleOptions ++ specs
+
     def createOpt(args: Vector[String], curOpts: Options): Options = {
       val name = args.headOption.getOrElse(throw new Exception("Option with no name"))
       if (deprecated.contains(name)) {
@@ -241,7 +250,7 @@ object MainUtils {
       }
       val values = args.tail
       val curValue = curOpts.get(name)
-      val spec = specs.getOrElse(
+      val spec = allSpecs.getOrElse(
           name,
           throw new Exception(s"Unexpected option ${name}")
       )
@@ -269,14 +278,6 @@ object MainUtils {
   }
 
   // logging
-
-  val SimpleOptions: OptionSpecs = Map(
-      "help" -> FlagOptionSpec.Default,
-      "quiet" -> FlagOptionSpec.Default,
-      "verbose" -> FlagOptionSpec.Default,
-      "verboseKey" -> StringOptionSpec.List,
-      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2))
-  )
 
   def initLogger(options: Options): Logger = {
     val verboseKeys: Set[String] = options.getList[String]("verboseKey").toSet
@@ -332,15 +333,15 @@ object MainUtils {
                                  override val exception: Option[Throwable] = None)
       extends UnsuccessfulTermination
 
-  def terminate(termination: Termination, usageMessage: Option[String] = None): Unit = {
+  def terminate(termination: Termination, usageMessage: String): Unit = {
     val rc = termination match {
       case _: SuccessfulTermination =>
         if (termination.message.nonEmpty) {
           println(termination.message)
         }
         0
-      case BadUsageTermination("", e) if usageMessage.isDefined =>
-        Logger.error(failureMessage(usageMessage.get, e))
+      case BadUsageTermination("", e) =>
+        Logger.error(failureMessage(usageMessage, e))
         1
       case term: UnsuccessfulTermination =>
         val msg = failureMessage(term.message, term.exception)

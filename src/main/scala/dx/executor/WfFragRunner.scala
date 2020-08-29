@@ -701,6 +701,7 @@ case class WfFragRunner(wf: TAT.Workflow,
     val (_, elemType, collection) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
+    // TODO: execute only up to N jobs at a time
     val childJobs: Vector[DxExecution] =
       collection.map { item =>
         val innerEnv = env + (sctNode.identifier -> (elemType, item))

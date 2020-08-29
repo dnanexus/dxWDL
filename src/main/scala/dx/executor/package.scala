@@ -22,16 +22,6 @@ package object executor {
     val Launch, Collect = Value
   }
 
-  // Job input, output,  error, and info files are located relative to the home
-  // directory
-  def jobFilesOfHomeDir(homeDir: Path): (Path, Path, Path, Path) = {
-    val jobInputPath = homeDir.resolve("job_input.json")
-    val jobOutputPath = homeDir.resolve("job_output.json")
-    val jobErrorPath = homeDir.resolve("job_error.json")
-    val jobInfoPath = homeDir.resolve("dnanexus-job.json")
-    (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
-  }
-
   def createEvaluator(dxPathConfig: DxPathConfig,
                       fileResolver: FileSourceResolver,
                       wdlVersion: WdlVersion): Eval = {

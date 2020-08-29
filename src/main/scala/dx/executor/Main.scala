@@ -4,12 +4,12 @@ import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
 import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
-import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
-import dx.core.languages.wdl.{Evaluator, ParseSource, ParameterLinkSerde}
+import dx.core.ir.Value
+import dx.core.languages.wdl.ParseSource
 import dx.core.util.MainUtils._
 import dx.core.util.CompressionUtils
-import wdlTools.util.{Enum, FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
+import wdlTools.util.{Enum, FileSourceResolver, FileUtils, JsUtils, TraceLevel}
 import spray.json._
 
 object Main {
@@ -17,14 +17,6 @@ object Main {
     type ExecAction = Value
     val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
         TaskCheckInstanceType, TaskProlog, TaskInstantiateCommand, TaskEpilog, TaskRelaunch = Value
-  }
-
-  // Setup the standard paths used for applets. These are used at
-  // runtime, not at compile time. On the cloud instance running the
-  // job, the user is "dnanexus", and the home directory is
-  // "/home/dnanexus".
-  private def buildRuntimePathConfig(streamAllFiles: Boolean, logger: Logger): DxPathConfig = {
-    DxPathConfig.apply(baseDNAxDir, streamAllFiles, logger)
   }
 
   private def taskAction(op: ExecAction.Value,
@@ -35,7 +27,7 @@ object Main {
                          dxPathConfig: DxPathConfig,
                          fileResolver: FileSourceResolver,
                          dxFileDescCache: DxFileDescCache,
-                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                         defaultRuntimeAttributes: Option[Map[String, Value]],
                          delayWorkspaceDestruction: Option[Boolean],
                          dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
@@ -134,7 +126,7 @@ object Main {
                                  dxPathConfig: DxPathConfig,
                                  fileResolver: FileSourceResolver,
                                  dxFileDescCache: DxFileDescCache,
-                                 defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+                                 defaultRuntimeAttributes: Option[Map[String, Value]],
                                  delayWorkspaceDestruction: Option[Boolean],
                                  dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
@@ -234,73 +226,6 @@ object Main {
     Success(s"success ${op}")
   }
 
-  private def parseStreamAllFiles(s: String): Boolean = {
-    s.toLowerCase match {
-      case "true"  => true
-      case "false" => false
-      case other =>
-        throw new Exception(
-            s"""|the streamAllFiles flag must be a boolean (true,false).
-                |Value ${other} is illegal.""".stripMargin
-              .replaceAll("\n", " ")
-        )
-    }
-  }
-
-  private def getWdlSourceCodeFromDetails(details: JsValue): String = {
-    val fields = details.asJsObject.fields
-    val JsString(wdlSourceCode) = fields.getOrElse("wdlSourceCode", fields("womSourceCode"))
-    wdlSourceCode
-  }
-
-  // Get the WDL source code, and the instance type database from the
-  // details field stored on the platform
-  private def retrieveFromDetails(
-      dxApi: DxApi,
-      jobInfoPath: Path
-  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
-    val jobInfo = FileUtils.readFileContent(jobInfoPath).parseJson
-    val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
-      case None =>
-        dxApi.logger.trace(
-            s"""|executable field not found locally, performing
-                |an API call.
-                |""".stripMargin,
-            minLevel = TraceLevel.None
-        )
-        val dxJob = dxApi.currentJob
-        dxJob.describe().executable
-      case Some(JsString(x)) if x.startsWith("app-") =>
-        dxApi.app(x)
-      case Some(JsString(x)) if x.startsWith("applet-") =>
-        dxApi.applet(x)
-      case Some(other) =>
-        throw new Exception(s"Malformed executable field ${other} in job info")
-    }
-
-    val details: JsValue = executable.describe(Set(Field.Details)).details.get
-    val wdlSourceCodeEncoded = getWdlSourceCodeFromDetails(details)
-    val wdlSourceCode = CompressionUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
-
-    val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
-    val dbRaw = CompressionUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
-    val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-
-    val runtimeAttrs: Option[WdlRuntimeAttrs] =
-      details.asJsObject.fields.get("runtimeAttrs") match {
-        case None         => None
-        case Some(JsNull) => None
-        case Some(x)      => Some(x.convertTo[WdlRuntimeAttrs])
-      }
-
-    val delayWorkspaceDestruction: Option[Boolean] =
-      details.asJsObject.fields.get("delayWorkspaceDestruction") match {
-        case Some(JsBoolean(flag)) => Some(flag)
-        case None                  => None
-      }
-    (wdlSourceCode, instanceTypeDB, details, runtimeAttrs, delayWorkspaceDestruction)
-  }
-
   // Report an error, since this is called from a bash script, we
   // can't simply raise an exception. Instead, we write the error to
   // a standard JSON file.
@@ -327,90 +252,158 @@ object Main {
     System.err.println(exceptionToString(e))
   }
 
-  def dispatchCommand(args: Seq[String]): Termination = {
-    val operation = ExecAction.values.find(x => normKey(x.toString) == normKey(args.head))
-    operation match {
-      case None =>
-        Failure(s"unknown internal action ${args.head}")
-      case Some(op) if args.length == 4 =>
-        val homeDir = Paths.get(args(1))
-        val logger = Logger(quiet = false, traceLevel = getTraceLevel(Some(args(2))))
-        val dxApi = DxApi(logger)
-        val streamAllFiles = parseStreamAllFiles(args(3))
-        val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
-        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
-        val inputs: JsValue = FileUtils.readFileContent(jobInputPath).parseJson
-        val allFilesReferenced = inputs.asJsObject.fields.flatMap {
-          case (_, jsElem) => dxApi.findFiles(jsElem)
-        }.toVector
-        // Describe all the files, in one go
-        val dxFileDescCache = DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
-        val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-        val fileResolver =
-          FileSourceResolver.create(localDirectories = Vector(dxPathConfig.homeDir),
-                                    userProtocols = Vector(dxProtocol),
-                                    logger = logger)
+  private val CommonOptions: OptionSpecs = Map(
+      "streamAllFiles" -> FlagOptionSpec.Default
+  )
 
-        // Get the WDL source code (currently WDL, could be also CWL in the future)
-        // Parse the inputs, convert to WDL values.
-        val (wdlSourceCode,
-             instanceTypeDB,
-             metaInfo,
-             defaultRuntimeAttrs,
-             delayWorkspaceDestruction) =
-          retrieveFromDetails(dxApi, jobInfoPath)
+  private[executor] def dispatchCommand(args: Vector[String]): Termination = {
+    if (args.isEmpty) {
+      return BadUsageTermination()
+    }
 
-        try {
-          op match {
-            case ExecAction.Collect | ExecAction.WfFragment | ExecAction.WfInputs |
-                ExecAction.WfOutputs | ExecAction.WorkflowOutputReorg |
-                ExecAction.WfCustomReorgOutputs =>
-              workflowFragAction(
-                  op,
-                  wdlSourceCode,
-                  instanceTypeDB,
-                  metaInfo,
-                  jobInputPath,
-                  jobOutputPath,
-                  dxPathConfig,
-                  fileResolver,
-                  dxFileDescCache,
-                  defaultRuntimeAttrs,
-                  delayWorkspaceDestruction,
-                  dxApi
-              )
-            case ExecAction.TaskCheckInstanceType | ExecAction.TaskProlog |
-                ExecAction.TaskInstantiateCommand | ExecAction.TaskEpilog |
-                ExecAction.TaskRelaunch =>
-              taskAction(
-                  op,
-                  wdlSourceCode,
-                  instanceTypeDB,
-                  jobInputPath,
-                  jobOutputPath,
-                  dxPathConfig,
-                  fileResolver,
-                  dxFileDescCache,
-                  defaultRuntimeAttrs,
-                  delayWorkspaceDestruction,
-                  dxApi
-              )
-          }
-        } catch {
-          case e: Throwable =>
-            writeJobError(jobErrorPath, e)
-            Failure(s"failure running ${op}")
+    val action =
+      try {
+        ExecAction.withNameIgnoreCase(args.head.replaceAll("_", ""))
+      } catch {
+        case _: NoSuchElementException =>
+          return BadUsageTermination()
+      }
+
+    val homeDir = args.headOption
+      .map(Paths.get(_))
+      .getOrElse(
+          return BadUsageTermination(
+              "Missing required positional argument <homedir>"
+          )
+      )
+
+    val options =
+      try {
+        parseCommandLine(args, CommonOptions)
+      } catch {
+        case e: OptionParseException =>
+          return BadUsageTermination("Error parsing command line options", Some(e))
+      }
+
+    val logger = initLogger(options)
+    val dxApi = DxApi(logger)
+    val streamAllFiles = options.getFlag("streamAllFiles")
+
+    // Job input, output,  error, and info files are located relative to the home directory
+    val jobInputPath = homeDir.resolve("job_input.json")
+    val jobOutputPath = homeDir.resolve("job_output.json")
+    val jobErrorPath = homeDir.resolve("job_error.json")
+    val jobInfoPath = homeDir.resolve("dnanexus-job.json")
+
+    try {
+      // Setup the standard paths used for applets. These are used at runtime, not at compile time.
+      // On the cloud instance running the job, the user is "dnanexus", and the home directory is
+      // "/home/dnanexus".
+      val dxPathConfig = DxPathConfig.apply(baseDNAxDir, streamAllFiles, logger)
+      val inputs: JsValue = FileUtils.readFileContent(jobInputPath).parseJson
+      val allFilesReferenced = inputs.asJsObject.fields.flatMap {
+        case (_, jsElem) => dxApi.findFiles(jsElem)
+      }.toVector
+
+      // Describe all the files and build a lookup cache
+      val dxFileDescCache = DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
+      val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
+      val fileResolver =
+        FileSourceResolver.create(localDirectories = Vector(dxPathConfig.homeDir),
+                                  userProtocols = Vector(dxProtocol),
+                                  logger = logger)
+
+      // Get the source code, instance type DB, etc from the application's details
+      val jobInfo = FileUtils.readFileContent(jobInfoPath).parseJson
+      val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
+        case None =>
+          dxApi.logger.trace(
+              "executable field not found locally, performing an API call.",
+              minLevel = TraceLevel.None
+          )
+          val dxJob = dxApi.currentJob
+          dxJob.describe().executable
+        case Some(JsString(x)) if x.startsWith("app-") =>
+          dxApi.app(x)
+        case Some(JsString(x)) if x.startsWith("applet-") =>
+          dxApi.applet(x)
+        case Some(other) =>
+          throw new Exception(s"Malformed executable field ${other} in job info")
+      }
+
+      val details = executable.describe(Set(Field.Details)).details.get.asJsObject.fields
+      val JsString(sourceCodeEncoded) = details.getOrElse("wdlSourceCode", details("womSourceCode"))
+      val wdlSourceCode = CompressionUtils.base64DecodeAndGunzip(wdlSourceCodeEncoded)
+
+      val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
+      val dbRaw = CompressionUtils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+      val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
+
+      val runtimeAttrs: Option[Map[String, Value]] =
+        details.asJsObject.fields.get("runtimeAttrs") match {
+          case None         => None
+          case Some(JsNull) => None
+          case Some(x)      => Some(x.convertTo[Map[String, Value]])
         }
-      case Some(_) =>
-        BadUsageTermination(s"""|Bad arguments to internal operation
-                                |  ${args}
-                                |Usage:
-                                |  java -jar dxWDL.jar internal <action> <home dir> <debug level>
-                                |""".stripMargin)
+
+      val delayWorkspaceDestruction: Option[Boolean] =
+        details.asJsObject.fields.get("delayWorkspaceDestruction") match {
+          case Some(JsBoolean(flag)) => Some(flag)
+          case None                  => None
+        }
+
+      action match {
+        case ExecAction.Collect | ExecAction.WfFragment | ExecAction.WfInputs |
+            ExecAction.WfOutputs | ExecAction.WorkflowOutputReorg |
+            ExecAction.WfCustomReorgOutputs =>
+          workflowFragAction(
+              action,
+              wdlSourceCode,
+              instanceTypeDB,
+              metaInfo,
+              jobInputPath,
+              jobOutputPath,
+              dxPathConfig,
+              fileResolver,
+              dxFileDescCache,
+              defaultRuntimeAttrs,
+              delayWorkspaceDestruction,
+              dxApi
+          )
+        case ExecAction.TaskCheckInstanceType | ExecAction.TaskProlog |
+            ExecAction.TaskInstantiateCommand | ExecAction.TaskEpilog | ExecAction.TaskRelaunch =>
+          taskAction(
+              action,
+              wdlSourceCode,
+              instanceTypeDB,
+              jobInputPath,
+              jobOutputPath,
+              dxPathConfig,
+              fileResolver,
+              dxFileDescCache,
+              defaultRuntimeAttrs,
+              delayWorkspaceDestruction,
+              dxApi
+          )
+      }
+    } catch {
+      case e: Throwable =>
+        writeJobError(jobErrorPath, e)
+        Failure(s"failure running ${action}")
     }
   }
 
+  private val usageMessage =
+    s"""|java -jar dxWDL.jar internal <action> <homedir> [options]
+        |
+        |Options:
+        |    -traceLevel [0,1,2] How much debug information to write to the
+        |                        job log at runtime. Zero means write the minimum,
+        |                        one is the default, and two is for internal debugging.
+        |    -streamAllFiles     Mount all files with dxfuse, do not use the download agent
+        |""".stripMargin
+
   def main(args: Seq[String]): Unit = {
-    terminate(dispatchCommand(args))
+    terminate(dispatchCommand(args.toVector), usageMessage)
   }
 }
