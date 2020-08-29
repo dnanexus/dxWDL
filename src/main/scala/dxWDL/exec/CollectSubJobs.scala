@@ -199,7 +199,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     val parentJob: DxJob = dxJob.describe().parentJob.get
     val childExecs: Vector[ChildExecDesc] =
       findChildExecutions(Some(parentJob), dxJob.id)
-    Utils.trace(verbose.on, s"execExecs=${childExecs}")
+    Utils.trace(verbose.on, s"childExecs=${childExecs}")
     childExecs
   }
 
