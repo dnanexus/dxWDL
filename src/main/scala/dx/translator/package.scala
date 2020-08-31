@@ -5,6 +5,6 @@ package object translator {
   val CommonStage = "common"
   val EvalStage = "eval"
   val OutputSection = "outputs"
-  val Reorg = "reorg"
+  val ReorgStage = "reorg"
   val CustomReorgConfig = "reorg_config"
 }

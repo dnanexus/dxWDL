@@ -2,9 +2,9 @@ package dx.api
 
 import spray.json._
 
-case class DxJobDescribe(project: String,
-                         id: String,
+case class DxJobDescribe(id: String,
                          name: String,
+                         project: DxProject,
                          created: Long,
                          modified: Long,
                          properties: Option[Map[String, String]],
@@ -12,6 +12,7 @@ case class DxJobDescribe(project: String,
                          executableName: String,
                          parentJob: Option[DxJob],
                          analysis: Option[DxAnalysis],
+                         executable: Option[DxExecutable],
                          output: Option[JsValue])
     extends DxObjectDescribe
 
@@ -20,9 +21,9 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None)
     with DxExecution {
   def describeNoCache(fields: Set[Field.Value] = Set.empty): DxJobDescribe = {
     val projSpec = DxObject.maybeSpecifyProject(project)
-    val defaultFields = Set(Field.Project,
-                            Field.Id,
+    val defaultFields = Set(Field.Id,
                             Field.Name,
+                            Field.Project,
                             Field.Created,
                             Field.Modified,
                             Field.ExecutableName,
@@ -38,21 +39,22 @@ case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None)
 object DxJob {
   def parseDescribeJson(descJs: JsObject, dxApi: DxApi = DxApi.get): DxJobDescribe = {
     val desc =
-      descJs.getFields("project", "id", "name", "created", "modified", "executableName") match {
-        case Seq(JsString(project),
-                 JsString(id),
+      descJs.getFields("id", "name", "project", "created", "modified", "executableName") match {
+        case Seq(JsString(id),
                  JsString(name),
+                 JsString(project),
                  JsNumber(created),
                  JsNumber(modified),
                  JsString(executableName)) =>
-          DxJobDescribe(project,
-                        id,
+          DxJobDescribe(id,
                         name,
+                        dxApi.project(project),
                         created.toLong,
                         modified.toLong,
                         None,
                         None,
                         executableName,
+                        None,
                         None,
                         None,
                         None)
@@ -72,11 +74,17 @@ object DxJob {
       case Some(JsNull) | None => None
       case Some(other)         => throw new Exception(s"should be an analysis ${other}")
     }
+    val executable = descJs.fields.get("executable") match {
+      case Some(JsString(id))  => Some(dxApi.executable(id, Some(desc.project)))
+      case Some(JsNull) | None => None
+      case Some(other)         => throw new Exception(s"should be an executable ID ${other}")
+    }
     val output = descJs.fields.get("output")
     desc.copy(details = details,
               properties = props,
               parentJob = parentJob,
               analysis = analysis,
+              executable = executable,
               output = output)
   }
 }

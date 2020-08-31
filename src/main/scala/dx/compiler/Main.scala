@@ -6,13 +6,13 @@ import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
 import dx.compiler.Main.CompilerFlag.CompilerFlag
 import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
-import dx.translator.wdl.{WdlDxNativeInterfaceFactory, WdlTranslatorFactory}
 import dx.core.getVersion
 import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
 import dx.core.ir.Bundle
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
+import dx.dxni.DxNativeInterface
 import dx.translator.{Extras, ExtrasParser, Translator}
 import spray.json._
 import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
@@ -68,45 +68,6 @@ object Main {
     )
     FileSourceResolver.set(fileResolver)
     fileResolver
-  }
-
-  private def getTranslator(
-      options: Options,
-      extras: Option[Extras],
-      fileResolver: FileSourceResolver,
-      sourceFile: Option[Path] = None,
-      defaultValue: Option[Language] = None
-  ): Translator = {
-    val translatorFactories = Vector(
-        WdlTranslatorFactory(fileResolver = fileResolver)
-    )
-    val languageOpt = options.getValue[Language]("language").orElse(defaultValue)
-    languageOpt match {
-      case Some(language) =>
-        translatorFactories
-          .collectFirst { factory =>
-            factory.create(language, extras) match {
-              case Some(support) => support
-            }
-          }
-          .getOrElse(
-              throw OptionParseException(s"Language ${language} is not supported")
-          )
-      case None if sourceFile.isDefined =>
-        translatorFactories
-          .collectFirst { factory =>
-            factory.create(sourceFile.get, extras) match {
-              case Some(support) => support
-            }
-          }
-          .getOrElse(
-              throw OptionParseException(
-                  s"Could not detect language from source file ${sourceFile}"
-              )
-          )
-      case _ =>
-        throw OptionParseException("Could not determine language")
-    }
   }
 
   // compile
@@ -306,10 +267,12 @@ object Main {
 
     try {
       // generate IR
-      val translator = getTranslator(options, extras, fileResolver, Some(sourceFile))
+      val language = options.getValue[Language]("language")
+      val translator = Translator(extras, fileResolver)
       val bundle = translator.apply(
           sourceFile,
           project,
+          language,
           inputs,
           defaults,
           locked,
@@ -368,44 +331,6 @@ object Main {
       "r" -> FlagOptionSpec.Default.copy(alias = Some("recursive"))
   )
 
-  private def getDxNativeInterface(
-      options: Options,
-      fileResolver: FileSourceResolver,
-      sourceFile: Option[Path] = None,
-      defaultValue: Option[Language] = None
-  ): DxNativeInterface = {
-    val dxniFactories = Vector(
-        WdlDxNativeInterfaceFactory(fileResolver = fileResolver)
-    )
-    val languageOpt = options.getValue[Language]("language").orElse(defaultValue)
-    languageOpt match {
-      case Some(language) =>
-        dxniFactories
-          .collectFirst { factory =>
-            factory.create(language) match {
-              case Some(support) => support
-            }
-          }
-          .getOrElse(
-              throw OptionParseException(s"Language ${language} is not supported")
-          )
-      case None if sourceFile.isDefined =>
-        dxniFactories
-          .collectFirst { factory =>
-            factory.create(sourceFile.get) match {
-              case Some(support) => support
-            }
-          }
-          .getOrElse(
-              throw OptionParseException(
-                  s"Could not detect language from source file ${sourceFile}"
-              )
-          )
-      case _ =>
-        throw OptionParseException("Could not determine language")
-    }
-  }
-
   private[compiler] def dxni(args: Vector[String]): Termination = {
     val options =
       try {
@@ -415,7 +340,8 @@ object Main {
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
     val fileResolver = initCommon(options)
-    val dxni = getDxNativeInterface(options, fileResolver, defaultValue = Some(Language.WdlDefault))
+    val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
+    val dxni = DxNativeInterface(fileResolver)
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
     // flags
     val Vector(
@@ -429,7 +355,7 @@ object Main {
     ).map(options.getFlag(_))
     if (appsOnly) {
       try {
-        dxni.apply(outputFile, force)
+        dxni.apply(language, outputFile, force)
         Success()
       } catch {
         case e: Throwable => Failure(exception = Some(e))
@@ -442,13 +368,15 @@ object Main {
       try {
         folderOrFile match {
           case Left(folder) =>
-            dxni.apply(outputFile,
+            dxni.apply(language,
+                       outputFile,
                        dxProject,
                        folder = Some(folder),
                        recursive = recursive,
                        force = force)
           case Right(applet: DxApplet) =>
-            dxni.apply(outputFile,
+            dxni.apply(language,
+                       outputFile,
                        dxProject,
                        applet = Some(applet),
                        recursive = recursive,

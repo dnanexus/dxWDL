@@ -19,7 +19,7 @@ import wdlTools.types.{
   WdlTypes,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{DefaultBindings, FileSource, FileSourceResolver, Logger}
+import wdlTools.util.{DefaultBindings, FileSource, FileSourceResolver, Logger, StringFileSource}
 
 object Utils {
   val locPlaceholder: SourceLocation = SourceLocation.empty
@@ -99,6 +99,18 @@ object Utils {
       logger: Logger = Logger.get
   ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
     val sourceCode = fileResolver.fromPath(path)
+    val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
+      .getParser(sourceCode)
+    parseSource(parser, sourceCode, fileResolver, regime, logger)
+  }
+
+  def parseSource(
+      sourceCodeStr: String,
+      fileResolver: FileSourceResolver = FileSourceResolver.get,
+      regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
+      logger: Logger = Logger.get
+  ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
+    val sourceCode = StringFileSource(sourceCodeStr)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
     parseSource(parser, sourceCode, fileResolver, regime, logger)

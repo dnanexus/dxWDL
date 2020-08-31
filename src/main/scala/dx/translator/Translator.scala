@@ -2,10 +2,10 @@ package dx.translator
 
 import java.nio.file.{Path, Paths}
 
-import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.api.{DxApi, DxProject}
 import dx.core.ir._
 import dx.core.languages.Language.Language
+import dx.translator.wdl.WdlTranslatorFactory
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
 
@@ -14,95 +14,54 @@ import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
   * @param dxApi DxApi
   * @param logger Logger
   */
-abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
-  private class Fields(name: String, fields: Map[String, JsValue]) {
-    private var retrievedKeys: Set[String] = Set.empty
+case class Translator(extras: Option[Extras] = None,
+                      baseFileResolver: FileSourceResolver = FileSourceResolver.get,
+                      dxApi: DxApi = DxApi.get,
+                      logger: Logger = Logger.get) {
 
-    def getExactlyOnce(fqn: String): Option[JsValue] = {
-      fields.get(fqn) match {
-        case None =>
-          logger.trace(s"getExactlyOnce ${fqn} => None")
-          None
-        case Some(v: JsValue) if retrievedKeys.contains(fqn) =>
-          logger.trace(
-              s"getExactlyOnce ${fqn} => Some(${v}); value already retrieved so returning None"
+  private val translatorFactories = Vector(
+      WdlTranslatorFactory(dxApi = dxApi, logger = logger)
+  )
+
+  private def getTranslator(language: Language,
+                            fileResolver: FileSourceResolver): LanguageTranslator = {
+    translatorFactories
+      .collectFirst { factory =>
+        factory.create(language, extras, fileResolver) match {
+          case Some(translator) => translator
+        }
+      }
+      .getOrElse(
+          throw new Exception(s"Language ${language} is not supported")
+      )
+  }
+
+  private def getTranslator(sourceFile: Path,
+                            fileResolver: FileSourceResolver): LanguageTranslator = {
+    translatorFactories
+      .collectFirst { factory =>
+        factory.create(sourceFile, extras, fileResolver) match {
+          case Some(translator) => translator
+        }
+      }
+      .getOrElse(
+          throw new Exception(
+              s"Could not detect language from source file ${sourceFile}"
           )
-          None
-        case Some(v: JsValue) =>
-          logger.trace(s"getExactlyOnce ${fqn} => Some(${v})")
-          retrievedKeys += fqn
-          Some(v)
-      }
-    }
-
-    def checkAllUsed(): Unit = {
-      val unused = fields.keySet -- retrievedKeys
-      if (unused.nonEmpty) {
-        throw new Exception(s"""|Could not map all ${name} fields.
-                                |These were left: ${unused}""".stripMargin)
-
-      }
-    }
+      )
   }
 
   /**
-    * Given an input field value, translate it to the DNAnexus input field(s).
-    * @param parameter input parameter
-    * @param jsv input JsValue
-    * @param dxName DNAnexus field name
-    * @param encodeName whether to convert dots in the field name
+    * Build a dx input file, based on the JSON input file and the workflow.
+    *
+    * The general idea is to figure out the ancestry of each
+    * app(let)/call/workflow input. This provides the fully-qualified-name (fqn)
+    * of each IR variable. Then we check if the fqn is defined in the input file.
+    * @param inputFields input fields to translate
+    * @param bundle IR bundle
     * @return
     */
-  protected def translateInput(parameter: Parameter,
-                               jsv: JsValue,
-                               dxName: String,
-                               fileResolver: FileSourceResolver,
-                               encodeName: Boolean): Map[String, JsValue]
-
-  private case class InputFile(fields: Map[String, JsValue], fileResolver: FileSourceResolver) {
-    private val inputFields: Fields = new Fields("input", fields)
-    private var dxFields: Map[String, JsValue] = Map.empty
-
-    // If WDL variable fully qualified name [fqn] was provided in the
-    // input file, set [stage.cvar] to its JSON value
-    def checkAndBind(fqn: String, dxName: String, parameter: Parameter): Unit = {
-      inputFields.getExactlyOnce(fqn) match {
-        case None      => ()
-        case Some(jsv) =>
-          // Do not assign the value to any later stages.
-          // We found the variable declaration, the others
-          // are variable uses.
-          logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
-          dxFields ++= translateInput(parameter, jsv, dxName, fileResolver, encodeName = false)
-      }
-    }
-
-    // Check if all the input fields were actually used. Otherwise, there are some
-    // key/value pairs that were not translated to DNAx.
-    def toJsObject: JsObject = {
-      inputFields.checkAllUsed()
-      JsObject(dxFields)
-    }
-  }
-
-  // skip comment lines, these start with ##.
-  private def removeCommentFields(inputs: Map[String, JsValue]): Map[String, JsValue] = {
-    inputs.foldLeft(Map.empty[String, JsValue]) {
-      case (accu, (k, v)) if !k.startsWith("##") => accu + (k -> v)
-    }
-  }
-
-  // Build a dx input file, based on the JSON input file and the workflow
-  //
-  // The general idea here is to figure out the ancestry of each
-  // app(let)/call/workflow input. This provides the fully-qualified-name (fqn)
-  // of each IR variable. Then we check if the fqn is defined in
-  // the input file.
-  private def dxFromInputJson(bundle: Bundle,
-                              inputs: Map[String, JsValue],
-                              fileResolver: FileSourceResolver): JsObject = {
-    val inputFields = InputFile(inputs, fileResolver)
-
+  private def translateInputFile(inputFields: InputFile, bundle: Bundle): JsObject = {
     def handleTask(application: Application): Unit = {
       application.inputs.foreach { parameter =>
         val fqn = s"${application.name}.${parameter.name}"
@@ -152,7 +111,8 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
         }
 
         // filter out auxiliary stages
-        val auxStages = Set(s"stage-${CommonStage}", s"stage-${OutputSection}", s"stage-${Reorg}")
+        val auxStages =
+          Set(s"stage-${CommonStage}", s"stage-${OutputSection}", s"stage-${ReorgStage}")
         val middleStages = wf.stages.filter { stg =>
           !(auxStages contains stg.id.getId)
         }
@@ -179,108 +139,58 @@ abstract class Translator(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get)
     inputFields.toJsObject
   }
 
-  /**
-    * Translate a document in a supported workflow language to a Bundle.
-    * @param source the source file.
-    * @return
-    */
-  protected def translateDocument(source: Path,
-                                  locked: Boolean,
-                                  reorgEnabled: Option[Boolean],
-                                  fileResolver: FileSourceResolver): Bundle
-
-  /**
-    * Given a mapping of field name to value, selects just the file-type fields
-    * and returns them as DxFiles.
-    * @param fields all input + default fields
-    * @return tuple of (pathToFile, allFiles), where pathToFile is a mapping of the
-    *         original path value to the resolved DxFile, and allFiles is all of the
-    *         input + default DxFiles.
-    */
-  protected def filterFiles(fields: Map[String, JsValue],
-                            dxProject: DxProject): (Map[String, DxFile], Vector[DxFile])
-
-  /**
-    * Updates `bundle` with default values.
-    * @param bundle The raw bundle
-    * @param fileResolver FileSourceResolver
-    * @param pathToDxFile mapping of original paths to DNAnexus paths
-    * @param dxFileDescCache cache of DxFileDescribe
-    * @param defaults default values
-    * @return
-    */
-  protected def embedDefaults(bundle: Bundle,
-                              fileResolver: FileSourceResolver,
-                              pathToDxFile: Map[String, DxFile],
-                              dxFileDescCache: DxFileDescCache,
-                              defaults: Map[String, JsValue]): Bundle
+  // skip comment lines, these start with ##.
+  private def removeCommentFields(inputs: Map[String, JsValue]): Map[String, JsValue] = {
+    inputs.foldLeft(Map.empty[String, JsValue]) {
+      case (accu, (k, v)) if !k.startsWith("##") => accu + (k -> v)
+    }
+  }
 
   def apply(source: Path,
-            dxProject: DxProject,
+            project: DxProject,
+            language: Option[Language] = None,
             inputs: Vector[Path] = Vector.empty,
             defaults: Option[Path] = None,
             locked: Boolean = false,
             reorgEnabled: Option[Boolean] = None,
-            writeDxInputsFile: Boolean = true,
-            fileResolver: FileSourceResolver = FileSourceResolver.get): Bundle = {
+            writeDxInputsFile: Boolean = true): Bundle = {
     val sourceAbsPath = FileUtils.absolutePath(source)
-    val sourceFileResolver = fileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
-    // generate IR
-    val bundle: Bundle = translateDocument(source, locked, reorgEnabled, sourceFileResolver)
+    val fileResolver = baseFileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
+    val translator = language match {
+      case Some(lang) => getTranslator(lang, fileResolver)
+      case None       => getTranslator(sourceAbsPath, fileResolver)
+    }
     val jsDefaults =
       defaults
         .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
         .getOrElse(Map.empty)
-    // exit early if there are neither any defaults nor any inputs to translate
-    if (jsDefaults.isEmpty && !writeDxInputsFile) {
-      return bundle
-    }
-    // read inputs as JSON
-    val jsInputs = inputs
-      .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
-      .toMap
-    // Scan the JSON inputs files for dx:files, and batch describe them. This
-    // reduces the number of API calls.
-    val inputAndDefaultFields = (jsInputs.values.flatten ++ jsDefaults).toMap
-    val (pathToDxFile, dxFiles) = filterFiles(inputAndDefaultFields, dxProject)
-    // lookup platform files in bulk
-    val allFiles = dxApi.fileBulkDescribe(dxFiles)
-    val dxFileDescCache = DxFileDescCache(allFiles)
-    // update bundle with default values
-    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-    val fileResolverWithCache = sourceFileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
-    val finalBundle = if (jsDefaults.isEmpty) {
+    // only process inputs if they are needed
+    if (jsDefaults.nonEmpty || writeDxInputsFile) {
+      // read inputs as JSON
+      val jsInputs = inputs
+        .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
+        .toMap
+      // generate IR and translate input files
+      val (bundle, inputFiles) =
+        translator.translateDocumentWithDefaults(source, locked, jsDefaults, jsInputs, reorgEnabled)
+      // write DNAnexus input files if requested
+      if (writeDxInputsFile) {
+        inputFiles.foreach {
+          case (path, inputFile) =>
+            logger.trace(s"Translating input file ${path}")
+            val dxInputs = translateInputFile(inputFile, bundle)
+            val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
+            val dxInputFile = path.getParent match {
+              case null   => Paths.get(fileName)
+              case parent => parent.resolve(fileName)
+            }
+            logger.trace(s"Writing DNAnexus JSON input file ${dxInputFile}")
+            FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+        }
+      }
       bundle
     } else {
-      embedDefaults(
-          bundle,
-          fileResolverWithCache,
-          pathToDxFile,
-          dxFileDescCache,
-          jsDefaults
-      )
+      translator.translateDocument(source, locked, reorgEnabled)
     }
-    // generate DNAnexus input files if requested
-    if (writeDxInputsFile) {
-      jsInputs.foreach {
-        case (path, jsValues) =>
-          logger.trace(s"Translating WDL input file ${path}")
-          val dxInputs = dxFromInputJson(finalBundle, jsValues, fileResolverWithCache)
-          val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
-          val dxInputFile = path.getParent match {
-            case null   => Paths.get(fileName)
-            case parent => parent.resolve(fileName)
-          }
-          logger.trace(s"Writing DNAnexus JSON input file ${dxInputFile}")
-          FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-      }
-    }
-    finalBundle
   }
-}
-
-trait TranslatorFactory {
-  def create(language: Language, extras: Option[Extras]): Option[Translator]
-
-  def create(sourceFile: Path, extras: Option[Extras]): Option[Translator]
 }

@@ -19,7 +19,7 @@ import dx.api.{
   Field,
   InstanceTypeDbQuery
 }
-import dx.core.getVersion
+import dx.core.{NativeProperties, getVersion}
 import dx.core.io.DxPathConfig
 import dx.core.ir._
 import dx.core.util.CompressionUtils
@@ -89,7 +89,7 @@ case class Compiler(extras: Option[Extras],
       }
       // Find the runtime dxWDL asset with the correct version. Look inside the
       // project configured for this region. The regions live in dxWDL.conf
-      val config = ConfigFactory.load(DxWdlRuntimeConfigFile)
+      val config = ConfigFactory.load(RuntimeConfigFile)
       val regionToProjectOption: Vector[Config] =
         config.getConfigList("dxWDL.region2project").asScala.toVector
       val regionToProjectConf: Map[String, String] = regionToProjectOption.map { pair =>
@@ -111,7 +111,7 @@ case class Compiler(extras: Option[Extras],
           throw new Exception(s"Bad syntax for destination ${destination}")
       }
       val regionalProject = dxApi.resolveProject(regionalProjectName)
-      val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${DxWdlAsset}"
+      val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${RuntimeAsset}"
       logger.trace(s"Looking for asset id at ${assetUri}")
       val dxAsset = dxApi.resolveOnePath(assetUri, Some(regionalProject)) match {
         case dxFile: DxRecord => dxFile
@@ -120,7 +120,7 @@ case class Compiler(extras: Option[Extras],
       }
       // We need the dxWDL runtime library cloned into this project, so it will
       // be available to all subjobs we run.
-      dxApi.cloneAsset(dxAsset, project, DxWdlAsset, regionalProject)
+      dxApi.cloneAsset(dxAsset, project, RuntimeAsset, regionalProject)
       Some(dxAsset)
     }
 
@@ -172,9 +172,8 @@ case class Compiler(extras: Option[Extras],
         }
       val updatedProperties = existingProperties ++
         Map(
-            VersionProperty ->
-              JsString(getVersion),
-            ChecksumProperty -> JsString(digest)
+            NativeProperties.Version -> JsString(getVersion),
+            NativeProperties.Checksum -> JsString(digest)
         )
       // Add properties and attributes we don't want to fall under the checksum
       // This allows, for example, moving the dx:executable, while

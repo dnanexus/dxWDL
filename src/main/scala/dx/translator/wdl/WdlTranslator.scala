@@ -3,18 +3,39 @@ package dx.translator.wdl
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.compiler.ir.TranslatorFactory
 import dx.core.io.DxFileDescCache
-import dx.core.ir.{Bundle, Callable, Parameter}
+import dx.core.ir.{Bundle, Callable, Parameter, Value}
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
-import dx.translator.{Extras, ReorgAttributes, Translator, TranslatorFactory}
+import dx.translator.{
+  Extras,
+  InputFile,
+  LanguageTranslator,
+  LanguageTranslatorFactory,
+  ReorgAttributes
+}
 import spray.json.JsValue
+import wdlTools.eval.WdlValueSerde
 import wdlTools.syntax.Parsers
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
+
+case class WdlInputFile(fields: Map[String, JsValue],
+                        typeAliases: Map[String, WdlTypes.T],
+                        fileResolver: FileSourceResolver,
+                        logger: Logger)
+    extends InputFile(fields, fileResolver, logger) {
+  override protected def translateInput(parameter: Parameter,
+                                        jsv: JsValue,
+                                        dxName: String,
+                                        fileResolver: FileSourceResolver,
+                                        encodeName: Boolean): Map[String, Value] = {
+    val wdlType = WdlUtils.fromIRType(parameter.dxType, typeAliases)
+    val wdlValue = WdlValueSerde.deserialize(jsv, wdlType)
+  }
+}
 
 /**
   * Compiles WDL to IR.
@@ -23,15 +44,10 @@ import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
   */
 case class WdlTranslator(extras: Option[Extras] = None,
                          regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
+                         fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
-    extends Translator(dxApi, logger) {
-
-  override protected def translateInput(parameter: Parameter,
-                                        jsv: JsValue,
-                                        dxName: String,
-                                        fileResolver: FileSourceResolver,
-                                        encodeName: Boolean): Map[String, JsValue] = {}
+    extends LanguageTranslator {
 
   /**
     * Check that a declaration name is not any dx-reserved names.
@@ -227,10 +243,17 @@ case class WdlTranslator(extras: Option[Extras] = None,
     bundleInfo.tasks.values.toVector ++ orderedWorkflows
   }
 
-  override protected def translateDocument(source: Path,
-                                           locked: Boolean,
-                                           reorgEnabled: Option[Boolean],
-                                           fileResolver: FileSourceResolver): Bundle = {
+  /**
+    * Translates a document in a supported workflow language to a Bundle.
+    *
+    * @param source       the source file
+    * @param locked       whether to lock generated workflows
+    * @param reorgEnabled whether output reorg is enabled
+    * @return the generated Bundle
+    */
+  override def translateDocument(source: Path,
+                                 locked: Boolean,
+                                 reorgEnabled: Option[Boolean]): Bundle = {
     val (tDoc, typeAliases) =
       WdlUtils.parseSource(source, fileResolver, regime, logger)
     val wdlBundle: WdlBundle = flattenDepthFirst(tDoc)
@@ -283,40 +306,57 @@ case class WdlTranslator(extras: Option[Extras] = None,
     Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
   }
 
-  override protected def filterFiles(
-      fields: Map[String, JsValue],
-      dxProject: DxProject
-  ): (Map[String, DxFile], Vector[DxFile]) = ???
+  /**
+    * Translates a document in a supported workflow language to a Bundle.
+    * Also uses the provided inputs to
+    *
+    * @param source       the source file.
+    * @param locked       whether to lock generated workflows
+    * @param defaults     default values to embed in generated Bundle
+    * @param inputs       inputs to use when resolving defaults
+    * @param reorgEnabled whether output reorg is enabled
+    * @return (bundle, fileCache), where bundle is the generated Bundle and fileCache
+    *         is a cache of the translated values for all the DxFiles in `defaults`
+    *         and `inputs`
+    */
+  override def translateDocumentWithDefaults(
+      source: Path,
+      locked: Boolean,
+      defaults: Map[String, JsValue],
+      inputs: Map[Path, Map[String, JsValue]],
+      reorgEnabled: Option[Boolean]
+  ): (Bundle, Map[Path, InputFile]) = {
+    // Scan the JSON inputs files for dx:files, and batch describe them. This
+    // reduces the number of API calls.
+    val inputAndDefaultFields = (inputs.values.flatten ++ defaults).toMap
 
-  override protected def embedDefaults(bundle: Bundle,
-                                       fileResolver: FileSourceResolver,
-                                       pathToDxFile: Map[String, DxFile],
-                                       dxFileDescCache: DxFileDescCache,
-                                       defaults: Map[String, JsValue]): Bundle = ???
-
+  }
 }
 
 case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
-                                fileResolver: FileSourceResolver = FileSourceResolver.get,
                                 dxApi: DxApi = DxApi.get,
                                 logger: Logger = Logger.get)
-    extends TranslatorFactory {
-  override def create(language: Language, extras: Option[Extras]): Option[WdlTranslator] = {
+    extends LanguageTranslatorFactory {
+  override def create(language: Language,
+                      extras: Option[Extras],
+                      fileResolver: FileSourceResolver): Option[WdlTranslator] = {
     try {
       logger.ignore(Language.toWdlVersion(language))
-      Some(WdlTranslator(extras, regime, dxApi, logger))
+      Some(WdlTranslator(extras, regime, fileResolver, dxApi, logger))
     } catch {
       case _: Throwable => None
     }
   }
 
-  override def create(sourceFile: Path, extras: Option[Extras]): Option[WdlTranslator] = {
+  override def create(sourceFile: Path,
+                      extras: Option[Extras],
+                      fileResolver: FileSourceResolver): Option[WdlTranslator] = {
     try {
       val fileSource = fileResolver.fromPath(sourceFile)
       try {
         val parsers = Parsers(followImports = false, fileResolver)
         logger.ignore(parsers.getWdlVersion(fileSource))
-        Some(WdlTranslator(extras, regime, dxApi, logger))
+        Some(WdlTranslator(extras, regime, fileResolver, dxApi, logger))
       } catch {
         case _: Throwable => None
       }

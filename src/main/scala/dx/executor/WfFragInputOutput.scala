@@ -55,7 +55,7 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
   // 1. Convert the inputs to WDL values
   // 2. Setup an environment to evaluate the sub-block. This should
   //    look to the WDL code as if all previous code had been evaluated.
-  def loadInputs(inputs: JsValue, metaInfo: JsValue): WfFragInput = {
+  def loadInputs(inputs: JsValue, metaInfo: Map[String, JsValue]): WfFragInput = {
     val regularFields: Map[String, JsValue] = inputs.asJsObject.fields
       .filter { case (fieldName, _) => !fieldName.endsWith(ParameterLinkSerde.FlatFilesSuffix) }
 

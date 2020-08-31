@@ -155,40 +155,6 @@ case class ParseSource(dxApi: DxApi) {
      flatInfo.adjunctFiles)
   }
 
-  private def parseWdlFromString(src: String): (TAT.Document, Context) = {
-    val sourceCode = StringFileSource(src)
-    try {
-      val fileResolver = createFileResolver()
-      val parsers = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
-      val doc = parsers.parseDocument(sourceCode)
-      TypeInfer(regime = WdlTypeCheckingRegime.Strict, fileResolver = fileResolver, logger = logger)
-        .apply(doc)
-    } catch {
-      case se: SyntaxException =>
-        System.out.println("WDL code is syntactically invalid ----- ")
-        System.out.println(src)
-        throw se
-      case te: TypeException =>
-        System.out.println("WDL code is syntactically valid BUT it fails type-checking ----- ")
-        System.out.println(src)
-        throw te
-    }
-  }
-
-  // throw an exception if this WDL program is invalid
-  def validateWdlCode(wdlWfSource: String, language: Option[Language.Value] = None): Unit = {
-    val (tDoc, _) = parseWdlFromString(wdlWfSource)
-
-    // Check that this is the correct language version
-    language match {
-      case None => ()
-      case Some(requiredLang) =>
-        val docLang = Language.fromWdlVersion(tDoc.version.value)
-        if (docLang != requiredLang)
-          throw new Exception(s"document has wrong version $docLang, should be $requiredLang")
-    }
-  }
-
   // Parse a Workflow source file. Return the:
   //  * workflow definition
   //  * directory of tasks
