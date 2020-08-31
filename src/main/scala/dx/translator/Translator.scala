@@ -2,7 +2,9 @@ package dx.translator
 
 import java.nio.file.{Path, Paths}
 
-import dx.api.{DxApi, DxProject}
+import dx.api.{DxApi, DxFile, DxProject}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.core.ir.Type.{TArray, TFile, THash, TMap, TOptional, TSchema}
 import dx.core.ir._
 import dx.core.languages.Language.Language
 import dx.translator.wdl.WdlTranslatorFactory
@@ -22,34 +24,6 @@ case class Translator(extras: Option[Extras] = None,
   private val translatorFactories = Vector(
       WdlTranslatorFactory(dxApi = dxApi, logger = logger)
   )
-
-  private def getTranslator(language: Language,
-                            fileResolver: FileSourceResolver): LanguageTranslator = {
-    translatorFactories
-      .collectFirst { factory =>
-        factory.create(language, extras, fileResolver) match {
-          case Some(translator) => translator
-        }
-      }
-      .getOrElse(
-          throw new Exception(s"Language ${language} is not supported")
-      )
-  }
-
-  private def getTranslator(sourceFile: Path,
-                            fileResolver: FileSourceResolver): LanguageTranslator = {
-    translatorFactories
-      .collectFirst { factory =>
-        factory.create(sourceFile, extras, fileResolver) match {
-          case Some(translator) => translator
-        }
-      }
-      .getOrElse(
-          throw new Exception(
-              s"Could not detect language from source file ${sourceFile}"
-          )
-      )
-  }
 
   /**
     * Build a dx input file, based on the JSON input file and the workflow.
@@ -156,23 +130,37 @@ case class Translator(extras: Option[Extras] = None,
             writeDxInputsFile: Boolean = true): Bundle = {
     val sourceAbsPath = FileUtils.absolutePath(source)
     val fileResolver = baseFileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
-    val translator = language match {
+    val translator = translatorFactories
+      .collectFirst { factory =>
+        factory.create(language, extras, fileResolver) match {
+          case Some(translator) => translator
+        }
+      }
+      .getOrElse(
+          throw new Exception(s"Language ${language} is not supported")
+      )
+
+    language match {
       case Some(lang) => getTranslator(lang, fileResolver)
       case None       => getTranslator(sourceAbsPath, fileResolver)
     }
+    // only process inputs if they are needed
     val jsDefaults =
       defaults
         .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
         .getOrElse(Map.empty)
-    // only process inputs if they are needed
     if (jsDefaults.nonEmpty || writeDxInputsFile) {
       // read inputs as JSON
       val jsInputs = inputs
         .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
         .toMap
-      // generate IR and translate input files
-      val (bundle, inputFiles) =
-        translator.translateDocumentWithDefaults(source, locked, jsDefaults, jsInputs, reorgEnabled)
+      val (bundle, inputFiles) = translator.translateDocumentWithDefaults(
+          sourceAbsPath,
+          locked,
+          jsDefaults,
+          jsInputs,
+          reorgEnabled
+      )
       // write DNAnexus input files if requested
       if (writeDxInputsFile) {
         inputFiles.foreach {

@@ -3,19 +3,21 @@ package dx.translator.wdl
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.DxFileDescCache
-import dx.core.ir.{Bundle, Callable, Parameter, Value}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.core.ir.Type.{THash, _}
+import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
 import dx.translator.{
+  DocumentTranslator,
+  DocumentTranslatorFactory,
   Extras,
   InputFile,
-  LanguageTranslator,
-  LanguageTranslatorFactory,
   ReorgAttributes
 }
-import spray.json.JsValue
+import kantan.csv.ops.source
+import spray.json.{JsArray, JsNull, JsObject, JsString, JsValue}
 import wdlTools.eval.WdlValueSerde
 import wdlTools.syntax.Parsers
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
@@ -47,7 +49,7 @@ case class WdlTranslator(extras: Option[Extras] = None,
                          fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
-    extends LanguageTranslator {
+    extends DocumentTranslator {
 
   /**
     * Check that a declaration name is not any dx-reserved names.
@@ -306,60 +308,29 @@ case class WdlTranslator(extras: Option[Extras] = None,
     Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
   }
 
-  /**
-    * Translates a document in a supported workflow language to a Bundle.
-    * Also uses the provided inputs to
-    *
-    * @param source       the source file.
-    * @param locked       whether to lock generated workflows
-    * @param defaults     default values to embed in generated Bundle
-    * @param inputs       inputs to use when resolving defaults
-    * @param reorgEnabled whether output reorg is enabled
-    * @return (bundle, fileCache), where bundle is the generated Bundle and fileCache
-    *         is a cache of the translated values for all the DxFiles in `defaults`
-    *         and `inputs`
-    */
-  override def translateDocumentWithDefaults(
-      source: Path,
-      locked: Boolean,
-      defaults: Map[String, JsValue],
-      inputs: Map[Path, Map[String, JsValue]],
-      reorgEnabled: Option[Boolean]
-  ): (Bundle, Map[Path, InputFile]) = {
-    // Scan the JSON inputs files for dx:files, and batch describe them. This
-    // reduces the number of API calls.
-    val inputAndDefaultFields = (inputs.values.flatten ++ defaults).toMap
-
-  }
 }
 
 case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                                 dxApi: DxApi = DxApi.get,
                                 logger: Logger = Logger.get)
-    extends LanguageTranslatorFactory {
-  override def create(language: Language,
-                      extras: Option[Extras],
-                      fileResolver: FileSourceResolver): Option[WdlTranslator] = {
-    try {
-      logger.ignore(Language.toWdlVersion(language))
-      Some(WdlTranslator(extras, regime, fileResolver, dxApi, logger))
-    } catch {
-      case _: Throwable => None
-    }
-  }
+    extends DocumentTranslatorFactory {
+  def create(sourceFile: Path,
+             language: Option[Language],
+             extras: Option[Extras],
+             locked: Boolean,
+             reorgEnabled: Option[Boolean] = None,
+             fileResolver: FileSourceResolver): Option[DocumentTranslator] = {
 
-  override def create(sourceFile: Path,
-                      extras: Option[Extras],
-                      fileResolver: FileSourceResolver): Option[WdlTranslator] = {
-    try {
-      val fileSource = fileResolver.fromPath(sourceFile)
+    val (tDoc, typeAliases) =
       try {
-        val parsers = Parsers(followImports = false, fileResolver)
-        logger.ignore(parsers.getWdlVersion(fileSource))
-        Some(WdlTranslator(extras, regime, fileResolver, dxApi, logger))
+        WdlUtils.parseSource(sourceFile, fileResolver, regime, logger)
       } catch {
-        case _: Throwable => None
+        case _: Throwable =>
+          return None
       }
+    if (!language.forall(Language.toWdlVersion(_) == tDoc.version.value)) {
+      throw new Exception(s"WDL document ${sourceFile} is not version ${language.get}")
     }
+    Some(WdlTranslator(tDoc, typeAliases, extras, regime, fileResolver, dxApi, logger))
   }
 }
