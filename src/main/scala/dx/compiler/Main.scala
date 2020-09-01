@@ -429,16 +429,13 @@ object Main {
     }
     val runtimeTraceLevel =
       getTraceLevel(options.get("runtimeDebugLevel"), DEFAULT_RUNTIME_TRACE_LEVEL)
-    if (extras.isDefined) {
-      if (extras.get.customReorgAttributes.isDefined && (options contains "reorg")) {
-        throw new InvalidInputException(
-            "ERROR: cannot provide --reorg option when reorg is specified in extras."
-        )
-      }
-      if (extras.contains("reorg") && (options contains "locked")) {
-        throw new InvalidInputException(
-            "ERROR: cannot provide --locked option when reorg is specified in extras."
-        )
+    if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
+      Set("reorg", "locked").foreach { opt =>
+        if (options.contains(opt)) {
+          throw new InvalidInputException(
+              s"ERROR: cannot provide --reorg option when ${opt} is specified in extras."
+          )
+        }
       }
     }
     CompilerOptions(

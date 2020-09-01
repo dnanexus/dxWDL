@@ -10,7 +10,6 @@ import wdlTools.types.{
   Context,
   TypeException,
   TypeInfer,
-  TypeOptions,
   WdlTypes,
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
