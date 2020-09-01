@@ -24,8 +24,8 @@ object Main extends App {
     val Compile, Config, DXNI, Internal, Version, Describe = Value
   }
   object InternalOp extends Enumeration {
-    val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
-        TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
+    val Collect, Continue, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs,
+        WfFragment, TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
   }
 
   case class DxniBaseOptions(force: Boolean,
@@ -747,7 +747,6 @@ object Main extends App {
 
   // Execute a part of a workflow
   private def workflowFragAction(op: InternalOp.Value,
-                                 applet: DxApplet,
                                  womSourceCode: String,
                                  instanceTypeDB: InstanceTypeDB,
                                  metaInfo: JsValue,
@@ -765,7 +764,22 @@ object Main extends App {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
     val inputLines: String = Utils.readFileContent(jobInputPath)
-    val inputsRaw: JsValue = inputLines.parseJson
+    val (inputsRaw: JsValue, scatterStart: Int) = (op, inputLines.parseJson) match {
+      case (InternalOp.Continue, JsObject(fields)) if fields.contains(Utils.CONTINUE_START) =>
+        // remove the special input that tells where to continue the scatter
+        val start = fields(Utils.CONTINUE_START) match {
+          case JsNumber(s) => s.toIntExact
+          case other =>
+            throw new Exception(s"Invalid value ${other} for  ${Utils.CONTINUE_START}")
+        }
+        (JsObject(fields - Utils.CONTINUE_START), start)
+      case (InternalOp.Continue, _) =>
+        throw new Exception(
+            s"internal continue command missing required parameter ${Utils.CONTINUE_START}"
+        )
+      case (_, inputs) =>
+        (inputs, 0)
+    }
 
     val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
@@ -777,23 +791,12 @@ object Main extends App {
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
     val outputFields: Map[String, JsValue] =
       op match {
-        case InternalOp.WfFragment =>
-          val fragRunner = new exec.WfFragRunner(wf,
-                                                 taskDir,
-                                                 typeAliases,
-                                                 applet,
-                                                 womSourceCode,
-                                                 instanceTypeDB,
-                                                 fragInputs.execLinkInfo,
-                                                 dxPathConfig,
-                                                 dxIoFunctions,
-                                                 inputsRaw,
-                                                 fragInputOutput,
-                                                 defaultRuntimeAttributes,
-                                                 delayWorkspaceDestruction,
-                                                 rtDebugLvl)
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
-        case InternalOp.Collect =>
+        case InternalOp.WfFragment | InternalOp.Continue | InternalOp.Collect =>
+          val mode = op match {
+            case InternalOp.WfFragment => RunnerWfFragmentMode.Launch
+            case InternalOp.Continue   => RunnerWfFragmentMode.Continue
+            case InternalOp.Collect    => RunnerWfFragmentMode.Collect
+          }
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
@@ -806,8 +809,9 @@ object Main extends App {
                                                  fragInputOutput,
                                                  defaultRuntimeAttributes,
                                                  delayWorkspaceDestruction,
-                                                 rtDebugLvl)
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
+                                                 rtDebugLvl,
+                                                 scatterStart)
+          fragRunner.apply(fragInputs.blockPath, fragInputs.env, mode)
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(wf,
                                            womSourceCode,
@@ -937,9 +941,10 @@ object Main extends App {
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
-        val applet = getApplet(jobInfoPath)
+
         // Get the WOM source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WOM values.
+        val applet = getApplet(jobInfoPath)
         val (womSourceCode,
              instanceTypeDB,
              metaInfo,
@@ -949,12 +954,11 @@ object Main extends App {
 
         try {
           op match {
-            case InternalOp.Collect | InternalOp.WfFragment | InternalOp.WfInputs |
-                InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
+            case InternalOp.Collect | InternalOp.Continue | InternalOp.WfFragment |
+                InternalOp.WfInputs | InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
                 InternalOp.WfCustomReorgOutputs =>
               workflowFragAction(
                   op,
-                  applet,
                   womSourceCode,
                   instanceTypeDB,
                   metaInfo,

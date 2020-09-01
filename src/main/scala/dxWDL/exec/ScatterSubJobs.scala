@@ -91,9 +91,36 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
+  // Launch a subjob to continue a large scatter
+  def launchContinue(childJobs: Vector[DxExecution],
+                     start: Int,
+                     exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+    assert(childJobs.nonEmpty)
+
+    val inputsWithStart = JsObject(
+        inputsRaw.asJsObject.fields + (Utils.CONTINUE_START -> JsNumber(start))
+    )
+
+    // Run a sub-job with the "collect" entry point.
+    // We need to provide the exact same inputs.
+    val dxSubJob: DxJob = DxUtils.runSubJob("continue",
+                                            Some(instanceTypeDB.defaultInstanceType),
+                                            inputsWithStart,
+                                            childJobs,
+                                            delayWorkspaceDestruction,
+                                            maxVerboseLevel)
+
+    // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+    // is exactly the same as the parent, we can immediately exit the parent job.
+    exportTypes.map {
+      case (eVarName, womType) =>
+        eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
+    }
+  }
+
   // Launch a subjob to collect the outputs
-  def launch(childJobs: Vector[DxExecution],
-             exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+  def launchCollect(childJobs: Vector[DxExecution],
+                    exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
     assert(childJobs.nonEmpty)
 
     // Run a sub-job with the "collect" entry point.

@@ -38,6 +38,7 @@ package dxWDL.exec
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.Paths
+
 import spray.json._
 import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
 import wom.callable.Callable._
@@ -47,7 +48,6 @@ import wom.graph.GraphNodePort._
 import wom.graph.expression._
 import wom.values._
 import wom.types._
-
 import dxWDL.base._
 import dxWDL.dx._
 import dxWDL.util._
@@ -55,7 +55,6 @@ import dxWDL.util._
 case class WfFragRunner(wf: WorkflowDefinition,
                         taskDir: Map[String, CallableTaskDefinition],
                         typeAliases: Map[String, WomType],
-                        applet: DxApplet,
                         wfSourceCode: String,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
@@ -65,7 +64,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
-                        runtimeDebugLevel: Int) {
+                        runtimeDebugLevel: Int,
+                        scatterStart: Int = 0) {
   private val MAX_JOB_NAME = 50
   private val MAX_JOBS_PER_SCATTER = 1000
   private val verbose = runtimeDebugLevel >= 1
@@ -622,7 +622,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
   private def evalScatterCollection(
       sctNode: ScatterNode,
       env: Map[String, WomValue]
-  ): (ScatterVariableNode, Seq[WomValue]) = {
+  ): (ScatterVariableNode, Seq[WomValue], Option[Int]) = {
     // WDL has exactly one variable
     assert(sctNode.scatterVariableNodes.size == 1)
     val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
@@ -630,27 +630,21 @@ case class WfFragRunner(wf: WorkflowDefinition,
       evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
                             WomArrayType(svNode.womType),
                             env)
-    val collection: Seq[WomValue] = collectionRaw match {
-      case x: WomArray => x.value
-      case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+    val (collection: Seq[WomValue], next: Option[Int]) = collectionRaw match {
+      case x: WomArray if scatterStart == 0 && x.size <= MAX_JOBS_PER_SCATTER =>
+        (x.value, None)
+      case x: WomArray =>
+        val array = x.value
+        val scatterEnd = scatterStart + MAX_JOBS_PER_SCATTER
+        if (scatterEnd < array.size) {
+          (array.slice(scatterStart, scatterEnd), Some(scatterEnd))
+        } else {
+          (array.drop(scatterStart), None)
+        }
+      case other =>
+        throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
-    (svNode, collection)
-  }
-
-  // Launch a subjob to collect and marshal the call results.
-  // Remove the declarations already calculated
-  private def collectScatter(sctNode: ScatterNode,
-                             childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
-    val resultTypes: Map[String, WomArrayType] = sctNode.outputMapping.map {
-      case scp: ScatterGathererPort =>
-        scp.identifier.localName.value -> scp.womType
-    }.toMap
-    val promises = collectSubJobs.launch(childJobs, resultTypes)
-    val promisesStr = promises.mkString("\n")
-
-    Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
-    Utils.appletLog(verbose, s"promises=${promisesStr}")
-    promises
+    (svNode, collection, next)
   }
 
   // A scatter may contain many sub-jobs. Rather than enforce a maximum number of scatter sub-jobs,
@@ -666,12 +660,39 @@ case class WfFragRunner(wf: WorkflowDefinition,
   // |_exec scatter(1001..2000, previous=JBOR 1..1000) // does not run until jobs 1-1000 are complete
   //        |_exec job 1001..2000
   //        |_exec collect(JBOR 1..2000)
+  private def continueScatter(sctNode: ScatterNode,
+                              childJobs: Vector[DxExecution],
+                              next: Int): Map[String, WdlVarLinks] = {
+    val resultTypes: Map[String, WomArrayType] = sctNode.outputMapping.map {
+      scp: ScatterGathererPort =>
+        scp.identifier.localName.value -> scp.womType
+    }.toMap
+    val promises = collectSubJobs.launchContinue(childJobs, next, resultTypes)
+    val promisesStr = promises.mkString("\n")
+    Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
+    Utils.appletLog(verbose, s"promises=${promisesStr}")
+    promises
+  }
+
+  // Launch a subjob to collect and marshal the call results.
+  // Remove the declarations already calculated
+  private def collectScatter(sctNode: ScatterNode,
+                             childJobs: Vector[DxExecution]): Map[String, WdlVarLinks] = {
+    val resultTypes: Map[String, WomArrayType] = sctNode.outputMapping.map {
+      scp: ScatterGathererPort =>
+        scp.identifier.localName.value -> scp.womType
+    }.toMap
+    val promises = collectSubJobs.launchCollect(childJobs, resultTypes)
+    val promisesStr = promises.mkString("\n")
+    Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
+    Utils.appletLog(verbose, s"promises=${promisesStr}")
+    promises
+  }
+
   private def execScatterCall(sctNode: ScatterNode,
                               call: CallNode,
                               env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
-    val (svNode, collection) = evalScatterCollection(sctNode, env)
-
-    //collection.grouped(MAX_JOBS_PER_SCATTER).foldLeft
+    val (svNode, collection, next) = evalScatterCollection(sctNode, env)
 
     // loop on the collection, call the applet in the inner loop
     val childJobs: Vector[DxExecution] =
@@ -683,12 +704,19 @@ case class WfFragRunner(wf: WorkflowDefinition,
         dxJob
       }.toVector
 
-    collectScatter(sctNode, childJobs)
+    next match {
+      case Some(index) =>
+        // there are remaning chunks - call a continue sub-job
+        continueScatter(sctNode, childJobs, index)
+      case None =>
+        // this is the last chunk - call collect sub-job to gather all the results
+        collectScatter(sctNode, childJobs)
+    }
   }
 
   private def execScatterSubblock(sctNode: ScatterNode,
                                   env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
-    val (svNode, collection) = evalScatterCollection(sctNode, env)
+    val (svNode, collection, next) = evalScatterCollection(sctNode, env)
 
     // There must be exactly one sub-workflow
     assert(execLinkInfo.size == 1)
@@ -710,7 +738,14 @@ case class WfFragRunner(wf: WorkflowDefinition,
         dxJob
       }.toVector
 
-    collectScatter(sctNode, childJobs)
+    next match {
+      case Some(index) =>
+        // there are remaning chunks - call a continue sub-job
+        continueScatter(sctNode, childJobs, index)
+      case None =>
+        // this is the last chunk - call collect sub-job to gather all the results
+        collectScatter(sctNode, childJobs)
+    }
   }
 
   def apply(blockPath: Vector[Int],
@@ -795,23 +830,40 @@ case class WfFragRunner(wf: WorkflowDefinition,
           // on the scatter variable, and make the applet call
           // for each value.
           case Block.ScatterOneCall(_, sctNode, call) =>
+            assert(scatterStart == 0)
             execScatterCall(sctNode, call, env)
 
           // Same as previous case, but call a subworkflow
           // or fragment.
           case Block.ScatterFullBlock(_, sctNode) =>
+            assert(scatterStart == 0)
             execScatterSubblock(sctNode, env)
         }
-
-      // A subjob that collects results from scatters
+      case RunnerWfFragmentMode.Continue =>
+        // A subjob that collects results from scatters
+        catg match {
+          // a scatter with a subblock inside it. Iterate
+          // on the scatter variable, and make the applet call
+          // for each value.
+          case Block.ScatterOneCall(_, sctNode, call) =>
+            assert(scatterStart > 0)
+            execScatterCall(sctNode, call, env)
+          // Same as previous case, but call a subworkflow
+          // or fragment.
+          case Block.ScatterFullBlock(_, sctNode) =>
+            assert(scatterStart > 0)
+            execScatterSubblock(sctNode, env)
+          case other =>
+            throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
+        }
       case RunnerWfFragmentMode.Collect =>
         val childJobsComplete = collectSubJobs.executableFromSeqNum()
         catg match {
-          case Block.ScatterOneCall(_, sctNode, call) =>
+          case Block.ScatterOneCall(_, _, call) =>
             // scatter with a single call
             collectSubJobs.aggregateResults(call, childJobsComplete)
 
-          case Block.ScatterFullBlock(_, sctNode) =>
+          case Block.ScatterFullBlock(_, _) =>
             // A scatter with a complex sub-block, compiled as a sub-workflow
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)

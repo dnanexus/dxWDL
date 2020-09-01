@@ -43,6 +43,7 @@ object Utils {
   val REORG_CONFIG = "reorg_conf___"
   val REORG_STATUS = "reorg_status___"
   val REORG_STATUS_COMPLETE = "completed"
+  val CONTINUE_START = "continue_start___"
 
   var traceLevel = 0
 

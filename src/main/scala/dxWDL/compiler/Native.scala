@@ -484,6 +484,10 @@ case class Native(dxWDLrtId: Option[String],
         |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
         |}
         |
+        |continue() {
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal continue $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |}
+        |
         |collect() {
         |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
         |}""".stripMargin.trim
