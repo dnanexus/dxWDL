@@ -2,13 +2,19 @@ package dx.translator.wdl
 
 import java.nio.file.Path
 
-import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.DxFileAccessProtocol
+import dx.api.{DxApi, DxProject}
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
-import dx.translator.{DocumentTranslator, DocumentTranslatorFactory, InputFile, ReorgAttributes}
+import dx.translator.{
+  CommonStage,
+  DocumentTranslator,
+  DocumentTranslatorFactory,
+  ExactlyOnce,
+  InputFile,
+  ReorgAttributes
+}
 import spray.json._
 import wdlTools.eval.WdlValueSerde
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
@@ -20,21 +26,6 @@ import wdlTools.util.{
   JsUtils,
   LocalFileSource,
   Logger
-}
-
-case class WdlInputFile(fields: Map[String, JsValue],
-                        typeAliases: Map[String, WdlTypes.T],
-                        fileResolver: FileSourceResolver,
-                        logger: Logger)
-    extends InputFile(fields, fileResolver, logger) {
-  override protected def translateInput(parameter: Parameter,
-                                        jsv: JsValue,
-                                        dxName: String,
-                                        fileResolver: FileSourceResolver,
-                                        encodeName: Boolean): Map[String, Value] = {
-    val wdlType = WdlUtils.fromIRType(parameter.dxType, typeAliases)
-    val wdlValue = WdlValueSerde.deserialize(jsv, wdlType)
-  }
 }
 
 /**
@@ -53,7 +44,15 @@ case class WdlDocumentTranslator(doc: TAT.Document,
                                  fileResolver: FileSourceResolver = FileSourceResolver.get,
                                  dxApi: DxApi = DxApi.get,
                                  logger: Logger = Logger.get)
-    extends DocumentTranslator {
+    extends DocumentTranslator(fileResolver, dxApi) {
+
+  private def wdlInputToIr(dxType: Type, jsValue: JsValue): Value = {
+    // convert js to WDL value
+    val wdlType = WdlUtils.fromIRType(dxType, typeAliases.bindings)
+    val wdlValue = WdlValueSerde.deserialize(jsValue, wdlType)
+    // convert WDL value to IR value
+    WdlUtils.toIRValue(wdlValue, wdlType)
+  }
 
   /**
     * Check that a declaration name is not any dx-reserved names.
@@ -256,11 +255,7 @@ case class WdlDocumentTranslator(doc: TAT.Document,
     }
   }
 
-  def embedDefaults(bundle: Bundle,
-                    pathToDxFile: Map[String, DxFile],
-                    fileResolver: FileSourceResolver): Bundle = {}
-
-  override lazy val bundle: Bundle = {
+  private lazy val rawBundle: Bundle = {
     val wdlBundle: WdlBundle = flattenDepthFirst(doc)
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()
@@ -300,33 +295,114 @@ case class WdlDocumentTranslator(doc: TAT.Document,
     val irTypeAliases = typeAliases.toMap.map {
       case (name, struct: WdlTypes.T_Struct) => name -> WdlUtils.toIRType(struct)
     }
-    val bundle = Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
-    val jsDefaults = defaults
-      .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
-      .getOrElse(Map.empty)
-    if (jsDefaults.nonEmpty) {
-      // read inputs and defaults as JSON
-      val jsInputs = inputs
-        .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
-        .toMap
-      // extract all the files to be resolved so we can bulk describe them
-      val inputAndDefaults = (jsInputs.values.flatten ++ jsDefaults).toMap
-      val (pathToDxFile, dxFileDescCache) =
-        resolveAndDescribeDxFiles(bundle, inputAndDefaults, project)
-      // update bundle with default values
-      val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-      val fileResolverWithCache = fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
-      embedDefaults(
-          bundle,
-          pathToDxFile,
-          fileResolverWithCache
-      )
+    Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
+  }
+
+  private lazy val wdlJsInputs = inputs
+    .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
+    .toMap
+  private lazy val wdlJsDefaults = defaults
+    .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
+    .getOrElse(Map.empty)
+  private lazy val fileResolverWithCache = {
+    val inputAndDefaults = (wdlJsInputs.values.flatten ++ wdlJsDefaults).toMap
+    fileResolverWithCachedFiles(bundle, inputAndDefaults, project)
+  }
+
+  private lazy val bundleWithDefaults: Bundle = {
+    logger.trace(s"Embedding defaults into the IR")
+    val defaultsExactlyOnce = ExactlyOnce("default", wdlJsDefaults, logger)
+    val allCallablesWithDefaults: Map[String, Callable] = rawBundle.allCallables.map {
+      case (name, applet: Application) =>
+        val inputsWithDefaults = applet.inputs.map { param =>
+          val fqn = s"${applet.name}.${param.name}"
+          defaultsExactlyOnce.get(fqn) match {
+            case None => param
+            case Some(default: JsValue) =>
+              val irValue = wdlInputToIr(param.dxType, default)
+              param.copy(defaultValue = Some(irValue))
+          }
+        }
+        name -> applet.copy(inputs = inputsWithDefaults)
+      case (name, workflow: Workflow) =>
+        val workflowWithDefaults =
+          if (workflow.locked) {
+            // locked workflow - we have workflow-level inputs
+            val inputsWithDefaults = workflow.inputs.map {
+              case (param, stageInput) =>
+                val fqn = s"${workflow.name}.${param.name}"
+                val stageInputWithDefault = defaultsExactlyOnce.get(fqn) match {
+                  case None =>
+                    stageInput
+                  case Some(default: JsValue) =>
+                    StaticInput(wdlInputToIr(param.dxType, default))
+                }
+                (param, stageInputWithDefault)
+            }
+            workflow.copy(inputs = inputsWithDefaults)
+          } else {
+            // Workflow is unlocked, we don't have workflow-level inputs.
+            // Instead, set the defaults in the COMMON stage.
+            val stagesWithDefaults = workflow.stages.map { stage =>
+              val callee: Callable = rawBundle.allCallables(stage.calleeName)
+              logger.trace(s"addDefaultToStage ${stage.id.getId}, ${stage.description}")
+              val prefix = if (stage.id.getId == s"stage-${CommonStage}") {
+                workflow.name
+              } else {
+                s"${workflow.name}.${stage.description}"
+              }
+              val inputsWithDefaults = stage.inputs.zipWithIndex.map {
+                case (stageInput, idx) =>
+                  val param = callee.inputVars(idx)
+                  val fqn = s"${prefix}.${param.name}"
+                  defaultsExactlyOnce.get(fqn) match {
+                    case None =>
+                      stageInput
+                    case Some(default: JsValue) =>
+                      StaticInput(wdlInputToIr(param.dxType, default))
+                  }
+              }
+              stage.copy(inputs = inputsWithDefaults)
+            }
+            workflow.copy(stages = stagesWithDefaults)
+          }
+        // check that the stage order hasn't changed
+        val allStageNames = workflow.stages.map(_.id)
+        val embedAllStageNames = workflowWithDefaults.stages.map(_.id)
+        assert(allStageNames == embedAllStageNames)
+        name -> workflowWithDefaults
+      case other =>
+        throw new Exception(s"Unexpected callable ${other}")
+    }
+    val primaryCallableWithDefaults =
+      rawBundle.primaryCallable.map(primary => allCallablesWithDefaults(primary.name))
+    defaultsExactlyOnce.checkAllUsed()
+    rawBundle.copy(primaryCallable = primaryCallableWithDefaults,
+                   allCallables = allCallablesWithDefaults)
+  }
+
+  override lazy val bundle: Bundle = {
+    if (wdlJsDefaults.isEmpty) {
+      rawBundle
     } else {
-      bundle
+      bundleWithDefaults
     }
   }
 
-  override lazy val inputFiles: Map[Path, InputFile] = {}
+  private lazy val parameterLinkSerializer = ParameterLinkSerializer(fileResolverWithCache, dxApi)
+
+  case class WdlInputFile(fields: Map[String, JsValue])
+      extends InputFile(fields, parameterLinkSerializer, logger) {
+    override protected def translateInput(parameter: Parameter, jsv: JsValue): Value = {
+      wdlInputToIr(parameter.dxType, jsv)
+    }
+  }
+
+  override lazy val inputFiles: Map[Path, InputFile] = {
+    wdlJsInputs.map {
+      case (path, inputs) => path -> WdlInputFile(inputs)
+    }
+  }
 }
 
 case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,

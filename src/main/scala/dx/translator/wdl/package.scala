@@ -1,6 +1,5 @@
 package dx.translator.wdl
 
-import dx.compiler.WorkflowSource
 import dx.core.ir.{ApplicationSource, DocumentSource, WorkflowSource}
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.WdlVersion

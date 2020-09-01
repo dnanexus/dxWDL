@@ -3,20 +3,20 @@ package dx.translator
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.DxFileDescCache
-import dx.core.ir.Type.{TArray, TFile, THash, TMap, TOptional, TSchema}
-import dx.core.ir.{Bundle, Callable, Parameter, Type, Value, ValueSerde}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.core.ir.Type._
+import dx.core.ir.{Bundle, Callable, Parameter, ParameterLinkSerializer, Type, Value, ValueSerde}
 import dx.core.languages.Language.Language
 import spray.json.{JsArray, JsNull, JsObject, JsString, JsValue}
 import wdlTools.util.{FileSourceResolver, Logger}
 
-abstract class InputFile(fields: Map[String, JsValue],
-                         fileResolver: FileSourceResolver,
-                         logger: Logger) {
+/**
+  * Tracks which keys are accessed in a map and ensures all keys are accessed exactly once.
+  */
+case class ExactlyOnce(name: String, fields: Map[String, JsValue], logger: Logger) {
   private var retrievedKeys: Set[String] = Set.empty
-  private var irFields: Map[String, Value] = Map.empty
 
-  private def getExactlyOnce(fqn: String): Option[JsValue] = {
+  def get(fqn: String): Option[JsValue] = {
     fields.get(fqn) match {
       case None =>
         logger.trace(s"getExactlyOnce ${fqn} => None")
@@ -33,37 +33,40 @@ abstract class InputFile(fields: Map[String, JsValue],
     }
   }
 
-  protected def translateInput(parameter: Parameter,
-                               jsv: JsValue,
-                               dxName: String,
-                               fileResolver: FileSourceResolver,
-                               encodeName: Boolean): Map[String, Value]
+  def checkAllUsed(): Unit = {
+    val unused = fields.keySet -- retrievedKeys
+    if (unused.nonEmpty) {
+      throw new Exception(s"Could not map all ${name} fields. These were left: ${unused}")
+    }
+  }
+}
+
+abstract class InputFile(fields: Map[String, JsValue],
+                         parameterLinkSerializer: ParameterLinkSerializer,
+                         logger: Logger) {
+  private val fieldsExactlyOnce = ExactlyOnce("input", fields, logger)
+  private var irFields: Map[String, Value] = Map.empty
+
+  protected def translateInput(parameter: Parameter, jsv: JsValue): Value
 
   // If WDL variable fully qualified name [fqn] was provided in the
   // input file, set [stage.cvar] to its JSON value
   def checkAndBind(fqn: String, dxName: String, parameter: Parameter): Unit = {
-    getExactlyOnce(fqn) match {
+    fieldsExactlyOnce.get(fqn) match {
       case None      => ()
       case Some(jsv) =>
         // Do not assign the value to any later stages.
         // We found the variable declaration, the others
         // are variable uses.
         logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
-        irFields ++= translateInput(parameter, jsv, dxName, fileResolver, encodeName = false)
-    }
-  }
-
-  def checkAllUsed(): Unit = {
-    val unused = fields.keySet -- retrievedKeys
-    if (unused.nonEmpty) {
-      throw new Exception(s"""|Could not map all input fields.
-                              |These were left: ${unused}""".stripMargin)
-
+        val irValue = translateInput(parameter, jsv)
+        val link = parameterLinkSerializer.createLink(parameter.dxType, irValue)
+        irFields ++= parameterLinkSerializer.createFields(link, dxName, encodeDots = false)
     }
   }
 
   def serialize: JsObject = {
-    checkAllUsed()
+    fieldsExactlyOnce.checkAllUsed()
     JsObject(irFields.map {
       case (name, value) => name -> ValueSerde.serialize(value)
     })
@@ -73,7 +76,8 @@ abstract class InputFile(fields: Map[String, JsValue],
 /**
   * Translates a document in a supported workflow language to a Bundle.
   */
-abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
+abstract class DocumentTranslator(fileResolver: FileSourceResolver = FileSourceResolver.get,
+                                  dxApi: DxApi = DxApi.get) {
 
   private def extractDxFiles(t: Type, jsv: JsValue): Vector[JsValue] = {
     case (TOptional(_), JsNull)   => Vector.empty
@@ -121,11 +125,11 @@ abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
       throw new Exception(s"value ${jsv} cannot be deserialized to ${t}")
   }
 
-  protected def resolveAndDescribeDxFiles(
+  protected def fileResolverWithCachedFiles(
       bundle: Bundle,
       inputs: Map[String, JsValue],
       project: DxProject
-  ): (Map[String, DxFile], DxFileDescCache) = {
+  ): FileSourceResolver = {
     val fileJs = bundle.allCallables.values.toVector.flatMap { callable: Callable =>
       callable.inputVars.flatMap { param =>
         val fqn = s"${callable.name}.${param.name}"
@@ -152,8 +156,8 @@ abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
       }
     // lookup platform files in bulk
     val described = dxApi.fileBulkDescribe(dxFiles ++ resolvedPaths.values)
-    val dxFileDescCache = DxFileDescCache(described)
-    (resolvedPaths, dxFileDescCache)
+    val dxProtocol = DxFileAccessProtocol(dxApi, DxFileDescCache(described))
+    fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
   }
 
   def bundle: Bundle
