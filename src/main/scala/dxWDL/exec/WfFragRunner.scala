@@ -67,7 +67,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         runtimeDebugLevel: Int,
                         scatterStart: Int = 0) {
   private val MAX_JOB_NAME = 50
-  private val MAX_JOBS_PER_SCATTER = 1000
+  private val MAX_JOBS_PER_SCATTER = 2
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
