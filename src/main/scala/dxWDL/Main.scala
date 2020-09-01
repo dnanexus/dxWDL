@@ -747,6 +747,7 @@ object Main extends App {
 
   // Execute a part of a workflow
   private def workflowFragAction(op: InternalOp.Value,
+                                 applet: DxApplet,
                                  womSourceCode: String,
                                  instanceTypeDB: InstanceTypeDB,
                                  metaInfo: JsValue,
@@ -780,6 +781,7 @@ object Main extends App {
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
+                                                 applet,
                                                  womSourceCode,
                                                  instanceTypeDB,
                                                  fragInputs.execLinkInfo,
@@ -858,13 +860,9 @@ object Main extends App {
     SuccessfulTermination(s"success ${op}")
   }
 
-  // Get the WOM source code, and the instance type database from the
-  // details field stored on the platform
-  private def retrieveFromDetails(
-      jobInfoPath: Path
-  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
+  private def getApplet(jobInfoPath: Path): DxApplet = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-    val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+    jobInfo.asJsObject.fields.get("applet") match {
       case None =>
         Utils.trace(true, s"""|applet field not found locally, performing
                               |an API call.
@@ -876,7 +874,13 @@ object Main extends App {
       case Some(other) =>
         throw new Exception(s"malformed applet field ${other} in job info")
     }
+  }
 
+  // Get the WOM source code, and the instance type database from the
+  // details field stored on the platform
+  private def retrieveFromDetails(
+      applet: DxApplet
+  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
     val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
@@ -933,7 +937,7 @@ object Main extends App {
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
-
+        val applet = getApplet(jobInfoPath)
         // Get the WOM source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WOM values.
         val (womSourceCode,
@@ -941,7 +945,7 @@ object Main extends App {
              metaInfo,
              defaultRuntimeAttrs,
              delayWorkspaceDestruction) =
-          retrieveFromDetails(jobInfoPath)
+          retrieveFromDetails(applet)
 
         try {
           op match {
@@ -950,6 +954,7 @@ object Main extends App {
                 InternalOp.WfCustomReorgOutputs =>
               workflowFragAction(
                   op,
+                  applet,
                   womSourceCode,
                   instanceTypeDB,
                   metaInfo,

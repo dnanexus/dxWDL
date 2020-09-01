@@ -55,6 +55,7 @@ import dxWDL.util._
 case class WfFragRunner(wf: WorkflowDefinition,
                         taskDir: Map[String, CallableTaskDefinition],
                         typeAliases: Map[String, WomType],
+                        applet: DxApplet,
                         wfSourceCode: String,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
@@ -66,6 +67,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         delayWorkspaceDestruction: Option[Boolean],
                         runtimeDebugLevel: Int) {
   private val MAX_JOB_NAME = 50
+  private val MAX_JOBS_PER_SCATTER = 1000
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
@@ -632,16 +634,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
       case x: WomArray => x.value
       case other       => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
     }
-
-    // Limit the number of elements in the collection. Each one spawns a job; this strains the platform
-    // at large numbers.
-    if (collection.size > Utils.SCATTER_LIMIT) {
-      throw new AppInternalException(
-          s"""|The scatter iterates over ${collection.size} elements which
-              |exeedes the maximum (${Utils.SCATTER_LIMIT})""".stripMargin
-            .replaceAll("\n", " ")
-      )
-    }
     (svNode, collection)
   }
 
@@ -661,10 +653,25 @@ case class WfFragRunner(wf: WorkflowDefinition,
     promises
   }
 
+  // A scatter may contain many sub-jobs. Rather than enforce a maximum number of scatter sub-jobs,
+  // we instead chain scatters so that any number of sub-jobs can be executed with a maximum number
+  // running at one time. For example:
+  //
+  // ```scatter (i in range(2000)) { ... }```
+  //
+  // translates to:
+  //
+  // scatter(1-1000, previous=None)
+  // |_exec job 1..1000
+  // |_exec scatter(1001..2000, previous=JBOR 1..1000) // does not run until jobs 1-1000 are complete
+  //        |_exec job 1001..2000
+  //        |_exec collect(JBOR 1..2000)
   private def execScatterCall(sctNode: ScatterNode,
                               call: CallNode,
                               env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     val (svNode, collection) = evalScatterCollection(sctNode, env)
+
+    collection.grouped(MAX_JOBS_PER_SCATTER).foldLeft
 
     // loop on the collection, call the applet in the inner loop
     val childJobs: Vector[DxExecution] =
