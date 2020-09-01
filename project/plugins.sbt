@@ -10,7 +10,7 @@ libraryDependencies += "org.slf4j" % "slf4j-nop" % "1.7.24"
 libraryDependencies ++= {
   if (baseDirectory.value / "../.git" isDirectory)
     Seq(
-        Defaults.sbtPluginExtra("com.typesafe.sbt" % "sbt-git" % "0.8.5",
+        Defaults.sbtPluginExtra("com.typesafe.sbt" % "sbt-git" % "1.0.0",
                                 (sbtBinaryVersion in update).value,
                                 (scalaBinaryVersion in update).value)
     )
