@@ -3,11 +3,10 @@ package dx.translator
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
+import dx.core.io.DxFileDescCache
 import dx.core.ir.Type.{TArray, TFile, THash, TMap, TOptional, TSchema}
 import dx.core.ir.{Bundle, Callable, Parameter, Type, Value, ValueSerde}
 import dx.core.languages.Language.Language
-import kantan.csv.ops.source
 import spray.json.{JsArray, JsNull, JsObject, JsString, JsValue}
 import wdlTools.util.{FileSourceResolver, Logger}
 
@@ -62,17 +61,19 @@ abstract class InputFile(fields: Map[String, JsValue],
 
     }
   }
+
+  def serialize: JsObject = {
+    checkAllUsed()
+    JsObject(irFields.map {
+      case (name, value) => name -> ValueSerde.serialize(value)
+    })
+  }
 }
 
 /**
   * Translates a document in a supported workflow language to a Bundle.
   */
 abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
-
-  /**
-    * The IR Bundle
-    */
-  def bundle: Bundle
 
   private def extractDxFiles(t: Type, jsv: JsValue): Vector[JsValue] = {
     case (TOptional(_), JsNull)   => Vector.empty
@@ -120,7 +121,7 @@ abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
       throw new Exception(s"value ${jsv} cannot be deserialized to ${t}")
   }
 
-  private def resolveAndDescribeDxFiles(
+  protected def resolveAndDescribeDxFiles(
       bundle: Bundle,
       inputs: Map[String, JsValue],
       project: DxProject
@@ -155,47 +156,19 @@ abstract class DocumentTranslator(dxApi: DxApi = DxApi.get) {
     (resolvedPaths, dxFileDescCache)
   }
 
-  /**
-    * Translates a document in a supported workflow language to a Bundle.
-    * Also uses the provided inputs to
-    *
-    * @param defaults     default values to embed in generated Bundle
-    * @param inputs       inputs to use when resolving defaults
-    * @return (bundle, fileCache), where bundle is the generated Bundle and fileCache
-    *         is a cache of the translated values for all the DxFiles in `defaults`
-    *         and `inputs`
-    */
-  override def bundleWithDefaults(
-      defaults: Map[String, JsValue],
-      inputs: Map[Path, Map[String, JsValue]],
-      project: DxProject
-  ): (Bundle, Map[Path, InputFile]) = {
-    // extract all the files to be resolved so we can bulk describe them
-    val inputAndDefaults = (inputs.values.flatten ++ defaults).toMap
-    val (pathToDxFile, dxFileDescCache) =
-      resolveAndDescribeDxFiles(bundle, inputAndDefaults, project)
-    // update bundle with default values
-    val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
-    val fileResolverWithCache = fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
-    val updatedBundle = embedDefaults(
-        bundle,
-        fileResolverWithCache,
-        pathToDxFile,
-        dxFileDescCache,
-        defaults
-    )
-//    val inputFiles = inputs.map {
-//
-//    }
-    //(updatedBundle, )
-  }
+  def bundle: Bundle
+
+  def inputFiles: Map[Path, InputFile]
 }
 
 trait DocumentTranslatorFactory {
   def create(sourceFile: Path,
              language: Option[Language],
-             extras: Option[Extras],
+             inputs: Vector[Path],
+             defaults: Option[Path],
              locked: Boolean,
-             reorgEnabled: Option[Boolean] = None,
+             defaultRuntimeAttrs: Map[String, Value],
+             reorgAttrs: ReorgAttributes,
+             project: DxProject,
              fileResolver: FileSourceResolver): Option[DocumentTranslator]
 }

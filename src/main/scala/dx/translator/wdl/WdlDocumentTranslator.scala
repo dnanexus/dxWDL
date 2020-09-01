@@ -3,26 +3,24 @@ package dx.translator.wdl
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
-import dx.core.ir.Type.{THash, _}
+import dx.core.io.DxFileAccessProtocol
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
-import dx.translator.{
-  DocumentTranslator,
-  DocumentTranslatorFactory,
-  Extras,
-  InputFile,
-  ReorgAttributes
-}
-import kantan.csv.ops.source
-import spray.json.{JsArray, JsNull, JsObject, JsString, JsValue}
+import dx.translator.{DocumentTranslator, DocumentTranslatorFactory, InputFile, ReorgAttributes}
+import spray.json._
 import wdlTools.eval.WdlValueSerde
-import wdlTools.syntax.Parsers
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
-import wdlTools.util.{Adjuncts, FileSourceResolver, LocalFileSource, Logger}
+import wdlTools.util.{
+  Adjuncts,
+  DefaultBindings,
+  FileSourceResolver,
+  JsUtils,
+  LocalFileSource,
+  Logger
+}
 
 case class WdlInputFile(fields: Map[String, JsValue],
                         typeAliases: Map[String, WdlTypes.T],
@@ -44,11 +42,17 @@ case class WdlInputFile(fields: Map[String, JsValue],
   * TODO: remove limitation that two callables cannot have the same name
   * TODO: rewrite sortByDependencies using a graph data structure
   */
-case class WdlTranslator(extras: Option[Extras] = None,
-                         regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
-                         fileResolver: FileSourceResolver = FileSourceResolver.get,
-                         dxApi: DxApi = DxApi.get,
-                         logger: Logger = Logger.get)
+case class WdlDocumentTranslator(doc: TAT.Document,
+                                 typeAliases: DefaultBindings[WdlTypes.T_Struct],
+                                 inputs: Vector[Path],
+                                 defaults: Option[Path],
+                                 locked: Boolean,
+                                 defaultRuntimeAttrs: Map[String, Value],
+                                 reorgAttrs: ReorgAttributes,
+                                 project: DxProject,
+                                 fileResolver: FileSourceResolver = FileSourceResolver.get,
+                                 dxApi: DxApi = DxApi.get,
+                                 logger: Logger = Logger.get)
     extends DocumentTranslator {
 
   /**
@@ -245,34 +249,25 @@ case class WdlTranslator(extras: Option[Extras] = None,
     bundleInfo.tasks.values.toVector ++ orderedWorkflows
   }
 
-  /**
-    * Translates a document in a supported workflow language to a Bundle.
-    *
-    * @param source       the source file
-    * @param locked       whether to lock generated workflows
-    * @param reorgEnabled whether output reorg is enabled
-    * @return the generated Bundle
-    */
-  override def translateDocument(source: Path,
-                                 locked: Boolean,
-                                 reorgEnabled: Option[Boolean]): Bundle = {
-    val (tDoc, typeAliases) =
-      WdlUtils.parseSource(source, fileResolver, regime, logger)
-    val wdlBundle: WdlBundle = flattenDepthFirst(tDoc)
+  // skip comment lines, these start with ##
+  private def removeCommentFields(inputs: Map[String, JsValue]): Map[String, JsValue] = {
+    inputs.foldLeft(Map.empty[String, JsValue]) {
+      case (accu, (k, v)) if !k.startsWith("##") => accu + (k -> v)
+    }
+  }
+
+  def embedDefaults(bundle: Bundle,
+                    pathToDxFile: Map[String, DxFile],
+                    fileResolver: FileSourceResolver): Bundle = {}
+
+  override lazy val bundle: Bundle = {
+    val wdlBundle: WdlBundle = flattenDepthFirst(doc)
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()
     val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle, logger2)
     if (logger.isVerbose) {
       logger2.trace(s"all tasks: ${wdlBundle.tasks.keySet}")
       logger2.trace(s"all callables in dependency order: ${depOrder.map { _.name }}")
-    }
-    // load defaults from extras
-    val defaultRuntimeAttrs = extras.map(_.defaultRuntimeAttributes).getOrElse(Map.empty)
-    val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
-      case (Some(attr), None)    => attr
-      case (Some(attr), Some(b)) => attr.copy(enabled = b)
-      case (None, Some(b))       => ReorgAttributes(enabled = b)
-      case (None, None)          => ReorgAttributes(enabled = false)
     }
     // translate callables
     val callableTranslator = CallableTranslator(
@@ -305,32 +300,70 @@ case class WdlTranslator(extras: Option[Extras] = None,
     val irTypeAliases = typeAliases.toMap.map {
       case (name, struct: WdlTypes.T_Struct) => name -> WdlUtils.toIRType(struct)
     }
-    Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
+    val bundle = Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
+    val jsDefaults = defaults
+      .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
+      .getOrElse(Map.empty)
+    if (jsDefaults.nonEmpty) {
+      // read inputs and defaults as JSON
+      val jsInputs = inputs
+        .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
+        .toMap
+      // extract all the files to be resolved so we can bulk describe them
+      val inputAndDefaults = (jsInputs.values.flatten ++ jsDefaults).toMap
+      val (pathToDxFile, dxFileDescCache) =
+        resolveAndDescribeDxFiles(bundle, inputAndDefaults, project)
+      // update bundle with default values
+      val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
+      val fileResolverWithCache = fileResolver.replaceProtocol[DxFileAccessProtocol](dxProtocol)
+      embedDefaults(
+          bundle,
+          pathToDxFile,
+          fileResolverWithCache
+      )
+    } else {
+      bundle
+    }
   }
 
+  override lazy val inputFiles: Map[Path, InputFile] = {}
 }
 
 case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
                                 dxApi: DxApi = DxApi.get,
                                 logger: Logger = Logger.get)
     extends DocumentTranslatorFactory {
-  def create(sourceFile: Path,
-             language: Option[Language],
-             extras: Option[Extras],
-             locked: Boolean,
-             reorgEnabled: Option[Boolean] = None,
-             fileResolver: FileSourceResolver): Option[DocumentTranslator] = {
-
-    val (tDoc, typeAliases) =
+  override def create(sourceFile: Path,
+                      language: Option[Language],
+                      inputs: Vector[Path],
+                      defaults: Option[Path],
+                      locked: Boolean,
+                      defaultRuntimeAttrs: Map[String, Value],
+                      reorgAttrs: ReorgAttributes,
+                      project: DxProject,
+                      fileResolver: FileSourceResolver): Option[WdlDocumentTranslator] = {
+    val (doc, typeAliases) =
       try {
         WdlUtils.parseSource(sourceFile, fileResolver, regime, logger)
       } catch {
         case _: Throwable =>
           return None
       }
-    if (!language.forall(Language.toWdlVersion(_) == tDoc.version.value)) {
+    if (!language.forall(Language.toWdlVersion(_) == doc.version.value)) {
       throw new Exception(s"WDL document ${sourceFile} is not version ${language.get}")
     }
-    Some(WdlTranslator(tDoc, typeAliases, extras, regime, fileResolver, dxApi, logger))
+    Some(
+        WdlDocumentTranslator(doc,
+                              typeAliases,
+                              inputs,
+                              defaults,
+                              locked,
+                              defaultRuntimeAttrs,
+                              reorgAttrs,
+                              project,
+                              fileResolver,
+                              dxApi,
+                              logger)
+    )
   }
 }

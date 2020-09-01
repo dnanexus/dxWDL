@@ -2,14 +2,12 @@ package dx.translator
 
 import java.nio.file.{Path, Paths}
 
-import dx.api.{DxApi, DxFile, DxProject}
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
-import dx.core.ir.Type.{TArray, TFile, THash, TMap, TOptional, TSchema}
+import dx.api.{DxApi, DxProject}
 import dx.core.ir._
 import dx.core.languages.Language.Language
 import dx.translator.wdl.WdlTranslatorFactory
 import spray.json._
-import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
 
 /**
   * Base class for Translators, which convert from language-specific AST into IR.
@@ -21,7 +19,7 @@ case class Translator(extras: Option[Extras] = None,
                       dxApi: DxApi = DxApi.get,
                       logger: Logger = Logger.get) {
 
-  private val translatorFactories = Vector(
+  private val translatorFactories: Vector[DocumentTranslatorFactory] = Vector(
       WdlTranslatorFactory(dxApi = dxApi, logger = logger)
   )
 
@@ -110,14 +108,7 @@ case class Translator(extras: Option[Extras] = None,
         throw new Exception(s"Unknown case ${other.getClass}")
     }
 
-    inputFields.toJsObject
-  }
-
-  // skip comment lines, these start with ##.
-  private def removeCommentFields(inputs: Map[String, JsValue]): Map[String, JsValue] = {
-    inputs.foldLeft(Map.empty[String, JsValue]) {
-      case (accu, (k, v)) if !k.startsWith("##") => accu + (k -> v)
-    }
+    inputFields.serialize
   }
 
   def apply(source: Path,
@@ -130,55 +121,52 @@ case class Translator(extras: Option[Extras] = None,
             writeDxInputsFile: Boolean = true): Bundle = {
     val sourceAbsPath = FileUtils.absolutePath(source)
     val fileResolver = baseFileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
-    val translator = translatorFactories
+    // load defaults from extras
+    val defaultRuntimeAttrs = extras.map(_.defaultRuntimeAttributes).getOrElse(Map.empty)
+    val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
+      case (Some(attr), None)    => attr
+      case (Some(attr), Some(b)) => attr.copy(enabled = b)
+      case (None, Some(b))       => ReorgAttributes(enabled = b)
+      case (None, None)          => ReorgAttributes(enabled = false)
+    }
+    val docTranslator = translatorFactories
       .collectFirst { factory =>
-        factory.create(language, extras, fileResolver) match {
+        factory.create(sourceAbsPath,
+                       language,
+                       inputs,
+                       defaults,
+                       locked,
+                       defaultRuntimeAttrs,
+                       reorgAttrs,
+                       project,
+                       fileResolver) match {
           case Some(translator) => translator
         }
       }
       .getOrElse(
-          throw new Exception(s"Language ${language} is not supported")
+          language match {
+            case Some(lang) =>
+              throw new Exception(s"Language ${lang} is not supported")
+            case None =>
+              throw new Exception(s"Cannot determine language/version from source file ${source}")
+          }
       )
-
-    language match {
-      case Some(lang) => getTranslator(lang, fileResolver)
-      case None       => getTranslator(sourceAbsPath, fileResolver)
-    }
-    // only process inputs if they are needed
-    val jsDefaults =
-      defaults
-        .map(path => removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
-        .getOrElse(Map.empty)
-    if (jsDefaults.nonEmpty || writeDxInputsFile) {
-      // read inputs as JSON
-      val jsInputs = inputs
-        .map(path => path -> removeCommentFields(JsUtils.getFields(JsUtils.jsFromFile(path))))
-        .toMap
-      val (bundle, inputFiles) = translator.translateDocumentWithDefaults(
-          sourceAbsPath,
-          locked,
-          jsDefaults,
-          jsInputs,
-          reorgEnabled
-      )
-      // write DNAnexus input files if requested
-      if (writeDxInputsFile) {
-        inputFiles.foreach {
-          case (path, inputFile) =>
-            logger.trace(s"Translating input file ${path}")
-            val dxInputs = translateInputFile(inputFile, bundle)
-            val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
-            val dxInputFile = path.getParent match {
-              case null   => Paths.get(fileName)
-              case parent => parent.resolve(fileName)
-            }
-            logger.trace(s"Writing DNAnexus JSON input file ${dxInputFile}")
-            FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-        }
+    val bundle = docTranslator.bundle
+    // write DNAnexus input files if requesteds
+    if (writeDxInputsFile && inputs.nonEmpty) {
+      docTranslator.inputFiles.foreach {
+        case (path, inputFile) =>
+          logger.trace(s"Translating input file ${path}")
+          val dxInputs = translateInputFile(inputFile, bundle)
+          val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
+          val dxInputFile = path.getParent match {
+            case null   => Paths.get(fileName)
+            case parent => parent.resolve(fileName)
+          }
+          logger.trace(s"Writing DNAnexus JSON input file ${dxInputFile}")
+          FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
       }
-      bundle
-    } else {
-      translator.translateDocument(source, locked, reorgEnabled)
     }
+    bundle
   }
 }
