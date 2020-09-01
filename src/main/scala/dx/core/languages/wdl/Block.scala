@@ -76,7 +76,7 @@ These are not blocks, because we need a subworkflow to run them:
 package dx.core.languages.wdl
 
 import wdlTools.eval.WdlValues
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtil}
 
 // Block: a continuous list of workflow elements from a user
 // workflow.
@@ -125,10 +125,10 @@ case class Block(inputs: Vector[Block.InputDefinition],
   def makeName: Option[String] = {
     nodes.collectFirst {
       case TAT.Scatter(id, expr, _, _) =>
-        val collection = TUtil.exprToString(expr)
+        val collection = TUtil.prettyFormatExpr(expr)
         s"scatter (${id} in ${collection})"
       case TAT.Conditional(expr, _, _) =>
-        val cond = TUtil.exprToString(expr)
+        val cond = TUtil.prettyFormatExpr(expr)
         s"if (${cond})"
       case call: TAT.Call =>
         s"frag ${call.actualName}"
@@ -297,12 +297,6 @@ object Block {
         case TAT.ExprPlaceholderSep(sep: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(sep) ++ inner(value)
 
-        // operators on one argument
-        case oper1: TAT.ExprOperator1 => inner(oper1.value)
-
-        // operators on two arguments
-        case oper2: TAT.ExprOperator2 => inner(oper2.a) ++ inner(oper2.b)
-
         // Access an array element at [index]
         case TAT.ExprAt(value, index, _, _) =>
           inner(value) ++ inner(index)
@@ -343,7 +337,9 @@ object Block {
             case Vector(i: InputDefinition) =>
               Vector(RequiredInputDefinition(s"${i.name}.${fieldName}", wdlType))
             case _ =>
-              throw new Exception(s"Unhandled ExprGetName construction ${TUtil.exprToString(expr)}")
+              throw new Exception(
+                  s"Unhandled ExprGetName construction ${TUtil.prettyFormatExpr(expr)}"
+              )
           }
 
         case other =>

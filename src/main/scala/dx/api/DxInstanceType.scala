@@ -43,9 +43,9 @@ case class DxInstanceType(name: String,
                           os: Vector[(String, String)],
                           gpu: Boolean) {
   // Does this instance satisfy the requirements?
-  def satisfies(memReq: Option[Int],
-                diskReq: Option[Int],
-                cpuReq: Option[Int],
+  def satisfies(memReq: Option[Long],
+                diskReq: Option[Long],
+                cpuReq: Option[Long],
                 gpuReq: Option[Boolean]): Boolean = {
     memReq match {
       case Some(x) => if (memoryMB < x) return false
@@ -125,9 +125,9 @@ object DxInstanceType extends DefaultJsonProtocol {
 
 // Request for an instance type
 case class InstanceTypeReq(dxInstanceType: Option[String],
-                           memoryMB: Option[Int],
-                           diskGB: Option[Int],
-                           cpu: Option[Int],
+                           memoryMB: Option[Long],
+                           diskGB: Option[Long],
+                           cpu: Option[Long],
                            gpu: Option[Boolean])
 
 case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanceType]) {
@@ -158,9 +158,9 @@ case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanc
   // we use here is:
   // 1) discard all instances that do not have enough resources
   // 2) choose the cheapest instance
-  def chooseAttrs(memoryMB: Option[Int],
-                  diskGB: Option[Int],
-                  cpu: Option[Int],
+  def chooseAttrs(memoryMB: Option[Long],
+                  diskGB: Option[Long],
+                  cpu: Option[Long],
                   gpu: Option[Boolean]): String = {
     // discard all instances that are too weak
     val sufficient: Vector[DxInstanceType] =

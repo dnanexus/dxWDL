@@ -11,7 +11,7 @@ import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
 import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.languages.IORef
 import spray.json._
-import wdlTools.eval.{Serialize => WdlSerialize, WdlValues}
+import wdlTools.eval.{WdlValueSerde, WdlValues}
 import wdlTools.types.WdlTypes
 import wdlTools.util.{FileSourceResolver, LocalFileSource}
 
@@ -338,7 +338,7 @@ case class WdlVarLinksConverter(dxApi: DxApi,
       } else {
         bindName
       }
-    (bindEncName, WdlSerialize.toJson(wdlValue))
+    (bindEncName, WdlValueSerde.serialize(wdlValue))
   }
 
   // create input/output fields that bind the variable name [bindName] to

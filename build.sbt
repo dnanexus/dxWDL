@@ -30,7 +30,7 @@ publishMavenStyle := true
 val root = project.in(file("."))
 
 // reduce the maximum number of errors shown by the Scala compiler
-maxErrors := 7
+maxErrors := 20
 
 //coverageEnabled := true
 
@@ -70,7 +70,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val wdlToolsVersion = "0.3.1"
+val wdlToolsVersion = "0.5.0"
 val typesafeVersion = "1.3.3"
 val sprayVersion = "1.3.5"
 val jacksonVersion = "2.11.0"

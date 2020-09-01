@@ -24,7 +24,7 @@ object InstanceTypes {
     }
 
     // Examples for memory specification: "4000 MB", "1 GB"
-    val memoryMB: Option[Int] = wdlMemoryMB match {
+    val memoryMB: Option[Long] = wdlMemoryMB match {
       case None                          => None
       case Some(WdlValues.V_String(buf)) =>
         // extract number
@@ -74,7 +74,7 @@ object InstanceTypes {
     }
 
     // Examples: "local-disk 1024 HDD"
-    val diskGB: Option[Int] = wdlDiskGB match {
+    val diskGB: Option[Long] = wdlDiskGB match {
       case None => None
       case Some(WdlValues.V_String(buf)) =>
         val components = buf.split("\\s+")
@@ -95,7 +95,7 @@ object InstanceTypes {
     }
 
     // Examples: "1", "12"
-    val cpu: Option[Int] = wdlCpu match {
+    val cpu: Option[Long] = wdlCpu match {
       case None => None
       case Some(WdlValues.V_String(buf)) =>
         val i: Int =
