@@ -671,7 +671,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                               env: Map[String, WomValue]): Map[String, WdlVarLinks] = {
     val (svNode, collection) = evalScatterCollection(sctNode, env)
 
-    collection.grouped(MAX_JOBS_PER_SCATTER).foldLeft
+    //collection.grouped(MAX_JOBS_PER_SCATTER).foldLeft
 
     // loop on the collection, call the applet in the inner loop
     val childJobs: Vector[DxExecution] =
