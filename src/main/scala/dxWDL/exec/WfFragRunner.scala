@@ -657,11 +657,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
   //
   // translates to:
   //
-  // scatter(1-1000, previous=None)
+  // scatter(1-1000, jobId=A, parents=[])
   // |_exec job 1..1000
-  // |_exec scatter(1001..2000, previous=JBOR 1..1000) // does not run until jobs 1-1000 are complete
+  // |_exec scatter(1001..2000, jobId=B, parents=[A]) // does not run until jobs 1-1000 are complete
   //        |_exec job 1001..2000
-  //        |_exec collect(JBOR 1..2000)
+  //        |_exec collect(parents=[A,B]) // does not run until jobs 1001-2000 are complete
   private def continueScatter(sctNode: ScatterNode,
                               childJobs: Vector[DxExecution],
                               next: Int): Map[String, WdlVarLinks] = {

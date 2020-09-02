@@ -118,7 +118,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         Vector.empty
     }
     // add the current job to the list of parents
-    val allParents = parents :+ DxUtils.dxEnv.getJob
+    val allParents = parents :+ jobDesc.id
     JsObject(Map(ParentsKey -> JsArray(allParents.map(JsString(_)))))
   }
 
