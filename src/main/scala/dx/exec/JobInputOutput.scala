@@ -7,7 +7,7 @@ import dx.api.{DxApi, DxFile}
 import dx.core.io._
 import dx.core.languages.wdl.WdlVarLinksConverter
 import spray.json.{JsNull, JsValue}
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSource, FileSourceResolver, LocalFileSource, RealFileSource}
 
@@ -22,7 +22,7 @@ case class JobInputOutput(dxPathConfig: DxPathConfig,
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
-    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(env))
+    evaluator.applyExprAndCoerce(expr, wdlType, WdlValueBindings(env))
   }
 
   // Read the job-inputs JSON file, and convert the variables

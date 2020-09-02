@@ -4,7 +4,7 @@ import dx.api.DxApi
 import dx.core.languages.wdl.{PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
 import spray.json.JsValue
-import wdlTools.eval.{Context => EvalContext, Eval, WdlValues}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class WfInputs(wf: TAT.Workflow,
@@ -22,7 +22,7 @@ case class WfInputs(wf: TAT.Workflow,
     )
 
     // evaluate any non-overridden default expressions
-    var ctx = EvalContext(inputs.map { case (name, (_, value)) => name -> value })
+    var ctx = WdlValueBindings(inputs.map { case (name, (_, value)) => name -> value })
     val evaluatedInputs: Vector[(String, (WdlTypes.T, WdlValues.V))] = wf.inputs.flatMap {
       case i: TAT.InputDefinition if inputs.contains(i.name) =>
         // input with user-provided value
@@ -36,7 +36,7 @@ case class WfInputs(wf: TAT.Workflow,
         // TODO: order inputs by dependencies, since input expressions may
         //  reference each other
         val value = evaluator.applyExprAndCoerce(defaultExpr, wdlType, ctx)
-        ctx = ctx.addBinding(name, value)
+        ctx = ctx.add(name, value)
         Some(name -> (wdlType, value))
       case i: TAT.InputDefinition =>
         dxApi.logger.trace(s"Optional input ${i.name} not provided")

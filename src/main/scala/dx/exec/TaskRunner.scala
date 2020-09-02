@@ -28,11 +28,18 @@ import dx.core.io.{DxPathConfig, DxdaManifest, DxfuseManifest}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.exec.DockerUtils
 import wdlTools.syntax.SourceLocation
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSource, FileSourceResolver, RealFileSource, TraceLevel, Util}
+import wdlTools.util.{
+  FileSource,
+  FileSourceResolver,
+  FileUtils,
+  RealFileSource,
+  SysUtils,
+  TraceLevel
+}
 
 case class TaskRunner(task: TAT.Task,
                       document: TAT.Document,
@@ -46,7 +53,7 @@ case class TaskRunner(task: TAT.Task,
                       delayWorkspaceDestruction: Option[Boolean],
                       dxApi: DxApi,
                       evaluator: Eval) {
-  private val dockerUtils = DockerUtils(evaluator.opts, evaluator.evalCfg)
+  private val dockerUtils = DockerUtils(fileResolver)
 
   // serialize the task inputs to json, and then write to a file.
   def writeEnvToDisk(localizedInputs: Map[String, (WdlTypes.T, WdlValues.V)],
@@ -65,11 +72,11 @@ case class TaskRunner(task: TAT.Task,
 
     // marshal into json, and then to a string
     val json = JsObject("localizedInputs" -> JsObject(locInputsM), "dxUrl2path" -> JsObject(dxUrlM))
-    Util.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
+    FileUtils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
   }
 
   def readEnvFromDisk(): (Map[String, (WdlTypes.T, WdlValues.V)], Map[FileSource, Path]) = {
-    val buf = Util.readFileContent(dxPathConfig.runnerTaskEnv)
+    val buf = FileUtils.readFileContent(dxPathConfig.runnerTaskEnv)
     val json: JsValue = buf.parseJson
     val (localPathToJs, dxUriToJs) = json match {
       case JsObject(m) =>
@@ -98,7 +105,7 @@ case class TaskRunner(task: TAT.Task,
 
   private def printDirStruct(): Unit = {
     dxApi.logger.traceLimited("Directory structure:", minLevel = TraceLevel.VVerbose)
-    val (stdout, _) = Util.execCommand("ls -lR", None)
+    val (_, stdout, _) = SysUtils.execCommand("ls -lR", None)
     dxApi.logger.traceLimited(stdout + "\n", 10000, minLevel = TraceLevel.VVerbose)
   }
 
@@ -115,7 +122,7 @@ case class TaskRunner(task: TAT.Task,
           case Some(dra) => dra.m.get("docker")
         }
       case Some(expr) =>
-        val value = evaluator.applyExprAndCoerce(expr, WdlTypes.T_String, EvalContext(env))
+        val value = evaluator.applyExprAndCoerce(expr, WdlTypes.T_String, WdlValueBindings(env))
         Some(value)
     }
     dImg match {
@@ -190,7 +197,7 @@ case class TaskRunner(task: TAT.Task,
         Vector(part1, command, part2).mkString("\n")
       }
     dxApi.logger.traceLimited(s"writing bash script to ${dxPathConfig.script}")
-    Util.writeFileContent(dxPathConfig.script, script)
+    FileUtils.writeFileContent(dxPathConfig.script, script)
     dxPathConfig.script.toFile.setExecutable(true)
   }
 
@@ -249,7 +256,7 @@ case class TaskRunner(task: TAT.Task,
     //  -v ${dxPathConfig.dxfuseMountpoint}:${dxPathConfig.dxfuseMountpoint}
 
     dxApi.logger.traceLimited(s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
-    Util.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
+    FileUtils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
     dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
   }
 
@@ -276,7 +283,7 @@ case class TaskRunner(task: TAT.Task,
       task.declarations.foldLeft(inputsWithTypes) {
         case (env, TAT.Declaration(name, wdlType, Some(expr), _)) =>
           val wdlValue =
-            evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(stripTypesFromEnv(env)))
+            evaluator.applyExprAndCoerce(expr, wdlType, WdlValueBindings(stripTypesFromEnv(env)))
           env + (name -> (wdlType, wdlValue))
         case (_, TAT.Declaration(name, _, None, _)) =>
           throw new Exception(s"Declaration ${name} has no expression")
@@ -301,8 +308,8 @@ case class TaskRunner(task: TAT.Task,
     }
 
     val parameterMeta: Map[String, TAT.MetaValue] = task.parameterMeta match {
-      case None                                   => Map.empty
-      case Some(TAT.ParameterMetaSection(kvs, _)) => kvs
+      case None                          => Map.empty
+      case Some(TAT.MetaSection(kvs, _)) => kvs
     }
 
     // Download/stream all input files.
@@ -315,13 +322,13 @@ case class TaskRunner(task: TAT.Task,
     // build a manifest for dxda, if there are files to download
     val DxdaManifest(manifestJs) = dxdaManifest
     if (manifestJs.asJsObject.fields.nonEmpty) {
-      Util.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
+      FileUtils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
     }
 
     // build a manifest for dxfuse
     val DxfuseManifest(manifest2Js) = dxfuseManifest
     if (manifest2Js != JsNull) {
-      Util.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
+      FileUtils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
     }
 
     val inputsWithTypes: Map[String, (WdlTypes.T, WdlValues.V)] =
@@ -346,7 +353,7 @@ case class TaskRunner(task: TAT.Task,
     val docker = dockerImage(stripTypesFromEnv(env), task.command.loc)
 
     // instantiate the command
-    val command = evaluator.applyCommand(task.command, EvalContext(stripTypesFromEnv(env)))
+    val command = evaluator.applyCommand(task.command, WdlValueBindings(stripTypesFromEnv(env)))
 
     // Write shell script to a file. It will be executed by the dx-applet shell code.
     writeBashScript(command)
@@ -380,7 +387,7 @@ case class TaskRunner(task: TAT.Task,
             val envNoTypes = stripTypesFromEnv(env)
             val value = evaluator.applyExprAndCoerce(outDef.expr,
                                                      outDef.wdlType,
-                                                     EvalContext(envNoTypes ++ inputsNoTypes))
+                                                     WdlValueBindings(envNoTypes ++ inputsNoTypes))
             env + (outDef.name -> (outDef.wdlType, value))
         }
 
@@ -433,7 +440,9 @@ case class TaskRunner(task: TAT.Task,
         case Some(expr) =>
           Some(
               evaluator
-                .applyExprAndCoerce(expr, WdlTypes.T_String, EvalContext(stripTypesFromEnv(env)))
+                .applyExprAndCoerce(expr,
+                                    WdlTypes.T_String,
+                                    WdlValueBindings(stripTypesFromEnv(env)))
           )
       }
     }

@@ -44,7 +44,7 @@ import dx.core.io.{DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.wdl._
 import dx.core.getVersion
 import spray.json._
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, TraceLevel}
 
@@ -86,7 +86,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                                     env: Map[String, (WdlTypes.T, WdlValues.V)]): WdlValues.V = {
     // strip the types
     val envStripped = env.map { case (k, (_, v)) => k -> v }
-    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(envStripped))
+    evaluator.applyExprAndCoerce(expr, wdlType, WdlValueBindings(envStripped))
   }
 
   private def getCallLinkInfo(call: TAT.Call): ExecLinkInfo = {

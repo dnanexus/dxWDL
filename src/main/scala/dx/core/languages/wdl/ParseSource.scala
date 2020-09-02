@@ -10,7 +10,6 @@ import wdlTools.types.{
   Context,
   TypeException,
   TypeInfer,
-  TypeOptions,
   WdlTypes,
   TypeCheckingRegime => WdlTypeCheckingRegime,
   TypedAbstractSyntax => TAT
@@ -73,17 +72,6 @@ case class ParseSource(dxApi: DxApi) {
     BInfo(allCallables, sources, adjunctFiles)
   }
 
-  private def makeOptions(importDirs: Vector[Path]): TypeOptions = {
-    val dxProtocol = DxFileAccessProtocol(dxApi)
-    val fileResolver = FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
-    TypeOptions(
-        fileResolver = fileResolver,
-        logger = logger,
-        followImports = true,
-        typeChecking = WdlTypeCheckingRegime.Strict
-    )
-  }
-
   // recurse into the imported packages
   //
   // Check the uniqueness of tasks, Workflows, and Types
@@ -109,12 +97,18 @@ case class ParseSource(dxApi: DxApi) {
     retval
   }
 
+  private def createFileResolver(importDirs: Vector[Path]): FileSourceResolver = {
+    val dxProtocol = DxFileAccessProtocol(dxApi)
+    FileSourceResolver.create(importDirs, Vector(dxProtocol), logger)
+  }
+
   private def parseWdlFromPath(path: Path, importDirs: Vector[Path]): (TAT.Document, Context) = {
     val srcDir = path.getParent
-    val opts = makeOptions(importDirs :+ srcDir)
-    val parsers = Parsers(opts)
-    val doc = parsers.parseDocument(opts.fileResolver.fromPath(path))
-    TypeInfer(opts).apply(doc)
+    val fileResolver = createFileResolver(importDirs :+ srcDir)
+    val parsers = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
+    val doc = parsers.parseDocument(fileResolver.fromPath(path))
+    TypeInfer(regime = WdlTypeCheckingRegime.Moderate, fileResolver = fileResolver, logger = logger)
+      .apply(doc)
   }
 
   // Parses the main WDL file and all imports and creates a "bundle" of workflows and tasks.
@@ -156,20 +150,17 @@ case class ParseSource(dxApi: DxApi) {
 
     (tMainDoc.source,
      Language.fromWdlVersion(tMainDoc.version.value),
-     Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
+     Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases.bindings),
      flatInfo.sources,
      flatInfo.adjunctFiles)
   }
 
-  private def parseWdlFromString(
-      src: String,
-      opts: TypeOptions = makeOptions(Vector.empty)
-  ): (TAT.Document, Context) = {
+  private def parseWdlFromString(src: String): (TAT.Document, Context) = {
     val sourceCode = StringFileSource(src)
     try {
-      val parser = Parsers(opts).getParser(sourceCode)
-      val doc = parser.parseDocument(sourceCode)
-      TypeInfer(opts).apply(doc)
+      val parsers = Parsers(followImports = true, logger = logger)
+      val doc = parsers.parseDocument(sourceCode)
+      TypeInfer(regime = WdlTypeCheckingRegime.Moderate, logger = logger).apply(doc)
     } catch {
       case se: SyntaxException =>
         System.out.println("WDL code is syntactically invalid ----- ")
@@ -225,7 +216,7 @@ case class ParseSource(dxApi: DxApi) {
     val tasks = tDoc.elements.collect {
       case task: TAT.Task => task.name -> task
     }.toMap
-    (tasks, typeCtx.aliases, tDoc)
+    (tasks, typeCtx.aliases.bindings, tDoc)
   }
 
   def parseWdlTask(taskSource: String): (TAT.Task, Map[String, WdlTypes.T], TAT.Document) = {

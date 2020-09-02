@@ -53,7 +53,7 @@ import spray.json._
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{StringFileSource, Util}
+import wdlTools.util.{FileUtils, StringFileSource}
 
 import scala.util.matching.Regex
 
@@ -435,7 +435,7 @@ object DxNI {
     }
     val generator = WdlV1Generator()
     val lines = generator.generateDocument(element, header)
-    Util.writeFileContent(outputPath, lines.mkString("\n"))
+    FileUtils.writeFileContent(outputPath, lines.mkString("\n"))
   }
 
   // create headers for calling dx:applets and dx:workflows

@@ -51,8 +51,8 @@ case class GenerateIRTask(dxApi: DxApi,
 
     def evalHintAttr(attrName: String): Option[TAT.MetaValue] = {
       val hintAttributes: Map[String, TAT.MetaValue] = task.hints match {
-        case None                           => Map.empty
-        case Some(TAT.HintsSection(kvs, _)) => kvs
+        case None                          => Map.empty
+        case Some(TAT.MetaSection(kvs, _)) => kvs
       }
       hintAttributes.get(attrName) match {
         case None =>
@@ -185,7 +185,7 @@ case class GenerateIRTask(dxApi: DxApi,
     }
   }
 
-  private def unwrapMetaInteger(value: TAT.MetaValue): Int = {
+  private def unwrapMetaInteger(value: TAT.MetaValue): Long = {
     value match {
       case TAT.MetaValueInt(i, _) => i
       case _                      => throw new Exception("Expected WdlValues.V_Int")
@@ -198,10 +198,10 @@ case class GenerateIRTask(dxApi: DxApi,
   private def parseDuration(duration: String): IR.RuntimeHintTimeout = {
     durationRegexp.findFirstMatchIn(duration) match {
       case Some(result: Regex.Match) =>
-        def group(i: Int): Option[Int] = {
+        def group(i: Int): Option[Long] = {
           result.group(i) match {
             case null      => None
-            case s: String => Some(s.toInt)
+            case s: String => Some(s.toLong)
           }
         }
         IR.RuntimeHintTimeout(group(1), group(2), group(3))
@@ -260,7 +260,7 @@ case class GenerateIRTask(dxApi: DxApi,
   private def lookupInputParam(iName: String, task: TAT.Task): Option[TAT.MetaValue] = {
     task.parameterMeta match {
       case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         kvs.get(iName)
     }
   }
@@ -349,8 +349,8 @@ case class GenerateIRTask(dxApi: DxApi,
 
     // Handle any dx-specific runtime hints, other than "type" and "id" which are handled above
     val hintAttr: Map[String, TAT.MetaValue] = task.hints match {
-      case None                           => Map.empty
-      case Some(TAT.HintsSection(kvs, _)) => kvs
+      case None                          => Map.empty
+      case Some(TAT.MetaSection(kvs, _)) => kvs
     }
     val runtimeHints = unwrapHints(hintAttr)
 

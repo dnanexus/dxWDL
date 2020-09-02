@@ -8,7 +8,7 @@ import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{ParseSource, WdlVarLinksConverter}
 import spray.json.JsValue
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -257,7 +257,7 @@ case class Top(cOpt: CompilerOptions) {
     cOpt.inputs.foreach { path =>
       val dxInputs = inputFile.dxFromInputJson(bundle2, path)
       // write back out as xxxx.dx.json
-      val filename = Util.replaceFileSuffix(path, ".dx.json")
+      val filename = FileUtils.replaceFileSuffix(path, ".dx.json")
       val parent = path.getParent
       val dxInputFile =
         if (parent != null) {
@@ -265,7 +265,7 @@ case class Top(cOpt: CompilerOptions) {
         } else {
           Paths.get(filename)
         }
-      Util.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+      FileUtils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
       logger.trace(s"Wrote dx JSON input file ${dxInputFile}")
     }
     bundle2

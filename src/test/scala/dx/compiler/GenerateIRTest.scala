@@ -50,7 +50,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   private def getParamMeta(task: TAT.Task, iDef: TAT.InputDefinition): Option[TAT.MetaValue] = {
     task.parameterMeta match {
       case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         kvs.get(iDef.name)
     }
   }
@@ -462,7 +462,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     )
 
     inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
 
@@ -551,7 +551,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
           )
       )
     inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
 
@@ -967,7 +967,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
           "s" -> IR.MetaValueString("This is help for s")
       )
     inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe sansText
     }
 
@@ -989,7 +989,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val diffTask = getTaskByName("help_input_params_diff", bundle)
 
     inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
             "a" -> IR.MetaValueObject(
                 Map(
@@ -1201,7 +1201,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val cgrepTask = getTaskByName("cgrep", bundle)
     inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map("in_file" -> IR.MetaValueString("stream"))
     }
 
@@ -1214,7 +1214,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
             "a" -> IR.MetaValueString("stream"),
             "b" -> IR.MetaValueString("stream")
@@ -1235,7 +1235,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val cgrepTask = getTaskByName("cgrep", bundle)
     inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
             "in_file" -> IR.MetaValueObject(
                 Map("stream" -> IR.MetaValueBoolean(true))
@@ -1252,7 +1252,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
             "a" -> IR.MetaValueObject(
                 Map("stream" -> IR.MetaValueBoolean(true))
@@ -1276,7 +1276,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
+      case Some(TAT.MetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map("a" -> IR.MetaValueString("stream"),
                                            "b" -> IR.MetaValueString("stream"))
     }

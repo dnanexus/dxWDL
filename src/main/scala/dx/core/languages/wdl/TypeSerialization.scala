@@ -1,7 +1,7 @@
 package dx.core.languages.wdl
 
 import wdlTools.types.WdlTypes._
-import wdlTools.types.{Util => TUtil}
+import wdlTools.types.{Utils => TUtil}
 
 // Write a WDL type as a string, and be able to convert back.
 case class TypeSerialization(typeAliases: Map[String, T]) {
@@ -41,7 +41,7 @@ case class TypeSerialization(typeAliases: Map[String, T]) {
 
       // catch-all for other types not currently supported
       case other =>
-        throw new Exception(s"Unsupported WDL type ${TUtil.typeToString(other)}")
+        throw new Exception(s"Unsupported WDL type ${TUtil.prettyFormatType(other)}")
     }
   }
 
@@ -164,7 +164,7 @@ object TypeSerialization {
 
       // catch-all for other types not currently supported
       case other =>
-        throw new Exception(s"Unsupported WDL type ${TUtil.typeToString(other)}")
+        throw new Exception(s"Unsupported WDL type ${TUtil.prettyFormatType(other)}")
     }
   }
 }
