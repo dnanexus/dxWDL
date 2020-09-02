@@ -5,7 +5,7 @@ import dx.core.{REORG_STATUS, REORG_STATUS_COMPLETE}
 import dx.core.languages.wdl.{Block, PrettyPrintApprox, WdlVarLinksConverter}
 import dx.core.getVersion
 import spray.json.{JsString, JsValue}
-import wdlTools.eval.{Eval, WdlValues, Context => EvalContext}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 case class WfOutputs(wf: TAT.Workflow,
@@ -16,7 +16,7 @@ case class WfOutputs(wf: TAT.Workflow,
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
                                     env: Map[String, WdlValues.V]): WdlValues.V = {
-    evaluator.applyExprAndCoerce(expr, wdlType, EvalContext(env))
+    evaluator.applyExprAndCoerce(expr, wdlType, WdlValueBindings(env))
   }
 
   def apply(envInitial: Map[String, (WdlTypes.T, WdlValues.V)],

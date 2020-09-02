@@ -1,13 +1,13 @@
 package dx.core.languages.wdl
 
-import wdlTools.types.{TypedAbstractSyntax => TAT, Util => TUtil}
+import wdlTools.types.{TypedAbstractSyntax => TAT, Utils => TUtil}
 
 // TODO: I think this is redundant with wdlTools.generators.code.WdlV1Generator
 object PrettyPrintApprox {
   def applyWorkflowElement(node: TAT.WorkflowElement, indent: String): String = {
     node match {
       case TAT.Scatter(varName, expr, body, _) =>
-        val collection = TUtil.exprToString(expr)
+        val collection = TUtil.prettyFormatExpr(expr)
         val innerBlock = body
           .map { node =>
             applyWorkflowElement(node, indent + "  ")
@@ -25,7 +25,7 @@ object PrettyPrintApprox {
               applyWorkflowElement(node, indent + "  ")
             }
             .mkString("\n")
-        s"""|${indent}if (${TUtil.exprToString(expr)}) {
+        s"""|${indent}if (${TUtil.prettyFormatExpr(expr)}) {
             |${innerBlock}
             |${indent}}
             |""".stripMargin
@@ -34,7 +34,7 @@ object PrettyPrintApprox {
         val inputNames = call.inputs
           .map {
             case (key, expr) =>
-              s"${key} = ${TUtil.exprToString(expr)}"
+              s"${key} = ${TUtil.prettyFormatExpr(expr)}"
           }
           .mkString(",")
         val inputs =
@@ -48,22 +48,22 @@ object PrettyPrintApprox {
         }
 
       case TAT.Declaration(_, wdlType, None, _) =>
-        s"${indent} ${TUtil.typeToString(wdlType)}"
+        s"${indent} ${TUtil.prettyFormatType(wdlType)}"
       case TAT.Declaration(_, wdlType, Some(expr), _) =>
-        s"${indent} ${TUtil.typeToString(wdlType)} = ${TUtil.exprToString(expr)}"
+        s"${indent} ${TUtil.prettyFormatType(wdlType)} = ${TUtil.prettyFormatExpr(expr)}"
     }
   }
 
   private def applyInput(iDef: TAT.InputDefinition): String = {
     iDef match {
       case TAT.RequiredInputDefinition(iName, wdlType, _) =>
-        s"${TUtil.typeToString(wdlType)} ${iName}"
+        s"${TUtil.prettyFormatType(wdlType)} ${iName}"
 
       case TAT.OverridableInputDefinitionWithDefault(iName, wdlType, defaultExpr, _) =>
-        s"${TUtil.typeToString(wdlType)} ${iName} = ${TUtil.exprToString(defaultExpr)}"
+        s"${TUtil.prettyFormatType(wdlType)} ${iName} = ${TUtil.prettyFormatExpr(defaultExpr)}"
 
       case TAT.OptionalInputDefinition(iName, wdlType, _) =>
-        s"${TUtil.typeToString(wdlType)} ${iName}"
+        s"${TUtil.prettyFormatType(wdlType)} ${iName}"
     }
   }
 
@@ -75,7 +75,7 @@ object PrettyPrintApprox {
     outputs
       .map {
         case TAT.OutputDefinition(name, wdlType, expr, _) =>
-          s"${TUtil.typeToString(wdlType)} ${name} = ${TUtil.exprToString(expr)}"
+          s"${TUtil.prettyFormatType(wdlType)} ${name} = ${TUtil.prettyFormatExpr(expr)}"
       }
       .mkString("\n")
   }

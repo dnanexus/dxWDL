@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, Logger, Util}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger, SysUtils}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -115,7 +115,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val inputsFile = pathFromBasename(s"${wdlName}_input.json")
         assert(Files.exists(inputsFile))
-        Util.readFileContent(inputsFile).parseJson.asJsObject.fields
+        FileUtils.readFileContent(inputsFile).parseJson.asJsObject.fields
       } catch {
         case _: Throwable =>
           Map.empty
@@ -126,7 +126,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
       try {
         val outputsFile = pathFromBasename(s"${wdlName}_output.json")
         assert(Files.exists(outputsFile))
-        Some(Util.readFileContent(outputsFile).parseJson.asJsObject.fields)
+        Some(FileUtils.readFileContent(outputsFile).parseJson.asJsObject.fields)
       } catch {
         case _: Throwable =>
           None
@@ -134,8 +134,8 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
 
     // Create a clean temp directory for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
-    Util.deleteRecursive(jobHomeDir)
-    Util.createDirectories(jobHomeDir)
+    FileUtils.deleteRecursive(jobHomeDir)
+    FileUtils.createDirectories(jobHomeDir)
     val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
 
@@ -197,7 +197,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     // execute the shell script in a child job
     val script: Path = dxPathConfig.script
     if (Files.exists(script)) {
-      val (_, _) = Util.execCommand(script.toString, None)
+      val _ = SysUtils.execCommand(script.toString, None)
     }
 
     // epilog

@@ -44,7 +44,7 @@ object IR {
   sealed abstract class MetaValue
   final case object MetaValueNull extends MetaValue
   final case class MetaValueBoolean(value: Boolean) extends MetaValue
-  final case class MetaValueInt(value: Int) extends MetaValue
+  final case class MetaValueInt(value: Long) extends MetaValue
   final case class MetaValueFloat(value: Double) extends MetaValue
   final case class MetaValueString(value: String) extends MetaValue
   final case class MetaValueObject(value: Map[String, MetaValue]) extends MetaValue

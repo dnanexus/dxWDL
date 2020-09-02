@@ -12,7 +12,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{Logger, SysUtils}
 
 import scala.io.Source
 
@@ -77,9 +77,9 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val topDir = Paths.get(System.getProperty("user.dir"))
     nativeApplets.foreach { app =>
       try {
-        val (_, _) = Util.execCommand(
+        val _ = SysUtils.execCommand(
             s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
-            quiet = true
+            logger = Logger.Quiet
         )
       } catch {
         case _: Throwable =>
@@ -914,7 +914,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Util.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -941,7 +941,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Util.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -964,7 +964,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (stdout, _) = Util.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -1029,7 +1029,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
-    val (uploadOut, _) = Util.execCommand(
+    val (_, uploadOut, _) = SysUtils.execCommand(
         s"dx upload ${path.toString} --destination /reorg_tests --brief"
     )
     val fileId = uploadOut.trim
@@ -1122,8 +1122,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the job reuse flag is set
-    val (stdout, _) =
-      Util.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val (_, stdout, _) =
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
@@ -1149,8 +1149,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the job reuse flag is set
-    val (stdout, _) =
-      Util.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+    val (_, stdout, _) =
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
@@ -1175,8 +1175,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the delayWorkspaceDestruction flag is set
-    val (stdout, _) =
-      Util.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+    val (_, stdout, _) =
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
@@ -1202,8 +1202,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the flag is set on the resulting workflow
-    val (stdout, _) =
-      Util.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+    val (_, stdout, _) =
+      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)

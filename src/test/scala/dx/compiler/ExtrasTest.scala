@@ -8,14 +8,14 @@ import org.scalatest.matchers.should.Matchers
 import spray.json.DefaultJsonProtocol._
 import spray.json._
 import wdlTools.eval.WdlValues
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{Logger, SysUtils}
 
 class ExtrasTest extends AnyFlatSpec with Matchers {
   private val dxApi_QUIET = DxApi(Logger.Quiet)
   private val dxApi_LOUD = DxApi(Logger.Verbose)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, _) = Util.execCommand(s"dx describe ${name} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
@@ -169,7 +169,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
     val js = runSpec.parseJson
     val extras = Extras.parse(js, dxApi_LOUD)
 
-    val restartPolicy =
+    val restartPolicy: Map[String, Long] =
       Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
     extras.defaultTaskDxAttributes should be(
         Some(
