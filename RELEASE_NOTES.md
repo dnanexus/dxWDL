@@ -1,5 +1,23 @@
 # Release Notes
 
+## 1.49 (dev)
+
+* Remove size limit on scatters. Instead, scatters are broken up into chunks, with up to 500 jobs in each chunk. This allows scatters of any size while minimizing load on the API server.
+
+## 1.48.2 09-Aug-2020
+
+* Upgrade dxfuse to v0.22.3 to retry 502 errors inside jobs.
+* Upgrade dx-download-agent to v0.5.1 to fix retry.
+
+## 1.48.1 09-Jul-2020
+
+* Upgrade of dx-download-agent to v0.4.0 to fix progress reporting errors and symlink downloads.
+
+## 1.48 24-Jun-2020
+
+* Upgrade of dx-download-agent which retries 502 errors in jobs
+* Optimized bulk description of files by replacing system/describeDataObjects with system/findDataObjects API call and scoping file search to projects
+
 ## 1.47.2 05-Jun-2020
 - Upgrade dx-download-agent (includes a fix to the early database close issue) 
 - Fix to describing billTo of a project
