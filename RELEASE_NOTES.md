@@ -3,6 +3,7 @@
 ## 1.49 (dev)
 
 * Remove size limit on scatters. Instead, scatters are broken up into chunks, with up to 500 jobs in each chunk. This allows scatters of any size while minimizing load on the API server.
+* Describe executions during call to system/findExecutions, rather than as a separate call, to fix error when describing more than 1000 scatter jobs 
 
 ## 1.48.2 09-Aug-2020
 

@@ -10,8 +10,6 @@ import dxWDL.compiler.Tree
 import dxWDL.dx._
 import dxWDL.util._
 
-import scala.tools.nsc.interactive.Pickler.~
-
 object Main extends App {
   sealed trait Termination
   case class SuccessfulTermination(output: String) extends Termination
