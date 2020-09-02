@@ -871,7 +871,7 @@ object Main extends App {
         Utils.trace(true, s"""|applet field not found locally, performing
                               |an API call.
                               |""".stripMargin)
-        val dxJob = DxJob(DxUtils.dxEnv.getJob())
+        val dxJob = DxJob(DxUtils.dxEnv.getJob)
         dxJob.describe().applet
       case Some(JsString(x)) =>
         DxApplet(x, None)

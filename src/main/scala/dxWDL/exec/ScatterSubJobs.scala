@@ -91,24 +91,42 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
+  private def siblingJobs: Vector[DxExecution] = {
+    val currentJobId = DxUtils.dxEnv.getJob
+    val parentJob = DxJob(currentJobId).describe().parentJob match {
+      case Some(job) => job
+      case None =>
+        throw new Exception(s"Can't get parent job for $currentJobId")
+    }
+    findChildExecutions(Some(parentJob), currentJobId).map(_.exec)
+  }
+
   // Launch a subjob to continue a large scatter
   def launchContinue(childJobs: Vector[DxExecution],
                      start: Int,
-                     exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+                     exportTypes: Map[String, WomType],
+                     isContinuation: Boolean = false): Map[String, WdlVarLinks] = {
     assert(childJobs.nonEmpty)
 
     val inputsWithStart = JsObject(
         inputsRaw.asJsObject.fields + (Utils.CONTINUE_START -> JsNumber(start))
     )
+    val allChildJobs = if (isContinuation) {
+      siblingJobs ++ childJobs
+    } else {
+      childJobs
+    }
+    val name = s"continue($start)"
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
     val dxSubJob: DxJob = DxUtils.runSubJob("continue",
                                             Some(instanceTypeDB.defaultInstanceType),
                                             inputsWithStart,
-                                            childJobs,
+                                            allChildJobs,
                                             delayWorkspaceDestruction,
-                                            maxVerboseLevel)
+                                            maxVerboseLevel,
+                                            Some(name))
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
@@ -120,17 +138,25 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
 
   // Launch a subjob to collect the outputs
   def launchCollect(childJobs: Vector[DxExecution],
-                    exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+                    exportTypes: Map[String, WomType],
+                    isContinuation: Boolean = false): Map[String, WdlVarLinks] = {
     assert(childJobs.nonEmpty)
+
+    val allChildJobs = if (isContinuation) {
+      siblingJobs ++ childJobs
+    } else {
+      childJobs
+    }
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
     val dxSubJob: DxJob = DxUtils.runSubJob("collect",
                                             Some(instanceTypeDB.defaultInstanceType),
                                             inputsRaw,
-                                            childJobs,
+                                            allChildJobs,
                                             delayWorkspaceDestruction,
-                                            maxVerboseLevel)
+                                            maxVerboseLevel,
+                                            Some("collect"))
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.

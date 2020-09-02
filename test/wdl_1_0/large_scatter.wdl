@@ -9,8 +9,12 @@ workflow large_scatter {
     call echo { input: i = i }
   }
 
+  call sum_ints {
+    input: ints = echo.j
+  }
+
   output {
-    Array[Int] j = echo.j
+    Int sum = sum_ints.sum
   }
 }
 
@@ -25,6 +29,24 @@ task echo {
 
   output {
     Int j = read_int(stdout())
+  }
+
+  runtime {
+    docker: "ubuntu"
+  }
+}
+
+task sum_ints {
+  input {
+    Array[Int] ints
+  }
+
+  command <<<
+    echo "~{sep="+" ints}" | bc
+  >>>
+
+  output {
+    Int sum = read_int(stdout())
   }
 
   runtime {

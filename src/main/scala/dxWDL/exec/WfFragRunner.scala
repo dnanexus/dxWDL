@@ -667,7 +667,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
       scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
     }.toMap
-    val promises = collectSubJobs.launchContinue(childJobs, next, resultTypes)
+    val promises = collectSubJobs.launchContinue(childJobs, next, resultTypes, scatterStart > 0)
     val promisesStr = promises.mkString("\n")
     Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
     Utils.appletLog(verbose, s"promises=${promisesStr}")
@@ -682,7 +682,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
       scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
     }.toMap
-    val promises = collectSubJobs.launchCollect(childJobs, resultTypes)
+    val promises = collectSubJobs.launchCollect(childJobs, resultTypes, scatterStart > 0)
     val promisesStr = promises.mkString("\n")
     Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
     Utils.appletLog(verbose, s"promises=${promisesStr}")
@@ -706,7 +706,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
     next match {
       case Some(index) =>
-        // there are remaning chunks - call a continue sub-job
+        // there are remaining chunks - call a continue sub-job
         continueScatter(sctNode, childJobs, index)
       case None =>
         // this is the last chunk - call collect sub-job to gather all the results
