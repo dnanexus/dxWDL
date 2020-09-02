@@ -10,6 +10,8 @@ import dxWDL.compiler.Tree
 import dxWDL.dx._
 import dxWDL.util._
 
+import scala.tools.nsc.interactive.Pickler.~
+
 object Main extends App {
   sealed trait Termination
   case class SuccessfulTermination(output: String) extends Termination
@@ -413,14 +415,16 @@ object Main extends App {
       case None => Utils.DEFAULT_JOBS_PER_SCATTER
       case Some(x) =>
         val size = x.head.toInt
-        if (size >= 1 && size <= Utils.MAX_JOBS_PER_SCATTER) {
-          size
-        } else {
+        if (size < 1) {
+          Utils.DEFAULT_JOBS_PER_SCATTER
+        } else if (size > Utils.MAX_JOBS_PER_SCATTER) {
           Utils.warning(
               verbose,
               s"The number of jobs per scatter must be between 1-${Utils.MAX_JOBS_PER_SCATTER}"
           )
           Utils.MAX_JOBS_PER_SCATTER
+        } else {
+          size
         }
     }
 
