@@ -42,7 +42,7 @@ task sum_ints {
   }
 
   command <<<
-    apt update && apt install -y bc
+    (apt update && apt install -y bc) > /dev/null 2> /dev/null
     echo "~{sep="+" ints}" | bc
   >>>
 

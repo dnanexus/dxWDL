@@ -92,6 +92,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
   private val ParentsKey = "parents___"
+
   private def jsStringArrayToVector(jsv: Option[JsValue]): Vector[String] = {
     jsv match {
       case Some(JsArray(array)) =>
