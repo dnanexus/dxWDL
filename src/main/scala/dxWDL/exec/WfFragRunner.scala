@@ -62,12 +62,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         dxIoFunctions: DxIoFunctions,
                         inputsRaw: JsValue,
                         fragInputOutput: WfFragInputOutput,
+                        jobDesc: DxJobDescribe,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
                         runtimeDebugLevel: Int,
-                        scatterStart: Int = 0) {
+                        scatterStart: Int = 0,
+                        jobsPerScatter: Int = Utils.DEFAULT_JOBS_PER_SCATTER) {
   private val MAX_JOB_NAME = 50
-  private val MAX_JOBS_PER_SCATTER = 2
   private val verbose = runtimeDebugLevel >= 1
   //private val maxVerboseLevel = (runtimeDebugLevel == 2)
   private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
@@ -79,7 +80,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                               instanceTypeDB,
                                               delayWorkspaceDestruction,
                                               runtimeDebugLevel,
-                                              fragInputOutput.typeAliases)
+                                              fragInputOutput.typeAliases,
+                                              jobDesc)
   // The source code for all the tasks
   private val taskSourceDir: Map[String, String] =
     ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
@@ -631,11 +633,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
                             WomArrayType(svNode.womType),
                             env)
     val (collection: Seq[WomValue], next: Option[Int]) = collectionRaw match {
-      case x: WomArray if scatterStart == 0 && x.size <= MAX_JOBS_PER_SCATTER =>
+      case x: WomArray if scatterStart == 0 && x.size <= jobsPerScatter =>
         (x.value, None)
       case x: WomArray =>
         val array = x.value
-        val scatterEnd = scatterStart + MAX_JOBS_PER_SCATTER
+        val scatterEnd = scatterStart + jobsPerScatter
         if (scatterEnd < array.size) {
           (array.slice(scatterStart, scatterEnd), Some(scatterEnd))
         } else {
@@ -667,7 +669,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
       scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
     }.toMap
-    val promises = collectSubJobs.launchContinue(childJobs, next, resultTypes, scatterStart > 0)
+    val promises = collectSubJobs.launchContinue(childJobs, next, resultTypes)
     val promisesStr = promises.mkString("\n")
     Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
     Utils.appletLog(verbose, s"promises=${promisesStr}")
@@ -682,7 +684,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
       scp: ScatterGathererPort =>
         scp.identifier.localName.value -> scp.womType
     }.toMap
-    val promises = collectSubJobs.launchCollect(childJobs, resultTypes, scatterStart > 0)
+    val promises = collectSubJobs.launchCollect(childJobs, resultTypes)
     val promisesStr = promises.mkString("\n")
     Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
     Utils.appletLog(verbose, s"promises=${promisesStr}")
@@ -857,18 +859,17 @@ case class WfFragRunner(wf: WorkflowDefinition,
             throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
         }
       case RunnerWfFragmentMode.Collect =>
-        val childJobsComplete = collectSubJobs.executableFromSeqNum()
         catg match {
           case Block.ScatterOneCall(_, _, call) =>
             // scatter with a single call
-            collectSubJobs.aggregateResults(call, childJobsComplete)
+            collectSubJobs.aggregateResults(call)
 
           case Block.ScatterFullBlock(_, _) =>
             // A scatter with a complex sub-block, compiled as a sub-workflow
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)
             val (_, linkInfo) = execLinkInfo.toVector.head
-            collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
+            collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo)
 
           case other =>
             throw new AppInternalException(s"Bad case ${other.getClass} ${other}")

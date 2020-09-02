@@ -13,6 +13,7 @@ case class DxJobDescribe(project: String,
                          details: Option[JsValue],
                          applet: DxApplet,
                          parentJob: Option[DxJob],
+                         originJob: Option[DxJob],
                          analysis: Option[DxAnalysis])
     extends DxObjectDescribe
 
@@ -26,6 +27,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                             Field.Modified,
                             Field.Applet,
                             Field.ParentJob,
+                            Field.OriginJob,
                             Field.Analysis)
     val allFields = fields ++ defaultFields
     val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
@@ -51,6 +53,7 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
                         None,
                         DxApplet.getInstance(applet),
                         None,
+                        None,
                         None)
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -64,13 +67,23 @@ case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject
       case Some(JsString(x)) => Some(DxJob.getInstance(x))
       case Some(other)       => throw new Exception(s"should be a job ${other}")
     }
+    val originJob: Option[DxJob] = descJs.asJsObject.fields.get("originJob") match {
+      case None              => None
+      case Some(JsNull)      => None
+      case Some(JsString(x)) => Some(DxJob.getInstance(x))
+      case Some(other)       => throw new Exception(s"should be a job ${other}")
+    }
     val analysis = descJs.asJsObject.fields.get("analysis") match {
       case None              => None
       case Some(JsNull)      => None
       case Some(JsString(x)) => Some(DxAnalysis.getInstance(x))
       case Some(other)       => throw new Exception(s"should be an analysis ${other}")
     }
-    desc.copy(details = details, properties = props, parentJob = parentJob, analysis = analysis)
+    desc.copy(details = details,
+              properties = props,
+              parentJob = parentJob,
+              originJob = originJob,
+              analysis = analysis)
   }
 }
 

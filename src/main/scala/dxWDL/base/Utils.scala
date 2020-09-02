@@ -44,6 +44,9 @@ object Utils {
   val REORG_STATUS = "reorg_status___"
   val REORG_STATUS_COMPLETE = "completed"
   val CONTINUE_START = "continue_start___"
+  val DEFAULT_JOBS_PER_SCATTER = 500
+  val MAX_JOBS_PER_SCATTER = 1000
+  val SCATTER_CHUNK_SIZE = "scatterChunkSize"
 
   var traceLevel = 0
 

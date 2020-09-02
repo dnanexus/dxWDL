@@ -188,6 +188,9 @@ object Main extends App {
           case "verboseKey" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
+          case "scatterChunkSize" =>
+            checkNumberOfArguments(keyword, 1, subargs)
+            (keyword, subargs.head)
           case _ =>
             throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
         }
@@ -406,6 +409,20 @@ object Main extends App {
         )
       }
     }
+    val scatterChunkSize = options.get("scatterChunkSize") match {
+      case None => Utils.DEFAULT_JOBS_PER_SCATTER
+      case Some(x) =>
+        val size = x.head.toInt
+        if (size >= 1 && size <= Utils.MAX_JOBS_PER_SCATTER) {
+          size
+        } else {
+          Utils.warning(
+              verbose,
+              s"The number of jobs per scatter must be between 1-${Utils.MAX_JOBS_PER_SCATTER}"
+          )
+          Utils.MAX_JOBS_PER_SCATTER
+        }
+    }
 
     CompilerOptions(
         options contains "archive",
@@ -424,7 +441,8 @@ object Main extends App {
         // options contains "execTree",
         treePrinter,
         runtimeDebugLevel,
-        verbose
+        verbose,
+        scatterChunkSize
     )
   }
 
@@ -797,6 +815,12 @@ object Main extends App {
             case InternalOp.Continue   => RunnerWfFragmentMode.Continue
             case InternalOp.Collect    => RunnerWfFragmentMode.Collect
           }
+          val scatterSize = metaInfo.asJsObject.fields.get(Utils.SCATTER_CHUNK_SIZE) match {
+            case Some(JsNumber(n)) => n.toIntExact
+            case None              => Utils.DEFAULT_JOBS_PER_SCATTER
+            case other =>
+              throw new Exception(s"Invalid value ${other} for ${Utils.SCATTER_CHUNK_SIZE}")
+          }
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
@@ -807,10 +831,12 @@ object Main extends App {
                                                  dxIoFunctions,
                                                  inputsRaw,
                                                  fragInputOutput,
+                                                 jobDesc,
                                                  defaultRuntimeAttributes,
                                                  delayWorkspaceDestruction,
                                                  rtDebugLvl,
-                                                 scatterStart)
+                                                 scatterStart,
+                                                 scatterSize)
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, mode)
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(wf,
@@ -864,6 +890,11 @@ object Main extends App {
     SuccessfulTermination(s"success ${op}")
   }
 
+  private lazy val jobDesc: DxJobDescribe = {
+    val dxJob = DxJob(DxUtils.dxEnv.getJob)
+    dxJob.describe(Set(Field.Details))
+  }
+
   private def getApplet(jobInfoPath: Path): DxApplet = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
     jobInfo.asJsObject.fields.get("applet") match {
@@ -871,8 +902,7 @@ object Main extends App {
         Utils.trace(true, s"""|applet field not found locally, performing
                               |an API call.
                               |""".stripMargin)
-        val dxJob = DxJob(DxUtils.dxEnv.getJob)
-        dxJob.describe().applet
+        jobDesc.applet
       case Some(JsString(x)) =>
         DxApplet(x, None)
       case Some(other) =>

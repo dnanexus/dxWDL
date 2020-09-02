@@ -55,7 +55,8 @@ case class CompilerOptions(archive: Boolean,
                            streamAllFiles: Boolean,
                            execTree: Option[TreePrinter],
                            runtimeDebugLevel: Option[Int],
-                           verbose: Verbose)
+                           verbose: Verbose,
+                           scatterChunkSize: Int = Utils.DEFAULT_JOBS_PER_SCATTER)
 
 // Different ways of using the mini-workflow runner.
 //   Launch:     there are WDL calls, lanuch the dx:executables.

@@ -43,7 +43,8 @@ case class Native(dxWDLrtId: Option[String],
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
-                  verbose: Verbose) {
+                  verbose: Verbose,
+                  scatterChunkSize: Int = Utils.DEFAULT_JOBS_PER_SCATTER) {
   private val verbose2: Boolean = verbose.containsKey("Native")
   private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
@@ -1065,7 +1066,8 @@ case class Native(dxWDLrtId: Option[String],
                 case (k, t) =>
                   val tStr = WomTypeSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
-              }.toMap)
+              }),
+              Utils.SCATTER_CHUNK_SIZE -> JsNumber(scatterChunkSize)
           )
 
         case IR.AppletKindWfInputs | IR.AppletKindWfOutputs | IR.AppletKindWfCustomReorgOutputs |

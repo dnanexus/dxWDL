@@ -109,7 +109,8 @@ case class Top(cOpt: CompilerOptions) {
                cOpt.force,
                cOpt.archive,
                cOpt.locked,
-               cOpt.verbose).apply(bundle)
+               cOpt.verbose,
+               cOpt.scatterChunkSize).apply(bundle)
   }
 
   // check the declarations in [graph], and make sure they

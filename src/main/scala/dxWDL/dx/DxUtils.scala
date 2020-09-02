@@ -131,7 +131,8 @@ object DxUtils {
                 dependsOn: Vector[DxExecution],
                 delayWorkspaceDestruction: Option[Boolean],
                 verbose: Boolean,
-                name: Option[String] = None): DxJob = {
+                name: Option[String] = None,
+                details: Option[JsValue] = None): DxJob = {
     val fields = Map(
         "function" -> JsString(entryPoint),
         "input" -> inputs
@@ -162,7 +163,13 @@ object DxUtils {
       case Some(n) => Map("name" -> JsString(n))
       case None    => Map.empty
     }
-    val req = JsObject(fields ++ instanceFields ++ dependsFields ++ dwdFields ++ nameFields)
+    val detailsField = details match {
+      case Some(d) => Map("details" -> d)
+      case None    => Map.empty
+    }
+    val req = JsObject(
+        fields ++ instanceFields ++ dependsFields ++ dwdFields ++ nameFields ++ detailsField
+    )
     Utils.appletLog(verbose, s"subjob request=${req.prettyPrint}")
 
     val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
