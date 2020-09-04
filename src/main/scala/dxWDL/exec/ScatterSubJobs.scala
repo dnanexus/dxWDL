@@ -85,25 +85,65 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           instanceTypeDB: InstanceTypeDB,
                           delayWorkspaceDestruction: Option[Boolean],
                           runtimeDebugLevel: Int,
-                          typeAliases: Map[String, WomType]) {
+                          typeAliases: Map[String, WomType],
+                          jobDesc: DxJobDescribe) {
   //private val verbose = runtimeDebugLevel >= 1
   private val maxVerboseLevel = runtimeDebugLevel == 2
   private val verbose = Verbose(runtimeDebugLevel >= 1, quiet = false, Set.empty)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
+  private val ParentsKey = "parents___"
 
-  // Launch a subjob to collect the outputs
-  def launch(childJobs: Vector[DxExecution],
-             exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+  private def jsStringArrayToVector(jsv: Option[JsValue]): Vector[String] = {
+    jsv match {
+      case Some(JsArray(array)) =>
+        array.map {
+          case JsString(id) => id
+          case other =>
+            throw new Exception(s"Invalid value ${other} - expected String")
+        }
+      case None => Vector.empty
+      case other =>
+        throw new Exception(s"Invalid value ${other} - expected Array[String]")
+    }
+  }
+
+  // stick the IDs of all the parent jobs and all the child jobs to exclude
+  // (i.e. the continue/collect jobs) into details - we'll use these in the
+  // collect step
+  private def createSubjobDetails: JsValue = {
+    val parents = jobDesc.details match {
+      case Some(JsObject(fields)) if fields.contains(ParentsKey) =>
+        jsStringArrayToVector(fields.get(ParentsKey))
+      case _ =>
+        Vector.empty
+    }
+    // add the current job to the list of parents
+    val allParents = parents :+ jobDesc.id
+    JsObject(Map(ParentsKey -> JsArray(allParents.map(JsString(_)))))
+  }
+
+  // Launch a subjob to continue a large scatter
+  def launchContinue(childJobs: Vector[DxExecution],
+                     start: Int,
+                     exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
     assert(childJobs.nonEmpty)
+
+    val inputsWithStart = JsObject(
+        inputsRaw.asJsObject.fields + (Utils.CONTINUE_START -> JsNumber(start))
+    )
 
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
-    val dxSubJob: DxJob = DxUtils.runSubJob("collect",
-                                            Some(instanceTypeDB.defaultInstanceType),
-                                            inputsRaw,
-                                            childJobs,
-                                            delayWorkspaceDestruction,
-                                            maxVerboseLevel)
+    val dxSubJob: DxJob = DxUtils.runSubJob(
+        "continue",
+        Some(instanceTypeDB.defaultInstanceType),
+        inputsWithStart,
+        childJobs,
+        delayWorkspaceDestruction,
+        maxVerboseLevel,
+        Some(s"continue_scatter($start)"),
+        Some(createSubjobDetails)
+    )
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
     // is exactly the same as the parent, we can immediately exit the parent job.
@@ -113,10 +153,36 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }
   }
 
-  private def parseOneResult(value: JsValue, excludeId: String): Option[ChildExecDesc] = {
+  // Launch a subjob to collect the outputs
+  def launchCollect(childJobs: Vector[DxExecution],
+                    exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
+    assert(childJobs.nonEmpty)
+
+    // Run a sub-job with the "collect" entry point.
+    // We need to provide the exact same inputs.
+    val dxSubJob: DxJob = DxUtils.runSubJob(
+        "collect",
+        Some(instanceTypeDB.defaultInstanceType),
+        inputsRaw,
+        childJobs,
+        delayWorkspaceDestruction,
+        maxVerboseLevel,
+        Some("collect_scatter"),
+        Some(createSubjobDetails)
+    )
+
+    // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+    // is exactly the same as the parent, we can immediately exit the parent job.
+    exportTypes.map {
+      case (eVarName, womType) =>
+        eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
+    }
+  }
+
+  private def parseOneResult(value: JsValue, excludeIds: Set[String]): Option[ChildExecDesc] = {
     val fields = value.asJsObject.fields
     val (exec, desc) = fields.get("id") match {
-      case Some(JsString(id)) if id == excludeId =>
+      case Some(JsString(id)) if excludeIds.contains(id) =>
         Utils.trace(verbose.on, s"Ignoring result for job ${id}")
         return None
       case Some(JsString(id)) if id.startsWith("job-") =>
@@ -143,14 +209,14 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   }
 
   private def submitRequest(
-      parentJob: Option[DxJob],
+      parentJobId: Option[String],
       cursor: JsValue,
-      excludeId: String,
+      excludeIds: Set[String],
       limit: Option[Int]
   ): (Vector[ChildExecDesc], JsValue) = {
-    val parentField: Map[String, JsValue] = parentJob match {
-      case None      => Map.empty
-      case Some(job) => Map("parentJob" -> JsString(job.getId))
+    val parentField: Map[String, JsValue] = parentJobId match {
+      case None        => Map.empty
+      case Some(jobId) => Map("parentJob" -> JsString(jobId))
     }
     val cursorField: Map[String, JsValue] = cursor match {
       case JsNull      => Map.empty
@@ -171,21 +237,21 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     val responseJs: JsObject = DxUtils.jsValueOfJsonNode(response).asJsObject
     val results: Vector[ChildExecDesc] =
       responseJs.fields.get("results") match {
-        case Some(JsArray(results)) => results.flatMap(res => parseOneResult(res, excludeId))
+        case Some(JsArray(results)) => results.flatMap(res => parseOneResult(res, excludeIds))
         case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
         case None                   => throw new Exception(s"missing results field ${response}")
       }
     (results, responseJs.fields("next"))
   }
 
-  private def findChildExecutions(parentJob: Option[DxJob],
-                                  excludeId: String,
+  private def findChildExecutions(parentJobId: Option[String],
+                                  excludeIds: Set[String],
                                   limit: Option[Int] = None): Vector[ChildExecDesc] = {
 
     new UnfoldIterator[Vector[ChildExecDesc], Option[JsValue]](Some(JsNull))({
       case None => None
       case Some(cursor: JsValue) =>
-        submitRequest(parentJob, cursor, excludeId, limit) match {
+        submitRequest(parentJobId, cursor, excludeIds, limit) match {
           case (Vector(), _)     => None
           case (results, JsNull) => Some(results, None)
           case (results, next)   => Some(results, Some(next))
@@ -193,12 +259,27 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }).toVector.flatten.sortWith(_.seqNum < _.seqNum)
   }
 
-  def executableFromSeqNum(): Vector[ChildExecDesc] = {
-    // get the parent job
-    val dxJob = DxJob(DxUtils.dxEnv.getJob)
-    val parentJob: DxJob = dxJob.describe().parentJob.get
-    val childExecs: Vector[ChildExecDesc] =
-      findChildExecutions(Some(parentJob), dxJob.id)
+  /**
+    * Gets all the jobs launched by this job's origin job, excluding
+    * any continue and collect sub-jobs.
+    * @return
+    */
+  private def getScatterJobs: Vector[ChildExecDesc] = {
+    val childExecs = jobDesc.details match {
+      case Some(JsObject(fields)) if fields.contains(ParentsKey) =>
+        val parentJobIds = jsStringArrayToVector(fields.get(ParentsKey))
+        val excludeJobIds = parentJobIds.toSet + jobDesc.id
+        parentJobIds.flatMap { parentJobId =>
+          findChildExecutions(Some(parentJobId), excludeJobIds)
+        }
+      case _ =>
+        val parentJob = jobDesc.parentJob match {
+          case Some(job) => job
+          case None =>
+            throw new Exception(s"Can't get parent job for $jobDesc")
+        }
+        findChildExecutions(Some(parentJob.id), Set(jobDesc.id))
+    }
     Utils.trace(verbose.on, s"childExecs=${childExecs}")
     childExecs
   }
@@ -229,12 +310,11 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   }
 
   // aggregate call results
-  def aggregateResults(call: CallNode,
-                       childJobsComplete: Vector[ChildExecDesc]): Map[String, WdlVarLinks] = {
+  def aggregateResults(call: CallNode): Map[String, WdlVarLinks] = {
     call.callable.outputs.map { cot: OutputDefinition =>
       val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
       val womType = cot.womType
-      val value: WomValue = collectCallField(cot.name, womType, childJobsComplete)
+      val value: WomValue = collectCallField(cot.name, womType, getScatterJobs)
       val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
       fullName -> wvl
     }.toMap
@@ -243,12 +323,11 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   // collect results from a sub-workflow generated for the sole purpose of calculating
   // a sub-block.
   def aggregateResultsFromGeneratedSubWorkflow(
-      execLinkInfo: ExecLinkInfo,
-      childJobsComplete: Vector[ChildExecDesc]
+      execLinkInfo: ExecLinkInfo
   ): Map[String, WdlVarLinks] = {
     execLinkInfo.outputs.map {
       case (name, womType) =>
-        val value: WomValue = collectCallField(name, womType, childJobsComplete)
+        val value: WomValue = collectCallField(name, womType, getScatterJobs)
         val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
         name -> wvl
     }

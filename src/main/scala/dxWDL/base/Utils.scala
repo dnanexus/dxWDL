@@ -38,12 +38,15 @@ object Utils {
   val MAX_STRING_LEN = 32 * 1024 // Long strings cause problems with bash and the UI
   val MAX_STAGE_NAME_LEN = 60 // maximal length of a workflow stage name
   val MAX_NUM_FILES_MOVE_LIMIT = 1000
-  val SCATTER_LIMIT = 500
   val UBUNTU_VERSION = "16.04"
   val VERSION_PROP = "dxWDL_version"
   val REORG_CONFIG = "reorg_conf___"
   val REORG_STATUS = "reorg_status___"
   val REORG_STATUS_COMPLETE = "completed"
+  val CONTINUE_START = "continue_start___"
+  val DEFAULT_JOBS_PER_SCATTER = 500
+  val MAX_JOBS_PER_SCATTER = 1000
+  val SCATTER_CHUNK_SIZE = "scatterChunkSize"
 
   var traceLevel = 0
 

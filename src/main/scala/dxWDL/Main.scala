@@ -24,8 +24,8 @@ object Main extends App {
     val Compile, Config, DXNI, Internal, Version, Describe = Value
   }
   object InternalOp extends Enumeration {
-    val Collect, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs, WfFragment,
-        TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
+    val Collect, Continue, WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs,
+        WfFragment, TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
   }
 
   case class DxniBaseOptions(force: Boolean,
@@ -186,6 +186,9 @@ object Main extends App {
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
           case "verboseKey" =>
+            checkNumberOfArguments(keyword, 1, subargs)
+            (keyword, subargs.head)
+          case "scatterChunkSize" =>
             checkNumberOfArguments(keyword, 1, subargs)
             (keyword, subargs.head)
           case _ =>
@@ -406,6 +409,22 @@ object Main extends App {
         )
       }
     }
+    val scatterChunkSize = options.get("scatterChunkSize") match {
+      case None => Utils.DEFAULT_JOBS_PER_SCATTER
+      case Some(x) =>
+        val size = x.head.toInt
+        if (size < 1) {
+          Utils.DEFAULT_JOBS_PER_SCATTER
+        } else if (size > Utils.MAX_JOBS_PER_SCATTER) {
+          Utils.warning(
+              verbose,
+              s"The number of jobs per scatter must be between 1-${Utils.MAX_JOBS_PER_SCATTER}"
+          )
+          Utils.MAX_JOBS_PER_SCATTER
+        } else {
+          size
+        }
+    }
 
     CompilerOptions(
         options contains "archive",
@@ -424,7 +443,8 @@ object Main extends App {
         // options contains "execTree",
         treePrinter,
         runtimeDebugLevel,
-        verbose
+        verbose,
+        scatterChunkSize
     )
   }
 
@@ -764,7 +784,22 @@ object Main extends App {
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
     val inputLines: String = Utils.readFileContent(jobInputPath)
-    val inputsRaw: JsValue = inputLines.parseJson
+    val (inputsRaw: JsValue, scatterStart: Int) = (op, inputLines.parseJson) match {
+      case (InternalOp.Continue, JsObject(fields)) if fields.contains(Utils.CONTINUE_START) =>
+        // remove the special input that tells where to continue the scatter
+        val start = fields(Utils.CONTINUE_START) match {
+          case JsNumber(s) => s.toIntExact
+          case other =>
+            throw new Exception(s"Invalid value ${other} for  ${Utils.CONTINUE_START}")
+        }
+        (JsObject(fields - Utils.CONTINUE_START), start)
+      case (InternalOp.Continue, _) =>
+        throw new Exception(
+            s"internal continue command missing required parameter ${Utils.CONTINUE_START}"
+        )
+      case (_, inputs) =>
+        (inputs, 0)
+    }
 
     val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
@@ -776,7 +811,18 @@ object Main extends App {
     val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
     val outputFields: Map[String, JsValue] =
       op match {
-        case InternalOp.WfFragment =>
+        case InternalOp.WfFragment | InternalOp.Continue | InternalOp.Collect =>
+          val mode = op match {
+            case InternalOp.WfFragment => RunnerWfFragmentMode.Launch
+            case InternalOp.Continue   => RunnerWfFragmentMode.Continue
+            case InternalOp.Collect    => RunnerWfFragmentMode.Collect
+          }
+          val scatterSize = metaInfo.asJsObject.fields.get(Utils.SCATTER_CHUNK_SIZE) match {
+            case Some(JsNumber(n)) => n.toIntExact
+            case None              => Utils.DEFAULT_JOBS_PER_SCATTER
+            case other =>
+              throw new Exception(s"Invalid value ${other} for ${Utils.SCATTER_CHUNK_SIZE}")
+          }
           val fragRunner = new exec.WfFragRunner(wf,
                                                  taskDir,
                                                  typeAliases,
@@ -787,25 +833,13 @@ object Main extends App {
                                                  dxIoFunctions,
                                                  inputsRaw,
                                                  fragInputOutput,
+                                                 jobDesc,
                                                  defaultRuntimeAttributes,
                                                  delayWorkspaceDestruction,
-                                                 rtDebugLvl)
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
-        case InternalOp.Collect =>
-          val fragRunner = new exec.WfFragRunner(wf,
-                                                 taskDir,
-                                                 typeAliases,
-                                                 womSourceCode,
-                                                 instanceTypeDB,
-                                                 fragInputs.execLinkInfo,
-                                                 dxPathConfig,
-                                                 dxIoFunctions,
-                                                 inputsRaw,
-                                                 fragInputOutput,
-                                                 defaultRuntimeAttributes,
-                                                 delayWorkspaceDestruction,
-                                                 rtDebugLvl)
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
+                                                 rtDebugLvl,
+                                                 scatterStart,
+                                                 scatterSize)
+          fragRunner.apply(fragInputs.blockPath, fragInputs.env, mode)
         case InternalOp.WfInputs =>
           val wfInputs = new exec.WfInputs(wf,
                                            womSourceCode,
@@ -858,25 +892,31 @@ object Main extends App {
     SuccessfulTermination(s"success ${op}")
   }
 
-  // Get the WOM source code, and the instance type database from the
-  // details field stored on the platform
-  private def retrieveFromDetails(
-      jobInfoPath: Path
-  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
+  private lazy val jobDesc: DxJobDescribe = {
+    val dxJob = DxJob(DxUtils.dxEnv.getJob)
+    dxJob.describe(Set(Field.Details))
+  }
+
+  private def getApplet(jobInfoPath: Path): DxApplet = {
     val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-    val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
+    jobInfo.asJsObject.fields.get("applet") match {
       case None =>
         Utils.trace(true, s"""|applet field not found locally, performing
                               |an API call.
                               |""".stripMargin)
-        val dxJob = DxJob(DxUtils.dxEnv.getJob())
-        dxJob.describe().applet
+        jobDesc.applet
       case Some(JsString(x)) =>
         DxApplet(x, None)
       case Some(other) =>
         throw new Exception(s"malformed applet field ${other} in job info")
     }
+  }
 
+  // Get the WOM source code, and the instance type database from the
+  // details field stored on the platform
+  private def retrieveFromDetails(
+      applet: DxApplet
+  ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val details: JsValue = applet.describe(Set(Field.Details)).details.get
     val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
     val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
@@ -936,17 +976,18 @@ object Main extends App {
 
         // Get the WOM source code (currently WDL, could be also CWL in the future)
         // Parse the inputs, convert to WOM values.
+        val applet = getApplet(jobInfoPath)
         val (womSourceCode,
              instanceTypeDB,
              metaInfo,
              defaultRuntimeAttrs,
              delayWorkspaceDestruction) =
-          retrieveFromDetails(jobInfoPath)
+          retrieveFromDetails(applet)
 
         try {
           op match {
-            case InternalOp.Collect | InternalOp.WfFragment | InternalOp.WfInputs |
-                InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
+            case InternalOp.Collect | InternalOp.Continue | InternalOp.WfFragment |
+                InternalOp.WfInputs | InternalOp.WfOutputs | InternalOp.WorkflowOutputReorg |
                 InternalOp.WfCustomReorgOutputs =>
               workflowFragAction(
                   op,
