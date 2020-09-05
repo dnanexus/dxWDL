@@ -42,7 +42,7 @@ object TypeSerde {
   }
 
   def deserialize(jsValue: JsValue, typeAliases: Map[String, Type]): Type = {
-    def resolveType(name: String) = {
+    def resolveType(name: String): Type = {
       try {
         simpleFromString(name)
       } catch {

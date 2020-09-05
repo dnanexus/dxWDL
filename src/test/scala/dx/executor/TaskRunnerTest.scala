@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Evaluator, ParseSource, ParameterLinkSerde, Bundle => WdlBundle}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -136,7 +136,7 @@ class TaskRunnerTest extends AnyFlatSpec with Matchers {
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     Util.deleteRecursive(jobHomeDir)
     Util.createDirectories(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
+    val dxPathConfig = DxWorkerPaths.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
 
     val (_, language, wdlBundle: WdlBundle, allSources, _) =

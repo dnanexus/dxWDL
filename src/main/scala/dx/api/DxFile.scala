@@ -49,7 +49,7 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
     DxFile.parseDescribeJson(descJs)
   }
 
-  def getLinkAsJson: JsValue = {
+  def asJson: JsValue = {
     project match {
       case None =>
         JsObject(DxUtils.DxLinkKey -> JsString(id))
@@ -155,6 +155,13 @@ object DxFile {
     }
   }
 
+  def isLinkJson(jsv: JsValue): Boolean = {
+    jsv match {
+      case JsObject(fields) if fields.keySet == Set(DxUtils.DxLinkKey) => true
+      case _                                                           => false
+    }
+  }
+
   // Parse a dnanexus file descriptor. Examples:
   //
   // {
@@ -164,7 +171,7 @@ object DxFile {
   //   },
   //   DxUtils.DxLinkKey: "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"
   // }
-  def fromJsValue(dxApi: DxApi, jsValue: JsValue): DxFile = {
+  def fromJson(dxApi: DxApi, jsValue: JsValue): DxFile = {
     val innerObj = jsValue match {
       case JsObject(fields) if fields.contains(DxUtils.DxLinkKey) =>
         fields(DxUtils.DxLinkKey)

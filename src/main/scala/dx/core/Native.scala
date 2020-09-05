@@ -1,9 +1,7 @@
 package dx.core
 
-/**
-  * Keys used in the details of a generated native executable.
-  */
-object NativeDetails {
+object Native {
+  // keys used in details of native applets
   val ExecLinkInfo: String = "execLinkInfo"
   val BlockPath: String = "blockPath"
   val WfFragmentInputs: String = "fqnDictTypes"
@@ -12,17 +10,21 @@ object NativeDetails {
   val CompilerTag = "dxCompiler"
   val SourceCode: String = "sourceCode"
   val Language: String = "language"
-}
+  val ScatterChunkSize = "scatterChunkSize"
 
-/**
-  * Common property names.
-  */
-object NativeProperties {
+  // keys used in properties of native applets
   val Checksum = "dxCompiler_checksum"
   val Version = "dxCompiler_version"
-}
 
-object ReorgOutputs {
+  // parameter names used in "special" native applets
   val ReorgStatus = "reorg_status___"
   val ReorgStatusCompleted = "completed"
+  val ContinueStart = "continue_start___"
+
+  // Limits imposed on native apps.
+  val JobsPerScatterLimit = 1000
+  val JobPerScatterDefault = 500
+  // Very long strings cause problems with bash and the UI, so we set
+  // a max limit of 32k characters
+  val StringLengthLimit: Int = 32 * 1024
 }

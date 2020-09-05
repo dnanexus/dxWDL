@@ -1,10 +1,11 @@
 package dx.compiler
 
 import dx.api.{DxApi, DxUtils}
-import dx.core.NativeDetails
+import dx.core.Native
 import dx.core.ir.{
   EmptyInput,
   ExecutableLink,
+  IORef,
   Level,
   LinkInput,
   Parameter,
@@ -16,7 +17,6 @@ import dx.core.ir.{
   Workflow,
   WorkflowInput
 }
-import dx.core.languages.IORef
 import dx.core.util.CompressionUtils
 import dx.translator.CallableAttributes._
 import dx.translator.Extras
@@ -90,8 +90,8 @@ case class WorkflowCompiler(extras: Option[Extras],
             // the user will have to fill in a value at runtime.
             accu
           case StaticInput(value) =>
-            val link = parameterLinkSerializer.createLink(parameter.dxType, value)
-            val fields = parameterLinkSerializer.createFields(link, parameter.dxName)
+            val fields =
+              parameterLinkSerializer.createFields(parameter.dxName, parameter.dxType, value)
             accu ++ fields.toMap
           case LinkInput(dxStage, paramname) =>
             val link = ParameterLinkStage(dxStage, IORef.Output, paramname, parameter.dxType)
@@ -144,11 +144,11 @@ case class WorkflowCompiler(extras: Option[Extras],
           stagesReq :+ stageReqDesc
       }
     // build the details JSON
-    val defaultTags = Set(NativeDetails.CompilerTag)
+    val defaultTags = Set(Native.CompilerTag)
     val (wfMeta, wfMetaDetails) = workflowAttributesToNative(workflow, defaultTags)
     // compress and base64 encode the source code
     val sourceDetails = Map(
-        NativeDetails.SourceCode -> JsString(
+        Native.SourceCode -> JsString(
             CompressionUtils.gzipAndBase64Encode(workflow.document.toString)
         )
     )

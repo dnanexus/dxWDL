@@ -13,7 +13,7 @@ case class DxfuseManifest(value: JsValue)
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(file2LocalMapping: Map[DxFile, Path],
             dxFileDescCache: DxFileDescCache,
-            dxPathConfig: DxPathConfig): DxfuseManifest = {
+            dxPathConfig: DxWorkerPaths): DxfuseManifest = {
     if (file2LocalMapping.isEmpty) {
       return DxfuseManifest(JsNull)
     }

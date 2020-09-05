@@ -25,6 +25,12 @@ object DxApi {
     instance = Some(dxApi)
     curDxApi
   }
+
+  def createAndSet(logger: Logger = Logger.get): DxApi = {
+    val dxApi = DxApi(logger)
+    set(dxApi)
+    dxApi
+  }
 }
 
 /**
@@ -341,7 +347,7 @@ case class DxApi(logger: Logger = Logger.get,
       case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
         Vector.empty[DxFile]
       case JsObject(_) if DxFile.isDxFile(jsValue) =>
-        Vector(DxFile.fromJsValue(this, jsValue))
+        Vector(DxFile.fromJson(this, jsValue))
       case JsObject(fields) =>
         fields.map { case (_, v) => findFiles(v) }.toVector.flatten
       case JsArray(elems) =>
@@ -444,8 +450,10 @@ case class DxApi(logger: Logger = Logger.get,
                 instanceType: Option[String],
                 inputs: JsValue,
                 dependsOn: Vector[DxExecution],
-                delayWorkspaceDestruction: Option[Boolean]): DxJob = {
-    val fields = Map(
+                delayWorkspaceDestruction: Option[Boolean],
+                name: Option[String] = None,
+                details: Option[JsValue] = None): DxJob = {
+    val requiredFields = Map(
         "function" -> JsString(entryPoint),
         "input" -> inputs
     )
@@ -467,11 +475,19 @@ case class DxApi(logger: Logger = Logger.get,
         }
         Map("dependsOn" -> JsArray(execIds))
       }
-    val dwd = delayWorkspaceDestruction match {
+    val dwdFields = delayWorkspaceDestruction match {
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val request = fields ++ instanceFields ++ dependsFields ++ dwd
+    val nameFields = name match {
+      case Some(n) => Map("name" -> JsString(n))
+      case None    => Map.empty
+    }
+    val detailsFields = details match {
+      case Some(d) => Map("details" -> d)
+      case None    => Map.empty
+    }
+    val request = requiredFields ++ instanceFields ++ dependsFields ++ dwdFields ++ nameFields ++ detailsFields
     logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
 
     val response = jobNew(request)

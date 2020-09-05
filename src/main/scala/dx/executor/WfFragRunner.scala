@@ -41,13 +41,22 @@ import dx.{AppInternalException, executor}
 import dx.api._
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.{getVersion, ir}
-import dx.core.io.{DxFileDescCache, DxPathConfig}
+import dx.core.io.{DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.ParameterLinkExec
 import dx.core.languages.wdl._
+import dx.executor.RunnerWfFragmentMode.Value
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, TraceLevel}
+import wdlTools.util.{Enum, FileSourceResolver, TraceLevel}
+
+// Different ways of using the mini-workflow runner.
+//   Launch:     there are WDL calls, lanuch the dx:executables.
+//   Collect:    the dx:exucutables are done, collect the results.
+object RunnerWfFragmentMode extends Enum {
+  type RunnerWfFragmentMode = Value
+  val Launch, Continue, Collect = Value
+}
 
 case class WfFragRunner(wf: TAT.Workflow,
                         taskDir: Map[String, TAT.Task],
@@ -55,7 +64,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                         document: TAT.Document,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, WdlExecutableLink],
-                        dxPathConfig: DxPathConfig,
+                        dxPathConfig: DxWorkerPaths,
                         fileResolver: FileSourceResolver,
                         wdlVarLinksConverter: ParameterLinkSerde,
                         jobInputOutput: JobInputOutput,
@@ -63,6 +72,8 @@ case class WfFragRunner(wf: TAT.Workflow,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
+                        scatterStart: Int,
+                        scatterSize: Int,
                         dxApi: DxApi,
                         evaluator: Eval) {
   private val MAX_JOB_NAME = 50
@@ -657,16 +668,6 @@ case class WfFragRunner(wf: TAT.Workflow,
     val collection: Seq[WdlValues.V] = collectionRaw match {
       case x: WdlValues.V_Array => x.value
       case other                => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
-    }
-
-    // Limit the number of elements in the collection. Each one spawns a job; this strains the platform
-    // at large numbers.
-    if (collection.size > executor.SCATTER_LIMIT) {
-      throw new AppInternalException(
-          s"""|The scatter iterates over ${collection.size} elements which
-              |exeedes the maximum (${executor.SCATTER_LIMIT})""".stripMargin
-            .replaceAll("\n", " ")
-      )
     }
 
     val elemType = sct.expr.wdlType match {

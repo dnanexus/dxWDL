@@ -6,8 +6,8 @@ import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
 import dx.compiler.Main.CompilerFlag.CompilerFlag
 import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
-import dx.core.getVersion
-import dx.core.io.{DxFileAccessProtocol, DxPathConfig}
+import dx.core.{Native, getVersion}
+import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Bundle
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
@@ -48,7 +48,7 @@ object Main {
     }
   }
 
-  private val CommonOptions: OptionSpecs = Map(
+  private val CommonOptions: InternalOptions = Map(
       "destination" -> StringOptionSpec.One,
       "force" -> FlagOptionSpec.Default,
       "f" -> FlagOptionSpec.Default.copy(alias = Some("force")),
@@ -58,7 +58,7 @@ object Main {
       "language" -> LanguageOptionSpec()
   )
 
-  private def initCommon(options: Options): FileSourceResolver = {
+  private def initCommon(options: Options): (FileSourceResolver, Logger) = {
     val logger = initLogger(options)
     val imports: Vector[Path] = options.getList[Path]("imports")
     val fileResolver = FileSourceResolver.create(
@@ -67,7 +67,7 @@ object Main {
         logger
     )
     FileSourceResolver.set(fileResolver)
-    fileResolver
+    (fileResolver, logger)
   }
 
   // compile
@@ -113,7 +113,7 @@ object Main {
       ExecTreeFormat.withNameIgnoreCase(value)
   }
 
-  private def CompileOptions: OptionSpecs = Map(
+  private def CompileOptions: InternalOptions = Map(
       "archive" -> FlagOptionSpec.Default,
       "compileMode" -> CompileModeOptionSpec(),
       "defaults" -> PathOptionSpec.MustExist,
@@ -128,7 +128,8 @@ object Main {
       "projectWideReuse" -> FlagOptionSpec.Default,
       "reorg" -> FlagOptionSpec.Default,
       "runtimeDebugLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2)),
-      "streamAllFiles" -> FlagOptionSpec.Default
+      "streamAllFiles" -> FlagOptionSpec.Default,
+      "scatterChunkSize" -> IntOptionSpec.One
   )
 
   private val DeprecatedCompileOptions = Set(
@@ -226,7 +227,7 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    val fileResolver = initCommon(options)
+    val (fileResolver, logger) = initCommon(options)
     val extras: Option[Extras] =
       options.getValue[Path]("extras").map(extrasPath => ExtrasParser().parse(extrasPath))
     if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
@@ -283,10 +284,26 @@ object Main {
       }
       // compile to native
       val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
-      val dxPathConfig = DxPathConfig.apply(baseDNAxDir, streamAllFiles)
+      val dxPathConfig = DxWorkerPaths(streamAllFiles, logger)
+      val scatterChunkSize: Int = options.getValue[Int]("scatterChunkSize") match {
+        case None => Native.JobPerScatterDefault
+        case Some(x) =>
+          val size = x.toInt
+          if (size < 1) {
+            Native.JobPerScatterDefault
+          } else if (size > Native.JobsPerScatterLimit) {
+            logger.warning(
+                s"The number of jobs per scatter must be between 1-${Native.JobsPerScatterLimit}"
+            )
+            Native.JobsPerScatterLimit
+          } else {
+            size
+          }
+      }
       val compiler = Compiler(
           extras,
           dxPathConfig,
+          scatterChunkSize,
           runtimeTraceLevel,
           includeAsset,
           archive,
@@ -320,7 +337,7 @@ object Main {
 
   // DxNI
 
-  private def DxNIOptions: OptionSpecs = Map(
+  private def DxNIOptions: InternalOptions = Map(
       "appsOnly" -> FlagOptionSpec.Default,
       "apps" -> FlagOptionSpec.Default.copy(alias = Some("appsOnly")),
       "path" -> StringOptionSpec.One,
@@ -339,7 +356,7 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    val fileResolver = initCommon(options)
+    val (fileResolver, _) = initCommon(options)
     val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
     val dxni = DxNativeInterface(fileResolver)
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
@@ -395,7 +412,7 @@ object Main {
 
   // describe
 
-  private def DescribeOptions: OptionSpecs = Map(
+  private def DescribeOptions: InternalOptions = Map(
       "pretty" -> FlagOptionSpec.Default
   )
 

@@ -1,9 +1,13 @@
 package dx.executor
 
 import dx.api._
-import dx.executor
 import dx.core.getVersion
 import spray.json.{JsBoolean, JsObject, JsValue}
+
+object WorkflowOutputReorg {
+  val MaxNumFilesMoveLimit = 1000
+  val IntermediateResultsFolder = "intermediate"
+}
 
 case class WorkflowOutputReorg(dxApi: DxApi) {
   // Efficiently get the names of many files. We
@@ -47,7 +51,7 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
     dxApi.logger.traceLimited(s"analysis has ${fileInputs.size} input files")
     dxApi.logger.traceLimited(s"analysis has ${realOutputs.size} real outputs")
     dxApi.logger.traceLimited("Checking timestamps")
-    if (realOutputs.size > executor.MAX_NUM_FILES_MOVE_LIMIT) {
+    if (realOutputs.size > WorkflowOutputReorg.MaxNumFilesMoveLimit) {
       dxApi.logger.traceLimited(
           s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects"
       )
@@ -74,7 +78,7 @@ case class WorkflowOutputReorg(dxApi: DxApi) {
     val dxProjDesc = dxProject.describe()
     val dxAnalysis = dxApi.currentJob.describe().analysis.get
     val outFolder = dxAnalysis.describe().folder
-    val intermFolder = outFolder + "/" + executor.INTERMEDIATE_RESULTS_FOLDER
+    val intermFolder = outFolder + "/" + WorkflowOutputReorg.IntermediateResultsFolder
     dxApi.logger.traceLimited(s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
     // find all analysis output files

@@ -4,9 +4,11 @@ import java.nio.file.Path
 
 import dx.core.ir.{Type, Value}
 import dx.core.ir.Type._
+import dx.core.ir.TypeSerde.UnknownTypeException
 import dx.core.ir.Value._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
+import spray.json.{JsBoolean, JsObject, JsString, JsValue}
 import wdlTools.eval.Coercion
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
@@ -19,7 +21,14 @@ import wdlTools.types.{
   WdlTypes,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{DefaultBindings, FileSource, FileSourceResolver, Logger, StringFileSource}
+import wdlTools.util.{
+  DefaultBindings,
+  FileSource,
+  FileSourceResolver,
+  JsUtils,
+  Logger,
+  StringFileSource
+}
 
 object Utils {
   val locPlaceholder: SourceLocation = SourceLocation.empty
@@ -32,52 +41,6 @@ object Utils {
       case Language.WdlV2_0    => WdlVersion.V2
       case other =>
         throw new Exception(s"Unsupported language version ${other}")
-    }
-  }
-
-  // create a wdl-value of a specific type.
-  def getDefaultValueOfType(wdlType: WdlTypes.T,
-                            loc: SourceLocation = Utils.locPlaceholder): TAT.Expr = {
-    wdlType match {
-      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, loc)
-      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, loc)
-      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, loc)
-      case WdlTypes.T_String  => TAT.ValueString("", wdlType, loc)
-      case WdlTypes.T_File    => TAT.ValueString("placeholder.txt", wdlType, loc)
-
-      // We could convert an optional to a null value, but that causes
-      // problems for the pretty printer.
-      // WdlValues.V_OptionalValue(wdlType, None)
-      case WdlTypes.T_Optional(t) => getDefaultValueOfType(t)
-
-      // The WdlValues.V_Map type HAS to appear before the array types, because
-      // otherwise it is coerced into an array. The map has to
-      // contain at least one key-value pair, otherwise you get a type error.
-      case WdlTypes.T_Map(keyType, valueType) =>
-        val k = getDefaultValueOfType(keyType)
-        val v = getDefaultValueOfType(valueType)
-        TAT.ExprMap(Map(k -> v), wdlType, loc)
-
-      // an empty array
-      case WdlTypes.T_Array(_, false) =>
-        TAT.ExprArray(Vector.empty, wdlType, loc)
-
-      // Non empty array
-      case WdlTypes.T_Array(t, true) =>
-        TAT.ExprArray(Vector(getDefaultValueOfType(t)), wdlType, loc)
-
-      case WdlTypes.T_Pair(lType, rType) =>
-        TAT.ExprPair(getDefaultValueOfType(lType), getDefaultValueOfType(rType), wdlType, loc)
-
-      case WdlTypes.T_Struct(_, typeMap) =>
-        val members = typeMap.map {
-          case (fieldName, t) =>
-            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, loc)
-            key -> getDefaultValueOfType(t)
-        }
-        TAT.ExprObject(members, wdlType, loc)
-
-      case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
   }
 
@@ -139,6 +102,157 @@ object Utils {
         )
         throw te
     }
+  }
+
+  // create a wdl-value of a specific type.
+  def getDefaultValueOfType(wdlType: WdlTypes.T,
+                            loc: SourceLocation = Utils.locPlaceholder): TAT.Expr = {
+    wdlType match {
+      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, loc)
+      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, loc)
+      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, loc)
+      case WdlTypes.T_String  => TAT.ValueString("", wdlType, loc)
+      case WdlTypes.T_File    => TAT.ValueString("placeholder.txt", wdlType, loc)
+
+      // We could convert an optional to a null value, but that causes
+      // problems for the pretty printer.
+      // WdlValues.V_OptionalValue(wdlType, None)
+      case WdlTypes.T_Optional(t) => getDefaultValueOfType(t)
+
+      // The WdlValues.V_Map type HAS to appear before the array types, because
+      // otherwise it is coerced into an array. The map has to
+      // contain at least one key-value pair, otherwise you get a type error.
+      case WdlTypes.T_Map(keyType, valueType) =>
+        val k = getDefaultValueOfType(keyType)
+        val v = getDefaultValueOfType(valueType)
+        TAT.ExprMap(Map(k -> v), wdlType, loc)
+
+      // an empty array
+      case WdlTypes.T_Array(_, false) =>
+        TAT.ExprArray(Vector.empty, wdlType, loc)
+
+      // Non empty array
+      case WdlTypes.T_Array(t, true) =>
+        TAT.ExprArray(Vector(getDefaultValueOfType(t)), wdlType, loc)
+
+      case WdlTypes.T_Pair(lType, rType) =>
+        TAT.ExprPair(getDefaultValueOfType(lType), getDefaultValueOfType(rType), wdlType, loc)
+
+      case WdlTypes.T_Struct(_, typeMap) =>
+        val members = typeMap.map {
+          case (fieldName, t) =>
+            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, loc)
+            key -> getDefaultValueOfType(t)
+        }
+        TAT.ExprObject(members, wdlType, loc)
+
+      case _ => throw new Exception(s"Unhandled type ${wdlType}")
+    }
+  }
+
+  def serializeType(t: WdlTypes.T): JsValue = {
+    t match {
+      case T_Boolean         => JsString("Boolean")
+      case T_Int             => JsString("Int")
+      case T_Float           => JsString("Float")
+      case T_String          => JsString("String")
+      case T_File            => JsString("File")
+      case T_Directory       => JsString("Directory")
+      case T_Object          => JsString("Object")
+      case T_Struct(name, _) => JsString(name)
+      case T_Array(memberType, nonEmpty) =>
+        JsObject(
+            Map(
+                "name" -> JsString("Array"),
+                "type" -> serializeType(memberType),
+                "nonEmpty" -> JsBoolean(nonEmpty)
+            )
+        )
+      case T_Pair(lType, rType) =>
+        JsObject(
+            Map(
+                "name" -> JsString("Pair"),
+                "leftType" -> serializeType(lType),
+                "rightType" -> serializeType(rType)
+            )
+        )
+      case T_Map(keyType, valueType) =>
+        JsObject(
+            Map(
+                "name" -> JsString("Map"),
+                "keyType" -> serializeType(keyType),
+                "valueType" -> serializeType(valueType)
+            )
+        )
+      case T_Optional(inner) =>
+        serializeType(inner) match {
+          case name: JsString =>
+            JsObject(Map("name" -> name, "optional" -> JsBoolean(true)))
+          case JsObject(fields) =>
+            JsObject(fields + ("optional" -> JsBoolean(true)))
+        }
+    }
+  }
+
+  def simpleFromString(s: String): WdlTypes.T = {
+    s match {
+      case "Boolean"   => T_Boolean
+      case "Int"       => T_Int
+      case "Float"     => T_Float
+      case "String"    => T_String
+      case "File"      => T_File
+      case "Directory" => T_Directory
+      case "Object"    => T_Object
+      case _ if s.endsWith("?") =>
+        simpleFromString(s.dropRight(1)) match {
+          case T_Optional(_) =>
+            throw new Exception(s"nested optional type ${s}")
+          case inner =>
+            T_Optional(inner)
+        }
+      case s if s.contains("[") =>
+        throw new Exception(s"type ${s} is not primitive")
+      case _ =>
+        throw UnknownTypeException(s"Unknown type ${s}")
+    }
+  }
+
+  def deserializeType(jsValue: JsValue, typeAliases: Map[String, WdlTypes.T]): WdlTypes.T = {
+    def resolveType(name: String): WdlTypes.T = {
+      try {
+        simpleFromString(name)
+      } catch {
+        case _: UnknownTypeException if typeAliases.contains(name) =>
+          typeAliases(name)
+      }
+    }
+    def inner(innerValue: JsValue): WdlTypes.T = {
+      innerValue match {
+        case JsString(name) => resolveType(name)
+        case JsObject(fields) =>
+          val t = fields("name") match {
+            case JsString("Array") =>
+              val arrayType = inner(fields("type"))
+              val nonEmpty = fields.get("nonEmpty").exists(JsUtils.getBoolean(_))
+              T_Array(arrayType, nonEmpty)
+            case JsString("Map") =>
+              val keyType = inner(fields("keyType"))
+              val valueType = inner(fields("valueType"))
+              T_Map(keyType, valueType)
+            case JsString("Pair") =>
+              val lType = inner(fields("leftType"))
+              val rType = inner(fields("rightType"))
+              T_Pair(lType, rType)
+            case JsString(name) => resolveType(name)
+          }
+          if (fields.get("optional").exists(JsUtils.getBoolean(_))) {
+            T_Optional(t)
+          } else {
+            t
+          }
+      }
+    }
+    inner(jsValue)
   }
 
   def toIRType(wdlType: T): Type = {
@@ -277,7 +391,7 @@ object Utils {
     }
   }
 
-  def fromIRValue(value: Value): V = {
+  def fromIRValue(value: Value, name: Option[String]): V = {
     value match {
       case VNull         => V_Null
       case VBoolean(b)   => V_Boolean(b)
@@ -286,16 +400,93 @@ object Utils {
       case VString(s)    => V_String(s)
       case VFile(f)      => V_File(f)
       case VDirectory(d) => V_Directory(d)
-      case VArray(array) => V_Array(array.map(fromIRValue))
+      case VArray(array) =>
+        V_Array(array.zipWithIndex.map {
+          case (v, i) => fromIRValue(v, name.map(n => s"${n}[${i}]"))
+        })
       case VHash(fields) =>
         V_Object(fields.map {
-          case (key, value) => key -> fromIRValue(value)
+          case (key, value) => key -> fromIRValue(value, name.map(n => s"${n}[${key}]"))
         })
       case VMap(fields) =>
         V_Map(fields.map {
-          case (key, value) => fromIRValue(key) -> fromIRValue(value)
+          case (key, value) =>
+            val elementName = name.map(n => s"${n}[${key}]")
+            fromIRValue(key, elementName) -> fromIRValue(value, elementName)
         })
+      case _ =>
+        throw new Exception(
+            s"Cannot convert ${name.getOrElse("IR")} value ${value} to WDL value"
+        )
     }
+  }
+
+  def fromIRValue(value: Value,
+                  wdlType: T,
+                  name: String,
+                  handler: Option[(Value, T, String) => Option[V]] = None): V = {
+    def inner(innerValue: Value, innerType: T, innerName: String): V = {
+      val v = handler.flatMap(_(innerValue, innerType, innerName))
+      if (v.isDefined) {
+        return v.get
+      }
+      (wdlType, value) match {
+        case (T_Optional(_), VNull)          => V_Null
+        case (T_Boolean, VBoolean(b))        => V_Boolean(value = b)
+        case (T_Int, VInt(i))                => V_Int(i)
+        case (T_Float, VFloat(f))            => V_Float(f)
+        case (T_String, VString(s))          => V_String(s)
+        case (T_File, VString(path))         => V_File(path)
+        case (T_File, VFile(path))           => V_File(path)
+        case (T_Directory, VString(path))    => V_Directory(path)
+        case (T_Directory, VDirectory(path)) => V_Directory(path)
+        case (T_Object, o: VHash)            => fromIRValue(o, Some(innerName))
+        case (T_Optional(t), v)              => V_Optional(inner(v, t, innerName))
+        case (T_Array(_, true), VArray(array)) if array.isEmpty =>
+          throw new Exception(
+              s"Empty array with non-empty (+) quantifier"
+          )
+        case (T_Array(t, _), VArray(array)) =>
+          V_Array(array.zipWithIndex.map {
+            case (v, i) => inner(v, t, s"${innerName}[${i}]")
+          })
+        case (T_Map(keyType, valueType), VMap(m)) =>
+          V_Map(m.map {
+            case (key, value) =>
+              val elementName = s"${innerName}[${key}]"
+              inner(key, keyType, elementName) -> inner(value, valueType, elementName)
+          })
+        case (T_Struct(structName, memberTypes), VHash(members)) =>
+          // ensure 1) members keys are a subset of memberTypes keys, 2) members
+          // values are convertable to the corresponding types, and 3) any keys
+          // in memberTypes that do not appear in members are optional
+          val keys1 = members.keySet
+          val keys2 = memberTypes.keySet
+          val extra = keys2.diff(keys1)
+          if (extra.nonEmpty) {
+            throw new Exception(
+                s"struct ${structName} value has members that do not appear in the struct definition: ${extra}"
+            )
+          }
+          val missingNonOptional = keys1.diff(keys2).map(key => key -> memberTypes(key)).filterNot {
+            case (_, T_Optional(_)) => false
+            case _                  => true
+          }
+          if (missingNonOptional.nonEmpty) {
+            throw new Exception(
+                s"struct ${structName} value is missing non-optional members ${missingNonOptional}"
+            )
+          }
+          V_Object(members.map {
+            case (key, value) => key -> inner(value, memberTypes(key), s"${innerName}[${key}]")
+          })
+        case _ =>
+          throw new Exception(
+              s"Cannot convert ${innerName} (${innerType}, ${innerValue}) to WDL value"
+          )
+      }
+    }
+    inner(value, wdlType, name)
   }
 
   private def ensureUniformType(exprs: Iterable[TAT.Expr]): T = {

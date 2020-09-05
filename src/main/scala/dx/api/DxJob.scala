@@ -13,7 +13,8 @@ case class DxJobDescribe(id: String,
                          parentJob: Option[DxJob],
                          analysis: Option[DxAnalysis],
                          executable: Option[DxExecutable],
-                         output: Option[JsValue])
+                         output: Option[JsValue],
+                         instanceType: Option[String])
     extends DxObjectDescribe
 
 case class DxJob(dxApi: DxApi, id: String, project: Option[DxProject] = None)
@@ -57,6 +58,7 @@ object DxJob {
                         None,
                         None,
                         None,
+                        None,
                         None)
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -80,11 +82,16 @@ object DxJob {
       case Some(other)         => throw new Exception(s"should be an executable ID ${other}")
     }
     val output = descJs.fields.get("output")
+    val instanceType = descJs.fields.get("instanceType") match {
+      case Some(JsString(instanceType)) => Some(instanceType)
+      case None                         => None
+    }
     desc.copy(details = details,
               properties = props,
               parentJob = parentJob,
               analysis = analysis,
               executable = executable,
-              output = output)
+              output = output,
+              instanceType = instanceType)
   }
 }

@@ -60,8 +60,12 @@ abstract class InputFile(fields: Map[String, JsValue],
         // are variable uses.
         logger.trace(s"checkAndBind, found: ${fqn} -> ${dxName}")
         val irValue = translateInput(parameter, jsv)
-        val link = parameterLinkSerializer.createLink(parameter.dxType, irValue)
-        irFields ++= parameterLinkSerializer.createFields(link, dxName, encodeDots = false)
+        irFields ++= parameterLinkSerializer.createFields(
+            dxName,
+            parameter.dxType,
+            irValue,
+            encodeDots = false
+        )
     }
   }
 
@@ -141,7 +145,7 @@ abstract class DocumentTranslator(fileResolver: FileSourceResolver = FileSourceR
     }
     val (dxFiles, dxPaths) = fileJs.foldLeft((Vector.empty[DxFile], Vector.empty[String])) {
       case ((files, paths), obj: JsObject) =>
-        (files :+ DxFile.fromJsValue(dxApi, obj), paths)
+        (files :+ DxFile.fromJson(dxApi, obj), paths)
       case ((files, paths), JsString(path)) =>
         (files, paths :+ path)
       case other =>

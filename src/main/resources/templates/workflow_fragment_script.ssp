@@ -5,6 +5,10 @@ main() {
     java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal wfFragment ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 }
 
+continue() {
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal continue ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
+}
+
 collect() {
     java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal collect ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 }

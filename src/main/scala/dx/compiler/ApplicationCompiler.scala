@@ -10,8 +10,8 @@ import dx.api.{
   InstanceTypeDbQuery,
   InstanceTypeRequest
 }
-import dx.core.NativeDetails
-import dx.core.io.DxPathConfig
+import dx.core.Native
+import dx.core.io.DxWorkerPaths
 import dx.core.ir._
 import dx.core.ir.ValueSerde.valueMapFormat
 import dx.core.util.CompressionUtils
@@ -25,8 +25,9 @@ import wdlTools.util.Logger
 case class ApplicationCompiler(typeAliases: Map[String, Type],
                                instanceTypeDb: InstanceTypeDB,
                                runtimeAsset: Option[JsValue],
-                               runtimePathConfig: DxPathConfig,
+                               runtimePathConfig: DxWorkerPaths,
                                runtimeTraceLevel: Int,
+                               scatterChunkSize: Int,
                                extras: Option[Extras],
                                parameterLinkSerializer: ParameterLinkSerializer,
                                dxApi: DxApi = DxApi.get,
@@ -184,7 +185,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     )
     val details: Map[String, JsValue] = dockerFile match {
       case None         => Map.empty
-      case Some(dxFile) => Map("docker-image" -> dxFile.getLinkAsJson)
+      case Some(dxFile) => Map("docker-image" -> dxFile.asJson)
     }
     (runSpec, details)
   }
@@ -309,7 +310,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         )
     }.unzip
     // build the details JSON
-    val defaultTags = Set(NativeDetails.CompilerTag)
+    val defaultTags = Set(Native.CompilerTag)
     val (taskMeta, taskDetails) = applicationAttributesToNative(applet, defaultTags)
     val delayDetails = delayWorkspaceDestructionToNative
     // meta information used for running workflow fragments
@@ -317,15 +318,16 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       applet.kind match {
         case ExecutableKindWfFragment(_, blockPath, inputs) =>
           Map(
-              NativeDetails.ExecLinkInfo -> JsObject(linkInfo.toMap),
-              NativeDetails.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
-              NativeDetails.WfFragmentInputs -> JsObject(inputs.map {
+              Native.ExecLinkInfo -> JsObject(linkInfo.toMap),
+              Native.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
+              Native.WfFragmentInputs -> JsObject(inputs.map {
                 case (k, t) => k -> TypeSerde.serialize(t)
-              })
+              }),
+              Native.ScatterChunkSize -> JsNumber(scatterChunkSize)
           )
         case ExecutableKindWfInputs | ExecutableKindWfOutputs | ExecutableKindWfCustomReorgOutputs |
             ExecutableKindWorkflowOutputReorg =>
-          Map(NativeDetails.WfFragmentInputs -> JsObject(applet.inputVars.map { p =>
+          Map(Native.WfFragmentInputs -> JsObject(applet.inputVars.map { p =>
             p.name -> TypeSerde.serialize(p.dxType)
           }.toMap))
         case _ =>
@@ -340,9 +342,9 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     val defaultRuntimeAttributes =
       extras.map(_.defaultRuntimeAttributes.toJson).getOrElse(JsNull)
     val auxDetails = Map(
-        NativeDetails.SourceCode -> JsString(sourceEncoded),
-        NativeDetails.InstanceTypeDb -> JsString(dbOpaqueEncoded),
-        NativeDetails.RuntimeAttributes -> defaultRuntimeAttributes
+        Native.SourceCode -> JsString(sourceEncoded),
+        Native.InstanceTypeDb -> JsString(dbOpaqueEncoded),
+        Native.RuntimeAttributes -> defaultRuntimeAttributes
     )
     // combine all details into a single Map
     val details: Map[String, JsValue] =

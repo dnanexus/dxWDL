@@ -72,28 +72,35 @@ object ValueSerde extends DefaultJsonProtocol {
     * @param jsValue the JsValue
     * @return
     */
-  def deserialize(jsValue: JsValue): Value = {
-    jsValue match {
-      case JsNull                               => VNull
-      case JsBoolean(b)                         => VBoolean(b.booleanValue)
-      case JsNumber(value) if value.isValidLong => VInt(value.toLongExact)
-      case JsNumber(value)                      => VFloat(value.toDouble)
-      case JsString(s)                          => VString(s)
-      case JsArray(array) =>
-        VArray(array.map(x => deserialize(x)))
-      case map: JsObject if isMapObject(map) =>
-        VMap(
-            (deserialize(map.fields("keys")), deserialize(map.fields("values"))) match {
-              case (VArray(keys), VArray(values)) => keys.zip(values).toMap
-              case _ =>
-                throw new Exception(s"Could not deserialize object that looks like a Map ${map}")
-            }
-        )
-      case JsObject(members) =>
-        VHash(members.map {
-          case (key, value) => key -> deserialize(value)
-        })
+  def deserialize(jsValue: JsValue, handler: Option[JsValue => Option[Value]] = None): Value = {
+    def inner(innerValue: JsValue): Value = {
+      val v = handler.flatMap(_(innerValue))
+      if (v.isDefined) {
+        return v.get
+      }
+      jsValue match {
+        case JsNull                               => VNull
+        case JsBoolean(b)                         => VBoolean(b.booleanValue)
+        case JsNumber(value) if value.isValidLong => VInt(value.toLongExact)
+        case JsNumber(value)                      => VFloat(value.toDouble)
+        case JsString(s)                          => VString(s)
+        case JsArray(array) =>
+          VArray(array.map(x => inner(x)))
+        case map: JsObject if isMapObject(map) =>
+          VMap(
+              (inner(map.fields("keys")), inner(map.fields("values"))) match {
+                case (VArray(keys), VArray(values)) => keys.zip(values).toMap
+                case _ =>
+                  throw new Exception(s"Could not deserialize object that looks like a Map ${map}")
+              }
+          )
+        case JsObject(members) =>
+          VHash(members.map {
+            case (key, value) => key -> inner(value)
+          })
+      }
     }
+    inner(jsValue)
   }
 
   /**
@@ -171,6 +178,6 @@ object ValueSerde extends DefaultJsonProtocol {
   }
 
   // support automatic conversion to/from JsValue
-  implicit val valueFormat: RootJsonFormat[Value] = jsonFormat1(deserialize)
+  implicit val valueFormat: RootJsonFormat[Value] = jsonFormat1(deserialize(_))
   implicit val valueMapFormat: RootJsonFormat[Map[String, Value]] = jsonFormat1(deserializeMap)
 }

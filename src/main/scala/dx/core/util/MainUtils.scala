@@ -201,13 +201,9 @@ object MainUtils {
     lazy val ListMustExist: PathOptionSpec = PathOptionSpec(mustExist = true, multiple = true)
   }
 
-  type OptionSpecs = Map[String, OptionSpec]
+  type InternalOptions = Map[String, OptionSpec]
 
-  // This directory exists only at runtime in the cloud. Beware of using
-  // it in code paths that run at compile time.
-  lazy val baseDNAxDir: Path = Paths.get("/home/dnanexus")
-
-  private val SimpleOptions: OptionSpecs = Map(
+  private val SimpleOptions: InternalOptions = Map(
       "quiet" -> FlagOptionSpec.Default,
       "verbose" -> FlagOptionSpec.Default,
       "verboseKey" -> StringOptionSpec.List,
@@ -221,7 +217,7 @@ object MainUtils {
   //    [[--sort, relaxed], [--reorg], [--compile-mode, IR]]
   //
   def parseCommandLine(args: Vector[String],
-                       specs: OptionSpecs,
+                       specs: InternalOptions,
                        deprecated: Set[String] = Set.empty): Options = {
     def isOption(word: String): Boolean = word.startsWith("-")
 

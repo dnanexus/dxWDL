@@ -6,7 +6,7 @@ import dx.translator.{CommonStage, CustomReorgConfig, EvalStage, OutputSection, 
 import dx.core.ir._
 import dx.core.ir.Type._
 import dx.core.ir.Value._
-import dx.core.ReorgOutputs.{ReorgStatus, ReorgStatusCompleted}
+import dx.core.Native.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{
   Block,
   BlockInput,

@@ -1,13 +1,17 @@
 package dx.core.ir
 
 import dx.AppInternalException
-import dx.api.{DxApi, DxExecution, DxUtils, DxWorkflowStage}
-import dx.core.io.DxFileSource
+import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
+import dx.core.Native
+import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.ir.Value._
-import dx.core.languages.IORef
-import dx.core.languages.wdl.ParameterLinkSerde
 import spray.json._
-import wdlTools.util.{FileSourceResolver, LocalFileSource, Logger}
+import wdlTools.util.{Enum, FileSourceResolver, LocalFileSource, Logger}
+
+object IORef extends Enum {
+  type IORef = Value
+  val Input, Output = Value
+}
 
 /**
   * A union of all the different ways of building a value from JSON passed
@@ -33,6 +37,13 @@ case class ParameterLinkWorkflowInput(varName: String, dxType: Type) extends Par
 case class ParameterLinkExec(dxExecution: DxExecution, varName: String, dxType: Type)
     extends ParameterLink
 
+object ParameterLink {
+  // Key used to wrap a complex value in JSON.
+
+  val FlatFilesSuffix = "___dxfiles"
+  val WorkflowInputFieldKey = "workflowInputField"
+}
+
 case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSourceResolver.get,
                                    dxApi: DxApi = DxApi.get) {
 
@@ -54,13 +65,13 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
     }
     def handler(value: Value): Option[JsValue] = {
       value match {
-        case VString(s) if s.length > ParameterLinkSerde.MaxStringLength =>
+        case VString(s) if s.length > Native.StringLengthLimit =>
           throw new AppInternalException(
-              s"string is longer than ${ParameterLinkSerde.MaxStringLength}"
+              s"string is longer than ${Native.StringLengthLimit}"
           )
         case VFile(path) =>
           fileResolver.resolve(path) match {
-            case dxFile: DxFileSource       => Some(dxFile.dxFile.getLinkAsJson)
+            case dxFile: DxFileSource       => Some(dxFile.dxFile.asJson)
             case localFile: LocalFileSource => Some(JsString(localFile.toString))
             case other =>
               throw new RuntimeException(s"Unsupported file source ${other}")
@@ -107,10 +118,10 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
         bindName
       }
     val wdlType = Type.unwrapOptional(link.dxType)
-    if (ParameterLinkSerde.isNativeDxType(wdlType)) {
+    if (Type.isDxType(wdlType)) {
       // Types that are supported natively in DX
       val jsv: JsValue = link match {
-        case ParameterLinkValue(jsn, _) => jsn
+        case ParameterLinkValue(jsLinkvalue, _) => jsLinkvalue
         case ParameterLinkStage(dxStage, ioRef, varEncName, _) =>
           ioRef match {
             case IORef.Input =>
@@ -121,7 +132,7 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
         case ParameterLinkWorkflowInput(varEncName, _) =>
           JsObject(
               DxUtils.DxLinkKey -> JsObject(
-                  ParameterLinkSerde.WorkflowInputFieldKey -> JsString(
+                  ParameterLink.WorkflowInputFieldKey -> JsString(
                       Parameter.encodeDots(varEncName)
                   )
               )
@@ -132,17 +143,17 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
       Vector((encodedName, jsv))
     } else {
       // Complex type requiring two fields: a JSON structure, and a flat array of files.
-      val fileArrayName = s"${encodedName}${ParameterLinkSerde.FlatFilesSuffix}"
+      val fileArrayName = s"${encodedName}${ParameterLink.FlatFilesSuffix}"
       val mapValue = link match {
-        case ParameterLinkValue(jsn, _) =>
+        case ParameterLinkValue(jsLinkvalue, _) =>
           // files that are embedded in the structure
-          val jsFiles = dxApi.findFiles(jsn).map(_.getLinkAsJson)
+          val jsFiles = dxApi.findFiles(jsLinkvalue).map(_.asJson)
           // Dx allows hashes as an input/output type. If the JSON value is
           // not a hash (JsObject), we need to add an outer layer to it.
-          val jsn1 = JsObject(ParameterLinkSerde.ComplexValueKey -> jsn)
-          Map(encodedName -> jsn1, fileArrayName -> JsArray(jsFiles))
+          val jsLink = JsObject(Parameter.ComplexValueKey -> jsLinkvalue)
+          Map(encodedName -> jsLink, fileArrayName -> JsArray(jsFiles))
         case ParameterLinkStage(dxStage, ioRef, varName, _) =>
-          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
+          val varFileArrayName = s"${varName}${ParameterLink.FlatFilesSuffix}"
           ioRef match {
             case IORef.Input =>
               Map(
@@ -156,23 +167,23 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
               )
           }
         case ParameterLinkWorkflowInput(varName, _) =>
-          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
+          val varFileArrayName = s"${varName}${ParameterLink.FlatFilesSuffix}"
           Map(
               encodedName ->
                 JsObject(
                     DxUtils.DxLinkKey -> JsObject(
-                        ParameterLinkSerde.WorkflowInputFieldKey -> JsString(varName)
+                        ParameterLink.WorkflowInputFieldKey -> JsString(varName)
                     )
                 ),
               fileArrayName ->
                 JsObject(
                     DxUtils.DxLinkKey -> JsObject(
-                        ParameterLinkSerde.WorkflowInputFieldKey -> JsString(varFileArrayName)
+                        ParameterLink.WorkflowInputFieldKey -> JsString(varFileArrayName)
                     )
                 )
           )
         case ParameterLinkExec(dxJob, varName, _) =>
-          val varFileArrayName = s"${varName}${ParameterLinkSerde.FlatFilesSuffix}"
+          val varFileArrayName = s"${varName}${ParameterLink.FlatFilesSuffix}"
           Map(
               encodedName -> DxUtils
                 .dxExecutionToEbor(dxJob, Parameter.encodeDots(varName)),
@@ -181,6 +192,44 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
           )
       }
       mapValue.toVector
+    }
+  }
+
+  def createFields(bindName: String,
+                   t: Type,
+                   v: Value,
+                   encodeDots: Boolean = true): Vector[(String, JsValue)] = {
+    createFields(createLink(t, v), bindName, encodeDots)
+  }
+}
+
+case class ParameterLinkDeserializer(dxFileDescCache: DxFileDescCache, dxApi: DxApi = DxApi.get) {
+  def deserializeInput(jsv: JsValue): Value = {
+    val unpacked =
+      jsv match {
+        case JsObject(fields) if fields.contains(Parameter.ComplexValueKey) =>
+          // unpack the hash with which complex JSON values are wrapped in dnanexus.
+          fields(Parameter.ComplexValueKey)
+        case _ => jsv
+      }
+
+    def handler(value: JsValue): Option[Value] = {
+      if (DxFile.isLinkJson(value)) {
+        // Convert the path in DNAx to a string. We can later decide if we want to download it or not.
+        // Use the cache value if there is one to save the API call.
+        val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJson(dxApi, value))
+        Some(VFile(dxFile.asUri))
+      } else {
+        None
+      }
+    }
+
+    ValueSerde.deserialize(unpacked, Some(handler))
+  }
+
+  def deserializeInputMap(inputs: Map[String, JsValue]): Map[String, Value] = {
+    inputs.map {
+      case (name, jsv) => name -> deserializeInput(jsv)
     }
   }
 }

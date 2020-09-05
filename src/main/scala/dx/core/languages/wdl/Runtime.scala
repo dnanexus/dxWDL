@@ -6,15 +6,21 @@ import wdlTools.eval.{
   Eval,
   EvalException,
   Hints,
-  Runtime => WdlRuntime,
   RuntimeAttributes,
   VBindings,
+  WdlValueBindings,
+  Runtime => WdlRuntime,
   RuntimeAttributes => WdlRuntimeAttributes,
   Utils => EUtils
 }
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+
+object DxMetaHints {
+  val ParameterMetaStream: String = "stream"
+  val ParameterHintStream = "dx_stream"
+}
 
 abstract class DxRuntimeHint(val runtimeKey: Option[String],
                              val hintsKey: String,
@@ -32,9 +38,10 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
                                       runtimeSection: Option[TAT.RuntimeSection],
                                       hintsSection: Option[TAT.MetaSection],
                                       evaluator: Eval,
-                                      defaultAttrs: VBindings[B]) {
+                                      defaultAttrs: VBindings[B],
+                                      ctx: Option[WdlValueBindings] = None) {
   private lazy val runtimeAttrs: WdlRuntimeAttributes[B] = {
-    val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator))
+    val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator, ctx))
     val hints = hintsSection.map(h => Hints.create(Some(h)))
     RuntimeAttributes[B](runtime, hints, defaultAttrs)
   }
@@ -73,33 +80,37 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
     runtimeAttrs.runtime.map(_.container).getOrElse(Vector.empty)
   }
 
-  def parseInstanceType: Option[InstanceTypeRequest] = {
-    try {
-      getDxHint(Runtime.InstanceType) match {
-        case None => ()
-        case Some(V_String(dxInstanceType)) =>
-          return Some(InstanceTypeRequest(Some(dxInstanceType)))
-        case other => throw new Exception(s"Invalid dxInstanceType ${other}")
-      }
+  def parseInstanceType: InstanceTypeRequest = {
+    getDxHint(Runtime.InstanceType) match {
+      case None => ()
+      case Some(V_String(dxInstanceType)) =>
+        return InstanceTypeRequest(Some(dxInstanceType))
+      case other => throw new Exception(s"Invalid dxInstanceType ${other}")
+    }
 
-      val memory = runtimeAttrs.runtime.flatMap(_.memory)
-      val memoryMB = memory.map(mem => EUtils.floatToInt(mem.toDouble / Runtime.MiB))
-      // we don't provide multiple disk mounts - instead we just add up all the
-      // requested disk space
-      val diskGB =
-        runtimeAttrs.runtime.map(r => EUtils.floatToInt(r.disks.map(_.size).sum / Runtime.GiB))
-      val diskType =
-        runtimeAttrs.runtime.map(_.disks.flatMap(_.diskType.map(_.toUpperCase)).distinct) match {
-          case Some(Vector(diskType))       => Some(DiskType.withNameIgnoreCase(diskType))
-          case Some(v) if v.contains("SSD") => Some(DiskType.SSD)
-          case _                            => None
-        }
-      val cpu = runtimeAttrs.runtime.flatMap(_.cpu).map(EUtils.floatToInt)
-      val gpu = runtimeAttrs.get(WdlRuntime.Keys.Gpu, Vector(T_Boolean)) match {
-        case None               => None
-        case Some(V_Boolean(b)) => Some(b)
+    val memory = runtimeAttrs.runtime.flatMap(_.memory)
+    val memoryMB = memory.map(mem => EUtils.floatToInt(mem.toDouble / Runtime.MiB))
+    // we don't provide multiple disk mounts - instead we just add up all the
+    // requested disk space
+    val diskGB =
+      runtimeAttrs.runtime.map(r => EUtils.floatToInt(r.disks.map(_.size).sum / Runtime.GiB))
+    val diskType =
+      runtimeAttrs.runtime.map(_.disks.flatMap(_.diskType.map(_.toUpperCase)).distinct) match {
+        case Some(Vector(diskType))       => Some(DiskType.withNameIgnoreCase(diskType))
+        case Some(v) if v.contains("SSD") => Some(DiskType.SSD)
+        case _                            => None
       }
-      Some(InstanceTypeRequest(None, memoryMB, diskGB, diskType, cpu, gpu))
+    val cpu = runtimeAttrs.runtime.flatMap(_.cpu).map(EUtils.floatToInt)
+    val gpu = runtimeAttrs.get(WdlRuntime.Keys.Gpu, Vector(T_Boolean)) match {
+      case None               => None
+      case Some(V_Boolean(b)) => Some(b)
+    }
+    InstanceTypeRequest(None, memoryMB, diskGB, diskType, cpu, gpu)
+  }
+
+  def safeParseInstanceType: Option[InstanceTypeRequest] = {
+    try {
+      Some(parseInstanceType)
     } catch {
       case _: EvalException =>
         // The generated code will need to calculate the instance type at runtime

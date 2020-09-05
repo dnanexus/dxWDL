@@ -186,8 +186,7 @@ object IOParameter {
               case Some(JsString(s)) => Some(s)
               case _                 => None
             }
-            IOParameterChoiceFile(name = nameStr,
-                                  value = DxFile.fromJsValue(dxApi, fields("value")))
+            IOParameterChoiceFile(name = nameStr, value = DxFile.fromJson(dxApi, fields("value")))
           case JsString(s)  => IOParameterChoiceString(s)
           case JsNumber(n)  => IOParameterChoiceNumber(n)
           case JsBoolean(b) => IOParameterChoiceBoolean(b)
@@ -205,7 +204,7 @@ object IOParameter {
               case _                 => None
             }
             val value: Option[DxFile] = fields.get("value") match {
-              case Some(v: JsValue) => Some(DxFile.fromJsValue(dxApi, v))
+              case Some(v: JsValue) => Some(DxFile.fromJson(dxApi, v))
               case _                => None
             }
             val project: Option[DxProject] = fields.get("project") match {
@@ -280,7 +279,7 @@ object IOParameter {
       case JsString(s)       => IOParameterDefaultString(s)
       case JsNumber(n)       => IOParameterDefaultNumber(n)
       case JsBoolean(b)      => IOParameterDefaultBoolean(b)
-      case fileObj: JsObject => IOParameterDefaultFile(DxFile.fromJsValue(dxApi, fileObj))
+      case fileObj: JsObject => IOParameterDefaultFile(DxFile.fromJson(dxApi, fileObj))
       case JsArray(array) =>
         IOParameterDefaultArray(array.map(value => ioParamDefaultFromJs(dxApi, value)))
       case other => throw new Exception(s"Unsupported default value type ${other}")

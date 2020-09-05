@@ -6,7 +6,7 @@ import dx.api.{DxApi, DxProject}
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.languages.wdl.{Block, ParameterLinkSerde, Utils => WdlUtils}
+import dx.core.languages.wdl.{Block, Utils => WdlUtils}
 import dx.translator.{
   CommonStage,
   DocumentTranslator,
@@ -59,7 +59,7 @@ case class WdlDocumentTranslator(doc: TAT.Document,
     */
   private def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
     decls.foreach {
-      case TAT.Declaration(name, _, _, _) if name == ParameterLinkSerde.ComplexValueKey =>
+      case TAT.Declaration(name, _, _, _) if name == Parameter.ComplexValueKey =>
         throw new Exception(
             s"Variable ${name} is reserved by DNAnexus and cannot be used as a variable name "
         )

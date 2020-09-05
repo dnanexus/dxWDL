@@ -3,7 +3,7 @@ package dx.dxni
 import java.nio.file.{Files, Path}
 
 import dx.api._
-import dx.core.NativeProperties
+import dx.core.Native
 import dx.core.getVersion
 import dx.core.languages.Language.Language
 import dx.dxni.wdl.WdlDxNativeInterfaceFactory
@@ -52,7 +52,7 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
         .keySet
         .collect {
           case applet: DxApplet
-              if applet.describe().properties.exists(_.contains(NativeProperties.Checksum)) =>
+              if applet.describe().properties.exists(_.contains(Native.Checksum)) =>
             applet
         }
         .toVector

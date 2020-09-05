@@ -4,7 +4,6 @@ import dx.api.DxWorkflowStage
 import dx.translator.RunSpec.{ContainerImage, InstanceType}
 import dx.core.ir.ExecutableType.ExecutableType
 import dx.core.ir.Level.Level
-import dx.core.languages.wdl.ParameterLinkSerde.ComplexValueKey
 import wdlTools.util.Enum
 
 trait ParameterAttribute
@@ -41,6 +40,7 @@ case class Parameter(
 }
 
 object Parameter {
+  val ComplexValueKey = "___"
 
   /**
     * Converts dots in parameter names to underscores.

@@ -7,13 +7,13 @@ import dx.core.ir.{
   Callable,
   Parameter,
   ParameterAttribute,
+  ParameterLink,
   ParameterLinkSerializer,
   Type,
   TypeSerde,
   Value,
   ValueSerde
 }
-import dx.core.languages.wdl.ParameterLinkSerde
 import dx.translator.CallableAttributes.{
   DescriptionAttribute,
   DetailsAttribute,
@@ -50,7 +50,7 @@ class ExecutableCompiler(extras: Option[Extras],
       case VInt(i)     => JsNumber(i)
       case VFloat(f)   => JsNumber(f)
       case VString(s)  => JsString(s)
-      case VFile(f)    => dxApi.resolveDxUriFile(f).getLinkAsJson
+      case VFile(f)    => dxApi.resolveDxUriFile(f).asJson
       // TODO: case VDirectory(d) =>
       case VArray(array) => JsArray(array.map(defaultValueToNative))
     }
@@ -89,7 +89,7 @@ class ExecutableCompiler(extras: Option[Extras],
           case ParameterAttributes.SimpleChoice(VBoolean(value)) => JsBoolean(value)
           case ParameterAttributes.FileChoice(value, name) => {
             // TODO: support project and record choices
-            val dxLink = dxApi.resolveDxUriFile(value).getLinkAsJson
+            val dxLink = dxApi.resolveDxUriFile(value).asJson
             if (name.isDefined) {
               JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
             } else {
@@ -107,7 +107,7 @@ class ExecutableCompiler(extras: Option[Extras],
           case ParameterAttributes.FileSuggestion(value, name, project, path) => {
             // TODO: support project and record suggestions
             val dxLink: Option[JsValue] = value match {
-              case Some(str) => Some(dxApi.resolveDxUriFile(str).getLinkAsJson)
+              case Some(str) => Some(dxApi.resolveDxUriFile(str).asJson)
               case None      => None
             }
             if (name.isDefined || project.isDefined || path.isDefined) {
@@ -162,8 +162,7 @@ class ExecutableCompiler(extras: Option[Extras],
     val defaultVals: Map[String, JsValue] = parameter.defaultValue match {
       case None => Map.empty
       case Some(wdlValue) =>
-        val wvl = parameterLinkSerializer.createLink(parameter.dxType, wdlValue)
-        parameterLinkSerializer.createFields(wvl, name).toMap
+        parameterLinkSerializer.createFields(name, parameter.dxType, wdlValue).toMap
     }
     val attributes = parameterAttributesToNative(parameter.attributes, defaultVals.contains(name))
     val (nativeType, optional) = TypeSerde.toNativeType(parameter.dxType)
@@ -204,7 +203,7 @@ class ExecutableCompiler(extras: Option[Extras],
         )
       case _ =>
         // A JSON structure passed as a hash, and a vector of platform files
-        val filesName = s"${name}${ParameterLinkSerde.FlatFilesSuffix}"
+        val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
         Vector(
             JsObject(
                 Map("name" -> JsString(name), "class" -> JsString("hash"))

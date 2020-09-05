@@ -1,4 +1,4 @@
-<% val dxPathConfig: dx.core.io.DxPathConfig %>
+<% val dxPathConfig: dx.core.io.DxWorkerPaths %>
 <% val rtTraceLevel: Int %>
 <% val streamAllFiles: Boolean %>
 <% val bashDollar: String = "$" %>

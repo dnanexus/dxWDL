@@ -57,8 +57,3 @@ object Language extends Enum {
     }
   }
 }
-
-object IORef extends Enum {
-  type IORef = Value
-  val Input, Output = Value
-}

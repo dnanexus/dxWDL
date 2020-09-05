@@ -162,7 +162,11 @@ case class InstanceTypeRequest(dxInstanceType: Option[String] = None,
                                diskGB: Option[Long] = None,
                                diskType: Option[DiskType] = None,
                                cpu: Option[Long] = None,
-                               gpu: Option[Boolean] = None)
+                               gpu: Option[Boolean] = None) {
+  override def toString: String = {
+    s"memory=${memoryMB} disk=${diskGB} cores=${cpu} instancetype=${dxInstanceType}"
+  }
+}
 
 case class InstanceTypeDB(pricingAvailable: Boolean, instances: Vector[DxInstanceType]) {
 

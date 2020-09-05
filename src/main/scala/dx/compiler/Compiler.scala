@@ -19,8 +19,8 @@ import dx.api.{
   Field,
   InstanceTypeDbQuery
 }
-import dx.core.{NativeProperties, getVersion}
-import dx.core.io.DxPathConfig
+import dx.core.{Native, getVersion}
+import dx.core.io.DxWorkerPaths
 import dx.core.ir._
 import dx.core.util.CompressionUtils
 import dx.translator.Extras
@@ -45,7 +45,8 @@ import scala.jdk.CollectionConverters._
   * @param logger the Logge
   */
 case class Compiler(extras: Option[Extras],
-                    runtimePathConfig: DxPathConfig,
+                    runtimePathConfig: DxWorkerPaths,
+                    scatterChunkSize: Int,
                     runtimeTraceLevel: Int,
                     includeAsset: Boolean,
                     archive: Boolean,
@@ -136,7 +137,7 @@ case class Compiler(extras: Option[Extras],
                 s"record does not have an archive field ${desc.details}"
             )
         }
-      val dxFile = DxFile.fromJsValue(dxApi, dxLink)
+      val dxFile = DxFile.fromJson(dxApi, dxLink)
       JsObject(
           "name" -> JsString(dxFile.describe().name),
           "id" -> JsObject(DxUtils.DxLinkKey -> JsString(dxFile.id))
@@ -172,8 +173,8 @@ case class Compiler(extras: Option[Extras],
         }
       val updatedProperties = existingProperties ++
         Map(
-            NativeProperties.Version -> JsString(getVersion),
-            NativeProperties.Checksum -> JsString(digest)
+            Native.Version -> JsString(getVersion),
+            Native.Checksum -> JsString(digest)
         )
       // Add properties and attributes we don't want to fall under the checksum
       // This allows, for example, moving the dx:executable, while
@@ -290,6 +291,7 @@ case class Compiler(extras: Option[Extras],
             runtimeAsset,
             runtimePathConfig,
             runtimeTraceLevel,
+            scatterChunkSize,
             extras,
             parameterLinkSerializer,
             dxApi,

@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
-import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
+import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.languages.Language
 import dx.core.languages.wdl.{Block, Evaluator, WdlExecutableLink, ParseSource, ParameterLinkSerde}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,11 +25,11 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     DxInstanceType("mem_ssd_unicorn", 100, 100, 4, 1.00f, Vector(("Ubuntu", "16.04")), gpu = false)
   private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
 
-  private def setup(): (DxPathConfig, FileSourceResolver) = {
+  private def setup(): (DxWorkerPaths, FileSourceResolver) = {
     // Create a clean temp directory for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     val dxPathConfig =
-      DxPathConfig.apply(jobHomeDir, streamAllFiles = false, logger)
+      DxWorkerPaths.apply(jobHomeDir, streamAllFiles = false, logger)
     dxPathConfig.createCleanDirs()
     val dxProtocol = DxFileAccessProtocol(dxApi)
     val fileResolver =
@@ -37,7 +37,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     (dxPathConfig, fileResolver)
   }
 
-  private def setupFragRunner(dxPathConfig: DxPathConfig,
+  private def setupFragRunner(dxPathConfig: DxWorkerPaths,
                               fileResolver: FileSourceResolver,
                               wfSourceCode: String): (TAT.Workflow, WfFragRunner) = {
     val (wf, taskDir, typeAliases, document) =
@@ -83,7 +83,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
   def evaluateWdlExpression(expr: TAT.Expr,
                             env: Map[String, WdlValues.V],
-                            dxPathConfig: DxPathConfig,
+                            dxPathConfig: DxWorkerPaths,
                             fileResolver: FileSourceResolver,
                             language: Language.Value): WdlValues.V = {
     // build an object capable of evaluating WDL expressions
