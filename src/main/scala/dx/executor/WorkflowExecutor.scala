@@ -1,18 +1,33 @@
 package dx.executor
 
+import java.nio.file.Path
+
 import dx.core.ir.{Type, Value}
 import dx.executor.WorkflowAction.WorkflowAction
-import wdlTools.util.Enum
+import dx.executor.wdl.WdlWorkflowSupportFactory
+import wdlTools.util.{Enum, Logger}
 
 object WorkflowAction extends Enum {
   type WorkflowAction = Value
   val Inputs, Outputs, OutputReorg, CustomReorgOutputs, Run, Continue, Collect = Value
 }
 
-class WorkflowExecutor {
-  val wfFragExecutor = executorFactories
+trait WorkflowSupport {}
+
+trait WorkflowSupportFactory {
+  def create: Option[WorkflowSupport]
+}
+
+case class WorkflowExecutor(homeDir: Path, logger: Logger = Logger.get) {
+  private val workflowSupportFactories: Vector[WorkflowSupportFactory] = Vector(
+      WdlWorkflowSupportFactory()
+  )
+
+  private val workflowMeta = WorkflowMeta(homeDir)
+
+  private val workflowSupport: WorkflowSupport = workflowSupportFactories
     .collectFirst { factory =>
-      factory.createWorkflowFragmentExecutor match {
+      factory.create match {
         case Some(executor) => executor
       }
     }
@@ -23,27 +38,29 @@ class WorkflowExecutor {
   def reorganizeOutputsDefault(): Map[String, (Type, Value)] = {}
 
   def apply(action: WorkflowAction): String = {
-    val outputs: Map[String, (Type, Value)] = action match {
-      case ExecutorAction.WfInputs             =>
-      case ExecutorAction.WfFragment           =>
-      case ExecutorAction.WfScatterContinue    =>
-      case ExecutorAction.WfScatterCollect     =>
-      case ExecutorAction.WfOutputs            =>
-      case ExecutorAction.WfCustomReorgOutputs =>
-      case ExecutorAction.WfOutputReorg =>
-        wfFragExecutor.reorganizeOutputsDefault()
-      case _ =>
-        throw new Exception(s"Illegal workflow fragment operation ${action}")
+    try {
+      val outputs: Map[String, (Type, Value)] = action match {
+        case WorkflowAction.Inputs             =>
+        case WorkflowAction.Run                =>
+        case WorkflowAction.Continue           =>
+        case WorkflowAction.Collect            =>
+        case WorkflowAction.Outputs            =>
+        case WorkflowAction.CustomReorgOutputs =>
+        case WorkflowAction.OutputReorg =>
+          reorganizeOutputsDefault()
+        case _ =>
+          throw new Exception(s"Illegal workflow fragment operation ${action}")
+      }
+      workflowMeta.writeOutputs(outputs)
+      s"success ${action}"
+    } catch {
+      case e: Throwable =>
+        workflowMeta.error(e)
+        throw e
     }
-
-    jobMeta.writeOutputs(outputs)
-    s"success ${action}"
   }
 }
 
-trait WorkflowExecutorFactory {
-  def create(): Option[WorkflowExecutor]
-}
 /**
 private def workflowFragAction(
       action: ExecutorAction.Value,

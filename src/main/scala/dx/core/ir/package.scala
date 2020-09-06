@@ -139,10 +139,10 @@ case class ExecutableKindWorkflowCustomReorg(id: String) extends ExecutableKind
 object ExecutableKind {
   def getCommand(kind: ExecutableKind): Option[String] = {
     kind match {
-      case ExecutableKindWfInputs             => Some("wfInputs")
-      case ExecutableKindWfOutputs            => Some("wfOutputs")
-      case ExecutableKindWfCustomReorgOutputs => Some("wfCustomReorgOutputs")
-      case ExecutableKindWorkflowOutputReorg  => Some("workflowOutputReorg")
+      case ExecutableKindWfInputs             => Some("Inputs")
+      case ExecutableKindWfOutputs            => Some("Outputs")
+      case ExecutableKindWfCustomReorgOutputs => Some("CustomReorgOutputs")
+      case ExecutableKindWorkflowOutputReorg  => Some("OutputReorg")
       case _                                  => None
     }
   }

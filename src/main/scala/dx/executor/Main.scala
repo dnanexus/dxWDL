@@ -30,49 +30,42 @@ object Main {
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
     val logger = initLogger(options)
-    kind match {
-      case "task" =>
-        val taskAction =
-          try {
-            TaskAction.withNameIgnoreCase(action)
-          } catch {
-            case _: NoSuchElementException =>
-              return BadUsageTermination(s"Unknown action ${action}")
-          }
-        val streamAllFiles = options.getFlag("streamAllFiles")
-        try {
+    try {
+      kind match {
+        case "task" =>
+          val taskAction =
+            try {
+              TaskAction.withNameIgnoreCase(action)
+            } catch {
+              case _: NoSuchElementException =>
+                return BadUsageTermination(s"Unknown action ${action}")
+            }
+          val streamAllFiles = options.getFlag("streamAllFiles")
           val taskExecutor = TaskExecutor(homeDir, streamAllFiles, logger = logger)
           val successMessage = taskExecutor.apply(taskAction)
           Success(successMessage)
-        } catch {
-          case e: Throwable =>
-            Failure(s"failure running ${action}", Some(e))
-        }
-      case "frag" =>
-        val wfAction =
-          try {
-            WorkflowAction.withNameIgnoreCase(action)
-          } catch {
-            case _: NoSuchElementException =>
-              return BadUsageTermination(s"Unknown action ${args(0)}")
-          }
-        try {
-          val wfMeta = WorkflowMeta(homeDir)
-          val executor = WorkflowExecutor(wfMeta)
-          val successMessage = executor.apply(wfAction)
+        case "workflow" =>
+          val workflowAction =
+            try {
+              WorkflowAction.withNameIgnoreCase(action)
+            } catch {
+              case _: NoSuchElementException =>
+                return BadUsageTermination(s"Unknown action ${args(0)}")
+            }
+          val executor = WorkflowExecutor(homeDir)
+          val successMessage = executor.apply(workflowAction)
           Success(successMessage)
-        } catch {
-          case e: Throwable =>
-            JobMeta.writeError(homeDir, e)
-            Failure(s"failure running ${action}", Some(e))
-        }
-      case _ =>
-        BadUsageTermination()
+        case _ =>
+          BadUsageTermination()
+      }
+    } catch {
+      case e: Throwable =>
+        Failure(s"failure running ${action}", Some(e))
     }
   }
 
   private val usageMessage =
-    s"""|java -jar dxWDL.jar internal <action> <homedir> [options]
+    s"""|java -jar dxWDL.jar <task|workflow> <action> <homedir> [options]
         |
         |Options:
         |    -traceLevel [0,1,2] How much debug information to write to the
