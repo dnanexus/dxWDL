@@ -531,7 +531,7 @@ object Main {
         |    -verboseKey <module>     Detailed information for a specific module
         |""".stripMargin
 
-  def main(args: Seq[String]): Unit = {
-    terminate(dispatchCommand(args.toVector), usageMessage)
+  def main(args: Vector[String]): Unit = {
+    terminate(dispatchCommand(args), usageMessage)
   }
 }

@@ -1,13 +1,11 @@
 package dxWDL
 
-import dx.core.util.MainUtils.normKey
-
 // Temporary main class to dispatch to either compiler or exec - until these are split into separate JARs.
 object Main extends App {
-  val argsSeq = args.toSeq
-  if (argsSeq.nonEmpty && normKey(argsSeq.head) == normKey("internal")) {
-    dx.executor.Main.main(argsSeq.tail)
-  } else {
-    dx.compiler.Main.main(argsSeq)
+  args.toVector match {
+    case v if v.nonEmpty && Set("task", "frag").contains(v.head) =>
+      dx.executor.Main.main(v)
+    case v =>
+      dx.compiler.Main.main(v)
   }
 }

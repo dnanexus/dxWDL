@@ -3,7 +3,7 @@
 <% val streamAllFiles: Boolean %>
 <% val bashDollar: String = "$" %>
     # evaluate input arguments, and download input files
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal taskProlog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task prolog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 
     echo "Using dxda version: ${bashDollar}(dx-download-agent version)"
     echo "Using dxfuse version: ${bashDollar}(dxfuse -version)"
@@ -73,7 +73,7 @@
     fi
 
     # construct the bash command and write it to a file
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal taskInstantiateCommand ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task instantiateCommand ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 
     echo "bash command encapsulation script:"
     cat ${dxPathConfig.script.toString}
@@ -100,7 +100,7 @@
     fi
 
     # evaluate applet outputs, and upload result files
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal taskEpilog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task epilog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 
     # unmount dxfuse
     if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then

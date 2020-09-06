@@ -14,7 +14,7 @@ import dx.core.io.{
 }
 import dx.core.ir.ParameterLink
 import dx.core.languages.wdl.{DxMetaHints, Runtime, Utils => WdlUtils}
-import dx.executor.{FileUploader, JobMeta, TaskExecutor}
+import dx.executor.{FileUploader, TaskMeta, TaskSupport, TaskSupportFactory}
 import dx.translator.wdl.IrToWdlValueBindings
 import spray.json._
 import wdlTools.eval.WdlValues._
@@ -45,13 +45,13 @@ import wdlTools.util.{
   TraceLevel
 }
 
-case class WdlTaskExecutor(task: TAT.Task,
-                           wdlVersion: WdlVersion,
-                           typeAliases: DefaultBindings[WdlTypes.T_Struct],
-                           jobMeta: JobMeta,
-                           workerPaths: DxWorkerPaths,
-                           fileUploader: FileUploader)
-    extends TaskExecutor(jobMeta, workerPaths, fileUploader) {
+case class WdlTaskSupport(task: TAT.Task,
+                          wdlVersion: WdlVersion,
+                          typeAliases: DefaultBindings[WdlTypes.T_Struct],
+                          jobMeta: TaskMeta,
+                          workerPaths: DxWorkerPaths,
+                          fileUploader: FileUploader)
+    extends TaskSupport {
 
   private val dxFileDescCache = jobMeta.dxFileDescCache
   private val fileResolver = jobMeta.fileResolver
@@ -118,7 +118,7 @@ case class WdlTaskExecutor(task: TAT.Task,
     )
   }
 
-  def getRequiredInstanceType(inputs: Map[String, WdlValues.V]): String = {
+  private def getRequiredInstanceType(inputs: Map[String, WdlValues.V]): String = {
     logger.traceLimited("calcInstanceType", minLevel = TraceLevel.VVerbose)
     printInputs(inputs)
     val env = evaluateDeclarations(inputs)
@@ -128,7 +128,7 @@ case class WdlTaskExecutor(task: TAT.Task,
     jobMeta.instanceTypeDb.apply(request)
   }
 
-  lazy val requiredInstanceType: String = getRequiredInstanceType(getInputs)
+  override lazy val getRequiredInstanceType: String = getRequiredInstanceType(getInputs)
 
   private def extractFiles(v: WdlValues.V): Vector[FileSource] = {
     v match {
@@ -183,10 +183,10 @@ case class WdlTaskExecutor(task: TAT.Task,
     * but we want to download it just once.
     * @return
     */
-  override protected def localizeInputFiles: (Map[String, JsValue],
-                                              Map[FileSource, Path],
-                                              Option[DxdaManifest],
-                                              Option[DxfuseManifest]) = {
+  override def localizeInputFiles: (Map[String, JsValue],
+                                    Map[FileSource, Path],
+                                    Option[DxdaManifest],
+                                    Option[DxfuseManifest]) = {
     assert(workerPaths.inputFilesDir != workerPaths.dxfuseMountpoint)
 
     val inputs = getInputs
@@ -302,7 +302,7 @@ case class WdlTaskExecutor(task: TAT.Task,
     (localizedInputsJs, fileSourceToPath, Some(dxdaManifest), Some(dxfuseManifest))
   }
 
-  override protected def writeCommandScript(
+  override def writeCommandScript(
       localizedInputs: Map[String, JsValue]
   ): Map[String, JsValue] = {
     val inputs = deserializeValues(localizedInputs)
@@ -344,9 +344,9 @@ case class WdlTaskExecutor(task: TAT.Task,
   private lazy val outputDefs: Map[String, TAT.OutputDefinition] =
     task.outputs.map(d => d.name -> d).toMap
 
-  override protected def evaluateOutputs(localizedInputs: Map[String, JsValue],
-                                         fileSourceToPath: Map[FileSource, Path],
-                                         fileUploader: FileUploader): Unit = {
+  override def evaluateOutputs(localizedInputs: Map[String, JsValue],
+                               fileSourceToPath: Map[FileSource, Path],
+                               fileUploader: FileUploader): Unit = {
     val inputs = deserializeValues(localizedInputs)
     val inputValues = inputs.map {
       case (name, (_, v)) => name -> v
@@ -440,10 +440,44 @@ case class WdlTaskExecutor(task: TAT.Task,
     jobMeta.writeOutputs(remoteOutputs)
   }
 
-  override protected def linkOutputs(subjob: DxJob): Unit = {
+  override def linkOutputs(subjob: DxJob): Unit = {
     val irOutputFields = task.outputs.map { outputDef: TAT.OutputDefinition =>
       outputDef.name -> WdlUtils.toIRType(outputDef.wdlType)
     }
     jobMeta.writeOutputLinks(subjob, irOutputFields)
+  }
+}
+
+case class WdlTaskSupportFactory() extends TaskSupportFactory {
+  override def create(taskMeta: TaskMeta,
+                      workerPaths: DxWorkerPaths,
+                      fileUploader: FileUploader): Option[WdlTaskSupport] = {
+    val (doc, typeAliases) =
+      try {
+        WdlUtils.parseSource(taskMeta.sourceCode, taskMeta.fileResolver)
+      } catch {
+        case _: Throwable =>
+          return None
+      }
+    if (doc.workflow.isDefined) {
+      throw new Exception("a workflow that shouldn't be a member of this document")
+    }
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    if (tasks.isEmpty) {
+      throw new Exception("no tasks in this WDL program")
+    }
+    if (tasks.size > 1) {
+      throw new Exception("More than one task in this WDL program")
+    }
+    Some(
+        WdlTaskSupport(tasks.values.head,
+                       doc.version.value,
+                       typeAliases,
+                       taskMeta,
+                       workerPaths,
+                       fileUploader)
+    )
   }
 }

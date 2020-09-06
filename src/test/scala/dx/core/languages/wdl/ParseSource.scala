@@ -5,16 +5,13 @@ import java.nio.file.Path
 import dx.api.DxApi
 import dx.core.io.DxFileAccessProtocol
 import dx.core.languages.Language
-import wdlTools.syntax.{Parsers, SyntaxException}
-import wdlTools.types.{
-  Context,
-  TypeException,
-  TypeInfer,
-  WdlTypes,
-  TypeCheckingRegime => WdlTypeCheckingRegime,
-  TypedAbstractSyntax => TAT
-}
-import wdlTools.util.{Adjuncts, FileSource, FileSourceResolver, LocalFileSource, StringFileSource}
+import wdlTools.syntax.Parsers
+import wdlTools.types.{Context, TypeCheckingRegime, TypeInfer, WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.{Adjuncts, FileSource, FileSourceResolver, LocalFileSource}
+
+case class Bundle(primaryCallable: Option[TAT.Callable],
+                  allCallables: Map[String, TAT.Callable],
+                  typeAliases: Map[String, WdlTypes.T])
 
 // Read, parse, and typecheck a WDL source file. This includes loading all imported files.
 case class ParseSource(dxApi: DxApi) {
@@ -107,7 +104,7 @@ case class ParseSource(dxApi: DxApi) {
     val fileResolver = createFileResolver(importDirs :+ srcDir)
     val parsers = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
     val doc = parsers.parseDocument(fileResolver.fromPath(path))
-    TypeInfer(regime = WdlTypeCheckingRegime.Strict, fileResolver = fileResolver, logger = logger)
+    TypeInfer(regime = TypeCheckingRegime.Strict, fileResolver = fileResolver, logger = logger)
       .apply(doc)
   }
 
@@ -150,7 +147,7 @@ case class ParseSource(dxApi: DxApi) {
 
     (tMainDoc.source,
      Language.fromWdlVersion(tMainDoc.version.value),
-     Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
+     ir.Bundle(primaryCallable, flatInfo.callables, ctxTypes.aliases),
      flatInfo.sources,
      flatInfo.adjunctFiles)
   }

@@ -3,5 +3,5 @@
 <% val streamAllFiles: Boolean %>
 <% val bashDollar: String = "$" %>
 main() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar internal ${command} ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow ${command} ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if streamAllFiles "-streamAllFiles" else ""}
 }

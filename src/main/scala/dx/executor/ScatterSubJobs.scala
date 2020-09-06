@@ -74,7 +74,8 @@ import dx.api.{
 }
 import dx.core.ir
 import dx.core.ir.ParameterLinkExec
-import dx.core.languages.wdl.{ParameterLinkExec, ParameterLinkSerde, WdlDxLink, WdlExecutableLink}
+import dx.core.languages.wdl.{ParameterLinkExec, ParameterLinkSerde, WdlDxLink}
+import dx.executor.wdl.WdlExecutableLink
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

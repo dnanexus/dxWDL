@@ -1,4 +1,4 @@
-package dx.core.languages.wdl
+package dx.executor.wdl
 
 import dx.api._
 import dx.core.ir.Type

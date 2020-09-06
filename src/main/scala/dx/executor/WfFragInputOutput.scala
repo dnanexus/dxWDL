@@ -1,7 +1,8 @@
 package dx.executor
 
 import dx.api.{DxApi, DxFile}
-import dx.core.languages.wdl.{WdlExecutableLink, TypeSerialization, ParameterLinkSerde}
+import dx.core.languages.wdl.{ParameterLinkSerde, TypeSerialization}
+import dx.executor.wdl.WdlExecutableLink
 import spray.json._
 import wdlTools.eval.WdlValues
 import wdlTools.types.WdlTypes

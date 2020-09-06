@@ -45,6 +45,7 @@ import dx.core.io.{DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.ParameterLinkExec
 import dx.core.languages.wdl._
 import dx.executor.RunnerWfFragmentMode.Value
+import dx.executor.wdl.WdlExecutableLink
 import spray.json._
 import wdlTools.eval.{Eval, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
