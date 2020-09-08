@@ -39,6 +39,7 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.Paths
 
+import dxWDL.Main.InternalOp
 import spray.json._
 import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
 import wom.callable.Callable._
@@ -66,7 +67,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
                         runtimeDebugLevel: Int,
-                        scatterStart: Int = 0,
                         jobsPerScatter: Int = Utils.DEFAULT_JOBS_PER_SCATTER) {
   private val MAX_JOB_NAME = 50
   private val verbose = runtimeDebugLevel >= 1
@@ -85,6 +85,16 @@ case class WfFragRunner(wf: WorkflowDefinition,
   // The source code for all the tasks
   private val taskSourceDir: Map[String, String] =
     ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
+  private lazy val scatterStart = jobDesc.details match {
+    case Some(JsObject(fields)) =>
+      fields(Utils.CONTINUE_START) match {
+        case JsNumber(s) => s.toIntExact
+        case other =>
+          throw new Exception(s"Invalid value ${other} for  ${Utils.CONTINUE_START}")
+      }
+    case None => 0
+    case _    => throw new Exception(s"invalid job details ${jobDesc.details}")
+  }
 
   var gSeqNum = 0
   private def launchSeqNum(): Int = {

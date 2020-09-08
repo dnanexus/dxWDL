@@ -110,7 +110,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
   // stick the IDs of all the parent jobs and all the child jobs to exclude
   // (i.e. the continue/collect jobs) into details - we'll use these in the
   // collect step
-  private def createSubjobDetails: JsValue = {
+  private def createSubjobDetails(continueStart: Option[Int] = None): JsValue = {
     val parents = jobDesc.details match {
       case Some(JsObject(fields)) if fields.contains(ParentsKey) =>
         jsStringArrayToVector(fields.get(ParentsKey))
@@ -119,7 +119,13 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }
     // add the current job to the list of parents
     val allParents = parents :+ jobDesc.id
-    JsObject(Map(ParentsKey -> JsArray(allParents.map(JsString(_)))))
+    val details = Map(ParentsKey -> JsArray(allParents.map(JsString(_))))
+    val continueDetails = if (continueStart.isDefined) {
+      Map(Utils.CONTINUE_START -> JsNumber(continueStart.get))
+    } else {
+      Map.empty
+    }
+    JsObject(details ++ continueDetails)
   }
 
   // Launch a subjob to continue a large scatter
@@ -128,21 +134,17 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
                      exportTypes: Map[String, WomType]): Map[String, WdlVarLinks] = {
     assert(childJobs.nonEmpty)
 
-    val inputsWithStart = JsObject(
-        inputsRaw.asJsObject.fields + (Utils.CONTINUE_START -> JsNumber(start))
-    )
-
     // Run a sub-job with the "collect" entry point.
     // We need to provide the exact same inputs.
     val dxSubJob: DxJob = DxUtils.runSubJob(
         "continue",
         Some(instanceTypeDB.defaultInstanceType),
-        inputsWithStart,
+        inputsRaw,
         childJobs,
         delayWorkspaceDestruction,
         maxVerboseLevel,
         Some(s"continue_scatter($start)"),
-        Some(createSubjobDetails)
+        Some(createSubjobDetails(Some(start)))
     )
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
@@ -168,7 +170,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         delayWorkspaceDestruction,
         maxVerboseLevel,
         Some("collect_scatter"),
-        Some(createSubjobDetails)
+        Some(createSubjobDetails())
     )
 
     // Return promises (JBORs) for all the outputs. Since the signature of the sub-job

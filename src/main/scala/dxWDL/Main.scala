@@ -769,7 +769,7 @@ object Main extends App {
   private def workflowFragAction(op: InternalOp.Value,
                                  womSourceCode: String,
                                  instanceTypeDB: InstanceTypeDB,
-                                 metaInfo: JsValue,
+                                 appletDetails: JsValue,
                                  jobInputPath: Path,
                                  jobOutputPath: Path,
                                  dxPathConfig: DxPathConfig,
@@ -783,24 +783,7 @@ object Main extends App {
 
     // Parse the inputs, convert to WOM values. Delay downloading files
     // from the platform, we may not need to access them.
-    val inputLines: String = Utils.readFileContent(jobInputPath)
-    val (inputsRaw: JsValue, scatterStart: Int) = (op, inputLines.parseJson) match {
-      case (InternalOp.Continue, JsObject(fields)) if fields.contains(Utils.CONTINUE_START) =>
-        // remove the special input that tells where to continue the scatter
-        val start = fields(Utils.CONTINUE_START) match {
-          case JsNumber(s) => s.toIntExact
-          case other =>
-            throw new Exception(s"Invalid value ${other} for  ${Utils.CONTINUE_START}")
-        }
-        (JsObject(fields - Utils.CONTINUE_START), start)
-      case (InternalOp.Continue, _) =>
-        throw new Exception(
-            s"internal continue command missing required parameter ${Utils.CONTINUE_START}"
-        )
-      case (_, inputs) =>
-        (inputs, 0)
-    }
-
+    val inputsRaw: JsValue = Utils.readFileContent(jobInputPath).parseJson
     val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
     // setup the utility directories that the frag-runner employs
@@ -808,7 +791,7 @@ object Main extends App {
       new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
 
     // process the inputs
-    val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
+    val fragInputs = fragInputOutput.loadInputs(inputsRaw, appletDetails)
     val outputFields: Map[String, JsValue] =
       op match {
         case InternalOp.WfFragment | InternalOp.Continue | InternalOp.Collect =>
@@ -817,7 +800,7 @@ object Main extends App {
             case InternalOp.Continue   => RunnerWfFragmentMode.Continue
             case InternalOp.Collect    => RunnerWfFragmentMode.Collect
           }
-          val scatterSize = metaInfo.asJsObject.fields.get(Utils.SCATTER_CHUNK_SIZE) match {
+          val scatterSize = appletDetails.asJsObject.fields.get(Utils.SCATTER_CHUNK_SIZE) match {
             case Some(JsNumber(n)) => n.toIntExact
             case None              => Utils.DEFAULT_JOBS_PER_SCATTER
             case other =>
@@ -837,7 +820,6 @@ object Main extends App {
                                                  defaultRuntimeAttributes,
                                                  delayWorkspaceDestruction,
                                                  rtDebugLvl,
-                                                 scatterStart,
                                                  scatterSize)
           fragRunner.apply(fragInputs.blockPath, fragInputs.env, mode)
         case InternalOp.WfInputs =>
@@ -876,7 +858,7 @@ object Main extends App {
                                                      dxPathConfig,
                                                      dxIoFunctions,
                                                      rtDebugLvl)
-          val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
+          val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, appletDetails)
           wfReorg.apply(refDxFiles)
 
         case _ =>
@@ -979,7 +961,7 @@ object Main extends App {
         val applet = getApplet(jobInfoPath)
         val (womSourceCode,
              instanceTypeDB,
-             metaInfo,
+             appletDetails,
              defaultRuntimeAttrs,
              delayWorkspaceDestruction) =
           retrieveFromDetails(applet)
@@ -993,7 +975,7 @@ object Main extends App {
                   op,
                   womSourceCode,
                   instanceTypeDB,
-                  metaInfo,
+                  appletDetails,
                   jobInputPath,
                   jobOutputPath,
                   dxPathConfig,
