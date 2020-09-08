@@ -4,6 +4,7 @@ import dx.AppInternalException
 import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
 import dx.core.Native
 import dx.core.io.{DxFileDescCache, DxFileSource}
+import dx.core.ir.Type.TFile
 import dx.core.ir.Value._
 import spray.json._
 import wdlTools.util.{Enum, FileSourceResolver, LocalFileSource, Logger}
@@ -204,15 +205,16 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
 }
 
 case class ParameterLinkDeserializer(dxFileDescCache: DxFileDescCache, dxApi: DxApi = DxApi.get) {
-  def deserializeInput(jsv: JsValue): Value = {
-    val unpacked =
-      jsv match {
-        case JsObject(fields) if fields.contains(Parameter.ComplexValueKey) =>
-          // unpack the hash with which complex JSON values are wrapped in dnanexus.
-          fields(Parameter.ComplexValueKey)
-        case _ => jsv
-      }
+  private def unpack(jsv: JsValue): JsValue = {
+    jsv match {
+      case JsObject(fields) if fields.contains(Parameter.ComplexValueKey) =>
+        // unpack the hash with which complex JSON values are wrapped in dnanexus.
+        fields(Parameter.ComplexValueKey)
+      case _ => jsv
+    }
+  }
 
+  def deserializeInput(jsv: JsValue): Value = {
     def handler(value: JsValue): Option[Value] = {
       if (DxFile.isLinkJson(value)) {
         // Convert the path in DNAx to a string. We can later decide if we want to download it or not.
@@ -223,13 +225,27 @@ case class ParameterLinkDeserializer(dxFileDescCache: DxFileDescCache, dxApi: Dx
         None
       }
     }
-
-    ValueSerde.deserialize(unpacked, Some(handler))
+    ValueSerde.deserialize(unpack(jsv), Some(handler))
   }
 
   def deserializeInputMap(inputs: Map[String, JsValue]): Map[String, Value] = {
     inputs.map {
       case (name, jsv) => name -> deserializeInput(jsv)
     }
+  }
+
+  def deserializeInputWithType(jsv: JsValue, t: Type): Value = {
+    def handler(innerValue: JsValue, innerType: Type): Option[Value] = {
+      (innerType, innerValue) match {
+        case (TFile, _) if DxFile.isLinkJson(innerValue) =>
+          // Convert the path in DNAx to a string. We can later decide if we want to download it or not.
+          // Use the cache value if there is one to save the API call.
+          val dxFile = dxFileDescCache.updateFileFromCache(DxFile.fromJson(dxApi, innerValue))
+          Some(VFile(dxFile.asUri))
+        case _ =>
+          None
+      }
+    }
+    ValueSerde.deserializeWithType(unpack(jsv), t, Some(handler))
   }
 }

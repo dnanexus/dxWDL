@@ -31,6 +31,7 @@ object Main {
       }
     val logger = initLogger(options)
     try {
+      val jobMeta = JobMeta(homeDir)
       kind match {
         case "task" =>
           val taskAction =
@@ -41,7 +42,7 @@ object Main {
                 return BadUsageTermination(s"Unknown action ${action}")
             }
           val streamAllFiles = options.getFlag("streamAllFiles")
-          val taskExecutor = TaskExecutor(homeDir, streamAllFiles, logger = logger)
+          val taskExecutor = TaskExecutor(jobMeta, streamAllFiles)
           val successMessage = taskExecutor.apply(taskAction)
           Success(successMessage)
         case "workflow" =>
@@ -52,7 +53,7 @@ object Main {
               case _: NoSuchElementException =>
                 return BadUsageTermination(s"Unknown action ${args(0)}")
             }
-          val executor = WorkflowExecutor(homeDir)
+          val executor = WorkflowExecutor(jobMeta)
           val successMessage = executor.apply(workflowAction)
           Success(successMessage)
         case _ =>

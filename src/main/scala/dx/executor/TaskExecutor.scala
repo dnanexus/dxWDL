@@ -8,7 +8,7 @@ import dx.core.io.{DxWorkerPaths, DxdaManifest, DxfuseManifest}
 import dx.executor.TaskAction.TaskAction
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
-import wdlTools.util.{Enum, FileSource, FileUtils, Logger, RealFileSource, SysUtils, TraceLevel}
+import wdlTools.util.{Enum, FileSource, FileUtils, RealFileSource, SysUtils, TraceLevel}
 
 object TaskAction extends Enum {
   type TaskAction = Value
@@ -57,37 +57,41 @@ trait TaskSupport {
 }
 
 trait TaskSupportFactory {
-  def create(jobMeta: TaskMeta,
+  def create(jobMeta: JobMeta,
              workerPaths: DxWorkerPaths,
              fileUploader: FileUploader): Option[TaskSupport]
 }
 
-case class TaskExecutor(homeDir: Path,
-                        streamAllFiles: Boolean,
-                        traceLengthLimit: Int = 10000,
-                        logger: Logger = Logger.get) {
-  private val taskSupportFactories: Vector[TaskSupportFactory] = Vector(
+object TaskExecutor {
+  val taskSupportFactories: Vector[TaskSupportFactory] = Vector(
       WdlTaskSupportFactory()
   )
 
-  // parse the job meta files (inputs, outputs, etc)
-  private val taskMeta = TaskMeta(homeDir)
+  def createTaskSupport(jobMeta: JobMeta,
+                        workerPaths: DxWorkerPaths,
+                        fileUploader: FileUploader): TaskSupport = {
+    taskSupportFactories
+      .collectFirst { factory =>
+        factory.create(jobMeta, workerPaths, fileUploader) match {
+          case Some(executor) => executor
+        }
+      }
+      .getOrElse(
+          throw new Exception("Cannot determine language/version from source code")
+      )
+  }
+}
+
+case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLimit: Int = 10000) {
+  private val logger = jobMeta.logger
   // Setup the standard paths used for applets. These are used at runtime, not at compile time.
   // On the cloud instance running the job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
   private val workerPaths = DxWorkerPaths(streamAllFiles, logger)
   // TODO: swap this out for a parallelized version
   private val fileUploader = SerialFileUploader()
-
-  private val taskSupport: TaskSupport = taskSupportFactories
-    .collectFirst { factory =>
-      factory.create(taskMeta, workerPaths, fileUploader) match {
-        case Some(executor) => executor
-      }
-    }
-    .getOrElse(
-        throw new Exception("Cannot determine language/version from source code")
-    )
+  private val taskSupport: TaskSupport =
+    TaskExecutor.createTaskSupport(jobMeta, workerPaths, fileUploader)
 
   protected def trace(msg: String, minLevel: Int = TraceLevel.Verbose): Unit = {
     logger.traceLimited(msg, traceLengthLimit, minLevel)
@@ -109,12 +113,12 @@ case class TaskExecutor(homeDir: Path,
     // calculate the required instance type
     val reqInstanceType: String = taskSupport.getRequiredInstanceType
     trace(s"required instance type: ${reqInstanceType}")
-    val curInstanceType = taskMeta.jobDesc.instanceType.getOrElse(
-        throw new Exception(s"Cannot get instance type for job ${taskMeta.jobDesc.id}")
+    val curInstanceType = jobMeta.jobDesc.instanceType.getOrElse(
+        throw new Exception(s"Cannot get instance type for job ${jobMeta.jobDesc.id}")
     )
     trace(s"current instance type: ${curInstanceType}")
     val isSufficient =
-      taskMeta.instanceTypeDb.lteqByResources(reqInstanceType, curInstanceType)
+      jobMeta.instanceTypeDb.lteqByResources(reqInstanceType, curInstanceType)
     trace(s"isSufficient? ${isSufficient}")
     isSufficient
   }
@@ -145,7 +149,7 @@ case class TaskExecutor(homeDir: Path,
       case _ => throw new Exception("Malformed environment serialized to disk")
     }
     val fileSourceToPath = filesJs.map {
-      case (uri, JsString(path)) => taskMeta.fileResolver.resolve(uri) -> Paths.get(path)
+      case (uri, JsString(path)) => jobMeta.fileResolver.resolve(uri) -> Paths.get(path)
     }
     (inputJs, fileSourceToPath)
   }
@@ -158,7 +162,7 @@ case class TaskExecutor(homeDir: Path,
       trace(s"Prolog debugLevel=${logger.traceLevel}")
       trace(s"dxWDL version: ${getVersion}")
       printDirTree()
-      trace(s"Task source code:\n${taskMeta.sourceCode}", traceLengthLimit)
+      trace(s"Task source code:\n${jobMeta.sourceCode}", traceLengthLimit)
     }
     val (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest) =
       taskSupport.localizeInputFiles
@@ -198,11 +202,11 @@ case class TaskExecutor(homeDir: Path,
   def relaunch(): Unit = {
     // Run a sub-job with the "body" entry point, and the required instance type
     val dxSubJob: DxJob =
-      taskMeta.dxApi.runSubJob("body",
-                               Some(taskSupport.getRequiredInstanceType),
-                               JsObject(taskMeta.jsInputs),
-                               Vector.empty,
-                               taskMeta.delayWorkspaceDestruction)
+      jobMeta.dxApi.runSubJob("body",
+                              Some(taskSupport.getRequiredInstanceType),
+                              JsObject(jobMeta.jsInputs),
+                              Vector.empty,
+                              jobMeta.delayWorkspaceDestruction)
     taskSupport.linkOutputs(dxSubJob)
   }
 
@@ -231,7 +235,7 @@ case class TaskExecutor(homeDir: Path,
       }
     } catch {
       case e: Throwable =>
-        taskMeta.error(e)
+        jobMeta.error(e)
         throw e
     }
   }

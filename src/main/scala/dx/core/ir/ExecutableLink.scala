@@ -1,6 +1,6 @@
 package dx.core.ir
 
-import dx.api.DxExecutable
+import dx.api.{DxApi, DxExecutable}
 import spray.json.{JsObject, JsString, JsValue}
 
 import scala.collection.immutable.TreeMap
@@ -33,5 +33,28 @@ object ExecutableLink {
         "outputs" -> JsObject(outputs.to(TreeMap)),
         "id" -> JsString(link.dxExec.getId)
     )
+  }
+
+  def deserialize(jsValue: JsValue,
+                  typeAliases: Map[String, Type],
+                  dxApi: DxApi = DxApi.get): ExecutableLink = {
+    jsValue match {
+      case JsObject(fields) =>
+        val JsString(name) = fields("name")
+        val JsObject(inputs) = fields("inputs")
+        val inputTypes = inputs.map {
+          case (name, jsValue) =>
+            name -> TypeSerde.deserialize(jsValue, typeAliases)
+        }
+        val JsObject(outputs) = fields("outputs")
+        val outputTypes = outputs.map {
+          case (name, jsValue) =>
+            name -> TypeSerde.deserialize(jsValue, typeAliases)
+        }
+        val JsString(id) = fields("id")
+        ExecutableLink(name, inputTypes, outputTypes, dxApi.executable(id))
+      case _ =>
+        throw new Exception(s"Invalid ExecutableLink ${jsValue}")
+    }
   }
 }

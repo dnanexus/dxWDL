@@ -15,50 +15,12 @@ case class WfFragInputOutput(typeAliases: Map[String, WdlTypes.T],
                              wdlVarLinksConverter: ParameterLinkSerde,
                              dxApi: DxApi) {
 
-  private def loadWorkflowMetaInfo(
-      metaInfo: Map[String, JsValue]
-  ): (Map[String, WdlExecutableLink], Vector[Int], Map[String, WdlTypes.T]) = {
-    // meta information used for running workflow fragments
-    val execLinkInfo: Map[String, WdlExecutableLink] = metaInfo.get("execLinkInfo") match {
-      case None => Map.empty
-      case Some(JsObject(fields)) =>
-        fields.map {
-          case (key, ali) =>
-            key -> WdlExecutableLink.readJson(dxApi, ali, typeAliases)
-        }
-      case other => throw new Exception(s"Bad value ${other}")
-    }
-    val blockPath: Vector[Int] = metaInfo.get("blockPath") match {
-      case None => Vector.empty
-      case Some(JsArray(arr)) =>
-        arr.map {
-          case JsNumber(n) => n.toInt
-          case _           => throw new Exception("Bad value ${arr}")
-        }
-      case other => throw new Exception(s"Bad value ${other}")
-    }
-    val fqnDictTypes: Map[String, WdlTypes.T] = metaInfo.get("fqnDictTypes") match {
-      case Some(JsObject(fields)) =>
-        fields.map {
-          case (key, JsString(value)) =>
-            // Transform back to a fully qualified name with dots
-            val orgKeyName = ParameterLinkSerde.decodeDots(key)
-            val wdlType = TypeSerialization(typeAliases).fromString(value)
-            orgKeyName -> wdlType
-          case other => throw new Exception(s"Bad value ${other}")
-        }
-      case other => throw new Exception(s"Bad value ${other}")
-    }
-
-    (execLinkInfo, blockPath, fqnDictTypes)
-  }
-
   // 1. Convert the inputs to WDL values
   // 2. Setup an environment to evaluate the sub-block. This should
   //    look to the WDL code as if all previous code had been evaluated.
   def loadInputs(inputs: JsValue, metaInfo: Map[String, JsValue]): WfFragInput = {
     val regularFields: Map[String, JsValue] = inputs.asJsObject.fields
-      .filter { case (fieldName, _) => !fieldName.endsWith(ParameterLinkSerde.FlatFilesSuffix) }
+      .filter { case (fieldName, _) => !fieldName.endsWith(Parameter.FlatFilesSuffix) }
 
     // Extract the meta information needed to setup the closure for the subblock
     val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo.asJsObject.fields)

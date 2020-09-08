@@ -280,6 +280,12 @@ object Utils {
     }
   }
 
+  def toIRTypeMap(wdlTypes: Map[String, T]): Map[String, Type] = {
+    wdlTypes.map {
+      case (name, t) => name -> toIRType(t)
+    }
+  }
+
   def fromIRType(irType: Type, typeAliases: Map[String, T] = Map.empty): T = {
     def inner(innerType: Type): T = {
       innerType match {

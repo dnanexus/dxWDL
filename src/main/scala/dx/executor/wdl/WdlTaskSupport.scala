@@ -14,7 +14,7 @@ import dx.core.io.{
 }
 import dx.core.ir.ParameterLink
 import dx.core.languages.wdl.{DxMetaHints, Runtime, Utils => WdlUtils}
-import dx.executor.{FileUploader, TaskMeta, TaskSupport, TaskSupportFactory}
+import dx.executor.{FileUploader, JobMeta, TaskSupport, TaskSupportFactory}
 import dx.translator.wdl.IrToWdlValueBindings
 import spray.json._
 import wdlTools.eval.WdlValues._
@@ -48,7 +48,7 @@ import wdlTools.util.{
 case class WdlTaskSupport(task: TAT.Task,
                           wdlVersion: WdlVersion,
                           typeAliases: DefaultBindings[WdlTypes.T_Struct],
-                          jobMeta: TaskMeta,
+                          jobMeta: JobMeta,
                           workerPaths: DxWorkerPaths,
                           fileUploader: FileUploader)
     extends TaskSupport {
@@ -449,12 +449,12 @@ case class WdlTaskSupport(task: TAT.Task,
 }
 
 case class WdlTaskSupportFactory() extends TaskSupportFactory {
-  override def create(taskMeta: TaskMeta,
+  override def create(jobMeta: JobMeta,
                       workerPaths: DxWorkerPaths,
                       fileUploader: FileUploader): Option[WdlTaskSupport] = {
     val (doc, typeAliases) =
       try {
-        WdlUtils.parseSource(taskMeta.sourceCode, taskMeta.fileResolver)
+        WdlUtils.parseSource(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None
@@ -475,7 +475,7 @@ case class WdlTaskSupportFactory() extends TaskSupportFactory {
         WdlTaskSupport(tasks.values.head,
                        doc.version.value,
                        typeAliases,
-                       taskMeta,
+                       jobMeta,
                        workerPaths,
                        fileUploader)
     )
