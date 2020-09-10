@@ -15,7 +15,7 @@ import wdlTools.types.WdlTypes._
 import wdlTools.eval.WdlValues._
 import wdlTools.util.{Logger, TraceLevel}
 
-case class WorkflowInputOutput(workflow: TAT.Workflow, logger: Logger)
+case class WorkflowIO(workflow: TAT.Workflow, logger: Logger)
     extends InputOutput(workflow, logger) {
   // TODO: implement graph building from workflow
 
@@ -38,7 +38,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       jobMeta.fileResolver,
       Logger.Quiet
   )
-  private lazy val workflowIO = WorkflowInputOutput(workflow, jobMeta.logger)
+  private lazy val workflowIO = WorkflowIO(workflow, jobMeta.logger)
 
   override def typeAliases: Map[String, Type] = WdlUtils.toIRTypeMap(wdlTypeAliases)
 
@@ -222,6 +222,9 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       val callName = call.actualName
       val callInputsIR = WdlUtils.toIR(callInputs)
       val instanceType = tasks.get(call.callee.name).map { task =>
+        val callIO = TaskIO(task, evaluator, logger)
+        val callInputs = callIO.getInputs(callInputsIR)
+
       }
       val dxExecution = launchJob(executableLink, callName, callInputsIR, instanceType)
       executableLink.outputs.map {

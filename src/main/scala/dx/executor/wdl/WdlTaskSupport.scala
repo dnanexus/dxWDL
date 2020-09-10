@@ -45,6 +45,26 @@ import wdlTools.util.{
   TraceLevel
 }
 
+case class TaskIO(task: TAT.Task, evaluator: Eval, logger: Logger) {
+  private lazy val taskIO = TaskInputOutput(task, logger)
+
+  def getInputs(inputs: Map[String, Value]): Map[String, WdlValues.V] = {
+    val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
+    // convert IR to WDL values; discard auxiliary fields
+    val inputWdlValues: Map[String, WdlValues.V] = inputs.collect {
+      case (name, value) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
+        val wdlType = taskInputs(name).wdlType
+        name -> WdlUtils.fromIRValue(value, wdlType, name)
+    }
+    // add default values for any missing inputs
+    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).bindings
+  }
+
+  def getOutputs(env: Map[String, V]): WdlValueBindings = {
+    taskIO.evaluateOutputs(evaluator, WdlValueBindings(env))
+  }
+}
+
 case class WdlTaskSupport(task: TAT.Task,
                           wdlVersion: WdlVersion,
                           typeAliases: DefaultBindings[WdlTypes.T_Struct],
@@ -64,19 +84,7 @@ case class WdlTaskSupport(task: TAT.Task,
       jobMeta.fileResolver,
       Logger.Quiet
   )
-  private lazy val taskIO = TaskInputOutput(task, logger)
-
-  private def getInputs: Map[String, WdlValues.V] = {
-    val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
-    // convert IR to WDL values; discard auxiliary fields
-    val inputWdlValues: Map[String, WdlValues.V] = jobMeta.inputs.collect {
-      case (name, value) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
-        val wdlType = taskInputs(name).wdlType
-        name -> WdlUtils.fromIRValue(value, wdlType, name)
-    }
-    // add default values for any missing inputs
-    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).bindings
-  }
+  private lazy val taskIO = TaskIO(task, evaluator, logger)
 
   private lazy val inputDefs: Map[String, TAT.InputDefinition] =
     task.inputs.map(d => d.name -> d).toMap
@@ -127,7 +135,7 @@ case class WdlTaskSupport(task: TAT.Task,
     jobMeta.instanceTypeDb.apply(request)
   }
 
-  override lazy val getRequiredInstanceType: String = getRequiredInstanceType(getInputs)
+  override lazy val getRequiredInstanceType: String = getRequiredInstanceType(taskIO.getInputs(jobMeta.inputs))
 
   private def extractFiles(v: WdlValues.V): Vector[FileSource] = {
     v match {
@@ -187,7 +195,7 @@ case class WdlTaskSupport(task: TAT.Task,
   ): (Map[String, JsValue], Map[FileSource, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
     assert(workerPaths.inputFilesDir != workerPaths.dxfuseMountpoint)
 
-    val inputs = getInputs
+    val inputs = taskIO.getInputs(jobMeta.inputs)
     printInputs(inputs)
 
     val (localFiles, filesToStream, filesToDownload) =
@@ -351,8 +359,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     // Evaluate the output declarations in dependency order
-    val outputsLocal: WdlValueBindings =
-      taskIO.evaluateOutputs(evaluator, WdlValueBindings(inputValues))
+    val outputsLocal: WdlValueBindings = taskIO.getOutputs(inputValues)
 
     // We have task outputs, where files are stored locally. Upload the files to
     // the cloud, and replace the WdlValues.Vs with dxURLs.
