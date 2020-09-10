@@ -25,7 +25,6 @@ import wdlTools.eval.{
   Meta,
   WdlValueBindings,
   WdlValueSerde,
-  WdlValues,
   Utils => WdlValueUtils
 }
 import wdlTools.exec.{
@@ -43,26 +42,6 @@ import wdlTools.util.{
   Logger,
   RealFileSource,
   TraceLevel
-}
-
-case class TaskIO(task: TAT.Task, evaluator: Eval, logger: Logger) {
-  private lazy val taskIO = TaskInputOutput(task, logger)
-
-  def getInputs(inputs: Map[String, Value]): Map[String, WdlValues.V] = {
-    val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
-    // convert IR to WDL values; discard auxiliary fields
-    val inputWdlValues: Map[String, WdlValues.V] = inputs.collect {
-      case (name, value) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
-        val wdlType = taskInputs(name).wdlType
-        name -> WdlUtils.fromIRValue(value, wdlType, name)
-    }
-    // add default values for any missing inputs
-    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).bindings
-  }
-
-  def getOutputs(env: Map[String, V]): WdlValueBindings = {
-    taskIO.evaluateOutputs(evaluator, WdlValueBindings(env))
-  }
 }
 
 case class WdlTaskSupport(task: TAT.Task,
@@ -84,12 +63,24 @@ case class WdlTaskSupport(task: TAT.Task,
       jobMeta.fileResolver,
       Logger.Quiet
   )
-  private lazy val taskIO = TaskIO(task, evaluator, logger)
+  private lazy val taskIO = TaskInputOutput(task, logger)
+
+  private def getInputs: Map[String, V] = {
+    val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
+    // convert IR to WDL values; discard auxiliary fields
+    val inputWdlValues: Map[String, V] = jobMeta.inputs.collect {
+      case (name, value) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
+        val wdlType = taskInputs(name).wdlType
+        name -> WdlUtils.fromIRValue(value, wdlType, name)
+    }
+    // add default values for any missing inputs
+    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).bindings
+  }
 
   private lazy val inputDefs: Map[String, TAT.InputDefinition] =
     task.inputs.map(d => d.name -> d).toMap
 
-  private def printInputs(inputs: Map[String, WdlValues.V]): Unit = {
+  private def printInputs(inputs: Map[String, V]): Unit = {
     if (logger.isVerbose) {
       val inputStr = task.inputs
         .map { inputDef =>
@@ -100,9 +91,9 @@ case class WdlTaskSupport(task: TAT.Task,
     }
   }
 
-  private def evaluateDeclarations(inputs: Map[String, WdlValues.V]): Map[String, WdlValues.V] = {
+  private def evaluateDeclarations(inputs: Map[String, V]): Map[String, V] = {
     // evaluate the declarations using the inputs
-    val env: Map[String, WdlValues.V] =
+    val env: Map[String, V] =
       task.declarations.foldLeft(inputs) {
         case (env, TAT.Declaration(name, wdlType, Some(expr), _)) =>
           val wdlValue =
@@ -114,7 +105,7 @@ case class WdlTaskSupport(task: TAT.Task,
     env
   }
 
-  private def createRuntime(env: Map[String, WdlValues.V]): Runtime[IrToWdlValueBindings] = {
+  private def createRuntime(env: Map[String, V]): Runtime[IrToWdlValueBindings] = {
     Runtime(
         wdlVersion,
         task.runtime,
@@ -125,7 +116,7 @@ case class WdlTaskSupport(task: TAT.Task,
     )
   }
 
-  private def getRequiredInstanceType(inputs: Map[String, WdlValues.V]): String = {
+  private def getRequiredInstanceType(inputs: Map[String, V]): String = {
     logger.traceLimited("calcInstanceType", minLevel = TraceLevel.VVerbose)
     printInputs(inputs)
     val env = evaluateDeclarations(inputs)
@@ -135,9 +126,9 @@ case class WdlTaskSupport(task: TAT.Task,
     jobMeta.instanceTypeDb.apply(request)
   }
 
-  override lazy val getRequiredInstanceType: String = getRequiredInstanceType(taskIO.getInputs(jobMeta.inputs))
+  override lazy val getRequiredInstanceType: String = getRequiredInstanceType(getInputs)
 
-  private def extractFiles(v: WdlValues.V): Vector[FileSource] = {
+  private def extractFiles(v: V): Vector[FileSource] = {
     v match {
       case V_File(s) =>
         Vector(fileResolver.resolve(s))
@@ -163,7 +154,7 @@ case class WdlTaskSupport(task: TAT.Task,
   private lazy val parameterMeta = Meta.create(wdlVersion, task.parameterMeta)
 
   private def serializeValues(
-      values: Map[String, (WdlTypes.T, WdlValues.V)]
+      values: Map[String, (WdlTypes.T, V)]
   ): Map[String, JsValue] = {
     values.map {
       case (name, (t, v)) =>
@@ -175,7 +166,7 @@ case class WdlTaskSupport(task: TAT.Task,
 
   private def deserializeValues(
       values: Map[String, JsValue]
-  ): Map[String, (WdlTypes.T, WdlValues.V)] = {
+  ): Map[String, (WdlTypes.T, V)] = {
     values.map {
       case (name, JsObject(fields)) =>
         val t = WdlUtils.deserializeType(fields("type"), typeAliases.bindings)
@@ -195,7 +186,7 @@ case class WdlTaskSupport(task: TAT.Task,
   ): (Map[String, JsValue], Map[FileSource, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
     assert(workerPaths.inputFilesDir != workerPaths.dxfuseMountpoint)
 
-    val inputs = taskIO.getInputs(jobMeta.inputs)
+    val inputs = getInputs
     printInputs(inputs)
 
     val (localFiles, filesToStream, filesToDownload) =
@@ -278,26 +269,26 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     // Replace the URIs with local file paths
-    def pathTranslator(v: WdlValues.V): Option[WdlValues.V] = {
+    def pathTranslator(v: V): Option[V] = {
       v match {
-        case WdlValues.V_File(uri) =>
+        case V_File(uri) =>
           uriToPath.get(uri) match {
-            case Some(localPath) => Some(WdlValues.V_File(localPath))
+            case Some(localPath) => Some(V_File(localPath))
             case None =>
               throw new Exception(s"Did not localize file ${uri}")
           }
-        case WdlValues.V_Optional(WdlValues.V_File(uri)) =>
+        case V_Optional(V_File(uri)) =>
           uriToPath.get(uri) match {
             case Some(localPath) =>
-              Some(WdlValues.V_Optional(WdlValues.V_File(localPath)))
+              Some(V_Optional(V_File(localPath)))
             case None =>
-              Some(WdlValues.V_Null)
+              Some(V_Null)
           }
         case _ => None
       }
     }
 
-    val localizedInputs: Map[String, WdlValues.V] =
+    val localizedInputs: Map[String, V] =
       inputs.view.mapValues(v => WdlValueUtils.transform(v, pathTranslator)).toMap
 
     // serialize the updated inputs
@@ -347,6 +338,10 @@ case class WdlTaskSupport(task: TAT.Task,
     })
   }
 
+  private def getOutputs(env: Map[String, V]): WdlValueBindings = {
+    taskIO.evaluateOutputs(evaluator, WdlValueBindings(env))
+  }
+
   private lazy val outputDefs: Map[String, TAT.OutputDefinition] =
     task.outputs.map(d => d.name -> d).toMap
 
@@ -359,7 +354,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     // Evaluate the output declarations in dependency order
-    val outputsLocal: WdlValueBindings = taskIO.getOutputs(inputValues)
+    val outputsLocal: WdlValueBindings = getOutputs(inputValues)
 
     // We have task outputs, where files are stored locally. Upload the files to
     // the cloud, and replace the WdlValues.Vs with dxURLs.
@@ -412,20 +407,20 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     // Replace the URIs with local file paths
-    def pathTranslator(v: WdlValues.V): Option[WdlValues.V] = {
+    def pathTranslator(v: V): Option[V] = {
       v match {
-        case WdlValues.V_File(localPath) =>
+        case V_File(localPath) =>
           pathToUri.get(localPath) match {
-            case Some(uri) => Some(WdlValues.V_File(uri))
+            case Some(uri) => Some(V_File(uri))
             case None =>
               throw new Exception(s"Did not localize file ${localPath}")
           }
-        case WdlValues.V_Optional(WdlValues.V_File(localPath)) =>
+        case V_Optional(V_File(localPath)) =>
           pathToUri.get(localPath) match {
             case Some(uri) =>
-              Some(WdlValues.V_Optional(WdlValues.V_File(uri)))
+              Some(V_Optional(V_File(uri)))
             case None =>
-              Some(WdlValues.V_Null)
+              Some(V_Null)
           }
         case _ => None
       }
@@ -448,7 +443,7 @@ case class WdlTaskSupport(task: TAT.Task,
   override def linkOutputs(subjob: DxJob): Unit = {
     val irOutputFields = task.outputs.map { outputDef: TAT.OutputDefinition =>
       outputDef.name -> WdlUtils.toIRType(outputDef.wdlType)
-    }
+    }.toMap
     jobMeta.writeOutputLinks(subjob, irOutputFields)
   }
 }

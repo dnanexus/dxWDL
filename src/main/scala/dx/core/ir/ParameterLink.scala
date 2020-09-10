@@ -27,16 +27,41 @@ object IORef extends Enum {
   */
 sealed trait ParameterLink {
   val dxType: Type
+
+  /**
+    * Copy this ParameterLink, replacing dxType with its optional equivalent.
+    * @return
+    */
+  def makeOptional: ParameterLink
 }
-case class ParameterLinkValue(jsn: JsValue, dxType: Type) extends ParameterLink
+case class ParameterLinkValue(jsn: JsValue, dxType: Type) extends ParameterLink {
+  def makeOptional: ParameterLinkValue = {
+    copy(dxType = Type.ensureOptional(dxType))
+  }
+}
+
 case class ParameterLinkStage(dxStage: DxWorkflowStage,
                               ioRef: IORef.Value,
                               varName: String,
                               dxType: Type)
-    extends ParameterLink
-case class ParameterLinkWorkflowInput(varName: String, dxType: Type) extends ParameterLink
+    extends ParameterLink {
+  def makeOptional: ParameterLinkStage = {
+    copy(dxType = Type.ensureOptional(dxType))
+  }
+}
+
+case class ParameterLinkWorkflowInput(varName: String, dxType: Type) extends ParameterLink {
+  def makeOptional: ParameterLinkWorkflowInput = {
+    copy(dxType = Type.ensureOptional(dxType))
+  }
+}
+
 case class ParameterLinkExec(dxExecution: DxExecution, varName: String, dxType: Type)
-    extends ParameterLink
+    extends ParameterLink {
+  def makeOptional: ParameterLinkExec = {
+    copy(dxType = Type.ensureOptional(dxType))
+  }
+}
 
 object ParameterLink {
   // Key used to wrap a complex value in JSON.

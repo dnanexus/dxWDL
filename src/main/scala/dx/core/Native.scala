@@ -11,10 +11,8 @@ object Native {
   val SourceCode: String = "sourceCode"
   val Language: String = "language"
   val ScatterChunkSize = "scatterChunkSize"
-
-  // keys used in properties of native applets
-  val Checksum = "dxCompiler_checksum"
-  val Version = "dxCompiler_version"
+  val Checksum = "checksum"
+  val Version = "version"
 
   // parameter names used in "special" native applets
   val ReorgStatus = "reorg_status___"

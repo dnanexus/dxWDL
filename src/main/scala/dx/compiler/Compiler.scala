@@ -54,6 +54,7 @@ case class Compiler(extras: Option[Extras],
                     leaveWorkflowsOpen: Boolean,
                     locked: Boolean,
                     projectWideReuse: Boolean,
+                    streamAllFiles: Boolean,
                     fileResolver: FileSourceResolver = FileSourceResolver.get,
                     dxApi: DxApi = DxApi.get,
                     logger: Logger = Logger.get) {
@@ -164,14 +165,14 @@ case class Compiler(extras: Option[Extras],
       val digest =
         CompressionUtils.md5Checksum(JsUtils.makeDeterministic(JsObject(desc)).prettyPrint)
       // Add the checksum to the properies
-      val existingProperties: Map[String, JsValue] =
-        desc.get("properties") match {
-          case Some(JsObject(props)) => props
-          case None                  => Map.empty
+      val existingDetails: Map[String, JsValue] =
+        desc.get("details") match {
+          case Some(JsObject(details)) => details
+          case None                    => Map.empty
           case other =>
             throw new Exception(s"Bad properties json value ${other}")
         }
-      val updatedProperties = existingProperties ++
+      val updatedDetails = existingDetails ++
         Map(
             Native.Version -> JsString(getVersion),
             Native.Checksum -> JsString(digest)
@@ -183,7 +184,7 @@ case class Compiler(extras: Option[Extras],
           "project" -> JsString(project.id),
           "folder" -> JsString(folder),
           "parents" -> JsBoolean(true),
-          "properties" -> JsObject(updatedProperties)
+          "details" -> JsObject(updatedDetails)
       )
       (updatedRequest, digest)
     }
@@ -291,6 +292,7 @@ case class Compiler(extras: Option[Extras],
             runtimeAsset,
             runtimePathConfig,
             runtimeTraceLevel,
+            streamAllFiles,
             scatterChunkSize,
             extras,
             parameterLinkSerializer,

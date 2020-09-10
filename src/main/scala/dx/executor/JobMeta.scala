@@ -7,7 +7,6 @@ import dx.api.{
   DxApi,
   DxExecutable,
   DxExecution,
-  DxJob,
   DxJobDescribe,
   DxProject,
   DxProjectDescribe,
@@ -95,29 +94,43 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
     }
   }
 
-  def writeOutputLinks(outputs: Map[String, ParameterLink]): Unit = {
-    val outputJs = outputs
+  def serializeOutputLinks(outputs: Map[String, ParameterLink]): Map[String, JsValue] = {
+    outputs
       .map {
         case (name, link) => outputSerializer.createFields(link, name)
       }
       .flatten
       .toMap
-    writeJsOutputs(outputJs)
   }
 
-  def writeOutputLinks(execution: DxExecution, irOutputFields: Vector[(String, Type)]): Unit = {
-    val outputJs: Map[String, JsValue] = irOutputFields
+  def writeOutputLinks(outputs: Map[String, ParameterLink]): Unit = {
+    writeJsOutputs(serializeOutputLinks(outputs))
+  }
+
+  def createOutputLinks(execution: DxExecution,
+                        irOutputFields: Map[String, Type],
+                        prefix: Option[String] = None): Map[String, ParameterLink] = {
+    irOutputFields.map {
+      case (name, t) =>
+        val fqn = prefix.map(p => s"${p}.${name}").getOrElse(name)
+        fqn -> ParameterLinkExec(execution, name, t)
+    }
+  }
+
+  def serializeOutputLinks(execution: DxExecution,
+                           irOutputFields: Map[String, Type]): Map[String, JsValue] = {
+    createOutputLinks(execution, irOutputFields)
       .flatMap {
-        case (name, t) =>
-          val link = ParameterLinkExec(execution, name, t)
-          outputSerializer.createFields(link, name)
+        case (name, link) => outputSerializer.createFields(link, name)
       }
       .filter {
         case (_, null | JsNull) => false
         case _                  => true
       }
-      .toMap
-    writeJsOutputs(outputJs)
+  }
+
+  def writeOutputLinks(execution: DxExecution, irOutputFields: Map[String, Type]): Unit = {
+    writeJsOutputs(serializeOutputLinks(execution, irOutputFields))
   }
 
   private lazy val info: Map[String, JsValue] =

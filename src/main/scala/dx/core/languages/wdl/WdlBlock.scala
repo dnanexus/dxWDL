@@ -74,7 +74,7 @@ These are not blocks, because we need a subworkflow to run them:
 package dx.core.languages.wdl
 
 import dx.core.ir.{Block, BlockKind}
-import dx.core.ir.BlockKind.BlockCategory
+import dx.core.ir.BlockKind.BlockKind
 import wdlTools.eval.{Eval, EvalException, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
 
@@ -196,7 +196,7 @@ case class WdlBlock(inputs: Vector[BlockInput],
   assert(elements.nonEmpty)
   assert(Utils.deepFindCalls(elements.dropRight(1)).isEmpty)
 
-  override lazy val category: BlockCategory = {
+  override lazy val kind: BlockKind = {
     elements.last match {
       case e if Utils.deepFindCalls(Vector(e)).isEmpty =>
         // The block comprises expressions only
@@ -236,7 +236,7 @@ case class WdlBlock(inputs: Vector[BlockInput],
   def target: TAT.WorkflowElement = elements.last
 
   def call: TAT.Call = {
-    val calls = (category, target) match {
+    val calls = (kind, target) match {
       case (BlockKind.CallDirect | BlockKind.CallWithSubexpressions | BlockKind.CallFragment,
             call: TAT.Call) =>
         Vector(call)
@@ -256,7 +256,7 @@ case class WdlBlock(inputs: Vector[BlockInput],
   }
 
   def innerElements: Vector[TAT.WorkflowElement] = {
-    (category, target) match {
+    (kind, target) match {
       case (BlockKind.ConditionalComplex, cond: TAT.Conditional) => cond.body
       case (BlockKind.ScatterComplex, scatter: TAT.Scatter)      => scatter.body
       case _ =>

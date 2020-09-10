@@ -13,9 +13,10 @@ import dx.api.{
   DxProject,
   DxWorkflow
 }
+import dx.core.Native
 import dx.core.ir.Bundle
 import spray.json.JsString
-import wdlTools.util.Logger
+import wdlTools.util.{JsUtils, Logger}
 
 trait DxExecutableInfo {
   val dataObj: DxDataObject
@@ -83,7 +84,7 @@ case class DxExecutableDirectory(bundle: Bundle,
               folder,
               recurse = false,
               Some(dxClass),
-              Vector(ChecksumProperty),
+              Vector(Native.CompilerTag),
               allExecutableNames.toVector,
               withInputOutputSpec = false,
               Vector.empty,
@@ -119,7 +120,8 @@ case class DxExecutableDirectory(bundle: Bundle,
           val creationDate = new java.util.Date(desc.created)
           val creationTime: LocalDateTime =
             LocalDateTime.ofInstant(creationDate.toInstant, ZoneId.systemDefault())
-          val checksum = desc.properties.flatMap(_.get(ChecksumProperty))
+          val checksum =
+            desc.details.flatMap(_.asJsObject.fields.get(Native.Checksum)).map(JsUtils.getString(_))
           DxExecutableWithDesc(dxObj, desc, checksum, Some(creationTime))
       }
       .groupBy(_.name)
@@ -147,8 +149,9 @@ case class DxExecutableDirectory(bundle: Bundle,
   private def findExecutablesInProject(): Map[String, Vector[DxExecutableInfo]] = {
     findExecutables(None)
       .collect {
-        case (obj, desc) if desc.properties.exists(_.contains(ChecksumProperty)) =>
-          DxExecutableWithDesc(obj, desc, Some(desc.properties.get(ChecksumProperty)))
+        case (obj, desc) if desc.details.exists(_.asJsObject.fields.contains(Native.Checksum)) =>
+          val JsString(digest) = desc.details.get.asJsObject.fields(Native.Checksum)
+          DxExecutableWithDesc(obj, desc, Some(digest))
       }
       .groupBy(_.digest.get)
   }

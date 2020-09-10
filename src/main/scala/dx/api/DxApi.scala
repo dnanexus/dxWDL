@@ -308,7 +308,7 @@ case class DxApi(logger: Logger = Logger.get,
             nameConstraints = Vector.empty,
             withInputOutputSpec = true,
             idConstraints = ids,
-            extrafields = extraFields
+            extraFields = extraFields
         )
         .asInstanceOf[Map[DxFile, DxFileDescribe]]
         .keys

@@ -9,7 +9,7 @@ import dx.core.ir.Value._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import spray.json.{JsBoolean, JsObject, JsString, JsValue}
-import wdlTools.eval.{Coercion, WdlValues}
+import wdlTools.eval.Coercion
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
@@ -272,6 +272,8 @@ object Utils {
         val key = toIRType(keyType)
         val value = toIRType(valueType)
         TMap(key, value)
+      case _: T_Pair =>
+        THash
       case T_Struct(name, members) =>
         TSchema(name, members.map {
           case (key, value) => key -> toIRType(value)
@@ -326,6 +328,18 @@ object Utils {
       case V_Directory(path) => VDirectory(path)
       case V_Array(array) =>
         VArray(array.map(v => toIRValue(v)))
+      case V_Map(m) =>
+        VMap(m.map {
+          case (key, value) => toIRValue(key) -> toIRValue(value)
+        })
+      case V_Pair(left, right) =>
+        // encode this as a hash with left and right keys
+        VHash(
+            Map(
+                "left" -> toIRValue(left),
+                "right" -> toIRValue(right)
+            )
+        )
       case V_Object(members) =>
         VHash(members.map {
           case (key, value) => key -> toIRValue(value)
@@ -333,10 +347,6 @@ object Utils {
       case V_Struct(_, members) =>
         VHash(members.map {
           case (key, value) => key -> toIRValue(value)
-        })
-      case V_Map(m) =>
-        VMap(m.map {
-          case (key, value) => toIRValue(key) -> toIRValue(value)
         })
       case _ =>
         throw new Exception(s"Invalid WDL value ${wdlValue})")
@@ -369,6 +379,14 @@ object Utils {
           case (key, value) =>
             toIRValue(key, keyType) -> toIRValue(value, valueType)
         })
+      case (T_Pair(leftType, rightType), V_Pair(leftValue, rightValue)) =>
+        // encode this as a hash with left and right keys
+        VHash(
+            Map(
+                "left" -> toIRValue(leftValue, leftType),
+                "right" -> toIRValue(rightValue, rightType)
+            )
+        )
       case (T_Struct(name, memberTypes), V_Object(members)) =>
         // ensure 1) members keys are a subset of memberTypes keys, 2) members
         // values are convertable to the corresponding types, and 3) any keys
@@ -407,6 +425,10 @@ object Utils {
     }
   }
 
+  def isPairHash(fields: Map[String, Value]): Boolean = {
+    fields.size == 2 && fields.keySet == Set("left", "right")
+  }
+
   def fromIRValue(value: Value, name: Option[String]): V = {
     value match {
       case VNull         => V_Null
@@ -420,15 +442,20 @@ object Utils {
         V_Array(array.zipWithIndex.map {
           case (v, i) => fromIRValue(v, name.map(n => s"${n}[${i}]"))
         })
-      case VHash(fields) =>
-        V_Object(fields.map {
-          case (key, value) => key -> fromIRValue(value, name.map(n => s"${n}[${key}]"))
-        })
       case VMap(fields) =>
         V_Map(fields.map {
           case (key, value) =>
             val elementName = name.map(n => s"${n}[${key}]")
             fromIRValue(key, elementName) -> fromIRValue(value, elementName)
+        })
+      case VHash(fields) if isPairHash(fields) =>
+        V_Pair(
+            fromIRValue(fields("left"), name.map(n => s"${n}.left")),
+            fromIRValue(fields("right"), name.map(n => s"${n}.right"))
+        )
+      case VHash(fields) =>
+        V_Object(fields.map {
+          case (key, value) => key -> fromIRValue(value, name.map(n => s"${n}[${key}]"))
         })
       case _ =>
         throw new Exception(
@@ -472,6 +499,11 @@ object Utils {
               val elementName = s"${innerName}[${key}]"
               inner(key, keyType, elementName) -> inner(value, valueType, elementName)
           })
+        case (T_Pair(leftType, rightType), VHash(fields)) if isPairHash(fields) =>
+          V_Pair(
+              inner(fields("left"), leftType, s"${name}.left"),
+              inner(fields("right"), rightType, s"${name}.right")
+          )
         case (T_Struct(structName, memberTypes), VHash(members)) =>
           // ensure 1) members keys are a subset of memberTypes keys, 2) members
           // values are convertable to the corresponding types, and 3) any keys
@@ -538,11 +570,6 @@ object Utils {
         val a = array.map(irValueToExpr)
         val t = ensureUniformType(a)
         TAT.ExprArray(a, t, loc)
-      case VHash(members) =>
-        val m: Map[TAT.Expr, TAT.Expr] = members.map {
-          case (key, value) => TAT.ValueString(key, T_String, loc) -> irValueToExpr(value)
-        }
-        TAT.ExprObject(m, T_Object, loc)
       case VMap(members) =>
         val m = members.map {
           case (key, value) => irValueToExpr(key) -> irValueToExpr(value)
@@ -550,6 +577,15 @@ object Utils {
         val keyType = ensureUniformType(m.keys)
         val valueType = ensureUniformType(m.values)
         TAT.ExprMap(m, T_Map(keyType, valueType), loc)
+      case VHash(fields) if isPairHash(fields) =>
+        val left = irValueToExpr(fields("left"))
+        val right = irValueToExpr(fields("right"))
+        TAT.ExprPair(left, right, T_Pair(left.wdlType, right.wdlType), loc)
+      case VHash(members) =>
+        val m: Map[TAT.Expr, TAT.Expr] = members.map {
+          case (key, value) => TAT.ValueString(key, T_String, loc) -> irValueToExpr(value)
+        }
+        TAT.ExprObject(m, T_Object, loc)
       case _ =>
         throw new Exception(s"Cannot convert IR value ${value} to WDL")
     }

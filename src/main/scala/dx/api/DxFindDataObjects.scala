@@ -152,13 +152,13 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
       dxProject: Option[DxProject],
       cursor: Option[JsValue],
       klass: Option[String],
-      propertyConstraints: Vector[String],
+      tagConstraints: Vector[String],
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean,
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
+    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Details)
     fields ++= extraFields
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
@@ -185,13 +185,11 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
       case None    => Map.empty
       case Some(k) => Map("class" -> JsString(k))
     }
-    val propertiesField =
-      if (propertyConstraints.isEmpty) {
+    val tagsField =
+      if (tagConstraints.isEmpty) {
         Map.empty
       } else {
-        Map("properties" -> JsObject(propertyConstraints.map { prop =>
-          prop -> JsBoolean(true)
-        }.toMap))
+        Map("tags" -> JsArray(tagConstraints.map(JsString(_))))
       }
 
     val namePcreField =
@@ -222,7 +220,7 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
       }
 
     val repJs = dxApi.findDataObjects(
-        reqFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ propertiesField ++
+        reqFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ tagsField ++
           namePcreField ++ idField
     )
     val next: Option[JsValue] = repJs.fields.get("next") match {
@@ -247,22 +245,22 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
     * @param folder folder to search in; None = root folder ("/")
     * @param recurse recurse into subfolders
     * @param classRestriction object classes to search
-    * @param withProperties objects must have these properties
+    * @param withTags objects must have these tags
     * @param nameConstraints object name has to be one of these strings
     * @param withInputOutputSpec should the IO spec be described?
     * @param idConstraints object must have one of these IDs
-    * @param extrafields extra fields to describe
+    * @param extraFields extra fields to describe
     * @return
     */
   def apply(dxProject: Option[DxProject],
             folder: Option[String],
             recurse: Boolean,
             classRestriction: Option[String] = None,
-            withProperties: Vector[String] = Vector.empty,
+            withTags: Vector[String] = Vector.empty,
             nameConstraints: Vector[String] = Vector.empty,
             withInputOutputSpec: Boolean,
             idConstraints: Vector[String] = Vector.empty,
-            extrafields: Set[Field.Value] = Set.empty): Map[DxDataObject, DxObjectDescribe] = {
+            extraFields: Set[Field.Value] = Set.empty): Map[DxDataObject, DxObjectDescribe] = {
     classRestriction.foreach { k =>
       if (!(Set("record", "file", "applet", "workflow") contains k))
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
@@ -279,11 +277,11 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
                                           dxProject,
                                           cursor,
                                           classRestriction,
-                                          withProperties,
+                                          withTags,
                                           nameConstraints,
                                           withInputOutputSpec,
                                           idConstraints,
-                                          extrafields)
+                                          extraFields)
       allResults = allResults ++ results
       cursor = next
     } while (cursor.isDefined)

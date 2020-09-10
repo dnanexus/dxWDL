@@ -497,7 +497,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       if (subBlocks.size == 1) {
         val block = subBlocks.head
         if (Set(BlockKind.CallDirect, BlockKind.CallWithSubexpressions)
-              .contains(block.category)) {
+              .contains(block.kind)) {
           throw new RuntimeException("Single call not expected in nested block")
         }
         // At runtime, we will need to execute a workflow fragment. This requires an applet.
@@ -626,10 +626,10 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // it when we get to the native phase.
       logger
         .withTraceIfContainsKey("GenerateIR")
-        .trace(s"category : ${block.category}")
+        .trace(s"category : ${block.kind}")
 
       val (innerCall, auxCallables): (Option[String], Vector[Callable]) =
-        (block.category, block.target) match {
+        (block.kind, block.target) match {
           case (BlockKind.ExpressionsOnly, _) =>
             (None, Vector.empty)
           case (BlockKind.CallDirect, _) =>
@@ -708,7 +708,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val (allStageInfo, stageEnv): (Vector[(Stage, Vector[Callable])], CallEnv) =
         subBlocks.zipWithIndex.foldLeft((Vector.empty[(Stage, Vector[Callable])], inputEnv)) {
           case ((stages, beforeEnv), (block: WdlBlock, blockNum: Int)) =>
-            if (block.category == BlockKind.CallDirect) {
+            if (block.kind == BlockKind.CallDirect) {
               block.target match {
                 case call: TAT.Call =>
                   // The block contains exactly one call, with no extra declarations.

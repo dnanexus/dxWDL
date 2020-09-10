@@ -284,7 +284,7 @@ object Main {
       }
       // compile to native
       val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
-      val dxPathConfig = DxWorkerPaths(streamAllFiles, logger)
+      val dxPathConfig = DxWorkerPaths()
       val scatterChunkSize: Int = options.getValue[Int]("scatterChunkSize") match {
         case None => Native.JobPerScatterDefault
         case Some(x) =>
@@ -311,6 +311,7 @@ object Main {
           leaveWorkflowsOpen,
           locked,
           projectWideReuse,
+          streamAllFiles,
           fileResolver
       )
       val results = compiler.apply(bundle, project, folder)

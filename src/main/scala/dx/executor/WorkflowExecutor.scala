@@ -27,6 +27,8 @@ trait BlockContext {
 
 object WorkflowSupport {
   val SeqNumber = "seqNumber"
+  val JobNameLengthLimit = 50
+  val ParentsKey = "parents___"
 }
 
 abstract class WorkflowSupport(jobMeta: JobMeta) {
@@ -123,7 +125,9 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
   protected def launchJob(executableLink: ExecutableLink,
                           name: String,
                           inputs: Map[String, (Type, Value)],
-                          instanceType: Option[String] = None): DxExecution = {
+                          nameDetail: Option[String] = None,
+                          instanceType: Option[String] = None): (DxExecution, String) = {
+    val jobName: String = nameDetail.map(hint => s"${name} ${hint}").getOrElse(name)
     val callInputsJs = JsObject(jobMeta.outputSerializer.createFields(inputs))
     logger.traceLimited(s"execDNAx ${callInputsJs.prettyPrint}", minLevel = TraceLevel.VVerbose)
 
@@ -142,10 +146,10 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
 
     // If this is a task that specifies the instance type
     // at runtime, launch it in the requested instance.
-    executableLink.dxExec match {
+    val dxExecution = executableLink.dxExec match {
       case app: DxApp =>
         app.newRun(
-            name,
+            jobName,
             callInputsJs,
             instanceType = instanceType,
             details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
@@ -153,7 +157,7 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
         )
       case applet: DxApplet =>
         applet.newRun(
-            name,
+            jobName,
             callInputsJs,
             instanceType = instanceType,
             details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
@@ -161,14 +165,15 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
         )
       case workflow: DxWorkflow =>
         workflow.newRun(
-            input = callInputsJs,
-            name = name,
-            details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
-            delayWorkspaceDestruction = jobMeta.delayWorkspaceDestruction
+            jobName,
+            callInputsJs,
+            Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
+            jobMeta.delayWorkspaceDestruction
         )
       case other =>
         throw new Exception(s"Unsupported executable ${other}")
     }
+    (dxExecution, jobName)
   }
 }
 

@@ -52,7 +52,10 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
         .keySet
         .collect {
           case applet: DxApplet
-              if applet.describe().properties.exists(_.contains(Native.Checksum)) =>
+              if applet
+                .describe(Set(Field.Details))
+                .details
+                .exists(_.asJsObject.fields.contains(Native.Checksum)) =>
             applet
         }
         .toVector

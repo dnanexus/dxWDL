@@ -1,6 +1,6 @@
 package dx.core.ir
 
-import dx.core.ir.BlockKind.BlockCategory
+import dx.core.ir.BlockKind.BlockKind
 import wdlTools.util.Enum
 
 /**
@@ -20,13 +20,13 @@ import wdlTools.util.Enum
   *      - with a complex subblock
   */
 object BlockKind extends Enum {
-  type BlockCategory = Value
+  type BlockKind = Value
   val ExpressionsOnly, CallDirect, CallWithSubexpressions, CallFragment, ConditionalOneCall,
       ConditionalComplex, ScatterOneCall, ScatterComplex = Value
 }
 
 trait Block {
-  def category: BlockCategory
+  def kind: BlockKind
 
   /**
     * Create a human readable name for a block of statements
