@@ -3,11 +3,22 @@ package dx.executor
 import java.nio.file.Path
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxExecutable, DxJob, DxJobDescribe, Field, InstanceTypeDB}
+import dx.api.{
+  DxApi,
+  DxExecutable,
+  DxExecution,
+  DxJob,
+  DxJobDescribe,
+  DxProject,
+  DxProjectDescribe,
+  Field,
+  InstanceTypeDB
+}
 import dx.core.Native
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.Value.VNull
 import dx.core.ir.{
+  ParameterLink,
   ParameterLinkDeserializer,
   ParameterLinkExec,
   ParameterLinkSerializer,
@@ -24,6 +35,9 @@ import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel
 case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
                    dxApi: DxApi = DxApi.get,
                    logger: Logger = Logger.get) {
+
+  lazy val project: DxProject = dxApi.currentProject
+  lazy val projectDesc: DxProjectDescribe = project.describe()
 
   private val inputPath = homeDir.resolve(JobMeta.inputFile)
   private val outputPath = homeDir.resolve(JobMeta.outputFile)
@@ -59,9 +73,9 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
     FileUtils.writeFileContent(outputPath, JsObject(outputJs).prettyPrint)
   }
 
-  private lazy val outputSerializer = ParameterLinkSerializer(fileResolver, dxApi)
+  lazy val outputSerializer: ParameterLinkSerializer = ParameterLinkSerializer(fileResolver, dxApi)
 
-  protected def writeOutputs(outputs: Map[String, (Type, Value)]): Unit = {
+  def writeOutputs(outputs: Map[String, (Type, Value)]): Unit = {
     // write outputs, ignore null values, these could occur for optional
     // values that were not specified.
     val outputJs = outputs
@@ -74,11 +88,28 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
     writeJsOutputs(outputJs)
   }
 
-  protected def writeOutputLinks(subjob: DxJob, irOutputFields: Vector[(String, Type)]): Unit = {
+  def createOutputLinks(outputs: Map[String, (Type, Value)]): Map[String, ParameterLink] = {
+    outputs.collect {
+      case (name, (t, v)) if v != VNull =>
+        name -> outputSerializer.createLink(t, v)
+    }
+  }
+
+  def writeOutputLinks(outputs: Map[String, ParameterLink]): Unit = {
+    val outputJs = outputs
+      .map {
+        case (name, link) => outputSerializer.createFields(link, name)
+      }
+      .flatten
+      .toMap
+    writeJsOutputs(outputJs)
+  }
+
+  def writeOutputLinks(execution: DxExecution, irOutputFields: Vector[(String, Type)]): Unit = {
     val outputJs: Map[String, JsValue] = irOutputFields
       .flatMap {
         case (name, t) =>
-          val link = ParameterLinkExec(subjob, name, t)
+          val link = ParameterLinkExec(execution, name, t)
           outputSerializer.createFields(link, name)
       }
       .filter {

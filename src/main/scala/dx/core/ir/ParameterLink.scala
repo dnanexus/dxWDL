@@ -202,6 +202,13 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
                    encodeDots: Boolean = true): Vector[(String, JsValue)] = {
     createFields(createLink(t, v), bindName, encodeDots)
   }
+
+  def createFields(values: Map[String, (Type, Value)],
+                   encodeDots: Boolean = true): Map[String, JsValue] = {
+    values.flatMap {
+      case (name, (t, v)) => createFields(name, t, v, encodeDots)
+    }
+  }
 }
 
 case class ParameterLinkDeserializer(dxFileDescCache: DxFileDescCache, dxApi: DxApi = DxApi.get) {

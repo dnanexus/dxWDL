@@ -9,7 +9,7 @@ import dx.core.ir.Value._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import spray.json.{JsBoolean, JsObject, JsString, JsValue}
-import wdlTools.eval.Coercion
+import wdlTools.eval.{Coercion, WdlValues}
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
@@ -19,7 +19,8 @@ import wdlTools.types.{
   TypeException,
   TypeInfer,
   WdlTypes,
-  TypedAbstractSyntax => TAT
+  TypedAbstractSyntax => TAT,
+  Utils => TUtils
 }
 import wdlTools.util.{
   DefaultBindings,
@@ -397,6 +398,15 @@ object Utils {
     }
   }
 
+  def toIR(wdl: Map[String, (T, V)]): Map[String, (Type, Value)] = {
+    wdl.map {
+      case (name, (wdlType, wdlValue)) =>
+        val irType = toIRType(wdlType)
+        val irValue = toIRValue(wdlValue, wdlType)
+        name -> (irType, irValue)
+    }
+  }
+
   def fromIRValue(value: Value, name: Option[String]): V = {
     value match {
       case VNull         => V_Null
@@ -495,6 +505,16 @@ object Utils {
     inner(value, wdlType, name)
   }
 
+  def fromIR(ir: Map[String, (Type, Value)],
+             typeAliases: Map[String, T_Struct]): Map[String, (T, V)] = {
+    ir.map {
+      case (name, (t, v)) =>
+        val wdlType = fromIRType(t, typeAliases)
+        val wdlValue = fromIRValue(v, wdlType, name)
+        name -> (wdlType, wdlValue)
+    }
+  }
+
   private def ensureUniformType(exprs: Iterable[TAT.Expr]): T = {
     exprs.headOption.map(_.wdlType) match {
       case Some(t) if exprs.tail.exists(_.wdlType != t) =>
@@ -532,6 +552,337 @@ object Utils {
         TAT.ExprMap(m, T_Map(keyType, valueType), loc)
       case _ =>
         throw new Exception(s"Cannot convert IR value ${value} to WDL")
+    }
+  }
+
+  /**
+    * A trivial expression has no operators, it is either(1) a constant,
+    * (2) a single identifier, or (3) an access to a call field.
+    * For example, `5`, `['a', 'b', 'c']`, and `true` are trivial.
+    * 'x + y'  is not.
+    * @param expr expression
+    * @return
+    */
+  def isTrivialExpression(expr: TAT.Expr): Boolean = {
+    expr match {
+      case expr if TUtils.isPrimitiveValue(expr) => true
+      case _: TAT.ExprIdentifier                 => true
+
+      // A collection of constants
+      case TAT.ExprPair(l, r, _, _)   => Vector(l, r).forall(TUtils.isPrimitiveValue)
+      case TAT.ExprArray(value, _, _) => value.forall(TUtils.isPrimitiveValue)
+      case TAT.ExprMap(value, _, _) =>
+        value.forall {
+          case (k, v) => TUtils.isPrimitiveValue(k) && TUtils.isPrimitiveValue(v)
+        }
+      case TAT.ExprObject(value, _, _) => value.values.forall(TUtils.isPrimitiveValue)
+
+      // Access a field in a call or a struct
+      //   Int z = eliminateDuplicate.fields
+      case TAT.ExprGetName(_: TAT.ExprIdentifier, _, _, _) => true
+
+      case _ => false
+    }
+  }
+
+  /**
+    * Deep search for all calls in WorkflowElements.
+    * @param elements WorkflowElements
+    * @return
+    */
+  def deepFindCalls(elements: Vector[TAT.WorkflowElement]): Vector[TAT.Call] = {
+    elements.foldLeft(Vector.empty[TAT.Call]) {
+      case (accu, call: TAT.Call) =>
+        accu :+ call
+      case (accu, ssc: TAT.Scatter) =>
+        accu ++ deepFindCalls(ssc.body)
+      case (accu, ifStmt: TAT.Conditional) =>
+        accu ++ deepFindCalls(ifStmt.body)
+      case (accu, _) =>
+        accu
+    }
+  }
+
+  // figure out the identifiers used in an expression.
+  //
+  // For example:
+  //   expression   inputs
+  //   x + y        Vector(x, y)
+  //   x + y + z    Vector(x, y, z)
+  //   1 + 9        Vector.empty
+  //   "a" + "b"    Vector.empty
+  //   foo.y + 3    Vector(foo.y)   [withMember = false]
+  //   foo.y + 3    Vector(foo)     [withMember = true]
+  //
+  def getExpressionInputs(expr: TAT.Expr,
+                          withMember: Boolean = true): Vector[(String, WdlTypes.T, Boolean)] = {
+    def inner(expr: TAT.Expr): Vector[(String, WdlTypes.T, Boolean)] = {
+      expr match {
+        case _: TAT.ValueNull      => Vector.empty
+        case _: TAT.ValueNone      => Vector.empty
+        case _: TAT.ValueBoolean   => Vector.empty
+        case _: TAT.ValueInt       => Vector.empty
+        case _: TAT.ValueFloat     => Vector.empty
+        case _: TAT.ValueString    => Vector.empty
+        case _: TAT.ValueFile      => Vector.empty
+        case _: TAT.ValueDirectory => Vector.empty
+        case TAT.ExprIdentifier(id, wdlType, _) =>
+          Vector((id, wdlType, TUtils.isOptional(wdlType)))
+        case TAT.ExprCompoundString(valArr, _, _) =>
+          valArr.flatMap(elem => inner(elem))
+        case TAT.ExprPair(l, r, _, _) =>
+          inner(l) ++ inner(r)
+        case TAT.ExprArray(arrVal, _, _) =>
+          arrVal.flatMap(elem => inner(elem))
+        case TAT.ExprMap(valMap, _, _) =>
+          valMap
+            .map { case (k, v) => inner(k) ++ inner(v) }
+            .toVector
+            .flatten
+        case TAT.ExprObject(fields, _, _) =>
+          fields
+            .map { case (_, v) => inner(v) }
+            .toVector
+            .flatten
+        case TAT.ExprPlaceholderEqual(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
+          inner(t) ++ inner(f) ++ inner(value)
+        case TAT.ExprPlaceholderDefault(default: TAT.Expr, value: TAT.Expr, _, _) =>
+          inner(default) ++ inner(value)
+        case TAT.ExprPlaceholderSep(sep: TAT.Expr, value: TAT.Expr, _, _) =>
+          inner(sep) ++ inner(value)
+        // Access an array element at [index]
+        case TAT.ExprAt(value, index, _, _) =>
+          inner(value) ++ inner(index)
+        // conditional:
+        case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
+          inner(cond) ++ inner(tBranch) ++ inner(fBranch)
+        // Apply a standard library function to arguments.
+        //
+        // TODO: some arguments may be _optional_ we need to take that
+        // into account. We need to look into the function type
+        // and figure out which arguments are optional.
+        case TAT.ExprApply(_, _, elements, _, _) =>
+          elements.flatMap(inner)
+        // Access the field of a call/struct/etc. What we do here depends on the
+        // value of withMember. When we the expression value is a struct and we
+        // are generating a closure, we only need the parent struct, not the member.
+        // Otherwise, we need to add the member name.
+        // Note: this case was added to fix bug/APPS-104 - there may be other expressions
+        // besides structs that need to not have the member name added when withMember = false.
+        // It may also be the case that the bug is with construction of the environment rather
+        // than here with the closure.
+        case TAT.ExprGetName(expr, _, _, _)
+            if !withMember && TUtils.unwrapOptional(expr.wdlType).isInstanceOf[WdlTypes.T_Struct] =>
+          inner(expr)
+        // Access a field of an identifier
+        //   Int z = eliminateDuplicate.fields
+        case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
+          Vector((s"${id}.${fieldName}", wdlType, false))
+        // Access a field of the result of an expression
+        case TAT.ExprGetName(expr, fieldName, _, _) =>
+          inner(expr) match {
+            case Vector((name, wdlType, _)) =>
+              Vector((s"${name}.${fieldName}", wdlType, false))
+            case _ =>
+              throw new Exception(
+                  s"Unhandled ExprGetName construction ${TUtils.prettyFormatExpr(expr)}"
+              )
+          }
+        case other =>
+          throw new Exception(s"Unhandled expression ${other}")
+      }
+    }
+    inner(expr)
+  }
+
+  def getCallInputs(call: TAT.Call): Vector[(String, WdlTypes.T, Boolean)] = {
+    // What the callee expects
+    call.callee.input.flatMap {
+      case (name: String, (_: WdlTypes.T, optional: Boolean)) =>
+        // provided by the caller
+        (call.inputs.get(name), optional) match {
+          case (None, false) =>
+            // A required input that will have to be provided at runtime
+            Vector.empty
+          case (Some(expr), false) =>
+            // required input that is provided
+            getExpressionInputs(expr)
+          case (None, true) =>
+            // a missing optional input, doesn't have to be provided
+            Vector.empty
+          case (Some(expr), true) =>
+            // an optional input
+            getExpressionInputs(expr).map {
+              case (name, wdlType, _) => (name, wdlType, true)
+            }
+        }
+    }.toVector
+  }
+
+  /**
+    * Get all inputs and outputs for a block of statements.
+    * @param elements the block elements
+    * @return
+    */
+  def getInputOutputClosure(
+      elements: Vector[TAT.WorkflowElement]
+  ): (Map[String, (WdlTypes.T, Boolean)], Map[String, TAT.OutputDefinition]) = {
+    // accumulate the inputs, outputs, and local definitions.
+    //
+    // start with:
+    //  an empty list of inputs
+    //  empty list of local definitions
+    //  empty list of outputs
+    elements.foldLeft(
+        (Map.empty[String, (WdlTypes.T, Boolean)], Map.empty[String, TAT.OutputDefinition])
+    ) {
+      case ((inputs, outputs), elem) =>
+        elem match {
+          case decl: TAT.Declaration =>
+            val newInputs = decl.expr match {
+              case None => inputs
+              case Some(expr) =>
+                inputs ++ getExpressionInputs(expr).collect {
+                  case (name, wdlType, optional)
+                      if !(inputs.contains(name) || outputs.contains(name)) =>
+                    name -> (wdlType, optional)
+                }.toMap
+            }
+            val newOutputs =
+              decl.expr match {
+                case None => outputs
+                case Some(expr) =>
+                  outputs + (decl.name -> TAT.OutputDefinition(decl.name,
+                                                               decl.wdlType,
+                                                               expr,
+                                                               decl.loc))
+              }
+            (newInputs, newOutputs)
+          case call: TAT.Call =>
+            val newInputs = inputs ++ Utils
+              .getCallInputs(call)
+              .collect {
+                case (name, wdlType, optional)
+                    if !(inputs.contains(name) || outputs.contains(name)) =>
+                  name -> (wdlType, optional)
+              }
+              .toMap
+            val newOutputs = outputs ++ call.callee.output.map {
+              case (name, wdlType) =>
+                val fqn = s"${call.actualName}.${name}"
+                fqn -> TAT.OutputDefinition(fqn,
+                                            wdlType,
+                                            TAT.ExprIdentifier(fqn, wdlType, call.loc),
+                                            call.loc)
+            }
+            (newInputs, newOutputs)
+          case cond: TAT.Conditional =>
+            // recurse into body of conditional
+            val (subBlockInputs, subBlockOutputs) = getInputOutputClosure(cond.body)
+            val exprInputs = getExpressionInputs(cond.expr).collect {
+              case (name, wdlType, optional)
+                  if !(inputs.contains(name) || subBlockInputs.contains(name) || outputs
+                    .contains(name)) =>
+                name -> (wdlType, optional)
+            }
+            val newInputs = inputs ++ subBlockInputs ++ exprInputs
+            // make outputs optional
+            val newOutputs = outputs ++ subBlockOutputs.values.map {
+              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
+                name -> TAT.OutputDefinition(name, TUtils.ensureOptional(wdlType), expr, loc)
+            }
+            (newInputs, newOutputs)
+          case scatter: TAT.Scatter =>
+            // recurse into body of the scatter
+            val (subBlockInputs, subBlockOutputs) = getInputOutputClosure(scatter.body)
+            val exprInputs = getExpressionInputs(scatter.expr).collect {
+              case (name, wdlType, optional)
+                  if !(inputs.contains(name) || subBlockInputs.contains(name) || outputs
+                    .contains(name)) =>
+                name -> (wdlType, optional)
+            }
+            val newInputs = inputs ++ subBlockInputs ++ exprInputs
+            // make outputs arrays
+            val newOutputs = outputs ++ subBlockOutputs.values.map {
+              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
+                name -> TAT.OutputDefinition(name,
+                                             WdlTypes.T_Array(wdlType, nonEmpty = false),
+                                             expr,
+                                             loc)
+            }
+            // remove the collection iteration variable
+            (newInputs - scatter.identifier, newOutputs - scatter.identifier)
+        }
+    }
+  }
+
+  /**
+    * We are building an applet for the output section of a workflow. The outputs have
+    * expressions, and we need to figure out which variables they refer to. This will
+    * allow the calculations to proceeed inside a stand alone applet.
+    * @param outputs output definitions
+    * @return
+    */
+  def getOutputClosure(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = {
+    // create inputs from all the expressions that go into outputs
+    outputs
+      .flatMap {
+        case TAT.OutputDefinition(_, _, expr, _) => Vector(expr)
+      }
+      .flatMap(e => getExpressionInputs(e, withMember = false))
+      .foldLeft(Map.empty[String, WdlTypes.T]) {
+        case (accu, (name, wdlType, _)) =>
+          accu + (name -> wdlType)
+      }
+  }
+
+  def prettyFormat(node: TAT.WorkflowElement, indent: String = "    "): String = {
+    node match {
+      case TAT.Scatter(varName, expr, body, _) =>
+        val collection = TUtils.prettyFormatExpr(expr)
+        val innerBlock = body
+          .map { node =>
+            prettyFormat(node, indent + "  ")
+          }
+          .mkString("\n")
+        s"""|${indent}scatter (${varName} in ${collection}) {
+            |${innerBlock}
+            |${indent}}
+            |""".stripMargin
+
+      case TAT.Conditional(expr, body, _) =>
+        val innerBlock =
+          body
+            .map { node =>
+              prettyFormat(node, indent + "  ")
+            }
+            .mkString("\n")
+        s"""|${indent}if (${TUtils.prettyFormatExpr(expr)}) {
+            |${innerBlock}
+            |${indent}}
+            |""".stripMargin
+
+      case call: TAT.Call =>
+        val inputNames = call.inputs
+          .map {
+            case (key, expr) =>
+              s"${key} = ${TUtils.prettyFormatExpr(expr)}"
+          }
+          .mkString(",")
+        val inputs =
+          if (inputNames.isEmpty) ""
+          else s"{ input: ${inputNames} }"
+        call.alias match {
+          case None =>
+            s"${indent}call ${call.fullyQualifiedName} ${inputs}"
+          case Some(al) =>
+            s"${indent}call ${call.fullyQualifiedName} as ${al} ${inputs}"
+        }
+
+      case TAT.Declaration(_, wdlType, None, _) =>
+        s"${indent} ${TUtils.prettyFormatType(wdlType)}"
+      case TAT.Declaration(_, wdlType, Some(expr), _) =>
+        s"${indent} ${TUtils.prettyFormatType(wdlType)} = ${TUtils.prettyFormatExpr(expr)}"
     }
   }
 }

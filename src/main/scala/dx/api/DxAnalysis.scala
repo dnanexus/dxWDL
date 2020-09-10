@@ -11,6 +11,7 @@ case class DxAnalysisDescribe(project: String,
                               executableName: Option[String],
                               properties: Option[Map[String, String]],
                               details: Option[JsValue],
+                              input: Option[JsValue],
                               output: Option[JsValue])
     extends DxObjectDescribe
 
@@ -53,6 +54,7 @@ object DxAnalysis {
                            None,
                            None,
                            None,
+                           None,
                            None)
       case _ =>
         throw new Exception(s"Malformed JSON ${descJs}")
@@ -66,11 +68,13 @@ object DxAnalysis {
     }
     val details = descJs.fields.get("details")
     val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val input = descJs.fields.get("input")
     val output = descJs.fields.get("output")
 
     desc.copy(executableName = executableName,
               details = details,
               properties = props,
+              input = input,
               output = output)
   }
 }

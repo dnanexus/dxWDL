@@ -166,13 +166,18 @@ case class DxWorkflow(dxApi: DxApi, id: String, project: Option[DxProject])
 
   def newRun(name: String,
              input: JsValue,
+             details: Option[JsValue] = None,
              delayWorkspaceDestruction: Option[Boolean] = None): DxAnalysis = {
     val req = Map("name" -> JsString(name), "input" -> input.asJsObject)
+    val detailsFields = details match {
+      case Some(jsv) => Map("details" -> jsv)
+      case None      => Map.empty
+    }
     val dwd = delayWorkspaceDestruction match {
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val repJs = dxApi.workflowRun(id, req ++ dwd)
+    val repJs = dxApi.workflowRun(id, req ++ detailsFields ++ dwd)
     repJs.fields.get("id") match {
       case None =>
         throw new Exception("id not returned in response")

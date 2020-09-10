@@ -43,6 +43,7 @@ import dx.compiler.WdlRuntimeAttrs
 import dx.core.{getVersion, ir}
 import dx.core.io.{DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.ParameterLinkExec
+import dx.core.languages.wdl.WdlBlock.getBlockIO
 import dx.core.languages.wdl._
 import dx.executor.RunnerWfFragmentMode.Value
 import dx.executor.wdl.WdlExecutableLink
@@ -88,11 +89,7 @@ case class WfFragRunner(wf: TAT.Workflow,
       wdlVarLinksConverter.copy(dxFileDescCache = DxFileDescCache.empty)
   )
 
-  var gSeqNum = 0
-  private def launchSeqNum(): Int = {
-    gSeqNum += 1
-    gSeqNum
-  }
+  private val seqNumIter = Iterator.from(1)
 
   private def evaluateWdlExpression(expr: TAT.Expr,
                                     wdlType: WdlTypes.T,
@@ -103,11 +100,12 @@ case class WfFragRunner(wf: TAT.Workflow,
   private def getCallLinkInfo(call: TAT.Call): WdlExecutableLink = {
     val calleeName = call.callee.name
     execLinkInfo.get(calleeName) match {
-      case None =>
-        throw new AppInternalException(s"Could not find linking information for ${calleeName}")
+      case None        =>
       case Some(eInfo) => eInfo
     }
   }
+  // figure out all the outputs from a block of statements
+  //
 
   // This method is exposed so that we can unit-test it.
   def evalExpressions(
@@ -143,7 +141,7 @@ case class WfFragRunner(wf: TAT.Workflow,
           }
 
         // build a mapping from from result-key to its type
-        val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(body)
+        val resultTypes: Map[String, WdlTypes.T] = getBlockOutputs(body)
 
         val initResults: Map[String, (WdlTypes.T, Vector[WdlValues.V])] = resultTypes.map {
           case (key, t) => key -> (t, Vector.empty[WdlValues.V])
@@ -178,7 +176,7 @@ case class WfFragRunner(wf: TAT.Workflow,
         val resultsFull: Map[String, (WdlTypes.T, WdlValues.V)] =
           if (!condValue) {
             // condition is false, return None for all the values
-            val resultTypes = Block.allOutputs(body)
+            val resultTypes = getBlockOutputs(body)
             resultTypes.map {
               case (key, wdlType) =>
                 key -> (WdlTypes.T_Optional(wdlType), WdlValues.V_Null)
@@ -682,7 +680,7 @@ case class WfFragRunner(wf: TAT.Workflow,
   // Remove the declarations already calculated
   private def collectScatter(sct: TAT.Scatter,
                              childJobs: Vector[DxExecution]): Map[String, WdlDxLink] = {
-    val resultTypes: Map[String, WdlTypes.T] = Block.allOutputs(sct.body)
+    val resultTypes: Map[String, WdlTypes.T] = getBlockOutputs(sct.body)
     val resultArrayTypes = resultTypes.map {
       case (k, t) =>
         k -> WdlTypes.T_Array(t, nonEmpty = false)
@@ -753,72 +751,53 @@ case class WfFragRunner(wf: TAT.Workflow,
     dxApi.logger.traceLimited(s"Environment: ${envInitial}")
 
     // Find the fragment block to execute
-    val block = Block.getSubBlock(blockPath, wf.body)
-    dxApi.logger.traceLimited(
-        s"""|Block ${blockPath} to execute:
-            |${PrettyPrintApprox.block(block)}
-            |
-            |""".stripMargin
-    )
+    val block = getSubBlock(blockPath, wf.body)
 
-    // Some of the inputs could be optional. If they are missing,
-    // add in a None value.
-    val envInitialFilled: Map[String, (WdlTypes.T, WdlValues.V)] =
-      block.inputs.flatMap { inputDef: BlockInput =>
-        envInitial.get(inputDef.name) match {
-          case None =>
-            None
-          case Some((t, v)) =>
-            Some(inputDef.name -> (t, v))
-        }
-      }.toMap
-
-    val catg = Block.categorize(block)
-    val env = evalExpressions(catg.nodes, envInitialFilled) ++ envInitialFilled
+    val env = evalExpressions(catg.elements, envInitialFilled) ++ envInitialFilled
 
     val fragResults: Map[String, WdlDxLink] = runMode match {
       case RunnerWfFragmentMode.Launch =>
         // The last node could be a call or a block. All the other nodes
         // are expressions.
         catg match {
-          case Block.AllExpressions(_) =>
+          case WdlBlock.AllExpressions(_) =>
             Map.empty
 
-          case Block.CallDirect(_, _) =>
+          case WdlBlock.CallDirect(_, _) =>
             throw new Exception("Should not be able to reach this state")
 
           // A single call at the end of the block
-          case Block.CallWithSubexpressions(_, call) =>
+          case WdlBlock.CallWithSubexpressions(_, call) =>
             val callInputs = evalCallInputs(call, env)
             val (_, dxExec) = execCall(call, callInputs, None)
             genPromisesForCall(call, dxExec)
 
           // The block contains a call and a bunch of expressions
           // that will be part of the output.
-          case Block.CallFragment(_, call) =>
+          case WdlBlock.CallFragment(_, call) =>
             val callInputs = evalCallInputs(call, env)
             val (_, dxExec) = execCall(call, callInputs, None)
             genPromisesForCall(call, dxExec)
 
           // The block contains a single call. We can execute it
           // right here, without another job.
-          case Block.CondOneCall(_, cnNode, call) =>
+          case WdlBlock.CondOneCall(_, cnNode, call) =>
             execConditionalCall(cnNode, call, env)
 
           // a conditional with a subblock inside it. We
           // need to call an applet or a subworkflow.
-          case Block.CondFullBlock(_, cnNode) =>
+          case WdlBlock.CondFullBlock(_, cnNode) =>
             execConditionalSubblock(cnNode, env)
 
           // a scatter with a subblock inside it. Iterate
           // on the scatter variable, and make the applet call
           // for each value.
-          case Block.ScatterOneCall(_, sctNode, call) =>
+          case WdlBlock.ScatterOneCall(_, sctNode, call) =>
             execScatterCall(sctNode, call, env)
 
           // Same as previous case, but call a subworkflow
           // or fragment.
-          case Block.ScatterFullBlock(_, sctNode) =>
+          case WdlBlock.ScatterFullBlock(_, sctNode) =>
             execScatterSubblock(sctNode, env)
         }
 
@@ -826,11 +805,11 @@ case class WfFragRunner(wf: TAT.Workflow,
       case RunnerWfFragmentMode.Collect =>
         val childJobsComplete = collectSubJobs.findChildExecs()
         catg match {
-          case Block.ScatterOneCall(_, _, call) =>
+          case WdlBlock.ScatterOneCall(_, _, call) =>
             // scatter with a single call
             collectSubJobs.aggregateResults(call, childJobsComplete)
 
-          case Block.ScatterFullBlock(_, _) =>
+          case WdlBlock.ScatterFullBlock(_, _) =>
             // A scatter with a complex sub-block, compiled as a sub-workflow
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)

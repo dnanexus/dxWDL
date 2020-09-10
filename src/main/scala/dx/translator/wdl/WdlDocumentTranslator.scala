@@ -6,7 +6,7 @@ import dx.api.{DxApi, DxProject}
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.languages.wdl.{Block, Utils => WdlUtils}
+import dx.core.languages.wdl.{Utils => WdlUtils}
 import dx.translator.{
   CommonStage,
   DocumentTranslator,
@@ -190,7 +190,7 @@ case class WdlDocumentTranslator(doc: TAT.Document,
     // on anything else - they are at the bottom of the dependency tree.
     val wfDeps: Map[String, Set[String]] = bundleInfo.workflows.map {
       case (name, wf) =>
-        getUnqualifiedName(name) -> Block
+        getUnqualifiedName(name) -> WdlUtils
           .deepFindCalls(wf.body)
           .map { call: TAT.Call =>
             // The name is fully qualified, for example, lib.add, lib.concat.

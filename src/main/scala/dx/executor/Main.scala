@@ -29,7 +29,7 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    val logger = initLogger(options)
+    initLogger(options)
     try {
       val jobMeta = JobMeta(homeDir)
       kind match {

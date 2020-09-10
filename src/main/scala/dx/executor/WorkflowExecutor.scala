@@ -1,19 +1,59 @@
 package dx.executor
 
+import dx.AppInternalException
+import dx.api.{DxAnalysis, DxApp, DxApplet, DxExecution, DxFile, DxWorkflow, Field, FolderContents}
+import dx.core.io.DxWorkerPaths
 import dx.core.{Native, getVersion}
-import dx.core.ir.{ExecutableLink, Parameter, ParameterLink, Type, TypeSerde, Value}
+import dx.core.ir.{Block, ExecutableLink, Parameter, ParameterLink, Type, TypeSerde, Value}
 import dx.executor.WorkflowAction.WorkflowAction
 import dx.executor.wdl.WdlWorkflowSupportFactory
-import spray.json.{JsArray, JsNumber, JsObject}
-import wdlTools.util.Enum
+import spray.json._
+import wdlTools.util.{Enum, TraceLevel}
 
 object WorkflowAction extends Enum {
   type WorkflowAction = Value
   val Inputs, Outputs, OutputReorg, CustomReorgOutputs, Run, Continue, Collect = Value
 }
 
+trait BlockContext {
+  def block: Block
+
+  def launch(): Map[String, ParameterLink]
+
+  def continue(): Map[String, ParameterLink]
+
+  def collect(): Map[String, ParameterLink]
+}
+
+object WorkflowSupport {
+  val SeqNumber = "seqNumber"
+}
+
 abstract class WorkflowSupport(jobMeta: JobMeta) {
+  private val logger = jobMeta.logger
+  private val seqNumIter = Iterator.from(1)
+
+  protected def nextSeqNum: Int = seqNumIter.next()
+
+  /**
+    *
+    * @return
+    */
   def typeAliases: Map[String, Type]
+
+  /**
+    * Evaluates any expressions in workflow inputs.
+    * @return
+    */
+  def evaluateInputs(jobInputs: Map[String, (Type, Value)]): Map[String, (Type, Value)]
+
+  /**
+    * Evaluates any expressions in workflow outputs.
+    */
+  def evaluateOutputs(jobInputs: Map[String, (Type, Value)],
+                      addReorgStatus: Boolean): Map[String, (Type, Value)]
+
+  def evaluateBlockInputs(jobInputs: Map[String, (Type, Value)]): BlockContext
 
   lazy val execLinkInfo: Map[String, ExecutableLink] =
     jobMeta.executableDetails.get("execLinkInfo") match {
@@ -28,8 +68,15 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
         throw new Exception(s"Bad value ${other}")
     }
 
+  def getExecutableLink(name: String): ExecutableLink = {
+    execLinkInfo.getOrElse(
+        name,
+        throw new AppInternalException(s"Could not find linking information for ${name}")
+    )
+  }
+
   lazy val blockPath: Vector[Int] = jobMeta.executableDetails.get("blockPath") match {
-    case Some(JsArray(arr)) =>
+    case Some(JsArray(arr)) if arr.nonEmpty =>
       arr.map {
         case JsNumber(n) => n.toInt
         case _           => throw new Exception("Bad value ${arr}")
@@ -54,21 +101,93 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
       case other =>
         throw new Exception(s"Bad value ${other}")
     }
+
+  lazy val scatterStart: Int = jobMeta.jobDesc.details match {
+    case Some(JsObject(fields)) =>
+      fields(Native.ContinueStart) match {
+        case JsNumber(s) => s.toIntExact
+        case other =>
+          throw new Exception(s"Invalid value ${other} for  ${Native.ContinueStart}")
+      }
+    case None => 0
+    case _    => throw new Exception(s"invalid job details ${jobMeta.jobDesc.details}")
+  }
+
+  lazy val scatterSize: Int = jobMeta.executableDetails.get(Native.ScatterChunkSize) match {
+    case Some(JsNumber(n)) => n.toIntExact
+    case None              => Native.JobPerScatterDefault
+    case other =>
+      throw new Exception(s"Invalid value ${other} for ${Native.ScatterChunkSize}")
+  }
+
+  protected def launchJob(executableLink: ExecutableLink,
+                          name: String,
+                          inputs: Map[String, (Type, Value)],
+                          instanceType: Option[String] = None): DxExecution = {
+    val callInputsJs = JsObject(jobMeta.outputSerializer.createFields(inputs))
+    logger.traceLimited(s"execDNAx ${callInputsJs.prettyPrint}", minLevel = TraceLevel.VVerbose)
+
+    // Last check that we have all the compulsory arguments.
+    // Note that we don't have the information here to tell difference between optional and non
+    // optionals. Right now, we are emitting warnings for optionals or arguments that have defaults.
+    executableLink.inputs.keys.foreach {
+      case argName if !callInputsJs.fields.contains(argName) =>
+        logger.warning(s"Missing argument ${argName} to call ${executableLink.name}", force = true)
+    }
+
+    // We may need to run a collect subjob. Add the the sequence
+    // number to each invocation, so the collect subjob will be
+    // able to put the results back together in the correct order.
+    val seqNum: Int = nextSeqNum
+
+    // If this is a task that specifies the instance type
+    // at runtime, launch it in the requested instance.
+    executableLink.dxExec match {
+      case app: DxApp =>
+        app.newRun(
+            name,
+            callInputsJs,
+            instanceType = instanceType,
+            details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
+            delayWorkspaceDestruction = jobMeta.delayWorkspaceDestruction
+        )
+      case applet: DxApplet =>
+        applet.newRun(
+            name,
+            callInputsJs,
+            instanceType = instanceType,
+            details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
+            delayWorkspaceDestruction = jobMeta.delayWorkspaceDestruction
+        )
+      case workflow: DxWorkflow =>
+        workflow.newRun(
+            input = callInputsJs,
+            name = name,
+            details = Some(JsObject(WorkflowSupport.SeqNumber -> JsNumber(seqNum))),
+            delayWorkspaceDestruction = jobMeta.delayWorkspaceDestruction
+        )
+      case other =>
+        throw new Exception(s"Unsupported executable ${other}")
+    }
+  }
 }
 
 trait WorkflowSupportFactory {
-  def create(jobMeta: JobMeta): Option[WorkflowSupport]
+  def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WorkflowSupport]
 }
 
 object WorkflowExecutor {
+  val MaxNumFilesMoveLimit = 1000
+  val IntermediateResultsFolder = "intermediate"
+
   val workflowSupportFactories: Vector[WorkflowSupportFactory] = Vector(
       WdlWorkflowSupportFactory()
   )
 
-  def createWorkflowSupport(jobMeta: JobMeta): WorkflowSupport = {
+  def createWorkflowSupport(jobMeta: JobMeta, workerPaths: DxWorkerPaths): WorkflowSupport = {
     workflowSupportFactories
       .collectFirst { factory =>
-        factory.create(jobMeta) match {
+        factory.create(jobMeta, workerPaths) match {
           case Some(executor) => executor
         }
       }
@@ -79,148 +198,168 @@ object WorkflowExecutor {
 }
 
 case class WorkflowExecutor(jobMeta: JobMeta) {
-  private val workflowSupport: WorkflowSupport = WorkflowExecutor.createWorkflowSupport(jobMeta)
+  // Setup the standard paths used for applets. These are used at runtime, not at compile time.
+  // On the cloud instance running the job, the user is "dnanexus", and the home directory is
+  // "/home/dnanexus".
+  private val workerPaths = DxWorkerPaths.default
+  private val workflowSupport: WorkflowSupport =
+    WorkflowExecutor.createWorkflowSupport(jobMeta, workerPaths)
+  private val dxApi = jobMeta.dxApi
   private val logger = jobMeta.logger
 
-  def reorganizeOutputsDefault(): Map[String, (Type, Value)] = {
-    logger.traceLimited(s"dxWDL version: ${getVersion}")
+  private lazy val jobInputs: Map[String, (Type, Value)] = jobMeta.jsInputs.collect {
+    case (name, jsValue) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
+      val fqn = Parameter.decodeDots(name)
+      val irType = workflowSupport.fqnDictTypes.getOrElse(
+          fqn,
+          throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
+      )
+      val irValue = jobMeta.inputDeserializer.deserializeInputWithType(jsValue, irType)
+      fqn -> (irType, irValue)
+  }
 
-    val inputs = jobMeta.jsInputs.collect {
-      case (name, jsValue) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
-        val fqn = Parameter.decodeDots(name)
-        val irType = workflowSupport.fqnDictTypes.getOrElse(
-            fqn,
-            throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
-        )
-        val irValue = jobMeta.inputDeserializer.deserializeInputWithType(jsValue, irType)
-        fqn -> (irType, irValue)
+  private def evaluateInputs(): Map[String, ParameterLink] = {
+    if (logger.isVerbose) {
+      logger.traceLimited(s"dxWDL version: ${getVersion}")
+      logger.traceLimited(s"Environment: ${jobInputs}")
+      logger.traceLimited("Artificial applet for unlocked workflow inputs")
     }
+    val inputs = workflowSupport.evaluateInputs(jobInputs)
+    jobMeta.createOutputLinks(inputs)
+  }
 
-    val wfReorg = WorkflowOutputReorg(jobMeta.dxApi)
-    val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, executableDetails)
-    wfReorg.apply(refDxFiles)
+  private def evaluateOutputs(addReorgStatus: Boolean = false): Map[String, ParameterLink] = {
+    if (logger.isVerbose) {
+      logger.traceLimited(s"dxWDL version: ${getVersion}")
+      logger.traceLimited(s"Environment: ${jobInputs}")
+      logger.traceLimited("Evaluating workflow outputs")
+    }
+    val outputs = workflowSupport.evaluateOutputs(jobInputs, addReorgStatus)
+    jobMeta.createOutputLinks(outputs)
+  }
 
+  private def evaluateFragInputs(): BlockContext = {
+    if (logger.isVerbose) {
+      logger.traceLimited(s"dxWDL version: ${getVersion}")
+      logger.traceLimited(s"link info=${workflowSupport.execLinkInfo}")
+      logger.traceLimited(s"Environment: ${jobInputs}")
+    }
+    val blockCtx = workflowSupport.evaluateBlockInputs(jobInputs)
+    logger.traceLimited(
+        s"""|Block ${workflowSupport.blockPath} to execute:
+            |${blockCtx.block.prettyFormat}
+            |""".stripMargin
+    )
+    blockCtx
+  }
+
+  private def getAnalysisOutputFiles(analysis: DxAnalysis): Map[String, DxFile] = {
+    val desc = analysis.describe(Set(Field.Input, Field.Output))
+    val fileOutputs: Set[DxFile] = dxApi.findFiles(desc.output.get).toSet
+    val fileInputs: Set[DxFile] = dxApi.findFiles(desc.input.get).toSet
+    val analysisFiles: Vector[DxFile] = (fileOutputs -- fileInputs).toVector
+    if (logger.isVerbose) {
+      logger.traceLimited(s"analysis has ${fileOutputs.size} output files")
+      logger.traceLimited(s"analysis has ${fileInputs.size} input files")
+      logger.traceLimited(s"analysis has ${analysisFiles.size} real outputs")
+    }
+    val filteredAnalysisFiles: Map[String, DxFile] =
+      if (analysisFiles.size > WorkflowExecutor.MaxNumFilesMoveLimit) {
+        dxApi.logger.traceLimited(
+            s"WARNING: Large number of outputs (${analysisFiles.size}), not moving objects"
+        )
+        Map.empty
+      } else {
+        logger.traceLimited("Checking timestamps")
+        // Retain only files that were created AFTER the analysis started
+        val describedFiles = dxApi.fileBulkDescribe(analysisFiles)
+        val analysisCreated: java.util.Date = desc.getCreationDate
+        describedFiles.collect {
+          case dxFile if dxFile.describe().getCreationDate.compareTo(analysisCreated) >= 0 =>
+            dxFile.id -> dxFile
+        }.toMap
+      }
+    logger.traceLimited(s"analysis has ${filteredAnalysisFiles.size} verified output files")
+    filteredAnalysisFiles
+  }
+
+  private def reorganizeOutputsDefault(): Map[String, ParameterLink] = {
+    logger.traceLimited(s"dxWDL version: ${getVersion}")
+    val analysis = jobMeta.jobDesc.analysis.get
+    val analysisFiles = getAnalysisOutputFiles(analysis)
+    if (analysisFiles.isEmpty) {
+      logger.trace(s"no output files to reorganize for analysis ${analysis.id}")
+    } else {
+      val outputIds: Set[String] = jobMeta.jsInputs
+        .collect {
+          case (name, jsValue) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
+            val fqn = Parameter.decodeDots(name)
+            if (!workflowSupport.fqnDictTypes.contains(fqn)) {
+              throw new Exception(
+                  s"Did not find variable ${fqn} (${name}) in the block environment"
+              )
+            }
+            dxApi.findFiles(jsValue)
+        }
+        .flatten
+        .map(_.id)
+        .toSet
+      val (exportFiles, intermediateFiles) = analysisFiles.partition {
+        case (id, _) => outputIds.contains(id)
+      }
+      val exportNames: Vector[String] = exportFiles.values.map(_.describe().name).toVector
+      logger.traceLimited(s"exportFiles=${exportNames}")
+      if (intermediateFiles.isEmpty) {
+        logger.trace("no intermediate files to reorganize for analysis ${analysis.id}")
+      } else {
+        val outputFolder = analysis.describe().folder
+        logger.traceLimited(
+            s"proj=${jobMeta.projectDesc.name} outFolder=${outputFolder}"
+        )
+        val intermediateFolder = s"outputFolder/${WorkflowExecutor.IntermediateResultsFolder}"
+        val project = jobMeta.project
+        val folderContents: FolderContents = project.listFolder(outputFolder)
+        if (!folderContents.subFolders.contains(intermediateFolder)) {
+          logger.traceLimited(s"Creating intermediate results sub-folder ${intermediateFolder}")
+          project.newFolder(intermediateFolder, parents = true)
+        } else {
+          logger.traceLimited(
+              s"Intermediate results sub-folder ${intermediateFolder} already exists"
+          )
+        }
+        project.moveObjects(intermediateFiles.values.toVector, intermediateFolder)
+      }
+    }
+    // reorg app has no outputs
     Map.empty
   }
 
   def apply(action: WorkflowAction): String = {
     try {
-      val outputs: Map[String, (Type, Value)] = action match {
-        case WorkflowAction.Inputs             =>
-        case WorkflowAction.Run                =>
-        case WorkflowAction.Continue           =>
-        case WorkflowAction.Collect            =>
-        case WorkflowAction.Outputs            =>
+      val outputs: Map[String, ParameterLink] = action match {
+        case WorkflowAction.Inputs =>
+          evaluateInputs()
+        case WorkflowAction.Run =>
+          evaluateFragInputs().launch()
+        case WorkflowAction.Continue =>
+          evaluateFragInputs().continue()
+        case WorkflowAction.Collect =>
+          evaluateFragInputs().collect()
+        case WorkflowAction.Outputs =>
+          evaluateOutputs()
         case WorkflowAction.CustomReorgOutputs =>
+          evaluateOutputs(addReorgStatus = true)
         case WorkflowAction.OutputReorg =>
           reorganizeOutputsDefault()
         case _ =>
           throw new Exception(s"Illegal workflow fragment operation ${action}")
       }
-      jobMeta.writeOutputs(outputs)
+      jobMeta.writeOutputLinks(outputs)
       s"success ${action}"
     } catch {
       case e: Throwable =>
-        workflowMeta.error(e)
+        jobMeta.error(e)
         throw e
     }
   }
 }
-
-/**
-private def workflowFragAction(
-      action: ExecutorAction.Value,
-      language: Option[Language],
-      sourceCode: String,
-      instanceTypeDB: InstanceTypeDB,
-      executableDetails: Map[String, JsValue],
-      jobInputPath: Path,
-      jobOutputPath: Path,
-      jobDesc: DxJobDescribe,
-      dxPathConfig: DxWorkerPaths,
-      fileResolver: FileSourceResolver,
-      dxFileDescCache: DxFileDescCache,
-      defaultRuntimeAttributes: Map[String, Value],
-      delayWorkspaceDestruction: Option[Boolean],
-      dxApi: DxApi
-  ): Termination = {
-
-    // Parse the inputs, convert to WDL values. Delay downloading files
-    // from the platform, we may not need to access them.
-    val inputsRaw: String = FileUtils.readFileContent(jobInputPath).parseJson
-    val (wf, taskDir, typeAliases, document) =
-      ParseSource(dxApi).parseWdlWorkflow(sourceCode)
-    val wdlVarLinksConverter =
-      WdlDxLinkSerde(dxApi, fileResolver, dxFileDescCache, typeAliases)
-    val evaluator = createEvaluator(dxPathConfig, fileResolver, document.version.value)
-    val jobInputOutput = JobInputOutput(dxPathConfig,
-                                        fileResolver,
-                                        dxFileDescCache,
-                                        wdlVarLinksConverter,
-                                        dxApi,
-                                        evaluator)
-    // setup the utility directories that the frag-runner employs
-    val fragInputOutput = WfFragInputOutput(typeAliases, wdlVarLinksConverter, dxApi)
-
-    // process the inputs
-    val fragInputs = fragInputOutput.loadInputs(inputsRaw, executableDetails)
-    val outputFields: Map[String, JsValue] =
-      action match {
-        case ExecutorAction.WfFragment | ExecutorAction.WfScatterContinue | ExecutorAction.WfScatterCollect =>
-
-          val scatterSize = executableDetails.get(Native.ScatterChunkSize) match {
-            case Some(JsNumber(n)) => n.toIntExact
-            case None              => Native.JobPerScatterDefault
-            case other =>
-              throw new Exception(s"Invalid value ${other} for ${Native.ScatterChunkSize}")
-          }
-          val fragRunner = WfFragRunner(
-              wf,
-              taskDir,
-              typeAliases,
-              document,
-              instanceTypeDB,
-              fragInputs.execLinkInfo,
-              dxPathConfig,
-              fileResolver,
-              wdlVarLinksConverter,
-              jobInputOutput,
-              inputsRaw,
-              fragInputOutput,
-              defaultRuntimeAttributes,
-              delayWorkspaceDestruction,
-              scatterSize,
-              dxApi,
-              evaluator
-          )
-          fragRunner.apply(fragInputs.blockPath, fragInputs.env, mode)
-        case ExecutorAction.WfInputs =>
-          val wfInputs = WfInputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
-          wfInputs.apply(fragInputs.env)
-        case ExecutorAction.WfOutputs =>
-          val wfOutputs = WfOutputs(wf, document, wdlVarLinksConverter, dxApi, evaluator)
-          wfOutputs.apply(fragInputs.env)
-
-        case ExecutorAction.WfCustomReorgOutputs =>
-          val wfCustomReorgOutputs = WfOutputs(
-              wf,
-              document,
-              wdlVarLinksConverter,
-              dxApi,
-              evaluator
-          )
-          // add ___reconf_status as output.
-          wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
-
-        case ExecutorAction.WfOutputReorg =>
-          val wfReorg = WorkflowOutputReorg(dxApi)
-          val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, executableDetails)
-          wfReorg.apply(refDxFiles)
-
-        case _ =>
-          throw new Exception(s"Illegal workflow fragment operation ${action}")
-      }
-
-  }
-
-  */

@@ -67,9 +67,8 @@ case class WdlTaskSupport(task: TAT.Task,
   private lazy val taskIO = TaskInputOutput(task, logger)
 
   private def getInputs: Map[String, WdlValues.V] = {
-    // Discard auxiliary fields
     val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
-    // convert IR to WDL values
+    // convert IR to WDL values; discard auxiliary fields
     val inputWdlValues: Map[String, WdlValues.V] = jobMeta.inputs.collect {
       case (name, value) if !name.endsWith(ParameterLink.FlatFilesSuffix) =>
         val wdlType = taskInputs(name).wdlType
@@ -183,10 +182,9 @@ case class WdlTaskSupport(task: TAT.Task,
     * but we want to download it just once.
     * @return
     */
-  override def localizeInputFiles: (Map[String, JsValue],
-                                    Map[FileSource, Path],
-                                    Option[DxdaManifest],
-                                    Option[DxfuseManifest]) = {
+  override def localizeInputFiles(
+      streamAllFiles: Boolean
+  ): (Map[String, JsValue], Map[FileSource, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
     assert(workerPaths.inputFilesDir != workerPaths.dxfuseMountpoint)
 
     val inputs = getInputs
@@ -205,7 +203,7 @@ case class WdlTaskSupport(task: TAT.Task,
           if (remote.isEmpty) {
             (localFiles ++ local, filesToStream, filesToDownload)
           } else {
-            val stream = workerPaths.streamAllFiles || (parameterMeta.get(name) match {
+            val stream = streamAllFiles || (parameterMeta.get(name) match {
               case Some(V_String(DxMetaHints.ParameterMetaStream)) =>
                 true
               case Some(V_Object(fields)) =>

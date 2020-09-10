@@ -124,7 +124,7 @@ case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject])
   def newRun(name: String,
              input: JsValue,
              instanceType: Option[String] = None,
-             properties: Map[String, JsValue] = Map.empty,
+             details: Option[JsValue] = None,
              delayWorkspaceDestruction: Option[Boolean] = None): DxJob = {
     val fields = Map(
         "name" -> JsString(name),
@@ -141,18 +141,15 @@ case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject])
             )
         )
     }
-
-    val props =
-      if (properties.isEmpty)
-        Map.empty
-      else
-        Map("properties" -> JsObject(properties))
-
+    val detailsFields = details match {
+      case Some(jsv) => Map("details" -> jsv)
+      case None      => Map.empty
+    }
     val dwd = delayWorkspaceDestruction match {
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val info = dxApi.appletRun(id, fields ++ instanceFields ++ props ++ dwd)
+    val info = dxApi.appletRun(id, fields ++ instanceFields ++ detailsFields ++ dwd)
     val jobId: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>

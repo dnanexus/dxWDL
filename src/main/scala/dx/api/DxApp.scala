@@ -50,7 +50,7 @@ case class DxApp(dxApi: DxApi, id: String)
   def newRun(name: String,
              input: JsValue,
              instanceType: Option[String] = None,
-             properties: Map[String, JsValue] = Map.empty,
+             details: Option[JsValue] = None,
              delayWorkspaceDestruction: Option[Boolean] = None): DxJob = {
     val fields = Map(
         "name" -> JsString(name),
@@ -67,18 +67,15 @@ case class DxApp(dxApi: DxApi, id: String)
             )
         )
     }
-
-    val props =
-      if (properties.isEmpty)
-        Map.empty
-      else
-        Map("properties" -> JsObject(properties))
-
+    val detailsFields = details match {
+      case Some(jsv) => Map("details" -> jsv)
+      case None      => Map.empty
+    }
     val dwd = delayWorkspaceDestruction match {
       case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
       case _          => Map.empty
     }
-    val info = dxApi.appRun(this.id, fields ++ instanceFields ++ props ++ dwd)
+    val info = dxApi.appRun(this.id, fields ++ instanceFields ++ detailsFields ++ dwd)
     val id: String = info.fields.get("id") match {
       case Some(JsString(x)) => x
       case _ =>

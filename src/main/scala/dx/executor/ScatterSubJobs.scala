@@ -86,10 +86,6 @@ case class ChildExecDesc(execName: String,
                          outputs: Map[String, JsValue],
                          exec: DxExecution)
 
-object CollectSubJobs {
-  val SeqNumber = "seq_number"
-}
-
 case class CollectSubJobs(jobInputOutput: JobInputOutput,
                           inputsRaw: JsValue,
                           instanceTypeDB: InstanceTypeDB,
@@ -138,12 +134,15 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
         throw new Exception(s"field id not found in ${value.prettyPrint}")
     }
     logger.trace(s"parsing desc ${desc} for ${exec}")
-    val (execName, properties, output) =
-      desc.getFields("executableName", "properties", "output") match {
-        case Seq(JsString(execName), properties, JsObject(output)) =>
-          (execName, DxObject.parseJsonProperties(properties), output)
+    val (execName, details, output) =
+      desc.getFields("executableName", "details", "output") match {
+        case Seq(JsString(execName), JsObject(details), JsObject(output)) =>
+          (execName, details, output)
       }
-    val seqNum = properties(CollectSubJobs.SeqNumber).toInt
+    val seqNum = details.get(CollectSubJobs.SeqNumber) match {
+      case Some(JsNumber(i)) => i.toIntExact
+      case other             => throw new Exception(s"Invalid seqNumber ${other}")
+    }
     Some(ChildExecDesc(execName, seqNum, output, exec))
   }
 
@@ -167,7 +166,7 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
     }
     val describeField: Map[String, JsValue] = Map(
         "describe" -> DxObject
-          .requestFields(Set(Field.Output, Field.ExecutableName, Field.Properties))
+          .requestFields(Set(Field.Output, Field.ExecutableName, Field.Details))
     )
     val response = dxApi.findExecutions(parentField ++ cursorField ++ limitField ++ describeField)
     val results: Vector[ChildExecDesc] =

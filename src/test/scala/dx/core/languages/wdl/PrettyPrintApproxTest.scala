@@ -20,7 +20,7 @@ class PrettyPrintApproxTest extends AnyFlatSpec with Matchers {
       }
     try {
       val (wf, _, _, _) = ParseSource(dxApi).parseWdlWorkflow(wfSourceCode)
-      val blocks = Block.splitWorkflow(wf)
+      val blocks = WdlBlock.splitWorkflow(wf)
 
       PrettyPrintApprox.graphInputs(wf.inputs)
       PrettyPrintApprox.graphOutputs(wf.outputs)

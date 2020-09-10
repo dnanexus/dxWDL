@@ -24,7 +24,7 @@ trait TaskSupport {
     * dxda and/or dxfuse manifests.
     * @return
     */
-  def localizeInputFiles: (
+  def localizeInputFiles(streamAllFiles: Boolean): (
       Map[String, JsValue],
       Map[FileSource, Path],
       Option[DxdaManifest],
@@ -83,15 +83,15 @@ object TaskExecutor {
 }
 
 case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLimit: Int = 10000) {
-  private val logger = jobMeta.logger
   // Setup the standard paths used for applets. These are used at runtime, not at compile time.
   // On the cloud instance running the job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private val workerPaths = DxWorkerPaths(streamAllFiles, logger)
+  private val workerPaths = DxWorkerPaths.default
   // TODO: swap this out for a parallelized version
   private val fileUploader = SerialFileUploader()
   private val taskSupport: TaskSupport =
     TaskExecutor.createTaskSupport(jobMeta, workerPaths, fileUploader)
+  private val logger = jobMeta.logger
 
   protected def trace(msg: String, minLevel: Int = TraceLevel.Verbose): Unit = {
     logger.traceLimited(msg, traceLengthLimit, minLevel)
@@ -165,7 +165,7 @@ case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLi
       trace(s"Task source code:\n${jobMeta.sourceCode}", traceLengthLimit)
     }
     val (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest) =
-      taskSupport.localizeInputFiles
+      taskSupport.localizeInputFiles(streamAllFiles)
     // build a manifest for dxda, if there are files to download
     dxdaManifest.foreach {
       case DxdaManifest(manifestJs: JsObject) if manifestJs.fields.nonEmpty =>

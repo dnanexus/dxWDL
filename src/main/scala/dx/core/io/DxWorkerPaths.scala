@@ -2,7 +2,7 @@ package dx.core.io
 
 import java.nio.file.{Path, Paths}
 
-import wdlTools.util.{FileUtils, Logger}
+import wdlTools.util.FileUtils
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -51,10 +51,7 @@ case class DxWorkerPaths(homeDir: Path,
                          dxfuseManifest: Path,
                          dxfuseMountpoint: Path,
                          // file for storing the state between prolog and epilog of the task runner
-                         runnerTaskEnv: Path,
-                         // should we stream all files?
-                         streamAllFiles: Boolean,
-                         logger: Logger) {
+                         runnerTaskEnv: Path) {
 
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
@@ -70,13 +67,13 @@ object DxWorkerPaths {
   // it in code paths that run at compile time.
   val HomeDir: Path = Paths.get("/home/dnanexus")
 
-  def apply(streamAllFiles: Boolean, logger: Logger = Logger.get): DxWorkerPaths = {
-    val metaDir: Path = HomeDir.resolve("meta")
-    val inputFilesDir: Path = HomeDir.resolve("inputs")
-    val outputFilesDir: Path = HomeDir.resolve("outputs")
-    val tmpDir: Path = HomeDir.resolve("job_scratch_space")
-    val instanceTypeDB = HomeDir.resolve("instance_type_db.json")
-    val wdlSourceCodeEncoded = HomeDir.resolve("source.wdl.uu64")
+  def apply(homeDir: Path = HomeDir): DxWorkerPaths = {
+    val metaDir: Path = homeDir.resolve("meta")
+    val inputFilesDir: Path = homeDir.resolve("inputs")
+    val outputFilesDir: Path = homeDir.resolve("outputs")
+    val tmpDir: Path = homeDir.resolve("job_scratch_space")
+    val instanceTypeDB = homeDir.resolve("instance_type_db.json")
+    val wdlSourceCodeEncoded = homeDir.resolve("source.wdl.uu64")
     val stdout = metaDir.resolve("stdout")
     val stderr = metaDir.resolve("stderr")
     val script = metaDir.resolve("script")
@@ -84,12 +81,12 @@ object DxWorkerPaths {
     val setupStreams = metaDir.resolve("setup_streams")
     val dxdaManifest = metaDir.resolve("dxdaManifest.json")
     val dxfuseManifest = metaDir.resolve("dxfuseManifest.json")
-    val dxfuseMountpoint = HomeDir.resolve("mnt")
+    val dxfuseMountpoint = homeDir.resolve("mnt")
     val rcPath = metaDir.resolve("rc")
     val dockerCid = metaDir.resolve("dockerCid")
     val runnerTaskEnv = metaDir.resolve("taskEnv.json")
     DxWorkerPaths(
-        HomeDir,
+        homeDir,
         metaDir,
         inputFilesDir,
         outputFilesDir,
@@ -106,9 +103,9 @@ object DxWorkerPaths {
         dxdaManifest,
         dxfuseManifest,
         dxfuseMountpoint,
-        runnerTaskEnv,
-        streamAllFiles,
-        logger
+        runnerTaskEnv
     )
   }
+
+  lazy val default: DxWorkerPaths = apply()
 }

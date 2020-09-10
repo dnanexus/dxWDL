@@ -8,9 +8,9 @@ object Field extends Enum {
   type Field = Value
   val Access, Analysis, App, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories,
       Created, Description, Details, DeveloperNotes, Executable, ExecutableName, Folder, Id,
-      IgnoreReuse, Inputs, InputSpec, InstanceType, Modified, Name, Output, Outputs, OutputSpec,
-      ParentJob, Parts, Project, Properties, Region, RunSpec, Size, Stages, Summary, Tags, Title,
-      Types, Version = Value
+      IgnoreReuse, Input, Inputs, InputSpec, InstanceType, Modified, Name, Output, Outputs,
+      OutputSpec, ParentJob, Parts, Project, Properties, Region, RunSpec, Size, Stages, Summary,
+      Tags, Title, Types, Version = Value
 }
 
 trait DxObjectDescribe {
@@ -71,6 +71,7 @@ object DxObject {
       case Field.Folder                 => "folder"
       case Field.Id                     => "id"
       case Field.IgnoreReuse            => "ignoreReuse"
+      case Field.Input                  => "input"
       case Field.Inputs                 => "inputs"
       case Field.InputSpec              => "inputSpec"
       case Field.InstanceType           => "instanceType"
