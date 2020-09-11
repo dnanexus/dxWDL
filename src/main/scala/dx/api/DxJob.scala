@@ -85,6 +85,7 @@ object DxJob {
     val instanceType = descJs.fields.get("instanceType") match {
       case Some(JsString(instanceType)) => Some(instanceType)
       case None                         => None
+      case other                        => throw new Exception(s"should be an instance type ${other}")
     }
     desc.copy(details = details,
               properties = props,

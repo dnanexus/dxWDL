@@ -3,7 +3,6 @@ package dx.core.ir
 import dx.core.ir.Type.{TDirectory, _}
 import dx.core.ir.Value._
 import spray.json._
-import wdlTools.types.WdlTypes.T_Optional
 import wdlTools.util.JsUtils
 
 object ValueSerde extends DefaultJsonProtocol {
@@ -45,6 +44,12 @@ object ValueSerde extends DefaultJsonProtocol {
       }
     }
     inner(value)
+  }
+
+  def serializeMap(values: Map[String, Value]): Map[String, JsValue] = {
+    values.map {
+      case (name, value) => name -> serialize(value)
+    }
   }
 
   /**
@@ -151,8 +156,8 @@ object ValueSerde extends DefaultJsonProtocol {
             )
           }
           val missingNonOptional = keys1.diff(keys2).map(key => key -> memberTypes(key)).filterNot {
-            case (_, T_Optional(_)) => false
-            case _                  => true
+            case (_, TOptional(_)) => false
+            case _                 => true
           }
           if (missingNonOptional.nonEmpty) {
             throw new Exception(
@@ -178,6 +183,8 @@ object ValueSerde extends DefaultJsonProtocol {
   }
 
   // support automatic conversion to/from JsValue
-  implicit val valueFormat: RootJsonFormat[Value] = jsonFormat1(deserialize(_))
-  implicit val valueMapFormat: RootJsonFormat[Map[String, Value]] = jsonFormat1(deserializeMap)
+  implicit val valueFormat: RootJsonFormat[Value] = new RootJsonFormat[Value] {
+    override def read(jsv: JsValue): Value = deserialize(jsv)
+    override def write(value: Value): JsValue = serialize(value)
+  }
 }

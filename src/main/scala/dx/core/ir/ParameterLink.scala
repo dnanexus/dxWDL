@@ -133,10 +133,9 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
 
   // create input/output fields that bind the variable name [bindName] to
   // this WdlVar
-  def createFields(link: ParameterLink,
-                   bindName: String,
-                   encodeDots: Boolean = true): Vector[(String, JsValue)] = {
-
+  def createFieldsFromLink(link: ParameterLink,
+                           bindName: String,
+                           encodeDots: Boolean = true): Vector[(String, JsValue)] = {
     val encodedName =
       if (encodeDots) {
         Parameter.encodeDots(bindName)
@@ -225,11 +224,11 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
                    t: Type,
                    v: Value,
                    encodeDots: Boolean = true): Vector[(String, JsValue)] = {
-    createFields(createLink(t, v), bindName, encodeDots)
+    createFieldsFromLink(createLink(t, v), bindName, encodeDots)
   }
 
-  def createFields(values: Map[String, (Type, Value)],
-                   encodeDots: Boolean = true): Map[String, JsValue] = {
+  def createFieldsFromMap(values: Map[String, (Type, Value)],
+                          encodeDots: Boolean = true): Map[String, JsValue] = {
     values.flatMap {
       case (name, (t, v)) => createFields(name, t, v, encodeDots)
     }

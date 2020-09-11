@@ -128,7 +128,7 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
                           nameDetail: Option[String] = None,
                           instanceType: Option[String] = None): (DxExecution, String) = {
     val jobName: String = nameDetail.map(hint => s"${name} ${hint}").getOrElse(name)
-    val callInputsJs = JsObject(jobMeta.outputSerializer.createFields(inputs))
+    val callInputsJs = JsObject(jobMeta.outputSerializer.createFieldsFromMap(inputs))
     logger.traceLimited(s"execDNAx ${callInputsJs.prettyPrint}", minLevel = TraceLevel.VVerbose)
 
     // Last check that we have all the compulsory arguments.

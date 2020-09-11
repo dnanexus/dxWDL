@@ -7,7 +7,7 @@ import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{Parsers, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{Bindings, FileSource, FileSourceResolver, Logger, StringFileSource}
+import wdlTools.util.{DefaultBindings, FileSource, FileSourceResolver, Logger, StringFileSource}
 
 case class VersionSupport(version: WdlVersion,
                           fileResolver: FileSourceResolver = FileSourceResolver.get,
@@ -31,15 +31,15 @@ case class VersionSupport(version: WdlVersion,
     }
   }
 
-  def parse(sourceCode: FileSource): (TAT.Document, Bindings[WdlTypes.T_Struct]) = {
+  def parse(sourceCode: FileSource): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
     Utils.parseSource(parser, sourceCode, fileResolver, regime, logger)
   }
 
-  def parse(src: String): (TAT.Document, Bindings[WdlTypes.T_Struct]) = {
+  def parse(src: String): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
     parse(StringFileSource(src))
   }
 
-  def parse(path: Path): (TAT.Document, Bindings[WdlTypes.T_Struct]) = {
+  def parse(path: Path): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
     parse(fileResolver.fromPath(path))
   }
 
@@ -61,7 +61,7 @@ object VersionSupport {
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       dxApi: DxApi = DxApi.get,
       logger: Logger = Logger.get
-  ): (TAT.Document, Bindings[WdlTypes.T_Struct], VersionSupport) = {
+  ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct], VersionSupport) = {
     val sourceCode = fileResolver.fromPath(source)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)

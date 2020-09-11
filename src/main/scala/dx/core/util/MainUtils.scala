@@ -4,6 +4,8 @@ import java.nio.file.{Files, Path, Paths}
 
 import wdlTools.util.{Logger, TraceLevel}
 
+import scala.reflect.ClassTag
+
 object MainUtils {
   case class OptionParseException(message: String) extends Exception(message)
 
@@ -34,7 +36,7 @@ object MainUtils {
       }
     }
 
-    def getValue[T](name: String): Option[T] = {
+    def getValue[T: ClassTag](name: String): Option[T] = {
       options.get(name).map {
         case SingleValueOption(value: T) => value
         case other =>
@@ -42,20 +44,21 @@ object MainUtils {
       }
     }
 
-    def getRequiredValue[T](name: String): T = {
+    def getRequiredValue[T: ClassTag](name: String): T = {
       getValue[T](name).getOrElse(
           throw OptionParseException(s"Missing required option ${name}")
       )
     }
 
-    def getValueOrElse[T](name: String, default: T): T = {
+    def getValueOrElse[T: ClassTag](name: String, default: T): T = {
       getValue[T](name).getOrElse(default)
     }
 
-    def getList[T](name: String): Vector[T] = {
+    // TODO: is there a way to do this without resorting to asInstanceOf?
+    def getList[T: ClassTag](name: String): Vector[T] = {
       options.get(name) match {
-        case Some(ListOption(value: Vector[T])) => value
-        case None                               => Vector.empty[T]
+        case Some(list: ListOption[_]) => list.value.asInstanceOf[Vector[T]]
+        case None                      => Vector.empty[T]
         case other =>
           throw OptionParseException(s"Unexpected value ${other} to option ${name}")
       }

@@ -37,6 +37,8 @@ object TypeSerde {
             JsObject(Map("name" -> name, "optional" -> JsBoolean(true)))
           case JsObject(fields) =>
             JsObject(fields + ("optional" -> JsBoolean(true)))
+          case other =>
+            throw new Exception(s"invalid inner type value ${other}")
         }
     }
   }
@@ -63,13 +65,18 @@ object TypeSerde {
               val keyType = inner(fields("keyType"))
               val valueType = inner(fields("valueType"))
               TMap(keyType, valueType)
-            case JsString(name) => resolveType(name)
+            case JsString(name) =>
+              resolveType(name)
+            case _ =>
+              throw new Exception(s"invalid type field value ${innerValue}")
           }
           if (fields.get("optional").exists(JsUtils.getBoolean(_))) {
             TOptional(t)
           } else {
             t
           }
+        case _ =>
+          throw new Exception(s"unexpected type value ${innerValue}")
       }
     }
     inner(jsValue)

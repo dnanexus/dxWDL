@@ -150,6 +150,7 @@ case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLi
     }
     val fileSourceToPath = filesJs.map {
       case (uri, JsString(path)) => jobMeta.fileResolver.resolve(uri) -> Paths.get(path)
+      case other                 => throw new Exception(s"unexpected path ${other}")
     }
     (inputJs, fileSourceToPath)
   }

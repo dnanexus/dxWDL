@@ -1,7 +1,6 @@
 package dx.translator.wdl
 
 import dx.api.ConstraintOper
-import dx.compiler.ir.ParameterAttributes
 import dx.core.ir.Value._
 import dx.core.ir.{CallableAttribute, ParameterAttribute, Value}
 import dx.core.languages.wdl
@@ -268,16 +267,16 @@ object ParameterMetaTranslator {
       case (T_Boolean, Some(V_Boolean(b))) => ParameterAttributes.SimpleSuggestion(VBoolean(b))
       case (T_File, file) =>
         val s = ParameterAttributes.FileSuggestion(
-            file.map {
+            file.collect {
               case V_File(path) => path
             },
-            name.map {
+            name.collect {
               case V_String(str) => str
             },
-            project.map {
+            project.collect {
               case V_String(str) => str
             },
-            path.map {
+            path.collect {
               case V_String(str) => str
             }
         )

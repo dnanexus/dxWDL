@@ -6,7 +6,6 @@ import wdlTools.eval.{
   Eval,
   EvalException,
   Hints,
-  RuntimeAttributes,
   VBindings,
   WdlValueBindings,
   Runtime => WdlRuntime,
@@ -43,7 +42,7 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
   private lazy val runtimeAttrs: WdlRuntimeAttributes[B] = {
     val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator, ctx))
     val hints = hintsSection.map(h => Hints.create(Some(h)))
-    RuntimeAttributes[B](runtime, hints, defaultAttrs)
+    WdlRuntimeAttributes[B](runtime, hints, defaultAttrs)
   }
 
   def get(id: String): Option[V] = runtimeAttrs.get(id)
@@ -104,6 +103,8 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
     val gpu = runtimeAttrs.get(WdlRuntime.Keys.Gpu, Vector(T_Boolean)) match {
       case None               => None
       case Some(V_Boolean(b)) => Some(b)
+      case other =>
+        throw new Exception(s"unexpected ${WdlRuntime.Keys.Gpu} value ${other}")
     }
     InstanceTypeRequest(None, memoryMB, diskGB, diskType, cpu, gpu)
   }

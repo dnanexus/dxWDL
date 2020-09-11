@@ -45,7 +45,7 @@ abstract class InputFile(fields: Map[String, JsValue],
                          parameterLinkSerializer: ParameterLinkSerializer,
                          logger: Logger) {
   private val fieldsExactlyOnce = ExactlyOnce("input", fields, logger)
-  private var irFields: Map[String, Value] = Map.empty
+  private var irFields: Map[String, JsValue] = Map.empty
 
   protected def translateInput(parameter: Parameter, jsv: JsValue): Value
 
@@ -71,9 +71,7 @@ abstract class InputFile(fields: Map[String, JsValue],
 
   def serialize: JsObject = {
     fieldsExactlyOnce.checkAllUsed()
-    JsObject(irFields.map {
-      case (name, value) => name -> ValueSerde.serialize(value)
-    })
+    JsObject(irFields)
   }
 }
 
@@ -84,49 +82,51 @@ abstract class DocumentTranslator(fileResolver: FileSourceResolver = FileSourceR
                                   dxApi: DxApi = DxApi.get) {
 
   private def extractDxFiles(t: Type, jsv: JsValue): Vector[JsValue] = {
-    case (TOptional(_), JsNull)   => Vector.empty
-    case (TOptional(inner), _)    => extractDxFiles(inner, jsv)
-    case (TFile, jsv)             => Vector(jsv)
-    case _ if Type.isPrimitive(t) => Vector.empty
+    (t, jsv) match {
+      case (TOptional(_), JsNull)   => Vector.empty
+      case (TOptional(inner), _)    => extractDxFiles(inner, jsv)
+      case (TFile, jsv)             => Vector(jsv)
+      case _ if Type.isPrimitive(t) => Vector.empty
 
-    case (TArray(elementType, _), JsArray(array)) =>
-      array.map(element => extractDxFiles(elementType, element))
+      case (TArray(elementType, _), JsArray(array)) =>
+        array.flatMap(element => extractDxFiles(elementType, element))
 
-    // Maps may be serialized as an object with a keys array and a values array.
-    case (TMap(keyType, valueType), JsObject(fields)) if ValueSerde.isMapObject(jsv) =>
-      val keys = fields("keys") match {
-        case JsArray(keys) => keys.map(k => extractDxFiles(keyType, k))
-        case other         => throw new Exception(s"invalid map keys ${other}")
-      }
-      val values = fields("values") match {
-        case JsArray(keys) => keys.map(v => extractDxFiles(valueType, v))
-        case other         => throw new Exception(s"invalid map keys ${other}")
-      }
-      keys ++ values
+      // Maps may be serialized as an object with a keys array and a values array.
+      case (TMap(keyType, valueType), JsObject(fields)) if ValueSerde.isMapObject(jsv) =>
+        val keys = fields("keys") match {
+          case JsArray(keys) => keys.flatMap(k => extractDxFiles(keyType, k))
+          case other         => throw new Exception(s"invalid map keys ${other}")
+        }
+        val values = fields("values") match {
+          case JsArray(keys) => keys.flatMap(v => extractDxFiles(valueType, v))
+          case other         => throw new Exception(s"invalid map keys ${other}")
+        }
+        keys ++ values
 
-    // Maps with String keys may also be serialized as an object
-    case (TMap(keyType, valueType), JsObject(fields)) =>
-      val keys = fields.keys.map(k => extractDxFiles(keyType, JsString(k)))
-      val values = fields.values.map(v => extractDxFiles(valueType, v))
-      keys ++ values
+      // Maps with String keys may also be serialized as an object
+      case (TMap(keyType, valueType), JsObject(fields)) =>
+        val keys = fields.keys.flatMap(k => extractDxFiles(keyType, JsString(k))).toVector
+        val values = fields.values.flatMap(v => extractDxFiles(valueType, v)).toVector
+        keys ++ values
 
-    case (TSchema(name, members), JsObject(fields)) =>
-      members.map {
-        case (memberName, memberType) =>
-          fields.get(memberName) match {
-            case Some(jsv)                           => extractDxFiles(memberType, jsv)
-            case None if Type.isOptional(memberType) => Vector.empty
-            case _ =>
-              throw new Exception(s"missing value for struct ${name} member ${memberName}")
-          }
-      }
+      case (TSchema(name, members), JsObject(fields)) =>
+        members.flatMap {
+          case (memberName, memberType) =>
+            fields.get(memberName) match {
+              case Some(jsv)                           => extractDxFiles(memberType, jsv)
+              case None if Type.isOptional(memberType) => Vector.empty
+              case _ =>
+                throw new Exception(s"missing value for struct ${name} member ${memberName}")
+            }
+        }.toVector
 
-    case (THash, JsObject(_)) =>
-      // anonymous objects will never result in file-typed members, so just skip these
-      Vector.empty
+      case (THash, JsObject(_)) =>
+        // anonymous objects will never result in file-typed members, so just skip these
+        Vector.empty
 
-    case _ =>
-      throw new Exception(s"value ${jsv} cannot be deserialized to ${t}")
+      case _ =>
+        throw new Exception(s"value ${jsv} cannot be deserialized to ${t}")
+    }
   }
 
   protected def fileResolverWithCachedFiles(

@@ -56,7 +56,7 @@ object Utils {
     *         *not* namespaced) and all aliases defined in import statements of all documents
     *         (which *are* namespaced).
     */
-  def parseSource(
+  def parseSourceFile(
       path: Path,
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
@@ -68,7 +68,7 @@ object Utils {
     parseSource(parser, sourceCode, fileResolver, regime, logger)
   }
 
-  def parseSource(
+  def parseSourceString(
       sourceCodeStr: String,
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
@@ -191,7 +191,11 @@ object Utils {
             JsObject(Map("name" -> name, "optional" -> JsBoolean(true)))
           case JsObject(fields) =>
             JsObject(fields + ("optional" -> JsBoolean(true)))
+          case other =>
+            throw new Exception(s"unhandled inner type ${other}")
         }
+      case _ =>
+        throw new Exception(s"Unhandled type ${t}")
     }
   }
 
@@ -244,13 +248,18 @@ object Utils {
               val lType = inner(fields("leftType"))
               val rType = inner(fields("rightType"))
               T_Pair(lType, rType)
-            case JsString(name) => resolveType(name)
+            case JsString(name) =>
+              resolveType(name)
+            case _ =>
+              throw new Exception(s"unhandled type value ${innerValue}")
           }
           if (fields.get("optional").exists(JsUtils.getBoolean(_))) {
             T_Optional(t)
           } else {
             t
           }
+        case other =>
+          throw new Exception(s"unexpected type value ${other}")
       }
     }
     inner(jsValue)

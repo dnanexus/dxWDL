@@ -172,6 +172,8 @@ case class WdlTaskSupport(task: TAT.Task,
         val t = WdlUtils.deserializeType(fields("type"), typeAliases.bindings)
         val v = WdlValueSerde.deserialize(fields("value"))
         name -> (t, v)
+      case other =>
+        throw new Exception(s"unexpected value ${other}")
     }
   }
 
@@ -244,7 +246,7 @@ case class WdlTaskSupport(task: TAT.Task,
                                     existingPaths = localFilesToPath.values.toSet)
     val downloadFileSourceToPath: Map[FileSource, Path] =
       filesToDownload.map(fs => fs -> downloadLocalizer.getLocalPath(fs)).toMap
-    val dxdaManifest = DxdaManifestBuilder(dxApi).apply(downloadFileSourceToPath.map {
+    val dxdaManifest = DxdaManifestBuilder(dxApi).apply(downloadFileSourceToPath.collect {
       case (dxFs: DxFileSource, localPath) =>
         dxFs.dxFile.id -> (dxFs.dxFile, localPath)
     })
@@ -256,7 +258,7 @@ case class WdlTaskSupport(task: TAT.Task,
     val streamFileSourceToPath: Map[FileSource, Path] =
       filesToStream.map(fs => fs -> streamingLocalizer.getLocalPath(fs)).toMap
     val dxfuseManifest =
-      DxfuseManifestBuilder(dxApi).apply(streamFileSourceToPath.map {
+      DxfuseManifestBuilder(dxApi).apply(streamFileSourceToPath.collect {
         case (dxFs: DxFileSource, localPath) => dxFs.dxFile -> localPath
       }, dxFileDescCache, workerPaths)
 
@@ -454,7 +456,7 @@ case class WdlTaskSupportFactory() extends TaskSupportFactory {
                       fileUploader: FileUploader): Option[WdlTaskSupport] = {
     val (doc, typeAliases) =
       try {
-        WdlUtils.parseSource(jobMeta.sourceCode, jobMeta.fileResolver)
+        WdlUtils.parseSourceString(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None

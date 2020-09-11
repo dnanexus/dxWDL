@@ -38,7 +38,7 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
   }
 
   // create a wdl-value of a specific type.
-  private[compiler] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
+  private[wdl] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
     wdlType match {
       case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, SourceLocation.empty)
       case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, SourceLocation.empty)
@@ -85,7 +85,7 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
     }
   }
 
-  private[compiler] def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
+  private[wdl] def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
     def seqToType(vec: Iterable[TAT.Expr]): WdlTypes.T = {
       vec.headOption.map(_.wdlType).getOrElse(WdlTypes.T_Any)
     }

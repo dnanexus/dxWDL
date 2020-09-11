@@ -362,7 +362,9 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
                   |""".stripMargin.replaceAll("\n", "")
           )
         }
-        supported.view.mapValues(ValueSerde.deserialize).toMap
+        supported.view.mapValues(ValueSerde.deserialize(_)).toMap
+      case _ =>
+        throw new Exception(s"unexpected runtimeAttrs value ${jsv}")
     }
   }
 

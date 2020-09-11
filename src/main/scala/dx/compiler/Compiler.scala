@@ -331,6 +331,8 @@ case class Compiler(extras: Option[Extras],
           val dxApplet = dxApi.applet(id)
           executableDir.insert(applet.name, dxApplet, digest)
           dxApplet
+        case other =>
+          throw new Exception(s"expected applet ${other}")
       }
       (dxApplet, dependencies.values.toVector)
     }

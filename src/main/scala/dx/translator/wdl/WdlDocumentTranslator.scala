@@ -420,7 +420,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
                       fileResolver: FileSourceResolver): Option[WdlDocumentTranslator] = {
     val (doc, typeAliases) =
       try {
-        WdlUtils.parseSource(sourceFile, fileResolver, regime, logger)
+        WdlUtils.parseSourceFile(sourceFile, fileResolver, regime, logger)
       } catch {
         case _: Throwable =>
           return None

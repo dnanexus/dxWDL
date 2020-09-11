@@ -48,7 +48,7 @@ object Language extends Enum {
       case (Some("draft2"), Some("wdl"))                  => Language.WdlVDraft2
       case (Some("wdl draft3" | "wdl 10"), _)             => Language.WdlV1_0
       case (Some("draft3" | "10"), Some("wdl"))           => Language.WdlV1_0
-      case (Some("wdl development") | "wdl 20", _)        => Language.WdlV2_0
+      case (Some("wdl development" | "wdl 20"), _)        => Language.WdlV2_0
       case (Some("development" | "20"), Some("wdl"))      => Language.WdlV2_0
       case (Some(v), _) if v.startsWith("cwl v120")       => Language.CwlV1_2
       case (Some(v), Some("cwl")) if v.startsWith("v120") => Language.CwlV1_2

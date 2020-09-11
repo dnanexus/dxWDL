@@ -53,6 +53,7 @@ class ExecutableCompiler(extras: Option[Extras],
       case VFile(f)    => dxApi.resolveDxUriFile(f).asJson
       // TODO: case VDirectory(d) =>
       case VArray(array) => JsArray(array.map(defaultValueToNative))
+      case _             => throw new Exception(s"unhandled value ${value}")
     }
   }
 
@@ -82,7 +83,7 @@ class ExecutableCompiler(extras: Option[Extras],
             }
         }
       case ParameterAttributes.ChoicesAttribute(choices) =>
-        Some(DxIOSpec.Choices -> JsArray(choices.map {
+        Some(DxIOSpec.Choices -> JsArray(choices.collect {
           case ParameterAttributes.SimpleChoice(VString(value))  => JsString(value)
           case ParameterAttributes.SimpleChoice(VInt(value))     => JsNumber(value)
           case ParameterAttributes.SimpleChoice(VFloat(value))   => JsNumber(value)
@@ -99,7 +100,7 @@ class ExecutableCompiler(extras: Option[Extras],
           // TODO: ParameterAttributes.DirectoryChoice
         }))
       case ParameterAttributes.SuggestionsAttribute(suggestions) =>
-        Some(DxIOSpec.Suggestions -> JsArray(suggestions.map {
+        Some(DxIOSpec.Suggestions -> JsArray(suggestions.collect {
           case ParameterAttributes.SimpleSuggestion(VString(value))  => JsString(value)
           case ParameterAttributes.SimpleSuggestion(VInt(value))     => JsNumber(value)
           case ParameterAttributes.SimpleSuggestion(VFloat(value))   => JsNumber(value)

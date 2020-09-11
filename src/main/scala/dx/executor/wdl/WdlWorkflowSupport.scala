@@ -339,6 +339,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       val cond = block.target match {
         case TAT.Conditional(expr, _, _) =>
           evaluateExpression(expr, T_Boolean, env)
+        case _ =>
+          throw new Exception(s"invalid conditional block ${block}")
       }
       val links = (cond, block.kind) match {
         case (V_Boolean(true), BlockKind.ConditionalOneCall) =>
@@ -666,6 +668,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
               throw new Exception(s"scatter type ${expr.wdlType} is not an array")
           }
           (identifier, itemType, collection, next)
+        case _ =>
+          throw new RuntimeException(s"invalid scatter block ${block}")
       }
       val childJobs: Vector[DxExecution] = block.kind match {
         case BlockKind.ScatterOneCall =>
@@ -904,7 +908,7 @@ case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
   override def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WdlWorkflowSupport] = {
     val (doc, typeAliases) =
       try {
-        WdlUtils.parseSource(jobMeta.sourceCode, jobMeta.fileResolver)
+        WdlUtils.parseSourceString(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None

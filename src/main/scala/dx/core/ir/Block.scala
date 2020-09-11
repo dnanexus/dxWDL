@@ -1,6 +1,5 @@
 package dx.core.ir
 
-import dx.core.ir.BlockKind.BlockKind
 import wdlTools.util.Enum
 
 /**
@@ -26,7 +25,7 @@ object BlockKind extends Enum {
 }
 
 trait Block {
-  def kind: BlockKind
+  def kind: BlockKind.BlockKind
 
   /**
     * Create a human readable name for a block of statements

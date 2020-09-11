@@ -30,7 +30,7 @@ publishMavenStyle := true
 val root = project.in(file("."))
 
 // reduce the maximum number of errors shown by the Scala compiler
-maxErrors := 7
+maxErrors := 20
 
 //coverageEnabled := true
 

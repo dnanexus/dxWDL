@@ -28,6 +28,7 @@ package dx.api
 
 import dx.api.DiskType.DiskType
 import wdlTools.util.{Enum, JsUtils}
+import wdlTools.util.Enum.enumFormat
 import spray.json._
 
 // Instance Type on the platform. For example:
@@ -145,7 +146,7 @@ case class DxInstanceType(name: String,
 
 // support automatic conversion to/from JsValue
 object DxInstanceType extends DefaultJsonProtocol {
-  implicit val diskType: RootJsonFormat[DiskType] = jsonFormat1(DiskType.withNameIgnoreCase)
+  implicit val diskTypeFormat: RootJsonFormat[DiskType.DiskType] = enumFormat(DiskType)
   implicit val dxInstanceTypeFormat: RootJsonFormat[DxInstanceType] = jsonFormat8(
       DxInstanceType.apply
   )

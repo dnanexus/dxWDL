@@ -81,8 +81,13 @@ case class IrToWdlValueBindings(
 
   private def resolve(name: String): Unit = {
     if (!cache.contains(name) && values.contains(name)) {
-      cache += (name -> WdlUtils.fromIRValue(values(name)))
+      cache += (name -> WdlUtils.fromIRValue(values(name), Some(name)))
     }
+  }
+
+  override def apply(name: String): V = {
+    resolve(name)
+    cache(name)
   }
 
   override def get(name: String): Option[V] = {
@@ -118,6 +123,8 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
           Some(WdlUtils.toIRValue(value))
         case (Some(value), Some(t)) =>
           Some(WdlUtils.toIRValue(value, t))
+        case other =>
+          throw new Exception(s"invalid value ${other}")
       }
     } catch {
       case _: EvalException =>
@@ -177,6 +184,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
             case _ =>
               throw new Exception("Not enough information to determine native app(let)")
           }
+        case other => throw new Exception(s"invalid app value ${other}")
       }
     }
     (meta.get(RuntimeTranslator.ExecutableType), meta.get(RuntimeTranslator.ExecutableId)) match {
@@ -254,12 +262,14 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
             developer = fields.get("developer").map(unwrapBoolean),
             projectCreation = fields.get("projectCreation").map(unwrapBoolean)
         )
+      case other => throw new Exception(s"invalid access value ${other}")
     }
   }
 
   def translateIgnoreReuse: Option[IgnoreReuseRequirement] = {
     runtime.getDxHint(RuntimeTranslator.IgnoreReuse).map {
       case V_Boolean(ignoreReuse) => IgnoreReuseRequirement(ignoreReuse)
+      case other                  => throw new Exception(s"invalid ignoreReuse value ${other}")
     }
   }
 
@@ -283,6 +293,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
               }
               .getOrElse(Map.empty)
         )
+      case other => throw new Exception(s"invalid restart value ${other}")
     }
   }
 
@@ -312,6 +323,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
             fields.get("hours").map(unwrapInt),
             fields.get("minutes").map(unwrapInt)
         )
+      case other => throw new Exception(s"invalid timeout value ${other}")
     }
   }
 
@@ -321,6 +333,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
       .orElse(runtime.getDxHint(RuntimeTranslator.Stream))
       .map {
         case V_Boolean(b) => StreamingRequirement(b)
+        case other        => throw new Exception(s"invalid stream value ${other}")
       }
   }
 

@@ -22,9 +22,9 @@ import dx.core.ir.{
   ParameterLinkExec,
   ParameterLinkSerializer,
   Type,
-  Value
+  Value,
+  ValueSerde
 }
-import dx.core.ir.ValueSerde.valueMapFormat
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.CompressionUtils
@@ -97,7 +97,7 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
   def serializeOutputLinks(outputs: Map[String, ParameterLink]): Map[String, JsValue] = {
     outputs
       .map {
-        case (name, link) => outputSerializer.createFields(link, name)
+        case (name, link) => outputSerializer.createFieldsFromLink(link, name)
       }
       .flatten
       .toMap
@@ -121,7 +121,7 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
                            irOutputFields: Map[String, Type]): Map[String, JsValue] = {
     createOutputLinks(execution, irOutputFields)
       .flatMap {
-        case (name, link) => outputSerializer.createFields(link, name)
+        case (name, link) => outputSerializer.createFieldsFromLink(link, name)
       }
       .filter {
         case (_, null | JsNull) => false
@@ -164,6 +164,8 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
       logger.warning("This applet ws built with an old version of dxWDL - please rebuild")
       // we will attempt to detect the language/version later
       None
+    case other =>
+      throw new Exception(s"unexpected ${Native.Language} value ${other}")
   }
 
   lazy val sourceCode: String = {
@@ -174,6 +176,8 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
         val JsString(s) =
           executableDetails.getOrElse("wdlSourceCode", executableDetails("womSourceCode"))
         s
+      case other =>
+        throw new Exception(s"unexpected ${Native.SourceCode} value ${other}")
     }
     CompressionUtils.base64DecodeAndGunzip(sourceCodeEncoded)
   }
@@ -182,12 +186,16 @@ case class JobMeta(homeDir: Path = DxWorkerPaths.HomeDir,
     case JsString(s) =>
       val js = CompressionUtils.base64DecodeAndGunzip(s)
       js.parseJson.convertTo[InstanceTypeDB]
+    case other =>
+      throw new Exception(s"unexpected ${Native.InstanceTypeDb} value ${other}")
   }
 
   lazy val defaultRuntimeAttrs: Map[String, Value] =
-    executableDetails.get("runtimeAttrs") match {
-      case Some(x)             => x.convertTo[Map[String, Value]]
-      case Some(JsNull) | None => Map.empty
+    executableDetails.get(Native.RuntimeAttributes) match {
+      case Some(JsObject(fields)) => ValueSerde.deserializeMap(fields)
+      case Some(JsNull) | None    => Map.empty
+      case other =>
+        throw new Exception(s"unexpected ${Native.RuntimeAttributes} value ${other}")
     }
 
   lazy val delayWorkspaceDestruction: Option[Boolean] =

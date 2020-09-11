@@ -13,7 +13,6 @@ import dx.core.languages.wdl.{
   OverridableBlockInputWithDynamicDefault,
   OverridableBlockInputWithStaticDefault,
   RequiredBlockInput,
-  Utils,
   WdlBlock,
   Utils => WdlUtils
 }
@@ -175,7 +174,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
     private type LinkedVar = (Parameter, StageInput)
 
-    private case class CallEnv(env: Map[String, LinkedVar]) {
+    case class CallEnv(env: Map[String, LinkedVar]) {
       def add(key: String, lvar: LinkedVar): CallEnv = {
         CallEnv(env + (key -> lvar))
       }
@@ -472,7 +471,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     private def splitWorkflowElements(
         statements: Vector[TAT.WorkflowElement]
     ): (Vector[BlockInput], Vector[WdlBlock], Vector[TAT.OutputDefinition]) = {
-      val (inputs, outputs) = Utils.getInputOutputClosure(statements)
+      val (inputs, outputs) = WdlUtils.getInputOutputClosure(statements)
       val subBlocks = WdlBlock.createBlocks(statements)
       (BlockInput.create(inputs), subBlocks, outputs.values.toVector)
     }
@@ -654,6 +653,8 @@ case class CallableTranslator(wdlBundle: WdlBundle,
             val innerEnv = env.add(scatter.identifier, (param, EmptyInput))
             val (callable, aux) = translateNestedBlock(wfName, scatter.body, blockPath, innerEnv)
             (Some(callable.name), aux :+ callable)
+          case _ =>
+            throw new Exception(s"unexpected block ${block}")
         }
 
       val applet = Application(

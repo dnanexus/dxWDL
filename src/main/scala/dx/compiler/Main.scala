@@ -138,7 +138,7 @@ object Main {
 
   private def resolveDestination(
       project: String,
-      folder: Option[String] = None,
+      folder: Option[String],
       path: Option[String] = None
   ): (DxProject, Either[String, DxDataObject]) = {
     val dxProject =

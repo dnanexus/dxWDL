@@ -13,7 +13,6 @@ import dx.api.{
 import dx.core.Native
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
-import dx.core.ir.ValueSerde.valueMapFormat
 import dx.core.util.CompressionUtils
 import dx.translator.{DockerRegistry, DxAccess, DxExecPolicy, DxRunSpec, DxTimeout, Extras}
 import dx.translator.CallableAttributes._
@@ -75,9 +74,9 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
   }
 
   private def generateJobScript(applet: Application): String = {
-    val templateAttrs = Map(
+    val templateAttrs: Map[String, Any] = Map(
         "rtTraceLevel" -> runtimeTraceLevel,
-        "streamAllFiles" -> runtimePathConfig.streamAllFiles
+        "streamAllFiles" -> streamAllFiles
     )
     applet.kind match {
       case ExecutableKindApplet =>
@@ -341,7 +340,9 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     val dbOpaqueEncoded = CompressionUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     // serilize default runtime attributes
     val defaultRuntimeAttributes =
-      extras.map(_.defaultRuntimeAttributes.toJson).getOrElse(JsNull)
+      extras
+        .map(ex => JsObject(ValueSerde.serializeMap(ex.defaultRuntimeAttributes)))
+        .getOrElse(JsNull)
     val auxDetails = Map(
         Native.SourceCode -> JsString(sourceEncoded),
         Native.InstanceTypeDb -> JsString(dbOpaqueEncoded),

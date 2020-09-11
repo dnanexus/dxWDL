@@ -57,13 +57,13 @@ case class WorkflowCompiler(extras: Option[Extras],
         Vector(parameterLinkSerializer.createConstantField(value, parameter.dxName))
       case LinkInput(dxStage, paramName) =>
         val link = ParameterLinkStage(dxStage, IORef.Output, paramName, parameter.dxType)
-        parameterLinkSerializer.createFields(link, parameter.dxName)
+        parameterLinkSerializer.createFieldsFromLink(link, parameter.dxName)
       case WorkflowInput(wfParam) =>
         // TODO: if the input has a non-static default, link to the value of the workflow input
         //  (either the user-specified value or the result of evaluting the expression)
         //  - right now this only links to the user-specified value
         val link = ParameterLinkWorkflowInput(wfParam.dxName, parameter.dxType)
-        parameterLinkSerializer.createFields(link, parameter.dxName)
+        parameterLinkSerializer.createFieldsFromLink(link, parameter.dxName)
       case other =>
         throw new Exception(s"Bad value for stage input ${other}")
     }
@@ -95,11 +95,11 @@ case class WorkflowCompiler(extras: Option[Extras],
             accu ++ fields.toMap
           case LinkInput(dxStage, paramname) =>
             val link = ParameterLinkStage(dxStage, IORef.Output, paramname, parameter.dxType)
-            val fields = parameterLinkSerializer.createFields(link, parameter.dxName)
+            val fields = parameterLinkSerializer.createFieldsFromLink(link, parameter.dxName)
             accu ++ fields.toMap
           case WorkflowInput(wfParam) =>
             val link = ParameterLinkWorkflowInput(wfParam.dxName, parameter.dxType)
-            val fields = parameterLinkSerializer.createFields(link, parameter.dxName)
+            val fields = parameterLinkSerializer.createFieldsFromLink(link, parameter.dxName)
             accu ++ fields.toMap
         }
     }

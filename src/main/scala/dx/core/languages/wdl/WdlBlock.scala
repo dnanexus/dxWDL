@@ -73,8 +73,8 @@ These are not blocks, because we need a subworkflow to run them:
  */
 package dx.core.languages.wdl
 
-import dx.core.ir.{Block, BlockKind}
 import dx.core.ir.BlockKind.BlockKind
+import dx.core.ir.{Block, BlockKind}
 import wdlTools.eval.{Eval, EvalException, WdlValues}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
 

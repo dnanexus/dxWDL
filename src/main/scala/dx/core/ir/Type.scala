@@ -1,7 +1,5 @@
 package dx.core.ir
 
-import wdlTools.eval.WdlValues
-
 import scala.annotation.tailrec
 
 sealed trait Type
@@ -97,8 +95,8 @@ object Type {
     t match {
       case _ if isDxPrimitiveType(t)   => true
       case TArray(inner, _)            => isDxPrimitiveType(inner)
-      case TOptional(inner)            => isDxPrimitiveType(inner)
       case TOptional(TArray(inner, _)) => isDxPrimitiveType(inner)
+      case TOptional(inner)            => isDxPrimitiveType(inner)
       case _                           => false
     }
   }
@@ -135,8 +133,8 @@ object Type {
 
   def isNestedOptional(t: Type): Boolean = {
     t match {
-      case WdlValues.V_Optional(WdlValues.V_Optional(_)) => true
-      case _                                             => false
+      case TOptional(TOptional(_)) => true
+      case _                       => false
     }
   }
 }
