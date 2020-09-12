@@ -129,14 +129,14 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
           case JsString(s) => s
           case _           => throw new Exception("unexpected")
         }
-        val price: Float =
-          if (pricingInfo) awsOnDemandHourlyPriceTable(internalName)
-          else 0
+        val price: Option[Float] =
+          if (pricingInfo) Some(awsOnDemandHourlyPriceTable(internalName))
+          else None
         val traits = fields("traits").asJsObject.fields
         val memoryMB = intOfJs(traits("totalMemoryMB"))
         val diskGB = intOfJs(traits("ephemeralStorageGB"))
         val cpu = intOfJs(traits("numCores"))
-        DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty, gpu = false)
+        DxInstanceType(name, memoryMB, diskGB, cpu, gpu = false, Vector.empty, None, price)
     }.toVector
     InstanceTypeDB(pricingInfo, db)
   }
@@ -155,8 +155,8 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "Work even without access to pricing information" in {
     // parameters are:          RAM,     disk,     cores
-    dbNoPrices.chooseAttrs(None, None, None, None) should equal("mem1_ssd1_x2")
-    dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None) should equal("mem1_ssd1_x4")
+    dbNoPrices.chooseAttrs(None, None, None, None, None) should equal("mem1_ssd1_x2")
+    dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None, None) should equal("mem1_ssd1_x4")
   }
 
   it should "perform JSON serialization" in {
@@ -179,24 +179,26 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 245751,
                 32,
                 597,
-                13.0.toFloat,
+                gpu = false,
                 Vector(("Ubuntu", "16.04")),
-                gpu = false
+                Some(DiskType.SSD),
+                Some(13.0.toFloat)
             ),
             DxInstanceType(
                 "mem4_ssd1_x128",
                 1967522,
                 128,
                 3573,
-                14.0.toFloat,
+                gpu = false,
                 Vector(("Ubuntu", "16.04")),
-                gpu = false
+                Some(DiskType.SSD),
+                Some(14.0.toFloat)
             )
         )
     )
 
-    db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None) should equal("mem3_ssd1_x32")
-    db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None) should equal("mem4_ssd1_x128")
+    db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None, None) should equal("mem3_ssd1_x32")
+    db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None, None) should equal("mem4_ssd1_x128")
   }
 
   it should "prefer v2 instances over v1's" in {
@@ -207,20 +209,22 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                            8000,
                            80,
                            4,
-                           0.2.toFloat,
+                           gpu = false,
                            Vector(("Ubuntu", "16.04")),
-                           gpu = false),
+                           Some(DiskType.SSD),
+                           Some(0.2.toFloat)),
             DxInstanceType("mem1_ssd1_x4",
                            8000,
                            80,
                            4,
-                           0.2.toFloat,
+                           gpu = false,
                            Vector(("Ubuntu", "16.04")),
-                           gpu = false)
+                           Some(DiskType.SSD),
+                           Some(0.2.toFloat))
         )
     )
 
-    db.chooseAttrs(None, None, Some(4), None) should equal("mem1_ssd1_v2_x4")
+    db.chooseAttrs(None, None, Some(4), None, None) should equal("mem1_ssd1_v2_x4")
   }
 
   it should "respect requests for GPU instances" taggedAs EdgeTest in {
@@ -231,31 +235,34 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                            8000,
                            80,
                            4,
-                           0.2.toFloat,
+                           gpu = false,
                            Vector(("Ubuntu", "16.04")),
-                           gpu = false),
+                           Some(DiskType.SSD),
+                           Some(0.2.toFloat)),
             DxInstanceType("mem1_ssd1_x4",
                            8000,
                            80,
                            4,
-                           0.2.toFloat,
+                           gpu = false,
                            Vector(("Ubuntu", "16.04")),
-                           gpu = false),
+                           Some(DiskType.SSD),
+                           Some(0.2.toFloat)),
             DxInstanceType("mem3_ssd1_gpu_x8",
                            30000,
                            100,
                            8,
-                           1.0.toFloat,
+                           gpu = true,
                            Vector(("Ubuntu", "16.04")),
-                           gpu = true)
+                           Some(DiskType.SSD),
+                           Some(1.0.toFloat))
         )
     )
 
-    db.chooseAttrs(None, None, Some(4), Some(true)) should equal("mem3_ssd1_gpu_x8")
+    db.chooseAttrs(None, None, Some(4), Some(true), None) should equal("mem3_ssd1_gpu_x8")
 
     assertThrows[Exception] {
       // No non-GPU instance has 8 cpus
-      db.chooseAttrs(None, None, Some(8), Some(false))
+      db.chooseAttrs(None, None, Some(8), Some(false), None)
     }
   }
 

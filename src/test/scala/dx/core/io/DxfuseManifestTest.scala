@@ -10,8 +10,7 @@ import wdlTools.util.Logger
 class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   private val dxApi: DxApi = DxApi(Logger.Quiet)
   private lazy val homeDir = Paths.get(System.getProperty("user.home"))
-  private lazy val dxPathConfig =
-    DxWorkerPaths.apply(homeDir, streamAllFiles = false, dxApi.logger)
+  private lazy val dxPathConfig = DxWorkerPaths(homeDir)
 
   it should "detect and provide legible error for archived files" in {
     val ARCHIVED_PROJ = "ArchivedStuff"

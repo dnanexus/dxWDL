@@ -1,7 +1,12 @@
 package dx.core.io
 
+import dx.core.languages.wdl.Utils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import wdlTools.eval.{Eval, EvalPaths}
+import wdlTools.syntax.WdlVersion
+import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.FileSourceResolver
 
 class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
 
@@ -17,8 +22,16 @@ class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val declarations = parseExpressions(wdlCode)
-    for (node <- declarations)
-      WdlValueAnalysis.ifConstEval(node.wdlType, node.expr.get)
+    val (doc, _) = Utils.parseSourceString(wdlCode)
+    val declarations = doc.elements.collect {
+      case decl: TAT.Declaration => decl
+    }
+    val fileResolver = FileSourceResolver.create(userProtocols = Vector(DxFileAccessProtocol()))
+    val evaluator = Eval(EvalPaths.empty, Some(WdlVersion.V1), fileResolver)
+    declarations.foreach { decl =>
+      // applies the default validation, which tries to resolve files and
+      // throws an exception on failure
+      evaluator.applyConstAndCoerce(decl.expr, decl.wdlType)
+    }
   }
 }

@@ -10,13 +10,13 @@ class DxJobTest extends AnyFlatSpec with Matchers {
 
   it should "describe job which ran app" in {
     val dxAppJob = dxApi.job("job-Fqy8YF00ffPB148G5f490Y25", dxWDLPlaygroundProject)
-    val dxAppJobDescription = dxAppJob.describe()
-    dxAppJobDescription.executable.getId shouldBe "app-Fqy8Xx00zZvZ503g5gJgq3Gb"
+    val dxAppJobDescription = dxAppJob.describe(Set(Field.Executable))
+    dxAppJobDescription.executable.get.id shouldBe "app-Fqy8Xx00zZvZ503g5gJgq3Gb"
   }
 
   it should "describe job which ran applet" in {
     val dxAppletJob = dxApi.job("job-Fqy8XV00ffP3b1j75bvVFX3b", dxWDLPlaygroundProject)
-    val dxAppletJobDescription = dxAppletJob.describe()
-    dxAppletJobDescription.executable.getId shouldBe "applet-Fqy8Vy80ffP3b1j75bvVFX3Q"
+    val dxAppletJobDescription = dxAppletJob.describe(Set(Field.Executable))
+    dxAppletJobDescription.executable.get.id shouldBe "applet-Fqy8Vy80ffP3b1j75bvVFX3Q"
   }
 }
