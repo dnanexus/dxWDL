@@ -1,17 +1,12 @@
 package dx.core.languages.wdl
 
-import dx.api.DxApi
+import dx.Tags.EdgeTest
+import dx.core.languages.wdl.{Utils => WdlUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.Logger
 
-// These tests involve compilation -without- access to the platform.
-//
-class ParseSourceTest extends AnyFlatSpec with Matchers {
-  private val dxApi = DxApi(Logger.Quiet)
-  private val parseWdlSourceFile = ParseSource(dxApi)
-
+class UtilsTest extends AnyFlatSpec with Matchers {
   private def validateTaskMeta(task: TAT.Task): Unit = {
     val kvs = task.meta match {
       case Some(TAT.MetaSection(kvs, _)) => kvs
@@ -42,7 +37,7 @@ class ParseSourceTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
+    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -67,7 +62,7 @@ class ParseSourceTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
+    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -92,7 +87,7 @@ class ParseSourceTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task: TAT.Task, _, _) = parseWdlSourceFile.parseWdlTask(srcCode)
+    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
     validateTaskMeta(task)
   }
 }

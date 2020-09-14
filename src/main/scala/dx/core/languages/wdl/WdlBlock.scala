@@ -83,7 +83,7 @@ import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
   * an extra type to disinguish between inputs with constant and dynamic default
   * values, and there is no SourceLocation.
   */
-sealed trait BlockInput {
+sealed trait WdlBlockInput {
   val name: String
   val wdlType: WdlTypes.T
 }
@@ -91,7 +91,7 @@ sealed trait BlockInput {
 /**
   * A compulsory input that has no default, and must be provided by the caller.
   */
-case class RequiredBlockInput(name: String, wdlType: WdlTypes.T) extends BlockInput
+case class RequiredBlockInput(name: String, wdlType: WdlTypes.T) extends WdlBlockInput
 
 /**
   * An input that has a constant default value and may be skipped by the caller.
@@ -99,7 +99,7 @@ case class RequiredBlockInput(name: String, wdlType: WdlTypes.T) extends BlockIn
 case class OverridableBlockInputWithStaticDefault(name: String,
                                                   wdlType: WdlTypes.T,
                                                   defaultValue: WdlValues.V)
-    extends BlockInput
+    extends WdlBlockInput
 
 /**
   * An input that has a default value that is an expression that must be evaluated at runtime,
@@ -108,18 +108,18 @@ case class OverridableBlockInputWithStaticDefault(name: String,
 case class OverridableBlockInputWithDynamicDefault(name: String,
                                                    wdlType: WdlTypes.T,
                                                    defaultExpr: TAT.Expr)
-    extends BlockInput
+    extends WdlBlockInput
 
 /**
   * An input that may be omitted by the caller. In that case the value will
   * be null (or None).
   */
-case class OptionalBlockInput(name: String, wdlType: WdlTypes.T) extends BlockInput
+case class OptionalBlockInput(name: String, wdlType: WdlTypes.T) extends WdlBlockInput
 
-object BlockInput {
+object WdlBlockInput {
   private lazy val evaluator: Eval = Eval.empty
 
-  def translate(i: TAT.InputDefinition): BlockInput = {
+  def translate(i: TAT.InputDefinition): WdlBlockInput = {
     i match {
       case TAT.RequiredInputDefinition(name, wdlType, _) =>
         RequiredBlockInput(name, wdlType)
@@ -143,7 +143,7 @@ object BlockInput {
     }
   }
 
-  def create(inputs: Map[String, (WdlTypes.T, Boolean)]): Vector[BlockInput] = {
+  def create(inputs: Map[String, (WdlTypes.T, Boolean)]): Vector[WdlBlockInput] = {
     inputs.map {
       case (name, (wdlType, optional)) =>
         if (optional) {
@@ -154,7 +154,7 @@ object BlockInput {
     }.toVector
   }
 
-  def isOptional(inputDef: BlockInput): Boolean = {
+  def isOptional(inputDef: WdlBlockInput): Boolean = {
     inputDef match {
       case _: RequiredBlockInput                      => false
       case _: OverridableBlockInputWithStaticDefault  => true
@@ -189,10 +189,10 @@ object BlockInput {
   *  type in the block.  For example, 'Int x' declared inside a scatter, is
   *  'Array[Int] x' outside the scatter.
   */
-case class WdlBlock(inputs: Vector[BlockInput],
+case class WdlBlock(inputs: Vector[WdlBlockInput],
                     outputs: Vector[TAT.OutputDefinition],
                     elements: Vector[TAT.WorkflowElement])
-    extends Block {
+    extends Block[WdlBlock] {
   assert(elements.nonEmpty)
   assert(Utils.deepFindCalls(elements.dropRight(1)).isEmpty)
 
@@ -264,6 +264,11 @@ case class WdlBlock(inputs: Vector[BlockInput],
             s"block ${this} does not have inner elements"
         )
     }
+  }
+
+  override def getSubBlock(index: Int): WdlBlock = {
+    val innerBlocks = WdlBlock.createBlocks(innerElements)
+    innerBlocks(index)
   }
 
   override lazy val outputNames: Set[String] = outputs.map(_.name).toSet
@@ -344,7 +349,7 @@ object WdlBlock {
     parts.collect {
       case v if v.nonEmpty =>
         val (inputs, outputs) = Utils.getInputOutputClosure(v)
-        WdlBlock(BlockInput.create(inputs), outputs.values.toVector, v)
+        WdlBlock(WdlBlockInput.create(inputs), outputs.values.toVector, v)
     }
   }
 }

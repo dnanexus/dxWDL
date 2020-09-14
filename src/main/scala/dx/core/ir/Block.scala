@@ -2,6 +2,8 @@ package dx.core.ir
 
 import wdlTools.util.Enum
 
+import scala.reflect.ClassTag
+
 /**
   * These are the kinds of blocks that are run by the workflow-fragment-runner.
   * A block can have expressions, input ports, and output ports in the beginning.
@@ -24,7 +26,7 @@ object BlockKind extends Enum {
       ConditionalComplex, ScatterOneCall, ScatterComplex = Value
 }
 
-trait Block {
+trait Block[Self <: Block[Self]] { this: Self =>
   def kind: BlockKind.BlockKind
 
   /**
@@ -37,7 +39,21 @@ trait Block {
     */
   def getName: Option[String]
 
+  def getSubBlock(index: Int): Self
+
+  def getSubBlockAt(path: Vector[Int])(implicit tag: ClassTag[Self]): Self = {
+    path.foldLeft(this) {
+      case (subBlock: Self, index) => subBlock.getSubBlock(index)
+    }
+  }
+
   def outputNames: Set[String]
 
   def prettyFormat: String
+}
+
+object Block {
+  def getSubBlockAt[B <: Block[B]: ClassTag](topBlocks: Vector[B], path: Vector[Int]): B = {
+    topBlocks(path.head).getSubBlockAt(path.tail)
+  }
 }

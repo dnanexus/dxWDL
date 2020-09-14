@@ -1,5 +1,7 @@
 package dx.core.io
 
+import dx.Assumptions.isLoggedIn
+import dx.Tags.ApiTest
 import dx.core.languages.wdl.Utils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -9,8 +11,9 @@ import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.FileSourceResolver
 
 class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
+  assume(isLoggedIn)
 
-  it should "handle links to dx files" in {
+  it should "handle links to dx files" taggedAs ApiTest in {
     val wdlCode =
       """|version 1.0
          |
@@ -28,10 +31,13 @@ class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
     }
     val fileResolver = FileSourceResolver.create(userProtocols = Vector(DxFileAccessProtocol()))
     val evaluator = Eval(EvalPaths.empty, Some(WdlVersion.V1), fileResolver)
-    declarations.foreach { decl =>
-      // applies the default validation, which tries to resolve files and
-      // throws an exception on failure
-      evaluator.applyConstAndCoerce(decl.expr, decl.wdlType)
+    declarations.foreach {
+      case TAT.Declaration(_, wdlType, Some(expr), _) =>
+        // applies the default validation, which tries to resolve files and
+        // throws an exception on failure
+        evaluator.applyConstAndCoerce(expr, wdlType)
+      case other =>
+        throw new Exception(s"expected declaration with expression ${other}")
     }
   }
 }

@@ -15,8 +15,8 @@ object WorkflowAction extends Enum {
   val Inputs, Outputs, OutputReorg, CustomReorgOutputs, Run, Continue, Collect = Value
 }
 
-trait BlockContext {
-  def block: Block
+trait BlockContext[B <: Block[B]] {
+  def block: Block[B]
 
   def launch(): Map[String, ParameterLink]
 
@@ -31,7 +31,7 @@ object WorkflowSupport {
   val ParentsKey = "parents___"
 }
 
-abstract class WorkflowSupport(jobMeta: JobMeta) {
+abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
   private val logger = jobMeta.logger
   private val seqNumIter = Iterator.from(1)
 
@@ -55,7 +55,7 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
   def evaluateOutputs(jobInputs: Map[String, (Type, Value)],
                       addReorgStatus: Boolean): Map[String, (Type, Value)]
 
-  def evaluateBlockInputs(jobInputs: Map[String, (Type, Value)]): BlockContext
+  def evaluateBlockInputs(jobInputs: Map[String, (Type, Value)]): BlockContext[B]
 
   lazy val execLinkInfo: Map[String, ExecutableLink] =
     jobMeta.executableDetails.get("execLinkInfo") match {
@@ -178,7 +178,7 @@ abstract class WorkflowSupport(jobMeta: JobMeta) {
 }
 
 trait WorkflowSupportFactory {
-  def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WorkflowSupport]
+  def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WorkflowSupport[_]]
 }
 
 object WorkflowExecutor {
@@ -189,7 +189,7 @@ object WorkflowExecutor {
       WdlWorkflowSupportFactory()
   )
 
-  def createWorkflowSupport(jobMeta: JobMeta, workerPaths: DxWorkerPaths): WorkflowSupport = {
+  def createWorkflowSupport(jobMeta: JobMeta, workerPaths: DxWorkerPaths): WorkflowSupport[_] = {
     workflowSupportFactories
       .collectFirst { factory =>
         factory.create(jobMeta, workerPaths) match {
@@ -207,7 +207,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
   // On the cloud instance running the job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
   private val workerPaths = DxWorkerPaths.default
-  private val workflowSupport: WorkflowSupport =
+  private val workflowSupport: WorkflowSupport[_] =
     WorkflowExecutor.createWorkflowSupport(jobMeta, workerPaths)
   private val dxApi = jobMeta.dxApi
   private val logger = jobMeta.logger
@@ -243,7 +243,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
     jobMeta.createOutputLinks(outputs)
   }
 
-  private def evaluateFragInputs(): BlockContext = {
+  private def evaluateFragInputs(): BlockContext[_] = {
     if (logger.isVerbose) {
       logger.traceLimited(s"dxWDL version: ${getVersion}")
       logger.traceLimited(s"link info=${workflowSupport.execLinkInfo}")

@@ -8,7 +8,7 @@ import dx.core.ir.Type._
 import dx.core.ir.Value._
 import dx.core.Native.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{
-  BlockInput,
+  WdlBlockInput,
   OptionalBlockInput,
   OverridableBlockInputWithDynamicDefault,
   OverridableBlockInputWithStaticDefault,
@@ -260,7 +260,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       * @param input the workflow input
       * @return (parameter, isDynamic)
       */
-    private def createWorkflowInput(input: BlockInput): (Parameter, Boolean) = {
+    private def createWorkflowInput(input: WdlBlockInput): (Parameter, Boolean) = {
       val wdlType = input.wdlType
       val irType = WdlUtils.toIRType(wdlType)
       val attr = parameterMeta.translate(input.name, input.wdlType)
@@ -455,14 +455,14 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
     // Find the closure of the inputs. Do not include the inputs themselves. Create an input
     // for each of these external references.
-    private def inputClosure(inputs: Vector[BlockInput],
+    private def inputClosure(inputs: Vector[WdlBlockInput],
                              subBlocks: Vector[WdlBlock]): Map[String, (WdlTypes.T, Boolean)] = {
       // remove the regular inputs
       val inputNames = inputs.map(_.name).toSet
       subBlocks.flatMap { block =>
         block.inputs.collect {
           case blockInput if !inputNames.contains(blockInput.name) =>
-            blockInput.name -> (blockInput.wdlType, BlockInput.isOptional(blockInput))
+            blockInput.name -> (blockInput.wdlType, WdlBlockInput.isOptional(blockInput))
         }
       }.toMap
     }
@@ -470,10 +470,10 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     // split a part of a workflow
     private def splitWorkflowElements(
         statements: Vector[TAT.WorkflowElement]
-    ): (Vector[BlockInput], Vector[WdlBlock], Vector[TAT.OutputDefinition]) = {
+    ): (Vector[WdlBlockInput], Vector[WdlBlock], Vector[TAT.OutputDefinition]) = {
       val (inputs, outputs) = WdlUtils.getInputOutputClosure(statements)
       val subBlocks = WdlBlock.createBlocks(statements)
-      (BlockInput.create(inputs), subBlocks, outputs.values.toVector)
+      (WdlBlockInput.create(inputs), subBlocks, outputs.values.toVector)
     }
 
     /**
@@ -583,7 +583,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // Note: some referenced variables may be undefined. This could be because they are:
       // 1) optional
       // 2) defined -inside- the block
-      val closure: Map[String, LinkedVar] = block.inputs.flatMap { i: BlockInput =>
+      val closure: Map[String, LinkedVar] = block.inputs.flatMap { i: WdlBlockInput =>
         env.lookup(i.name) match {
           case None               => None
           case Some((name, lVar)) => Some((name, lVar))
@@ -875,7 +875,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       */
     private def translateWorkflowLocked(
         wfName: String,
-        inputs: Vector[BlockInput],
+        inputs: Vector[WdlBlockInput],
         closureInputs: Map[String, (T, Boolean)],
         outputs: Vector[TAT.OutputDefinition],
         blockPath: Vector[Int],
@@ -914,7 +914,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           case OverridableBlockInputWithDynamicDefault(name, wdlType, _) =>
             val nonOptType = WdlUtils.toIRType(wdlType)
             Parameter(name, nonOptType)
-          case i: BlockInput =>
+          case i: WdlBlockInput =>
             val irType = WdlUtils.toIRType(i.wdlType)
             Parameter(i.name, irType)
         }
@@ -1023,7 +1023,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       * Compile a top-level locked workflow.
       */
     private def translateTopWorkflowLocked(
-        inputs: Vector[BlockInput],
+        inputs: Vector[WdlBlockInput],
         outputs: Vector[TAT.OutputDefinition],
         subBlocks: Vector[WdlBlock]
     ): (Workflow, Vector[Callable], Vector[LinkedVar]) = {
@@ -1041,7 +1041,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       * called at the top-level.
       */
     private def translateTopWorkflowUnlocked(
-        inputs: Vector[BlockInput],
+        inputs: Vector[WdlBlockInput],
         outputs: Vector[TAT.OutputDefinition],
         subBlocks: Vector[WdlBlock]
     ): (Workflow, Vector[Callable], Vector[LinkedVar]) = {
@@ -1155,7 +1155,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // scatter block, conditional block)
       val subBlocks = WdlBlock.createBlocks(wf.body)
       // translate workflow inputs/outputs to equivalent classes defined in Block
-      val inputs = wf.inputs.map(BlockInput.translate)
+      val inputs = wf.inputs.map(WdlBlockInput.translate)
       val (irWf, irCallables, irOutputs) =
         if (isLocked) {
           translateTopWorkflowLocked(inputs, wf.outputs, subBlocks)

@@ -343,6 +343,27 @@ case class DxApi(logger: Logger = Logger.get,
     call(DXAPI.systemFindApps[JsonNode], fields)
   }
 
+  def resolveOneApp(name: String): DxApp = {
+    findApps(Map("name" -> JsString(name))) match {
+      case JsObject(fields) if fields.contains("results") =>
+        fields("results") match {
+          case JsArray(results) if results.size == 1 =>
+            val result = results(0).asJsObject.fields
+            val JsString(id) = result("id")
+            val app = DxApp(this, id)
+            result.get("describe").foreach { descJs =>
+              val desc = DxApp.parseDescribeJson(descJs.asJsObject, this)
+              app.cacheDescribe(desc)
+            }
+            app
+          case other =>
+            throw new Exception(s"expected 1 result, got ${other}")
+        }
+      case other =>
+        throw new Exception(s"invalid findApps response ${other}")
+    }
+  }
+
   def findDataObjects(fields: Map[String, JsValue]): JsObject = {
     call(DXAPI.systemFindDataObjects[JsonNode], fields)
   }
@@ -774,7 +795,8 @@ case class DxApi(logger: Logger = Logger.get,
     })
     // peel off objects that have already been resolved
     val found = triageOne(components) match {
-      case Left(alreadyResolved) => Vector(alreadyResolved)
+      case Left(alreadyResolved) =>
+        Vector(alreadyResolved)
       case Right(dxPathsToResolve) =>
         submitRequest(Vector(dxPathsToResolve), proj).values.toVector
     }

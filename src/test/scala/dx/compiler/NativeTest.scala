@@ -3,10 +3,11 @@ package dx.compiler
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Files, Path, Paths}
 
+import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.core
-import dx.core.languages.wdl.ParseSource
+import dx.core.languages.wdl.{ParseSource, parseWdlTasks}
 import dx.core.util.MainUtils.Success
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -175,7 +176,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
+    val (tasks, _, _) = parseWdlTasks(content)
 
     tasks.keySet shouldBe Set(
         "native_sum",
@@ -187,7 +188,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     )
   }
 
-  it should "be able to build an interface to a specific applet" taggedAs NativeTestXX in {
+  it should "be able to build an interface to a specific applet" taggedAs NativeTest in {
     val outputPath: Path = Files.createTempFile("dx_extern_one", ".wdl")
     Main.dxni(
         List(
@@ -213,7 +214,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
+    val (tasks, _, _) = parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }
@@ -248,7 +249,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
         src.close()
       }
 
-    val (tasks, _, _) = ParseSource(dxApi).parseWdlTasks(content)
+    val (tasks, _, _) = parseWdlTasks(content)
 
     tasks.keySet shouldBe Set("native_sum")
   }

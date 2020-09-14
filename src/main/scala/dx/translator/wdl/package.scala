@@ -2,17 +2,7 @@ package dx.translator.wdl
 
 import dx.core.ir.{ApplicationSource, DocumentSource, WorkflowSource}
 import wdlTools.generators.code.WdlV1Generator
-import wdlTools.syntax.WdlVersion
 import wdlTools.types.{TypedAbstractSyntax => TAT}
-import wdlTools.util.Adjuncts
-
-case class WdlBundle(version: WdlVersion,
-                     primaryCallable: Option[TAT.Callable],
-                     tasks: Map[String, TAT.Task],
-                     workflows: Map[String, TAT.Workflow],
-                     callableNames: Set[String],
-                     sources: Map[String, TAT.Document],
-                     adjunctFiles: Map[String, Vector[Adjuncts.AdjunctFile]])
 
 // wrappers around WDL-specific document elements, used by Native
 // when generating apps/workflows

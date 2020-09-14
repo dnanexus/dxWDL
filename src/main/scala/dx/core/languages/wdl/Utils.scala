@@ -105,6 +105,40 @@ object Utils {
     }
   }
 
+  def parseSingleTask(
+      sourceCode: String,
+      fileResolver: FileSourceResolver = FileSourceResolver.get
+  ): (TAT.Task, DefaultBindings[WdlTypes.T_Struct], TAT.Document) = {
+    val (doc, typeAliases) = parseSourceString(sourceCode, fileResolver)
+    if (doc.workflow.isDefined) {
+      throw new Exception("a workflow shouldn't be a member of this document")
+    }
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    if (tasks.isEmpty) {
+      throw new Exception("no tasks in this WDL program")
+    }
+    if (tasks.size > 1) {
+      throw new Exception("More than one task in this WDL program")
+    }
+    (tasks.values.head, typeAliases, doc)
+  }
+
+  def parseWorkflow(
+      sourceCode: String,
+      fileResolver: FileSourceResolver = FileSourceResolver.get
+  ): (TAT.Workflow, Map[String, TAT.Task], DefaultBindings[WdlTypes.T_Struct], TAT.Document) = {
+    val (doc, typeAliases) = parseSourceString(sourceCode, fileResolver)
+    val workflow = doc.workflow.getOrElse(
+        throw new RuntimeException("This document should have a workflow")
+    )
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    (workflow, tasks, typeAliases, doc)
+  }
+
   // create a wdl-value of a specific type.
   def getDefaultValueOfType(wdlType: WdlTypes.T,
                             loc: SourceLocation = Utils.locPlaceholder): TAT.Expr = {
@@ -689,7 +723,7 @@ object Utils {
             .map { case (_, v) => inner(v) }
             .toVector
             .flatten
-        case TAT.ExprPlaceholderEqual(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
+        case TAT.ExprPlaceholderCondition(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(t) ++ inner(f) ++ inner(value)
         case TAT.ExprPlaceholderDefault(default: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(default) ++ inner(value)

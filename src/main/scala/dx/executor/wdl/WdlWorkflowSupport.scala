@@ -6,10 +6,10 @@ import dx.AppInternalException
 import dx.api.{DxExecution, DxObject, Field}
 import dx.core.Native
 import dx.core.io.DxWorkerPaths
-import dx.core.ir.{BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
+import dx.core.ir.{Block, BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
 import dx.core.ir.Type._
 import dx.core.ir.Value._
-import dx.core.languages.wdl.{BlockInput, Runtime, WdlBlock, Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlBlockInput, Runtime, WdlBlock, Utils => WdlUtils}
 import dx.executor.{BlockContext, JobMeta, WorkflowSupport, WorkflowSupportFactory}
 import spray.json._
 import wdlTools.eval.{Eval, EvalPaths, WdlValueBindings, Utils => VUtils}
@@ -35,7 +35,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
                               wdlTypeAliases: Map[String, T_Struct],
                               jobMeta: JobMeta,
                               workerPaths: DxWorkerPaths)
-    extends WorkflowSupport(jobMeta) {
+    extends WorkflowSupport[WdlBlock](jobMeta) {
   private val logger = jobMeta.logger
   private lazy val evaluator = Eval(
       EvalPaths(workerPaths.homeDir, workerPaths.tmpDir),
@@ -180,7 +180,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     }
   }
 
-  case class WdlBlockContext(block: WdlBlock, env: Map[String, (T, V)]) extends BlockContext {
+  case class WdlBlockContext(block: WdlBlock, env: Map[String, (T, V)])
+      extends BlockContext[WdlBlock] {
     private def call: TAT.Call = block.call
     private def dxApi = jobMeta.dxApi
 
@@ -885,17 +886,12 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
   override def evaluateBlockInputs(
       jobInputs: Map[String, (Type, Value)]
-  ): BlockContext = {
-    val topBlocks = WdlBlock.createBlocks(workflow.body)
-    val block = blockPath.tail.foldLeft(topBlocks(blockPath.head)) {
-      case (subBlock, index) =>
-        val innerBlocks = WdlBlock.createBlocks(subBlock.innerElements)
-        innerBlocks(index)
-    }
+  ): BlockContext[WdlBlock] = {
+    val block: WdlBlock = Block.getSubBlockAt(WdlBlock.createBlocks(workflow.body), blockPath)
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val irInputEnv: Map[String, (Type, Value)] = block.inputs.collect {
-      case blockInput: BlockInput if jobInputs.contains(blockInput.name) =>
+      case blockInput: WdlBlockInput if jobInputs.contains(blockInput.name) =>
         blockInput.name -> jobInputs(blockInput.name)
     }.toMap
     val inputEnv = WdlUtils.fromIR(irInputEnv, wdlTypeAliases)
@@ -906,19 +902,13 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
 case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
   override def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WdlWorkflowSupport] = {
-    val (doc, typeAliases) =
+    val (workflow, tasks, typeAliases, doc) =
       try {
-        WdlUtils.parseSourceString(jobMeta.sourceCode, jobMeta.fileResolver)
+        WdlUtils.parseWorkflow(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None
       }
-    val workflow = doc.workflow.getOrElse(
-        throw new RuntimeException("This document should have a workflow")
-    )
-    val tasks = doc.elements.collect {
-      case task: TAT.Task => task.name -> task
-    }.toMap
     Some(
         WdlWorkflowSupport(workflow,
                            doc.version.value,

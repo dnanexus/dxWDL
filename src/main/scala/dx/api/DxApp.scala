@@ -22,29 +22,7 @@ case class DxApp(dxApi: DxApi, id: String)
       Set(Field.Id, Field.Name, Field.Created, Field.Modified, Field.InputSpec, Field.OutputSpec)
     val allFields = fields ++ defaultFields
     val descJs = dxApi.appDescribe(id, Map("fields" -> DxObject.requestFields(allFields)))
-    val desc =
-      descJs.getFields("id", "name", "created", "modified", "inputSpec", "outputSpec") match {
-        case Seq(JsString(id),
-                 JsString(name),
-                 JsNumber(created),
-                 JsNumber(modified),
-                 JsArray(inputSpec),
-                 JsArray(outputSpec)) =>
-          DxAppDescribe(id,
-                        name,
-                        created.toLong,
-                        modified.toLong,
-                        None,
-                        None,
-                        Some(IOParameter.parseIOSpec(dxApi, inputSpec)),
-                        Some(IOParameter.parseIOSpec(dxApi, outputSpec)))
-        case _ =>
-          throw new Exception(s"Malformed JSON ${descJs}")
-      }
-    val details = descJs.fields.get("details")
-    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
-    val access = descJs.fields.get("access")
-    desc.copy(details = details, properties = props, access = access)
+    DxApp.parseDescribeJson(descJs, dxApi)
   }
 
   def newRun(name: String,
@@ -82,5 +60,33 @@ case class DxApp(dxApi: DxApi, id: String)
         throw new AppInternalException(s"Bad format returned from jobNew ${info.prettyPrint}")
     }
     dxApi.job(id)
+  }
+}
+
+object DxApp {
+  def parseDescribeJson(descJs: JsObject, dxApi: DxApi): DxAppDescribe = {
+    val desc =
+      descJs.getFields("id", "name", "created", "modified", "inputSpec", "outputSpec") match {
+        case Seq(JsString(id),
+                 JsString(name),
+                 JsNumber(created),
+                 JsNumber(modified),
+                 JsArray(inputSpec),
+                 JsArray(outputSpec)) =>
+          DxAppDescribe(id,
+                        name,
+                        created.toLong,
+                        modified.toLong,
+                        None,
+                        None,
+                        Some(IOParameter.parseIOSpec(dxApi, inputSpec)),
+                        Some(IOParameter.parseIOSpec(dxApi, outputSpec)))
+        case _ =>
+          throw new Exception(s"Malformed JSON ${descJs}")
+      }
+    val details = descJs.fields.get("details")
+    val props = descJs.fields.get("properties").map(DxObject.parseJsonProperties)
+    val access = descJs.fields.get("access")
+    desc.copy(details = details, properties = props, access = access)
   }
 }

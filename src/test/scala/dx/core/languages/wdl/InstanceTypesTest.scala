@@ -1,5 +1,7 @@
 package dx.core.languages.wdl
 
+import dx.Assumptions.isLoggedIn
+import dx.Tags.ApiTest
 import dx.api.{
   DiskType,
   DxApi,
@@ -11,7 +13,7 @@ import dx.api.{
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.eval.{Eval, EvalPaths, Runtime => WdlRuntime}
+import wdlTools.eval.{Eval, EvalPaths, WdlValueBindings, Runtime => WdlRuntime}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, Logger}
@@ -157,19 +159,21 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
   }
 
   private val dbFull = genTestDB(true)
-  private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private val dbOpaque = InstanceTypeDbQuery(dxApi).opaquePrices(dbFull)
+  private lazy val dbOpaque = {
+    assume(isLoggedIn)
+    InstanceTypeDbQuery(DxApi(Logger.Quiet)).opaquePrices(dbFull)
+  }
   private val evaluator: Eval =
-    Eval(EvalPaths.empty, WdlVersion.V1, FileSourceResolver.get, Logger.get)
+    Eval(EvalPaths.empty, Some(WdlVersion.V1), FileSourceResolver.get, Logger.get)
 
   private def createRuntime(dxInstanceType: Option[String],
                             memory: Option[String],
                             disks: Option[String],
                             cpu: Option[String],
-                            gpu: Option[Boolean]): Runtime = {
+                            gpu: Option[Boolean]): Runtime[WdlValueBindings] = {
     def makeString(s: String): TAT.Expr = TAT.ValueString(s, WdlTypes.T_String, null)
     val rt = Map(
-        Runtime.INSTANCE_TYPE -> dxInstanceType.map(makeString),
+        Runtime.DxInstanceTypeKey -> dxInstanceType.map(makeString),
         WdlRuntime.Keys.Memory -> memory.map(makeString),
         WdlRuntime.Keys.Disks -> disks.map(makeString),
         WdlRuntime.Keys.Cpu -> cpu.map(makeString),
@@ -182,7 +186,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
         Some(TAT.RuntimeSection(rt, null)),
         None,
         evaluator,
-        Map.empty
+        WdlValueBindings.empty
     )
   }
 
@@ -198,30 +202,30 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     }
 
     db.apply(
-        createRuntime(None, Some("3 GB"), Some("local-disk 10 HDD"), Some("1"), None).parseInstanceType.get
+        createRuntime(None, Some("3 GB"), Some("local-disk 10 HDD"), Some("1"), None).parseInstanceType
     ) should equal("mem1_ssd1_x2")
     db.apply(
-        createRuntime(None, Some("37 GB"), Some("local-disk 10 HDD"), Some("6"), None).parseInstanceType.get
+        createRuntime(None, Some("37 GB"), Some("local-disk 10 HDD"), Some("6"), None).parseInstanceType
     ) should equal("mem3_ssd1_x8")
     db.apply(
-        createRuntime(None, Some("2 GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType.get
+        createRuntime(None, Some("2 GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
     ) should equal("mem1_ssd1_x8")
     db.apply(
-        createRuntime(None, Some("2.1GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType.get
+        createRuntime(None, Some("2.1GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
     ) should equal("mem1_ssd1_x8")
 
-    db.apply(createRuntime(Some("mem3_ssd1_x8"), None, None, None, None).parseInstanceType.get) should equal(
+    db.apply(createRuntime(Some("mem3_ssd1_x8"), None, None, None, None).parseInstanceType) should equal(
         "mem3_ssd1_x8"
     )
 
     db.apply(
-        createRuntime(None, Some("235 GB"), Some("local-disk 550 HDD"), Some("32"), None).parseInstanceType.get
+        createRuntime(None, Some("235 GB"), Some("local-disk 550 HDD"), Some("32"), None).parseInstanceType
     ) should equal("mem3_ssd1_x32")
-    db.apply(createRuntime(Some("mem3_ssd1_x32"), None, None, None, None).parseInstanceType.get) should equal(
+    db.apply(createRuntime(Some("mem3_ssd1_x32"), None, None, None, None).parseInstanceType) should equal(
         "mem3_ssd1_x32"
     )
 
-    db.apply(createRuntime(None, None, None, Some("8"), None).parseInstanceType.get) should equal(
+    db.apply(createRuntime(None, None, None, Some("8"), None).parseInstanceType) should equal(
         "mem1_ssd1_x8"
     )
   }
@@ -230,7 +234,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     useDB(dbFull)
   }
 
-  it should "work even with opaque prices" in {
+  it should "work even with opaque prices" taggedAs ApiTest in {
     useDB(dbOpaque)
   }
 
@@ -254,41 +258,41 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
                           None,
                           None)
 
-    createRuntime(None, Some("230GiB"), None, None, None).parseInstanceType.get shouldBe
+    createRuntime(None, Some("230GiB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(None, Some(230 * 1024), None, None, None)
 
-    createRuntime(None, Some("1000 TB"), None, None, None).parseInstanceType.get shouldBe
+    createRuntime(None, Some("1000 TB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(None,
                           Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
                           None,
                           None,
                           None)
 
-    createRuntime(None, Some("1000 TiB"), None, None, None).parseInstanceType.get shouldBe
+    createRuntime(None, Some("1000 TiB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(None, Some(1000 * 1024 * 1024), None, None, None)
 
     assertThrows[Exception] {
-      createRuntime(None, Some("230 44 34 GB"), None, None, None).parseInstanceType.get
+      createRuntime(None, Some("230 44 34 GB"), None, None, None).parseInstanceType
     }
     assertThrows[Exception] {
-      createRuntime(None, Some("230.x GB"), None, None, None).parseInstanceType.get
+      createRuntime(None, Some("230.x GB"), None, None, None).parseInstanceType
     }
     assertThrows[Exception] {
-      createRuntime(None, Some("230.x GB"), None, None, None).parseInstanceType.get
+      createRuntime(None, Some("230.x GB"), None, None, None).parseInstanceType
     }
     assertThrows[Exception] {
-      createRuntime(None, Some("230.3"), None, None, None).parseInstanceType.get
+      createRuntime(None, Some("230.3"), None, None, None).parseInstanceType
     }
     assertThrows[Exception] {
-      createRuntime(None, Some("230 XXB"), None, None, None).parseInstanceType.get
+      createRuntime(None, Some("230 XXB"), None, None, None).parseInstanceType
     }
 
     // disk spec
     assertThrows[Exception] {
-      createRuntime(None, None, Some("just give me a disk"), None, None).parseInstanceType.get
+      createRuntime(None, None, Some("just give me a disk"), None, None).parseInstanceType
     }
     assertThrows[Exception] {
-      createRuntime(None, None, Some("local-disk xxxx"), None, None).parseInstanceType.get
+      createRuntime(None, None, Some("local-disk xxxx"), None, None).parseInstanceType
     }
 //    assertThrows[Exception] {
 //      createRuntime(None, None, Some(1024), None, None).parseInstanceType.get
@@ -296,9 +300,9 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
 
     // cpu
     assertThrows[Exception] {
-      createRuntime(None, None, None, Some("xxyy"), None).parseInstanceType.get
+      createRuntime(None, None, None, Some("xxyy"), None).parseInstanceType
     }
-    createRuntime(None, None, None, Some("1"), None).parseInstanceType.get shouldBe InstanceTypeRequest(
+    createRuntime(None, None, None, Some("1"), None).parseInstanceType shouldBe InstanceTypeRequest(
         None,
         None,
         None,
@@ -306,7 +310,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
         Some(1),
         None
     )
-    createRuntime(None, None, None, Some("1.2"), None).parseInstanceType.get shouldBe InstanceTypeRequest(
+    createRuntime(None, None, None, Some("1.2"), None).parseInstanceType shouldBe InstanceTypeRequest(
         None,
         None,
         None,
@@ -320,7 +324,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
 //    }
 
     // gpu
-    createRuntime(None, Some("1000 TiB"), None, None, Some(true)).parseInstanceType.get shouldBe
+    createRuntime(None, Some("1000 TiB"), None, None, Some(true)).parseInstanceType shouldBe
       InstanceTypeRequest(None, Some(1000 * 1024 * 1024), None, None, None, Some(true))
 
     createRuntime(None, None, None, None, Some(false)) shouldBe

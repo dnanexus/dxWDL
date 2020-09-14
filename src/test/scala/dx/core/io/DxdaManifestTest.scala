@@ -2,6 +2,8 @@ package dx.core.io
 
 import java.nio.file.{Path, Paths}
 
+import dx.Assumptions.isLoggedIn
+import dx.Tags.ApiTest
 import dx.api.{DxApi, DxDataObject, DxFile, DxProject}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -9,10 +11,11 @@ import spray.json._
 import wdlTools.util.Logger
 
 class DxdaManifestTest extends AnyFlatSpec with Matchers {
-  val dxApi: DxApi = DxApi(Logger.Quiet)
-  val testProject = "dxWDL_playground"
+  assume(isLoggedIn)
+  private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val testProject = "dxWDL_playground"
 
-  lazy val dxTestProject: DxProject =
+  private lazy val dxTestProject: DxProject =
     try {
       dxApi.resolveProject(testProject)
     } catch {
@@ -26,7 +29,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
   // describe a platform file, including its parts, with the dx-toolkit. We can then compare
   // it to what we get from our DxdaManifest code.
   //
-  it should "create manifests for dxda" in {
+  it should "create manifests for dxda" taggedAs ApiTest in {
     val fileDir: Map[String, Path] = Map(
         s"dx://${testProject}:/test_data/fileA" -> Paths.get("inputs/A"),
         s"dx://${testProject}:/test_data/fileB" -> Paths.get("inputs/B"),
@@ -72,7 +75,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "detect and provide legible error for archived files" in {
+  it should "detect and provide legible error for archived files" taggedAs ApiTest in {
     val ARCHIVED_PROJ = "ArchivedStuff"
     val dxArchivedProj: DxProject = dxApi.resolveProject(ARCHIVED_PROJ)
 

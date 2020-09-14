@@ -454,32 +454,15 @@ case class WdlTaskSupportFactory() extends TaskSupportFactory {
   override def create(jobMeta: JobMeta,
                       workerPaths: DxWorkerPaths,
                       fileUploader: FileUploader): Option[WdlTaskSupport] = {
-    val (doc, typeAliases) =
+    val (task, typeAliases, doc) =
       try {
-        WdlUtils.parseSourceString(jobMeta.sourceCode, jobMeta.fileResolver)
+        WdlUtils.parseSingleTask(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None
       }
-    if (doc.workflow.isDefined) {
-      throw new Exception("a workflow that shouldn't be a member of this document")
-    }
-    val tasks = doc.elements.collect {
-      case task: TAT.Task => task.name -> task
-    }.toMap
-    if (tasks.isEmpty) {
-      throw new Exception("no tasks in this WDL program")
-    }
-    if (tasks.size > 1) {
-      throw new Exception("More than one task in this WDL program")
-    }
     Some(
-        WdlTaskSupport(tasks.values.head,
-                       doc.version.value,
-                       typeAliases,
-                       jobMeta,
-                       workerPaths,
-                       fileUploader)
+        WdlTaskSupport(task, doc.version.value, typeAliases, jobMeta, workerPaths, fileUploader)
     )
   }
 }

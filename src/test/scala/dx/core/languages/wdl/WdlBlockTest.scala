@@ -2,35 +2,39 @@ package dx.core.languages.wdl
 
 import java.nio.file.{Path, Paths}
 
-import dx.api.DxApi
-import dx.core.languages.wdl.{Bundle => WdlBundle}
+import dx.Tags.EdgeTest
+import dx.core.ir.{Block, BlockKind}
+import dx.core.languages.wdl.{Utils => WdlUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.Logger
 
 class WdlBlockTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet
-  private val dxApi = DxApi(logger)
-  private val parseWdlSourceFile = ParseSource(dxApi)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
   }
 
-  def mapFromOutputs(outputs: Vector[WdlBlock.OutputDefinition]): Map[String, WdlTypes.T] = {
+  private def mapFromOutputs(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = {
     outputs.map {
-      case WdlBlock.OutputDefinition(name, wdlType, _) => name -> wdlType
+      case TAT.OutputDefinition(name, wdlType, _, _) => name -> wdlType
     }.toMap
   }
 
-  it should "calculate closure correctly" in {
-    val path = pathFromBasename("util", "block_closure.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
+  private def getDocument(dir: String, basename: String): TAT.Document = {
+    val path = pathFromBasename(dir, basename)
+    val (doc, _) = WdlUtils.parseSourceFile(path)
+    doc
+  }
+  private def getWorkflowBlocks(dir: String, basename: String): Vector[WdlBlock] = {
+    WdlBlock.createBlocks(getDocument(dir, basename).workflow.get.body)
+  }
 
+  it should "calculate closure correctly" in {
+    val blocks = getWorkflowBlocks("util", "block_closure.wdl")
     /*System.out.println(s"""|block #0 =
                                |${subBlocks(0).prettyPrintApproxWdl}}
                                |""".stripMargin)*/
@@ -42,11 +46,7 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "calculate outputs correctly" in {
-    val path = pathFromBasename("util", "block_closure.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("util", "block_closure.wdl")
     mapFromOutputs(blocks(1).outputs) should be(
         Map("inc2.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
     )
@@ -64,11 +64,7 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "calculate outputs correctly II" in {
-    val path = pathFromBasename("compiler", "wf_linear.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("compiler", "wf_linear.wdl")
     mapFromOutputs(blocks(1).outputs) should be(
         Map("z" -> WdlTypes.T_Int, "mul.result" -> WdlTypes.T_Int)
     )
@@ -76,38 +72,24 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle block zero" in {
-    val path = pathFromBasename("util", "block_zero.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("util", "block_zero.wdl")
     mapFromOutputs(blocks(0).outputs) should be(
         Map("rain" -> WdlTypes.T_Int, "inc.result" -> WdlTypes.T_Optional(WdlTypes.T_Int))
     )
   }
 
   it should "block with two calls or more" in {
-    val path = pathFromBasename("util", "block_with_three_calls.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
+    val blocks = getWorkflowBlocks("util", "block_with_three_calls.wdl")
     blocks.size should be(1)
   }
 
   it should "split a block with an expression after a call" in {
-    val path = pathFromBasename("util", "expression_after_call.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
+    val blocks = getWorkflowBlocks("util", "expression_after_call.wdl")
     blocks.size should be(2)
   }
 
   it should "calculate closure correctly for WDL draft-2" in {
-    val path = pathFromBasename("draft2", "block_closure.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("draft2", "block_closure.wdl")
     blocks(1).inputs.map(_.name).toSet should be(Set("flag", "rain"))
     blocks(2).inputs.map(_.name).toSet should be(Set("flag", "inc1.result"))
     blocks(3).inputs.map(_.name).toSet should be(Set("rain"))
@@ -115,128 +97,70 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "calculate closure correctly for WDL draft-2 II" in {
-    val path = pathFromBasename("draft2", "shapes.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("draft2", "shapes.wdl")
     blocks(0).inputs.map(_.name).toSet should be(Set("num"))
     blocks(1).inputs.map(_.name).toSet should be(Set.empty)
   }
 
   it should "calculate closure for a workflow with expression outputs" in {
-    val path = pathFromBasename("compiler", "wf_with_output_expressions.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val wfOutputs = wf.outputs.map(WdlBlock.translate)
-    WdlBlock.outputClosure(wfOutputs).keys.toSet should be(Set("a", "b"))
+    val doc = getDocument("compiler", "wf_with_output_expressions.wdl")
+    val outputClosure = WdlUtils.getOutputClosure(doc.workflow.get.outputs)
+    outputClosure.keys.toSet should be(Set("a", "b"))
   }
 
   it should "calculate output closure for a workflow" in {
-    val path = pathFromBasename("compiler", "cast.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val wfOutputs = wf.outputs.map(WdlBlock.translate)
-    WdlBlock.outputClosure(wfOutputs).keys.toSet should be(
+    val doc = getDocument("compiler", "cast.wdl")
+    val outputClosure = WdlUtils.getOutputClosure(doc.workflow.get.outputs)
+    outputClosure.keys.toSet should be(
         Set("Add.result", "SumArray.result", "SumArray2.result", "JoinMisc.result")
     )
   }
 
   it should "identify simple calls even if they have optionals" in {
-    val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
-
-    for (i <- 0 to 2) {
-      WdlBlock.categorize(blocks(i)) shouldBe a[WdlBlock.CallDirect]
-    }
+    val blocks = getWorkflowBlocks("util", "missing_inputs_to_direct_call.wdl")
+    blocks.foreach(_.kind shouldBe BlockKind.CallDirect)
   }
 
   it should "categorize correctly calls to subworkflows" in {
-    val path = pathFromBasename("subworkflows", "trains.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("Could not find the workflow in the source")
-    }
-
-    val blocks = WdlBlock.splitWorkflow(wf)
-
-    WdlBlock.categorize(blocks(0)) shouldBe a[WdlBlock.ScatterOneCall]
+    val blocks = getWorkflowBlocks("subworkflows", "trains.wdl")
+    blocks.head.kind shouldBe BlockKind.ScatterOneCall
   }
 
   ignore should "get subblocks" in {
-    val path = pathFromBasename("nested", "two_levels.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
+    val blocks = getWorkflowBlocks("nested", "two_levels.wdl")
 
-    val b0 = WdlBlock.getSubBlock(Vector(0), wf.body)
-    WdlBlock.categorize(b0) shouldBe a[WdlBlock.ScatterFullBlock]
+    val b0 = Block.getSubBlockAt(blocks, Vector(0))
+    b0.kind shouldBe BlockKind.ScatterComplex
 
-    val b1 = WdlBlock.getSubBlock(Vector(1), wf.body)
-    WdlBlock.categorize(b1) shouldBe a[WdlBlock.CondOneCall]
+    val b1 = Block.getSubBlockAt(blocks, Vector(1))
+    b1.kind shouldBe BlockKind.ConditionalOneCall
 
-    val b2 = WdlBlock.getSubBlock(Vector(2), wf.body)
-    WdlBlock.categorize(b2) shouldBe a[WdlBlock.CallDirect]
+    val b2 = Block.getSubBlockAt(blocks, Vector(2))
+    b2.kind shouldBe BlockKind.CallDirect
 
-    val b00 = WdlBlock.getSubBlock(Vector(0, 0), wf.body)
-    WdlBlock.categorize(b00) shouldBe a[WdlBlock.CallDirect]
+    val b00 = Block.getSubBlockAt(blocks, Vector(0, 0))
+    b00.kind shouldBe BlockKind.CallDirect
 
-    val b01 = WdlBlock.getSubBlock(Vector(0, 1), wf.body)
-    WdlBlock.categorize(b01) shouldBe a[WdlBlock.CallDirect]
+    val b01 = Block.getSubBlockAt(blocks, Vector(0, 1))
+    b01.kind shouldBe BlockKind.CallDirect
 
-    val b02 = WdlBlock.getSubBlock(Vector(0, 2), wf.body)
-    WdlBlock.categorize(b02) shouldBe a[WdlBlock.CallFragment]
+    val b02 = Block.getSubBlockAt(blocks, Vector(0, 2))
+    b02.kind shouldBe BlockKind.CallFragment
   }
 
   it should "handle calls to imported modules II" in {
-    val path = pathFromBasename("draft2", "block_category.wdl")
-    val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, Vector.empty)
-
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("unexpected")
-    }
-    val blocks = WdlBlock.splitWorkflow(wf)
-    WdlBlock.categorize(blocks(0)) shouldBe a[WdlBlock.CondOneCall]
+    val blocks = getWorkflowBlocks("draft2", "block_category.wdl")
+    blocks.head.kind shouldBe BlockKind.ConditionalOneCall
   }
 
   it should "handle calls to imported modules" in {
-    val path = pathFromBasename("draft2", "conditionals1.wdl")
-    val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, Vector.empty)
-
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("unexpected")
-    }
-    val blocks = WdlBlock.splitWorkflow(wf)
-
-    for (i <- blocks.indices) {
-      val b = blocks(i)
-      /*            System.out.println(s"""|BLOCK #${i} = [
-                                   |${b.prettyPrintApproxWdl}
-                                   |]
-                                   |""".stripMargin)*/
-      val catg = WdlBlock.categorize(b)
-      logger.ignore(catg)
-    }
+    logger.ignore(getWorkflowBlocks("draft2", "conditionals1.wdl"))
   }
 
   it should "compile a workflow calling a subworkflow as a direct call" in {
-    val path = pathFromBasename("draft2", "movies.wdl")
-    val (_, _, wdlBundle: WdlBundle, _, _) =
-      parseWdlSourceFile.apply(path, Vector.empty)
-
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("unexpected")
-    }
-
+    val blocks = getWorkflowBlocks("draft2", "movies.wdl")
     // Find the fragment block to execute
-    val block = WdlBlock.getSubBlock(Vector(0), wf.body)
+    val block = Block.getSubBlockAt(blocks, Vector(0))
 
     /*
         val dbgBlock = block.nodes.map{
@@ -247,16 +171,11 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
                                |""".stripMargin)
      */
 
-    WdlBlock.categorize(block) shouldBe a[WdlBlock.CallDirect]
+    block.kind shouldBe BlockKind.CallDirect
   }
 
   it should "sort a block correctly in the presence of conditionals" taggedAs EdgeTest in {
-    val path = pathFromBasename("draft2", "conditionals3.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-
-    val blocks = WdlBlock.splitWorkflow(wf)
-
+    val blocks = getWorkflowBlocks("draft2", "conditionals3.wdl")
     mapFromOutputs(blocks(0).outputs) should be(
         Map(
             "i1" -> WdlTypes.T_Optional(WdlTypes.T_Int),
@@ -268,31 +187,17 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "find the correct number of scatters" in {
-    val path = pathFromBasename("draft2", "conditionals_base.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
-
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("unexpected")
-    }
-
-    val scatters: Seq[TAT.Scatter] = wf.body.collect {
-      case n: TAT.Scatter => n
+    val blocks = getWorkflowBlocks("draft2", "conditionals_base.wdl")
+    val scatters = blocks.filter { block =>
+      Set(BlockKind.ScatterOneCall, BlockKind.ScatterComplex).contains(block.kind)
     }
     scatters.size should be(1)
   }
 
   it should "sort a subblock properly" in {
-    val path = pathFromBasename("draft2", "conditionals4.wdl")
-    val (_, _, wdlBundle, _, _) = parseWdlSourceFile.apply(path, Vector.empty)
-
-    val wf = wdlBundle.primaryCallable match {
-      case Some(wf: TAT.Workflow) => wf
-      case _                      => throw new Exception("unexpected")
-    }
-
+    val blocks = getWorkflowBlocks("draft2", "conditionals4.wdl")
     // Find the fragment block to execute
-    val b = WdlBlock.getSubBlock(Vector(1), wf.body)
+    val b = Block.getSubBlockAt(blocks, Vector(1))
     /*        System.out.println(s"""|BLOCK #1 = [
                                |${b.prettyPrintApproxWdl}
                                |]
@@ -301,43 +206,37 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
   }
 
   it should "handle an empty workflow" in {
-    val path = pathFromBasename("util", "empty_workflow.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val blocks = WdlBlock.splitWorkflow(wf)
+    val blocks = getWorkflowBlocks("util", "empty_workflow.wdl")
     blocks.size shouldBe 0
   }
 
   it should "detect when inputs are used as outputs" in {
-    val path = pathFromBasename("util", "inputs_used_as_outputs.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val wfInputs = wf.inputs.map(WdlBlock.translate)
-    val wfOutputs = wf.outputs.map(WdlBlock.translate)
-    WdlBlock.inputsUsedAsOutputs(wfInputs, wfOutputs) shouldBe Set("lane")
+    val doc = getDocument("util", "inputs_used_as_outputs.wdl")
+    val wf = doc.workflow.get
+    val inputs = wf.inputs.map(WdlBlockInput.translate)
+    val inputsUsedAsOutputs =
+      inputs.map(_.name).toSet.intersect(WdlUtils.getOutputClosure(wf.outputs).keySet)
+    inputsUsedAsOutputs shouldBe Set("lane")
   }
 
+  // TODO: this seems like a useless test, or at least one that doesn't belong here
   it should "create correct inputs for a workflow with an unpassed argument" in {
-    val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
-    val names = wf.inputs.map(_.name).toSet
+    val doc = getDocument("bugs", "unpassed_argument_propagation.wdl")
+    val names = doc.workflow.get.inputs.map(_.name).toSet
     names shouldBe Set.empty[String]
   }
 
   it should "figure out when a block has no calls" taggedAs EdgeTest in {
-    val path = pathFromBasename("block", "b1.wdl")
-    val wfSourceCode = Util.readFileContent(path)
-    val (wf, _, _, _) = parseWdlSourceFile.parseWdlWorkflow(wfSourceCode)
+    val blocks = getWorkflowBlocks("block", "b1.wdl")
 
-    val b0 = WdlBlock.getSubBlock(Vector(0), wf.body)
-    WdlBlock.categorize(b0) shouldBe a[WdlBlock.ScatterFullBlock]
+    val b0 = Block.getSubBlockAt(blocks, Vector(0))
+    b0.kind shouldBe BlockKind.ScatterComplex
 
-    val b00 = WdlBlock.getSubBlock(Vector(0, 0), wf.body)
+    val b00 = Block.getSubBlockAt(blocks, Vector(0, 0))
 
 //    val bl33 = WdlPrettyPrintApproxWdl.apply(b00.nodes)
 //    System.out.println(bl33)
 
-    WdlBlock.categorize(b00) shouldBe a[WdlBlock.CondOneCall]
+    b00.kind shouldBe BlockKind.ConditionalOneCall
   }
 }

@@ -29,8 +29,9 @@ object Runtime {
   val MiB: Double = 1024 * 1024
   val GiB: Double = 1024 * 1024 * 1024
   val DxHintsKey = "dnanexus"
+  val DxInstanceTypeKey = "dx_instance_type"
   case object InstanceType
-      extends DxRuntimeHint(Some("dx_instance_type"), "instance_type", Vector(T_String))
+      extends DxRuntimeHint(Some(DxInstanceTypeKey), "instance_type", Vector(T_String))
 }
 
 case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
