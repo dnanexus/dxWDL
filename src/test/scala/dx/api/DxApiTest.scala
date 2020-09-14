@@ -1,14 +1,19 @@
 package dx.api
 
+import dx.Assumptions.isLoggedIn
+import dx.Tags.ApiTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.util.Logger
 
-class DxUtilsTest extends AnyFlatSpec with Matchers {
-  val dxApi: DxApi = DxApi(Logger.Quiet)
-  val testProject = "dxWDL_playground"
+class DxApiTest extends AnyFlatSpec with Matchers {
+  assume(isLoggedIn)
+  private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val testProject = "dxWDL_playground"
+  private val testRecord = "record-Fgk7V7j0f9JfkYK55P7k3jGY"
+  private val testFile = "file-FJ1qyg80ffP9v6gVPxKz9pQ7"
 
-  lazy val dxTestProject: DxProject =
+  private lazy val dxTestProject: DxProject = {
     try {
       dxApi.resolveProject(testProject)
     } catch {
@@ -18,6 +23,17 @@ class DxUtilsTest extends AnyFlatSpec with Matchers {
                 |the platform on staging.""".stripMargin
         )
     }
+  }
+
+  ignore should "describe a record with details" taggedAs ApiTest in {
+    val record = dxApi.record(testRecord, Some(dxTestProject))
+    dxApi.logger.ignore(record.describe(Set(Field.Details)))
+  }
+
+  ignore should "describe a file with details" taggedAs ApiTest in {
+    val record = dxApi.file(testFile, Some(dxTestProject))
+    dxApi.logger.ignore(record.describe())
+  }
 
   it should "download files as strings" in {
     val results = dxApi.resolveBulk(Vector(s"dx://${testProject}:/test_data/fileA"), dxTestProject)

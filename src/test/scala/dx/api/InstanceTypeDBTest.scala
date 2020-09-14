@@ -1,5 +1,6 @@
 package dx.api
 
+import dx.Tags.{ApiTest, EdgeTest}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -141,14 +142,13 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
     InstanceTypeDB(pricingInfo, db)
   }
 
-  private val dbFull = genTestDB(true)
   private val dxApi: DxApi = DxApi(Logger.Quiet)
+  private val dbFull = genTestDB(true)
   private val dbNoPrices = genTestDB(false)
 
   it should "compare two instance types" in {
     dbFull.lteqByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be(true)
     dbFull.lteqByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be(false)
-
     // non existant instance
     dbFull.lteqByResources("mem1_ssd2_x2", "ggxx") should be(false)
   }
@@ -167,7 +167,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "pretty print" in {
     // Test pretty printing
-    dxApi.logger.ignore(dbFull.prettyFormat())
+    Logger.get.ignore(dbFull.prettyFormat())
   }
 
   it should "work on large instances (JIRA-1258)" in {
@@ -267,7 +267,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
   }
 
   // FIXME: This test will not pass on CI/CD as we are using scoped-token.
-  ignore should "Query returns correct pricing models for org and user" in {
+  ignore should "Query returns correct pricing models for org and user" taggedAs (ApiTest) in {
     val userBilltoProject = dxApi.project("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
     val orgBilltoProject = dxApi.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
 

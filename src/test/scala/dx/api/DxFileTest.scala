@@ -1,5 +1,7 @@
 package dx.api
 
+import dx.Assumptions.isLoggedIn
+import dx.Tags.ApiTest
 import dx.core.io.DxFileDescCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,6 +33,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
                             expected: Vector[DxFile],
                             expectedSize: Option[Int] = None,
                             compareDetails: Boolean = false): Unit = {
+    assume(isLoggedIn)
     val extraArgs = if (compareDetails) Set(Field.Details) else Set.empty[Field.Value]
     val result = dxApi.fileBulkDescribe(query, extraArgs)
     result.size shouldBe expectedSize.getOrElse(expected.size)
@@ -90,38 +93,38 @@ class DxFileTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "bulk describe DxFiles with one project" in {
+  it should "bulk describe DxFiles with one project" taggedAs ApiTest in {
     val query = Vector(FILE1, FILE2, FILE3)
     checkFileDesc(query, createFiles(query, Vector("fileA", "fileB", "fileC")))
   }
 
-  it should "bulk describe a file without project" in {
+  it should "bulk describe a file without project" taggedAs ApiTest in {
     val query = Vector(FILE7_WO_PROJ)
     checkFileDesc(query, createFiles(query, Vector("test4.test"), Vector(publicProject)))
   }
 
-  it should "bulk describe an empty vector" in {
+  it should "bulk describe an empty vector" taggedAs ApiTest in {
     val result = dxApi.fileBulkDescribe(Vector.empty)
     result.size shouldBe 0
   }
 
-  it should "bulk describe a duplicate file in vector" in {
+  it should "bulk describe a duplicate file in vector" taggedAs ApiTest in {
     checkFileDesc(Vector(FILE1, FILE2, FILE1),
                   createFiles(Vector(FILE1, FILE2), Vector("fileA", "fileB")))
   }
 
-  it should "bulk describe a duplicate file in vector2" in {
+  it should "bulk describe a duplicate file in vector2" taggedAs ApiTest in {
     checkFileDesc(Vector(FILE6, FILE6_WO_PROJ),
                   Vector(createFile(FILE6, "test3.test")),
                   expectedSize = Some(2))
   }
 
-  it should "bulk describe a files from multiple projects" in {
+  it should "bulk describe a files from multiple projects" taggedAs ApiTest in {
     val query = Vector(FILE1, FILE2, FILE5)
     checkFileDesc(query, createFiles(query, Vector("fileA", "fileB", "test2.test")))
   }
 
-  it should "bulk describe a files with and without project" in {
+  it should "bulk describe a files with and without project" taggedAs ApiTest in {
     val query = Vector(FILE4, FILE6_WO_PROJ, FILE7_WO_PROJ)
     checkFileDesc(query,
                   createFiles(query,
@@ -129,7 +132,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
                               Vector(publicProject, publicProject, publicProject)))
   }
 
-  it should "describe files in bulk with extrafields" in {
+  it should "describe files in bulk with extrafields" taggedAs ApiTest in {
     val expected = Vector(
         createFile(FILE_IN_TWO_PROJS,
                    "File_copied_to_another_project",
@@ -140,18 +143,18 @@ class DxFileTest extends AnyFlatSpec with Matchers {
     checkFileDesc(Vector(FILE_IN_TWO_PROJS, FILE2), expected, compareDetails = true)
   }
 
-  it should "Describe files in bulk without extrafield values - details value should be none" in {
+  it should "Describe files in bulk without extrafield values - details value should be none" taggedAs ApiTest in {
     val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
     results.foreach(f => f.describe().details shouldBe None)
   }
 
-  it should "bulk describe file which is in two projects, but projects where to search is given" in {
+  it should "bulk describe file which is in two projects, but projects where to search is given" taggedAs ApiTest in {
     val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS))
     results.forall(_.hasCachedDesc) shouldBe true
     results.size shouldBe 1
   }
 
-  it should "bulk describe file which is in two projects, project where to search is not given" in {
+  it should "bulk describe file which is in two projects, project where to search is not given" taggedAs ApiTest in {
     val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
     results.forall(_.hasCachedDesc) shouldBe true
     results.size shouldBe 2

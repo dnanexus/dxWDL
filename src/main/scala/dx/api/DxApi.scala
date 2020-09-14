@@ -199,7 +199,7 @@ case class DxApi(logger: Logger = Logger.get,
   }
 
   private def call(fn: (Any, Class[JsonNode], DXEnvironment) => JsonNode,
-                   fields: Map[String, JsValue]): JsObject = {
+                   fields: Map[String, JsValue] = Map.empty): JsObject = {
     val request = objMapper.readTree(JsObject(fields).prettyPrint)
     val response = fn(request, classOf[JsonNode], dxEnv)
     response.toString.parseJson.asJsObject
@@ -211,6 +211,19 @@ case class DxApi(logger: Logger = Logger.get,
     val request = objMapper.readTree(JsObject(fields).prettyPrint)
     val response = fn(objectId, request, classOf[JsonNode], dxEnv)
     response.toString.parseJson.asJsObject
+  }
+
+  def whoami(): String = {
+    call(DXAPI.systemWhoami[JsonNode]) match {
+      case JsObject(fields) =>
+        fields.get("id") match {
+          case Some(JsString(id)) => id
+          case other =>
+            throw new Exception(s"unexpected whoami result ${other}")
+        }
+      case other =>
+        throw new Exception(s"unexpected whoami result ${other}")
+    }
   }
 
   def analysisDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
