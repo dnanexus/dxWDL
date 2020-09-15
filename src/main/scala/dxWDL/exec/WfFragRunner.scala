@@ -39,7 +39,6 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.Paths
 
-import dxWDL.Main.InternalOp
 import spray.json._
 import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
 import wom.callable.Callable._

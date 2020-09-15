@@ -13,7 +13,7 @@ class ExtrasTest extends FlatSpec with Matchers {
   val verbose2 = Verbose(false, true, Set.empty)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
+    val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json")
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
@@ -398,7 +398,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
 
-    val appId: String = getIdFromName("cloud_workstation")
+    val appId: String = getIdFromName("app-cloud_workstation")
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {
