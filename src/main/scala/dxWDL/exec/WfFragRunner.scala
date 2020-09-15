@@ -85,14 +85,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
   private val taskSourceDir: Map[String, String] =
     ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
   private lazy val scatterStart = jobDesc.details match {
-    case Some(JsObject(fields)) =>
+    case Some(JsObject(fields)) if fields.contains(Utils.CONTINUE_START) =>
       fields(Utils.CONTINUE_START) match {
         case JsNumber(s) => s.toIntExact
         case other =>
-          throw new Exception(s"Invalid value ${other} for  ${Utils.CONTINUE_START}")
+          throw new Exception(s"Invalid value ${other} for ${Utils.CONTINUE_START}")
       }
-    case None => 0
-    case _    => throw new Exception(s"invalid job details ${jobDesc.details}")
+    case _ => 0
   }
 
   var gSeqNum = 0
