@@ -3,17 +3,18 @@ package dx.compiler
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Files, Path, Paths}
 
+import dx.Assumptions.isLoggedIn
 import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.core
-import dx.core.languages.wdl.{ParseSource, parseWdlTasks}
+import dx.core.languages.wdl.{parseWdlTasks}
 import dx.core.util.MainUtils.Success
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.{Logger, Util}
+import wdlTools.util.{Logger}
 
 import scala.io.Source
 
@@ -22,7 +23,8 @@ import scala.io.Source
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
+class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
+  assume(isLoggedIn)
   private val logger = Logger.Quiet
   private val dxApi = DxApi(logger)
 
@@ -118,7 +120,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     tmpExtras.toString
   }
 
-  it should "Native compile a linear WDL workflow" taggedAs NativeTestXX in {
+  it should "Native compile a linear WDL workflow" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
     val retval = Main.compile(
         path.toString
@@ -127,21 +129,21 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Success]
   }
 
-  it should "Native compile a workflow with a scatter without a call" taggedAs NativeTestXX in {
+  it should "Native compile a workflow with a scatter without a call" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "scatter_no_call.wdl")
     Main.compile(
         path.toString :: cFlags
     ) shouldBe a[Success]
   }
 
-  it should "Native compile a draft2 workflow" taggedAs NativeTestXX in {
+  it should "Native compile a draft2 workflow" taggedAs NativeTest in {
     val path = pathFromBasename("draft2", "shapes.wdl")
     Main.compile(
         path.toString :: "--force" :: cFlags
     ) shouldBe a[Success]
   }
 
-  it should "handle various conditionals" taggedAs NativeTestXX in {
+  it should "handle various conditionals" taggedAs NativeTest in {
     val path = pathFromBasename("draft2", "conditionals_base.wdl")
     Main.compile(
         path.toString
@@ -152,7 +154,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Success]
   }
 
-  it should "be able to build interfaces to native applets" taggedAs NativeTestXX in {
+  it should "be able to build interfaces to native applets" taggedAs NativeTest in {
     val outputPath: Path = Files.createTempFile("dx_extern", ".wdl")
     Main.dxni(
         List("--force",
@@ -219,7 +221,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     tasks.keySet shouldBe Set("native_sum")
   }
 
-  it should "build an interface to an applet specified by ID" taggedAs NativeTestXX in {
+  it should "build an interface to an applet specified by ID" taggedAs NativeTest in {
     val dxObj = dxApi.resolveOnePath(
         s"${DxPath.DxUriPrefix}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
     )
@@ -894,7 +896,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     y.default shouldBe Some(IOParameterDefaultNumber(5))
   }
 
-  it should "deep nesting" taggedAs NativeTestXX in {
+  it should "deep nesting" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
     Main.compile(
         path.toString
@@ -905,7 +907,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ) shouldBe a[Success]
   }
 
-  it should "make default task timeout 48 hours" taggedAs NativeTestXX in {
+  it should "make default task timeout 48 hours" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val appId = Main.compile(
         path.toString :: "--force" :: cFlags
@@ -930,7 +932,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     )
   }
 
-  it should "timeout can be overriden from the extras file" taggedAs NativeTestXX in {
+  it should "timeout can be overriden from the extras file" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout_override.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
     val appId = Main.compile(
@@ -956,7 +958,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   }
 
-  it should "allow choosing GPU instances" taggedAs NativeTestXX in {
+  it should "allow choosing GPU instances" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "GPU2.wdl")
 
     val appId = Main.compile(path.toString :: cFlags) match {
@@ -1102,7 +1104,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     trainsOutputVector.outputVars.size shouldBe 1
   }
 
-  it should "Set job-reuse flag" taggedAs NativeTestXX in {
+  it should "Set job-reuse flag" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -1129,7 +1131,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
 
-  it should "set job-reuse flag on workflow" taggedAs NativeTestXX in {
+  it should "set job-reuse flag on workflow" taggedAs NativeTest in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{
@@ -1156,7 +1158,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
 
-  it should "set delayWorkspaceDestruction on applet" taggedAs NativeTestXX in {
+  it should "set delayWorkspaceDestruction on applet" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =
       """|{
@@ -1183,7 +1185,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     delayWD shouldBe Some(JsTrue)
   }
 
-  it should "set delayWorkspaceDestruction on workflow" taggedAs NativeTestXX in {
+  it should "set delayWorkspaceDestruction on workflow" taggedAs NativeTest in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     val extrasContent =
       """|{

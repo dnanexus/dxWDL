@@ -1,10 +1,12 @@
-package dx.compiler
+package dx.translator
 
 import java.nio.file.{Path, Paths}
 
 import dx.api._
+import dx.compiler.Main
 import dx.compiler.Main.SuccessIR
-import dx.compiler.ParameterMeta.{translateMetaKVs, translateMetaValue => translate}
+import dx.core.ir.{ExecutableKindApplet, _}
+import dx.core.languages.wdl.{Utils => WdlUtils}
 import dx.core.util.MainUtils.{Failure, UnsuccessfulTermination}
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,12 +18,18 @@ import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
 //
-class GenerateIRTest extends AnyFlatSpec with Matchers {
+class TranslatorTest extends AnyFlatSpec with Matchers {
   private val dxApi = DxApi(Logger.Quiet)
 
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
+  }
+
+  private def pathAndDocument(dir: String, basename: String): (Path, TAT.Document) = {
+    val path = pathFromBasename(dir, basename)
+    val (doc, _) = WdlUtils.parseSourceFile(path)
+    (path, doc)
   }
 
   private val dxProject = dxApi.currentProject
@@ -49,161 +57,151 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   private def getParamMeta(task: TAT.Task, iDef: TAT.InputDefinition): Option[TAT.MetaValue] = {
     task.parameterMeta match {
-      case None => None
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        kvs.get(iDef.name)
+      case None                          => None
+      case Some(TAT.MetaSection(kvs, _)) => kvs.get(iDef.name)
     }
   }
 
   it should "IR compile a single WDL task" in {
     val path = pathFromBasename("compiler", "add.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a task with docker" in {
     val path = pathFromBasename("compiler", "BroadGenomicsDocker.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // workflow compilation
   it should "IR compile a linear WDL workflow without expressions" in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a linear WDL workflow" in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile unlocked workflow" in {
     val path = pathFromBasename("compiler", "wf_linear.wdl")
-    Main.compile(
-        path.toString :: cFlagsUnlocked
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlagsUnlocked
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a non trivial linear workflow with variable coercions" in {
     val path = pathFromBasename("compiler", "cast.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a workflow with two consecutive calls" in {
     val path = pathFromBasename("compiler", "strings.wdl")
-    Main.compile(path.toString :: cFlags) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a workflow with a scatter without a call" in {
     val path = pathFromBasename("compiler", "scatter_no_call.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile optionals" in {
     val path = pathFromBasename("compiler", "optionals.wdl")
-    Main.compile(
-        path.toString
-//                :: "--verbose"
-//                :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    //                :: "--verbose"
+    //                :: "--verboseKey" :: "GenerateIR"
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "support imports" in {
     val path = pathFromBasename("compiler", "check_imports.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "IR compile a draft2 workflow" in {
     val path = pathFromBasename("draft2", "shapes.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "expressions in an output block" in {
     val path = pathFromBasename("compiler", "expr_output_block.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   /*  ignore should "scatters over maps" in {
     val path = pathFromBasename("compiler", "dict2.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args =         path.toString :: cFlags
+Main.compile(args.toVector) shouldBe a[SuccessIR]
   }*/
 
   it should "skip missing optional arguments" in {
     val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "handle calling subworkflows" in {
     val path = pathFromBasename("subworkflows", "trains.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val irwf = retval match {
       case SuccessIR(irwf, _) => irwf
       case _                  => throw new Exception("unexpected")
     }
-    val primaryWf: IR.Workflow = irwf.primaryCallable match {
-      case Some(wf: IR.Workflow) => wf
-      case _                     => throw new Exception("unexpected")
+    val primaryWf: Workflow = irwf.primaryCallable match {
+      case Some(wf: Workflow) => wf
+      case _                  => throw new Exception("unexpected")
     }
     primaryWf.stages.size shouldBe 2
   }
 
   it should "compile a sub-block with several calls" in {
     val path = pathFromBasename("compiler", "subblock_several_calls.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "missing workflow inputs" in {
     val path = pathFromBasename("input_file", "missing_args.wdl")
-    Main.compile(
-        path.toString :: List("--compileMode", "ir", "--quiet", "--project", dxProject.id)
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: List("--compileMode", "ir", "--quiet", "--project", dxProject.id)
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Nested blocks
   it should "compile two level nested workflow" in {
     val path = pathFromBasename("nested", "two_levels.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "handle passing closure arguments to nested blocks" in {
     val path = pathFromBasename("nested", "param_passing.wdl")
-    Main.compile(
-        path.toString :: cFlags
-    ) shouldBe a[SuccessIR]
+    val args = path.toString :: cFlags
+    Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   it should "compile a workflow calling a subworkflow as a direct call" in {
     val path = pathFromBasename("draft2", "movies.wdl")
-    val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
+    val args = path.toString :: cFlags
+    val bundle: Bundle = Main.compile(args.toVector) match {
       case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
-    val wf: IR.Workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) =>
+    val wf: Workflow = bundle.primaryCallable match {
+      case Some(wf: Workflow) =>
         wf
       case _ => throw new Exception("bad value in bundle")
     }
@@ -213,14 +211,15 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "compile a workflow calling a subworkflow as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "movies.wdl")
-    val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
+    val args = path.toString :: cFlags
+    val bundle: Bundle = Main.compile(args.toVector) match {
       case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
-    val wf: IR.Workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) =>
+    val wf: Workflow = bundle.primaryCallable match {
+      case Some(wf: Workflow) =>
         wf
       case _ => throw new Exception("bad value in bundle")
     }
@@ -230,14 +229,15 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with 2.0 version" in {
     val path = pathFromBasename("v2", "call_dnanexus_applet.wdl")
-    val bundle: IR.Bundle = Main.compile(path.toString :: cFlags) match {
+    val args = path.toString :: cFlags
+    val bundle: Bundle = Main.compile(args.toVector) match {
       case SuccessIR(bundle, _) => bundle
       case other =>
         Logger.error(other.toString)
         throw new Exception(s"Failed to compile ${path}")
     }
-    val wf: IR.Workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) =>
+    val wf: Workflow = bundle.primaryCallable match {
+      case Some(wf: Workflow) =>
         wf
       case _ => throw new Exception("bad value in bundle")
     }
@@ -248,33 +248,31 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "three nesting levels" in {
     val path = pathFromBasename("nested", "three_levels.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
-    val primary: IR.Callable = bundle.primaryCallable.get
+    val primary: Callable = bundle.primaryCallable.get
     val wf = primary match {
-      case wf: IR.Workflow => wf
-      case _               => throw new Exception("unexpected")
+      case wf: Workflow => wf
+      case _            => throw new Exception("unexpected")
     }
 
     wf.stages.size shouldBe 1
 
     val level2 = bundle.allCallables(wf.name)
-    level2 shouldBe a[IR.Workflow]
-    val wfLevel2 = level2.asInstanceOf[IR.Workflow]
+    level2 shouldBe a[Workflow]
+    val wfLevel2 = level2.asInstanceOf[Workflow]
     wfLevel2.stages.size shouldBe 1
   }
 
   it should "four nesting levels" in {
     val path = pathFromBasename("nested", "four_levels.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     /*        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
@@ -282,20 +280,24 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     retval shouldBe a[SuccessIR]
   }
 
-  private def getAppletByName(name: String, bundle: IR.Bundle): IR.Applet =
+  private def getApplicationByName(name: String, bundle: Bundle): Application =
     bundle.allCallables(name) match {
-      case a: IR.Applet => a
-      case _            => throw new Exception(s"${name} is not an applet")
+      case a: Application => a
+      case _              => throw new Exception(s"${name} is not an applet")
     }
 
-  private def getTaskByName(
-      name: String,
-      bundle: IR.Bundle
-  ): TAT.Task = {
-    val applet = getAppletByName(name, bundle)
+  private def getTaskByName(name: String, bundle: Bundle, doc: TAT.Document): TAT.Task = {
+    val applet = getApplicationByName(name, bundle)
     val task: TAT.Task = applet.kind match {
-      case IR.AppletKindTask(x) => x
-      case _                    => throw new Exception(s"${name} is not a task")
+      case ExecutableKindApplet =>
+        doc.elements
+          .collectFirst {
+            case task: TAT.Task if task.name == name => task
+          }
+          .getOrElse(
+              throw new Exception(s"no task names ${name}")
+          )
+      case _ => throw new Exception(s"${name} is not a task")
     }
     task
   }
@@ -303,46 +305,45 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `pattern` keyword
   it should "recognize pattern in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("pattern_params_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("pattern_params_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            Type.TFile,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The input file to be searched"),
-                    IR.IOAttrPatterns(IR.PatternsReprArray(Vector("*.txt", "*.tsv"))),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Input file")
+                    IOAttrHelp("The input file to be searched"),
+                    IOAttrPatterns(PatternsReprArray(Vector("*.txt", "*.tsv"))),
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Input file")
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The pattern to use to search in_file"),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Search pattern")
+                    IOAttrHelp("The pattern to use to search in_file"),
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Search pattern")
                 )
             )
         )
     )
-    cgrepApplet.outputs shouldBe Vector(
-        IR.CVar("count", WdlTypes.T_Int, None, None),
-        IR.CVar(
+    cgrepApplication.outputs shouldBe Vector(
+        CVar("count", WdlTypes.T_Int, None, None),
+        CVar(
             "out_file",
             WdlTypes.T_File,
             None,
@@ -353,53 +354,52 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   // Check parameter_meta `pattern` keyword
   it should "recognize pattern object in parameters_obj_meta via CVar for input CVars" in {
-    val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val (path, doc) = pathAndDocument("compiler", "pattern_obj_params.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("pattern_params_obj_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("pattern_params_obj_cgrep", bundle, doc)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The input file to be searched"),
-                    IR.IOAttrPatterns(
-                        IR.PatternsReprObj(
+                    IOAttrHelp("The input file to be searched"),
+                    IOAttrPatterns(
+                        PatternsReprObj(
                             Some(Vector("*.txt", "*.tsv")),
                             Some("file"),
                             Some(Vector("foo", "bar"))
                         )
                     ),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Input file")
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Input file")
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The pattern to use to search in_file"),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Search pattern")
+                    IOAttrHelp("The pattern to use to search in_file"),
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Search pattern")
                 )
             )
         )
     )
-    cgrepApplet.outputs shouldBe Vector(
-        IR.CVar("count", WdlTypes.T_Int, None, None),
-        IR.CVar(
+    cgrepApplication.outputs shouldBe Vector(
+        CVar("count", WdlTypes.T_Int, None, None),
+        CVar(
             "out_file",
             WdlTypes.T_File,
             None,
@@ -411,9 +411,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta pattern: ["array"]
   it should "recognize pattern in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -422,41 +421,41 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
     val sansText = Map(
-        "in_file" -> IR.MetaValueObject(
+        "in_file" -> MetaValueObject(
             Map(
-                "help" -> IR.MetaValueString("The input file to be searched"),
-                "patterns" -> IR.MetaValueArray(
+                "help" -> MetaValueString("The input file to be searched"),
+                "patterns" -> MetaValueArray(
                     Vector(
-                        IR.MetaValueString("*.txt"),
-                        IR.MetaValueString("*.tsv")
+                        MetaValueString("*.txt"),
+                        MetaValueString("*.tsv")
                     )
                 ),
                 "group" ->
-                  IR.MetaValueString("Common"),
+                  MetaValueString("Common"),
                 "label" ->
-                  IR.MetaValueString("Input file")
+                  MetaValueString("Input file")
             )
         ),
-        "pattern" -> IR.MetaValueObject(
+        "pattern" -> MetaValueObject(
             Map(
                 "help" ->
-                  IR.MetaValueString("The pattern to use to search in_file"),
+                  MetaValueString("The pattern to use to search in_file"),
                 "group" ->
-                  IR.MetaValueString("Common"),
+                  MetaValueString("Common"),
                 "label" ->
-                  IR.MetaValueString("Search pattern")
+                  MetaValueString("Search pattern")
             )
         ),
-        "out_file" -> IR.MetaValueObject(
+        "out_file" -> MetaValueObject(
             Map(
-                "patterns" -> IR.MetaValueArray(
+                "patterns" -> MetaValueArray(
                     Vector(
-                        IR.MetaValueString("*.txt"),
-                        IR.MetaValueString("*.tsv")
+                        MetaValueString("*.txt"),
+                        MetaValueString("*.tsv")
                     )
                 ),
-                "group" -> IR.MetaValueString("Common"),
-                "label" -> IR.MetaValueString("Output file")
+                "group" -> MetaValueString("Common"),
+                "label" -> MetaValueString("Output file")
             )
         )
     )
@@ -468,20 +467,20 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     val sansText2 =
-      IR.MetaValueObject(
+      MetaValueObject(
           Map(
               "group" ->
-                IR.MetaValueString("Common"),
+                MetaValueString("Common"),
               "help" ->
-                IR.MetaValueString("The input file to be searched"),
-              "patterns" -> IR.MetaValueArray(
+                MetaValueString("The input file to be searched"),
+              "patterns" -> MetaValueArray(
                   Vector(
-                      IR.MetaValueString("*.txt"),
-                      IR.MetaValueString("*.tsv")
+                      MetaValueString("*.txt"),
+                      MetaValueString("*.tsv")
                   )
               ),
               "label" ->
-                IR.MetaValueString("Input file")
+                MetaValueString("Input file")
           )
       )
 
@@ -494,9 +493,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta pattern: {"object"}
   it should "recognize pattern object in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -506,47 +504,47 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
     val sansText =
       Map(
-          "in_file" -> IR.MetaValueObject(
+          "in_file" -> MetaValueObject(
               Map(
                   "help" ->
-                    IR.MetaValueString("The input file to be searched"),
-                  "patterns" -> IR.MetaValueObject(
+                    MetaValueString("The input file to be searched"),
+                  "patterns" -> MetaValueObject(
                       Map(
-                          "class" -> IR.MetaValueString("file"),
-                          "tag" -> IR.MetaValueArray(
-                              Vector(IR.MetaValueString("foo"), IR.MetaValueString("bar"))
+                          "class" -> MetaValueString("file"),
+                          "tag" -> MetaValueArray(
+                              Vector(MetaValueString("foo"), MetaValueString("bar"))
                           ),
-                          "name" -> IR.MetaValueArray(
-                              Vector(IR.MetaValueString("*.txt"), IR.MetaValueString("*.tsv"))
+                          "name" -> MetaValueArray(
+                              Vector(MetaValueString("*.txt"), MetaValueString("*.tsv"))
                           )
                       )
                   ),
                   "group" ->
-                    IR.MetaValueString("Common"),
+                    MetaValueString("Common"),
                   "label" ->
-                    IR.MetaValueString("Input file")
+                    MetaValueString("Input file")
               )
           ),
-          "pattern" -> IR.MetaValueObject(
+          "pattern" -> MetaValueObject(
               Map(
                   "help" ->
-                    IR.MetaValueString("The pattern to use to search in_file"),
+                    MetaValueString("The pattern to use to search in_file"),
                   "group" ->
-                    IR.MetaValueString("Common"),
+                    MetaValueString("Common"),
                   "label" ->
-                    IR.MetaValueString("Search pattern")
+                    MetaValueString("Search pattern")
               )
           ),
-          "out_file" -> IR.MetaValueObject(
+          "out_file" -> MetaValueObject(
               Map(
-                  "patterns" -> IR.MetaValueArray(
+                  "patterns" -> MetaValueArray(
                       Vector(
-                          IR.MetaValueString("*.txt"),
-                          IR.MetaValueString("*.tsv")
+                          MetaValueString("*.txt"),
+                          MetaValueString("*.tsv")
                       )
                   ),
-                  "group" -> IR.MetaValueString("Common"),
-                  "label" -> IR.MetaValueString("Output file")
+                  "group" -> MetaValueString("Common"),
+                  "label" -> MetaValueString("Output file")
               )
           )
       )
@@ -557,25 +555,25 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     val sansText2 =
-      IR.MetaValueObject(
+      MetaValueObject(
           Map(
               "group" ->
-                IR.MetaValueString("Common"),
+                MetaValueString("Common"),
               "help" ->
-                IR.MetaValueString("The input file to be searched"),
-              "patterns" -> IR.MetaValueObject(
+                MetaValueString("The input file to be searched"),
+              "patterns" -> MetaValueObject(
                   Map(
-                      "class" -> IR.MetaValueString("file"),
-                      "tag" -> IR.MetaValueArray(
-                          Vector(IR.MetaValueString("foo"), IR.MetaValueString("bar"))
+                      "class" -> MetaValueString("file"),
+                      "tag" -> MetaValueArray(
+                          Vector(MetaValueString("foo"), MetaValueString("bar"))
                       ),
-                      "name" -> IR.MetaValueArray(
-                          Vector(IR.MetaValueString("*.txt"), IR.MetaValueString("*.tsv"))
+                      "name" -> MetaValueArray(
+                          Vector(MetaValueString("*.txt"), MetaValueString("*.tsv"))
                       )
                   )
               ),
               "label" ->
-                IR.MetaValueString("Input file")
+                MetaValueString("Input file")
           )
       )
     inside(getParamMeta(cgrepTask, iDef)) {
@@ -587,30 +585,29 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `choices` keyword
   it should "recognize choices in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "choice_values.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("choice_values_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(
+                    IOAttrChoices(
                         Vector(
-                            IR.ChoiceReprFile(
+                            ChoiceReprFile(
                                 name = None,
                                 value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
                             ),
-                            IR.ChoiceReprFile(
+                            ChoiceReprFile(
                                 name = None,
                                 value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                             )
@@ -619,16 +616,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(
+                    IOAttrChoices(
                         Vector(
-                            IR.ChoiceReprString(value = "A"),
-                            IR.ChoiceReprString(value = "B")
+                            ChoiceReprString(value = "A"),
+                            ChoiceReprString(value = "B")
                         )
                     )
                 )
@@ -640,30 +637,29 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `choices` keyword with annotated values
   it should "recognize annotated choices in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "choice_obj_values.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("choice_values_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("choice_values_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(
+                    IOAttrChoices(
                         Vector(
-                            IR.ChoiceReprFile(
+                            ChoiceReprFile(
                                 name = Some("file1"),
                                 value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
                             ),
-                            IR.ChoiceReprFile(
+                            ChoiceReprFile(
                                 name = Some("file2"),
                                 value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                             )
@@ -672,16 +668,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrChoices(
+                    IOAttrChoices(
                         Vector(
-                            IR.ChoiceReprString(value = "A"),
-                            IR.ChoiceReprString(value = "B")
+                            ChoiceReprString(value = "A"),
+                            ChoiceReprString(value = "B")
                         )
                     )
                 )
@@ -693,9 +689,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `suggestion` keyword fails when there is a type mismatch
   it should "throw exception when choice types don't match parameter types" in {
     val path = pathFromBasename("compiler", "choices_type_mismatch.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
@@ -703,32 +698,31 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `suggestions` keyword
   it should "recognize suggestions in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "suggestion_values.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("suggestion_values_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(
+                    IOAttrSuggestions(
                         Vector(
-                            IR.SuggestionReprFile(
+                            SuggestionReprFile(
                                 name = None,
                                 value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
                                 project = None,
                                 path = None
                             ),
-                            IR.SuggestionReprFile(
+                            SuggestionReprFile(
                                 name = None,
                                 value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
                                 project = None,
@@ -739,16 +733,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(
+                    IOAttrSuggestions(
                         Vector(
-                            IR.SuggestionReprString(value = "A"),
-                            IR.SuggestionReprString(value = "B")
+                            SuggestionReprString(value = "A"),
+                            SuggestionReprString(value = "B")
                         )
                     )
                 )
@@ -760,32 +754,31 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `suggestions` keyword with annotated values
   it should "recognize annotated suggestions in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "suggestion_obj_values.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("suggestion_values_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("suggestion_values_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(
+                    IOAttrSuggestions(
                         Vector(
-                            IR.SuggestionReprFile(
+                            SuggestionReprFile(
                                 name = Some("file1"),
                                 value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
                                 project = None,
                                 path = None
                             ),
-                            IR.SuggestionReprFile(
+                            SuggestionReprFile(
                                 name = Some("file2"),
                                 value = None,
                                 project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
@@ -796,16 +789,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrSuggestions(
+                    IOAttrSuggestions(
                         Vector(
-                            IR.SuggestionReprString(value = "A"),
-                            IR.SuggestionReprString(value = "B")
+                            SuggestionReprString(value = "A"),
+                            SuggestionReprString(value = "B")
                         )
                     )
                 )
@@ -817,9 +810,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `suggestions` keyword fails when there is a parameter mismatch
   it should "throw exception when suggestion types don't match parameter types" in {
     val path = pathFromBasename("compiler", "suggestions_type_mismatch.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
@@ -827,9 +819,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `suggestions` keyword fails when there is a missing keyword
   it should "throw exception when file suggestion is missing a keyword" in {
     val path = pathFromBasename("compiler", "suggestions_missing_arg.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
@@ -837,43 +828,42 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `dx_type` keyword
   it should "recognize dx_type in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "add_dx_type.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("add_dx_type", bundle)
-    cgrepApplet.inputs shouldBe Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("add_dx_type", bundle)
+    cgrepApplication.inputs shouldBe Vector(
+        CVar(
             "a",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrType(IR.ConstraintReprString("fastq"))
+                    IOAttrType(ConstraintReprString("fastq"))
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "b",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrType(
-                        IR.ConstraintReprOper(
+                    IOAttrType(
+                        ConstraintReprOper(
                             ConstraintOper.And,
                             Vector(
-                                IR.ConstraintReprString("fastq"),
-                                IR.ConstraintReprOper(
+                                ConstraintReprString("fastq"),
+                                ConstraintReprOper(
                                     ConstraintOper.Or,
                                     Vector(
-                                        IR.ConstraintReprString("Read1"),
-                                        IR.ConstraintReprString("Read2")
+                                        ConstraintReprString("Read1"),
+                                        ConstraintReprString("Read2")
                                     )
                                 )
                             )
@@ -888,9 +878,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `dx_type` keyword fails when specified for a non-file parameter
   it should "throw exception when dx_type is used on non-file parameter" in {
     val path = pathFromBasename("compiler", "dx_type_nonfile.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
@@ -898,28 +887,27 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `default` keyword
   it should "recognize default in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "add_default.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("add_default", bundle)
-    cgrepApplet.inputs shouldBe Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("add_default", bundle)
+    cgrepApplication.inputs shouldBe Vector(
+        CVar(
             "a",
             WdlTypes.T_Int,
             Some(WdlValues.V_Int(1)),
             None
         ),
-        IR.CVar(
+        CVar(
             "b",
             WdlTypes.T_Optional(WdlTypes.T_Int),
             None,
-            Some(Vector(IR.IOAttrDefault(IR.DefaultReprInteger(2))))
+            Some(Vector(IOAttrDefault(DefaultReprInteger(2))))
         )
     )
   }
@@ -927,18 +915,18 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // Check parameter_meta `default` keyword fails when there is a type mismatch
   it should "throw exception when default types don't match parameter types" in {
     val path = pathFromBasename("compiler", "default_type_mismatch.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[UnsuccessfulTermination]
     // TODO: make assertion about exception message
   }
 
   it should "recognize help, group, and label in parameters_meta via WDL" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -948,23 +936,23 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
     val sansText =
       Map(
-          "in_file" -> IR.MetaValueObject(
+          "in_file" -> MetaValueObject(
               Map(
                   "help" ->
-                    IR.MetaValueString("The input file to be searched"),
-                  "group" -> IR.MetaValueString("Common"),
-                  "label" -> IR.MetaValueString("Input file")
+                    MetaValueString("The input file to be searched"),
+                  "group" -> MetaValueString("Common"),
+                  "label" -> MetaValueString("Input file")
               )
           ),
-          "pattern" -> IR.MetaValueObject(
+          "pattern" -> MetaValueObject(
               Map(
                   "description" ->
-                    IR.MetaValueString("The pattern to use to search in_file"),
-                  "group" -> IR.MetaValueString("Common"),
-                  "label" -> IR.MetaValueString("Search pattern")
+                    MetaValueString("The pattern to use to search in_file"),
+                  "group" -> MetaValueString("Common"),
+                  "label" -> MetaValueString("Search pattern")
               )
           ),
-          "s" -> IR.MetaValueString("This is help for s")
+          "s" -> MetaValueString("This is help for s")
       )
     inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
@@ -972,12 +960,12 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val sansText2 =
-      IR.MetaValueObject(
+      MetaValueObject(
           Map(
               "help" ->
-                IR.MetaValueString("The input file to be searched"),
-              "group" -> IR.MetaValueString("Common"),
-              "label" -> IR.MetaValueString("Input file")
+                MetaValueString("The input file to be searched"),
+              "group" -> MetaValueString("Common"),
+              "label" -> MetaValueString("Input file")
           )
       )
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
@@ -991,18 +979,18 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-            "a" -> IR.MetaValueObject(
+            "a" -> MetaValueObject(
                 Map(
-                    "help" -> IR.MetaValueString("lefthand file"),
-                    "group" -> IR.MetaValueString("Files"),
-                    "label" -> IR.MetaValueString("File A")
+                    "help" -> MetaValueString("lefthand file"),
+                    "group" -> MetaValueString("Files"),
+                    "label" -> MetaValueString("File A")
                 )
             ),
-            "b" -> IR.MetaValueObject(
+            "b" -> MetaValueObject(
                 Map(
-                    "help" -> IR.MetaValueString("righthand file"),
-                    "group" -> IR.MetaValueString("Files"),
-                    "label" -> IR.MetaValueString("File B")
+                    "help" -> MetaValueString("righthand file"),
+                    "group" -> MetaValueString("Files"),
+                    "label" -> MetaValueString("File B")
                 )
             )
         )
@@ -1011,48 +999,48 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "recognize help in parameters_meta via CVar for input CVars" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("help_input_params_cgrep", bundle)
-    cgrepApplet.inputs.iterator sameElements Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("help_input_params_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        CVar(
             "s",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("This is help for s")
+                    IOAttrHelp("This is help for s")
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "in_file",
             WdlTypes.T_File,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The input file to be searched"),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Input file")
+                    IOAttrHelp("The input file to be searched"),
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Input file")
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "pattern",
             WdlTypes.T_String,
             None,
             Some(
                 Vector(
-                    IR.IOAttrHelp("The pattern to use to search in_file"),
-                    IR.IOAttrGroup("Common"),
-                    IR.IOAttrLabel("Search pattern")
+                    IOAttrHelp("The pattern to use to search in_file"),
+                    IOAttrGroup("Common"),
+                    IOAttrLabel("Search pattern")
                 )
             )
         )
@@ -1064,18 +1052,18 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   // var class anyways, so it's basically impossible for this to happen
   it should "ignore help in parameters_meta via CVar for output CVars" in {
     val path = pathFromBasename("compiler", "help_output_params.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("help_output_params_cgrep", bundle)
-    cgrepApplet.outputs shouldBe Vector(
-        IR.CVar(
+    val cgrepApplication = getApplicationByName("help_output_params_cgrep", bundle)
+    cgrepApplication.outputs shouldBe Vector(
+        CVar(
             "count",
             WdlTypes.T_Int,
             None,
@@ -1086,57 +1074,57 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "recognize app metadata" in {
     val path = pathFromBasename("compiler", "add_app_meta.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("add", bundle)
-    cgrepApplet.meta.iterator sameElements
+    val cgrepApplication = getApplicationByName("add", bundle)
+    cgrepApplication.meta.iterator sameElements
       Vector(
-          IR.TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
-          IR.TaskAttrDescription(
+          TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
+          TaskAttrDescription(
               "Adds two int together. This app adds together two integers and returns the sum"
           ),
-          IR.TaskAttrTags(Vector("add", "ints")),
-          IR.TaskAttrOpenSource(true),
-          IR.TaskAttrVersion("1.0"),
-          IR.TaskAttrProperties(Map("foo" -> "bar")),
-          IR.TaskAttrCategories(Vector("Assembly")),
-          IR.TaskAttrDetails(
+          TaskAttrTags(Vector("add", "ints")),
+          TaskAttrOpenSource(true),
+          TaskAttrVersion("1.0"),
+          TaskAttrProperties(Map("foo" -> "bar")),
+          TaskAttrCategories(Vector("Assembly")),
+          TaskAttrDetails(
               Map(
-                  "contactEmail" -> IR.MetaValueString("joe@dev.com"),
-                  "upstreamVersion" -> IR.MetaValueString("1.0"),
-                  "upstreamAuthor" -> IR.MetaValueString("Joe Developer"),
-                  "upstreamUrl" -> IR.MetaValueString("https://dev.com/joe"),
-                  "upstreamLicenses" -> IR.MetaValueArray(
+                  "contactEmail" -> MetaValueString("joe@dev.com"),
+                  "upstreamVersion" -> MetaValueString("1.0"),
+                  "upstreamAuthor" -> MetaValueString("Joe Developer"),
+                  "upstreamUrl" -> MetaValueString("https://dev.com/joe"),
+                  "upstreamLicenses" -> MetaValueArray(
                       Vector(
-                          IR.MetaValueString("MIT")
+                          MetaValueString("MIT")
                       )
                   ),
-                  "whatsNew" -> IR.MetaValueArray(
+                  "whatsNew" -> MetaValueArray(
                       Vector(
-                          IR.MetaValueObject(
+                          MetaValueObject(
                               Map(
-                                  "version" -> IR.MetaValueString("1.1"),
-                                  "changes" -> IR.MetaValueArray(
+                                  "version" -> MetaValueString("1.1"),
+                                  "changes" -> MetaValueArray(
                                       Vector(
-                                          IR.MetaValueString("Added parameter --foo"),
-                                          IR.MetaValueString("Added cowsay easter-egg")
+                                          MetaValueString("Added parameter --foo"),
+                                          MetaValueString("Added cowsay easter-egg")
                                       )
                                   )
                               )
                           ),
-                          IR.MetaValueObject(
+                          MetaValueObject(
                               Map(
-                                  "version" -> IR.MetaValueString("1.0"),
-                                  "changes" -> IR.MetaValueArray(
+                                  "version" -> MetaValueString("1.0"),
+                                  "changes" -> MetaValueArray(
                                       Vector(
-                                          IR.MetaValueString("Initial version")
+                                          MetaValueString("Initial version")
                                       )
                                   )
                               )
@@ -1145,42 +1133,42 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
                   )
               )
           ),
-          IR.TaskAttrTitle("Add Ints"),
-          IR.TaskAttrTypes(Vector("Adder"))
+          TaskAttrTitle("Add Ints"),
+          TaskAttrTypes(Vector("Adder"))
       )
   }
 
   it should "recognize runtime hints" in {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepApplet = getAppletByName("add_runtime_hints", bundle)
-    cgrepApplet.runtimeHints shouldBe Some(
+    val cgrepApplication = getApplicationByName("add_runtime_hints", bundle)
+    cgrepApplication.runtimeHints shouldBe Some(
         Vector(
-            IR.RuntimeHintIgnoreReuse(true),
-            IR.RuntimeHintRestart(
+            RuntimeHintIgnoreReuse(true),
+            RuntimeHintRestart(
                 max = Some(5),
                 default = Some(1),
                 errors = Some(Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2))
             ),
-            IR.RuntimeHintTimeout(hours = Some(12), minutes = Some(30)),
-            IR.RuntimeHintAccess(network = Some(Vector("*")), developer = Some(true))
+            RuntimeHintTimeout(hours = Some(12), minutes = Some(30)),
+            RuntimeHintAccess(network = Some(Vector("*")), developer = Some(true))
         )
     )
   }
 
   it should "ignore dx_instance_type when evaluating runtime hints" in {
     val path = pathFromBasename("compiler", "instance_type_test.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     retval match {
       case SuccessIR(ir, _) => ir
@@ -1190,9 +1178,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "handle streaming files" in {
     val path = pathFromBasename("compiler", "streaming_files.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -1202,31 +1190,31 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val cgrepTask = getTaskByName("cgrep", bundle)
     inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map("in_file" -> IR.MetaValueString("stream"))
+        translateMetaKVs(kvs) shouldBe Map("in_file" -> MetaValueString("stream"))
     }
 
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
 
     inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
-        translate(metaValue) shouldBe IR.MetaValueString("stream")
+        translate(metaValue) shouldBe MetaValueString("stream")
     }
 
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-            "a" -> IR.MetaValueString("stream"),
-            "b" -> IR.MetaValueString("stream")
+            "a" -> MetaValueString("stream"),
+            "b" -> MetaValueString("stream")
         )
     }
   }
 
   it should "recognize the streaming object annotation" in {
     val path = pathFromBasename("compiler", "streaming_files_obj.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -1237,16 +1225,16 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     inside(cgrepTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-            "in_file" -> IR.MetaValueObject(
-                Map("stream" -> IR.MetaValueBoolean(true))
+            "in_file" -> MetaValueObject(
+                Map("stream" -> MetaValueBoolean(true))
             )
         )
     }
     val iDef = cgrepTask.inputs.find(_.name == "in_file").get
     inside(getParamMeta(cgrepTask, iDef)) {
       case Some(metaValue) =>
-        translate(metaValue) shouldBe IR.MetaValueObject(
-            Map("stream" -> IR.MetaValueBoolean(true))
+        translate(metaValue) shouldBe MetaValueObject(
+            Map("stream" -> MetaValueBoolean(true))
         )
     }
 
@@ -1254,11 +1242,11 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
         translateMetaKVs(kvs) shouldBe Map(
-            "a" -> IR.MetaValueObject(
-                Map("stream" -> IR.MetaValueBoolean(true))
+            "a" -> MetaValueObject(
+                Map("stream" -> MetaValueBoolean(true))
             ),
-            "b" -> IR.MetaValueObject(
-                Map("stream" -> IR.MetaValueBoolean(true))
+            "b" -> MetaValueObject(
+                Map("stream" -> MetaValueBoolean(true))
             )
         )
     }
@@ -1266,9 +1254,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   it should "recognize the streaming annotation for wdl draft2" in {
     val path = pathFromBasename("draft2", "streaming.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -1277,24 +1265,24 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     val diffTask = getTaskByName("diff", bundle)
     inside(diffTask.parameterMeta) {
       case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map("a" -> IR.MetaValueString("stream"),
-                                           "b" -> IR.MetaValueString("stream"))
+        translateMetaKVs(kvs) shouldBe Map("a" -> MetaValueString("stream"),
+                                           "b" -> MetaValueString("stream"))
     }
   }
 
   it should "handle an empty workflow" in {
     val path = pathFromBasename("util", "empty_workflow.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "handle structs" in {
     val path = pathFromBasename("struct", "Person.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
@@ -1384,8 +1372,8 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case SuccessIR(bundle, _) =>
         bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
-        callable shouldBe a[IR.Applet]
-        val task = callable.asInstanceOf[IR.Applet]
+        callable shouldBe a[Application]
+        val task = callable.asInstanceOf[Application]
         val generator = WdlV1Generator()
         val taskSource = generator.generateDocument(task.document).mkString("\n")
         taskSource should include(commandSection)
@@ -1412,13 +1400,13 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case SuccessIR(bundle, _) =>
         bundle.allCallables.size shouldBe 1
         val (_, callable) = bundle.allCallables.head
-        callable shouldBe a[IR.Applet]
-        val task = callable.asInstanceOf[IR.Applet]
-        task.instanceType shouldBe IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
-                                                        None,
-                                                        None,
-                                                        None,
-                                                        None)
+        callable shouldBe a[Application]
+        val task = callable.asInstanceOf[Application]
+        task.instanceType shouldBe InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
+                                                     None,
+                                                     None,
+                                                     None,
+                                                     None)
     }
   }
 
@@ -1437,9 +1425,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
       case _                    => throw new Exception("unexpected")
     }
 
-    val wfs: Vector[IR.Workflow] = bundle.allCallables.flatMap {
-      case (_, wf: IR.Workflow) if wf.locked && wf.level == IR.Level.Sub => Some(wf)
-      case (_, _)                                                        => None
+    val wfs: Vector[Workflow] = bundle.allCallables.flatMap {
+      case (_, wf: Workflow) if wf.locked && wf.level == Level.Sub => Some(wf)
+      case (_, _)                                                  => None
     }.toVector
     wfs.length shouldBe 1
     val wf = wfs.head
@@ -1452,7 +1440,7 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
   }
   it should "compile a workflow taking arguments from a Pair" in {
-    val path = pathFromBasename("draft2", "pair.wdl")
+    val path = pathFromBasename("draft2", "pawdl")
     val retval = Main.compile(
         path.toString
         //                                      :: "--verbose"
@@ -1465,9 +1453,9 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
   it should "pass as subworkflows do not have expression statement in output block" in {
     val path = pathFromBasename("subworkflows", basename = "trains.wdl")
 
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
@@ -1491,72 +1479,72 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
 
   ignore should "recognize workflow metadata" in {
     val path = pathFromBasename("compiler", "wf_meta.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
     val workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) => wf
-      case _                     => throw new Exception("primaryCallable is not a workflow")
+      case Some(wf: Workflow) => wf
+      case _                  => throw new Exception("primaryCallable is not a workflow")
     }
     workflow.meta shouldBe Some(
         Vector(
-            IR.WorkflowAttrDescription("This is a workflow that defines some metadata"),
-            IR.WorkflowAttrTags(Vector("foo", "bar")),
-            IR.WorkflowAttrVersion("1.0"),
-            IR.WorkflowAttrProperties(Map("foo" -> "bar")),
-            IR.WorkflowAttrDetails(
-                Map("whatsNew" -> IR.MetaValueString("v1.0: First release"))
+            WorkflowAttrDescription("This is a workflow that defines some metadata"),
+            WorkflowAttrTags(Vector("foo", "bar")),
+            WorkflowAttrVersion("1.0"),
+            WorkflowAttrProperties(Map("foo" -> "bar")),
+            WorkflowAttrDetails(
+                Map("whatsNew" -> MetaValueString("v1.0: First release"))
             ),
-            IR.WorkflowAttrTitle("Workflow with metadata"),
-            IR.WorkflowAttrTypes(Vector("calculator")),
-            IR.WorkflowAttrSummary("A workflow that defines some metadata")
+            WorkflowAttrTitle("Workflow with metadata"),
+            WorkflowAttrTypes(Vector("calculator")),
+            WorkflowAttrSummary("A workflow that defines some metadata")
         )
     )
   }
 
   ignore should "recognize workflow parameter metadata" in {
     val path = pathFromBasename("compiler", "wf_param_meta.wdl")
-    val retval = Main.compile(
-        path.toString :: cFlags
-    )
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
     }
     val workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) => wf
-      case _                     => throw new Exception("primaryCallable is not a workflow")
+      case Some(wf: Workflow) => wf
+      case _                  => throw new Exception("primaryCallable is not a workflow")
     }
-    val input_cvars: Vector[IR.CVar] = workflow.inputs.map {
-      case (c: IR.CVar, _) => c
-      case _               => throw new Exception("Invalid workflow input ${other}")
+    val input_cvars: Vector[CVar] = workflow.inputs.map {
+      case (c: CVar, _) => c
+      case _            => throw new Exception("Invalid workflow input ${other}")
     }
     input_cvars.sortWith(_.name < _.name) shouldBe Vector(
-        IR.CVar(
+        CVar(
             "x",
             WdlTypes.T_Int,
             Some(WdlValues.V_Int(3)),
             Some(
                 Vector(
-                    IR.IOAttrLabel("Left-hand side"),
-                    IR.IOAttrDefault(IR.DefaultReprInteger(3))
+                    IOAttrLabel("Left-hand side"),
+                    IOAttrDefault(DefaultReprInteger(3))
                 )
             )
         ),
-        IR.CVar(
+        CVar(
             "y",
             WdlTypes.T_Int,
             Some(WdlValues.V_Int(5)),
             Some(
                 Vector(
-                    IR.IOAttrLabel("Right-hand side"),
-                    IR.IOAttrDefault(IR.DefaultReprInteger(5))
+                    IOAttrLabel("Right-hand side"),
+                    IOAttrDefault(DefaultReprInteger(5))
                 )
             )
         )
@@ -1574,51 +1562,51 @@ class GenerateIRTest extends AnyFlatSpec with Matchers {
     }
 
     val workflow = bundle.primaryCallable match {
-      case Some(wf: IR.Workflow) => wf
-      case _                     => throw new Exception("primaryCallable is not a workflow")
+      case Some(wf: Workflow) => wf
+      case _                  => throw new Exception("primaryCallable is not a workflow")
     }
     workflow.meta match {
       case Some(array) =>
         array.size shouldBe 1
         array.foreach({
-          case IR.WorkflowAttrDescription(desc) =>
+          case WorkflowAttrDescription(desc) =>
             desc shouldBe "This is the readme for the wf_linear workflow."
           case other => throw new Exception(s"Unexpected workflow meta ${other}")
         })
       case _ => throw new Exception("Expected workflow meta")
     }
 
-    val addApp = getAppletByName("add", bundle)
+    val addApp = getApplicationByName("add", bundle)
     addApp.meta match {
-      case Some(v: Vector[IR.TaskAttr]) =>
+      case Some(v: Vector[TaskAttr]) =>
         v.size shouldBe 2
         v.foreach {
-          case IR.TaskAttrDescription(text) =>
+          case TaskAttrDescription(text) =>
             text shouldBe "This is the readme for the wf_linear add task."
-          case IR.TaskAttrDeveloperNotes(text) =>
+          case TaskAttrDeveloperNotes(text) =>
             text shouldBe "Developer notes defined in WDL"
           case other => throw new Exception(s"Invalid TaskAttr for add task ${other}")
         }
       case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for add task")
     }
 
-    val mulApp = getAppletByName("mul", bundle)
+    val mulApp = getApplicationByName("mul", bundle)
     mulApp.meta match {
-      case Some(v: Vector[IR.TaskAttr]) =>
+      case Some(v: Vector[TaskAttr]) =>
         v.size shouldBe 1
         v.foreach {
-          case IR.TaskAttrDescription(text) =>
+          case TaskAttrDescription(text) =>
             text shouldBe "Description defined in WDL"
           case other => throw new Exception(s"Invalid TaskAttr for mul task ${other}")
         }
       case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for mul task")
     }
 
-    val incApp = getAppletByName("inc", bundle)
+    val incApp = getApplicationByName("inc", bundle)
     incApp.meta match {
-      case Some(v: Vector[IR.TaskAttr]) => v.size shouldBe 0
-      case None                         => None
-      case _                            => throw new Exception("meta is not None or empty for inc task")
+      case Some(v: Vector[TaskAttr]) => v.size shouldBe 0
+      case None                      => None
+      case _                         => throw new Exception("meta is not None or empty for inc task")
     }
   }
 

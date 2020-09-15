@@ -105,14 +105,13 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
     }
 
   lazy val scatterStart: Int = jobMeta.jobDesc.details match {
-    case Some(JsObject(fields)) =>
+    case Some(JsObject(fields)) if fields.contains(Native.ContinueStart) =>
       fields(Native.ContinueStart) match {
         case JsNumber(s) => s.toIntExact
         case other =>
           throw new Exception(s"Invalid value ${other} for  ${Native.ContinueStart}")
       }
-    case None => 0
-    case _    => throw new Exception(s"invalid job details ${jobMeta.jobDesc.details}")
+    case _ => 0
   }
 
   lazy val scatterSize: Int = jobMeta.executableDetails.get(Native.ScatterChunkSize) match {

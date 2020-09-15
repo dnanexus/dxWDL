@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
-import dx.compiler.Main.CompilerFlag.CompilerFlag
+import dx.compiler.Main.CompilerMode.CompilerMode
 import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
 import dx.core.{Native, getVersion}
 import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
@@ -13,7 +13,7 @@ import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
 import dx.dxni.DxNativeInterface
-import dx.translator.{Extras, ExtrasParser, Translator}
+import dx.translator.{Extras, ExtrasParser, InputTranslator, TranslatorFactory}
 import spray.json._
 import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
 
@@ -90,15 +90,15 @@ object Main {
     val Compile, Config, DxNI, Version, Describe = Value
   }
 
-  object CompilerFlag extends Enum {
-    type CompilerFlag = Value
-    val All, IR, NativeWithoutRuntimeAsset = Value
+  object CompilerMode extends Enum {
+    type CompilerMode = Value
+    val IR, NativeWithoutRuntimeAsset, All = Value
   }
 
-  private case class CompileModeOptionSpec()
-      extends SingleValueOptionSpec[CompilerFlag](choices = CompilerFlag.values.toVector) {
-    override def parseValue(value: String): CompilerFlag =
-      CompilerFlag.withNameIgnoreCase(value)
+  private case class CompilerModeOptionSpec()
+      extends SingleValueOptionSpec[CompilerMode](choices = CompilerMode.values.toVector) {
+    override def parseValue(value: String): CompilerMode =
+      CompilerMode.withNameIgnoreCase(value)
   }
 
   // Tree printer types for the execTree option
@@ -115,7 +115,7 @@ object Main {
 
   private def CompileOptions: InternalOptions = Map(
       "archive" -> FlagOptionSpec.Default,
-      "compileMode" -> CompileModeOptionSpec(),
+      "compileMode" -> CompilerModeOptionSpec(),
       "defaults" -> PathOptionSpec.MustExist,
       "execTree" -> ExecTreeFormatOptionSpec(),
       "extras" -> PathOptionSpec.MustExist,
@@ -212,7 +212,7 @@ object Main {
     resolveDestination(project, folder)
   }
 
-  private[compiler] def compile(args: Vector[String]): Termination = {
+  def compile(args: Vector[String]): Termination = {
     val sourceFile: Path = args.headOption
       .map(Paths.get(_))
       .getOrElse(
@@ -227,7 +227,9 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    val (fileResolver, logger) = initCommon(options)
+
+    val (baseFileResolver, logger) = initCommon(options)
+
     val extras: Option[Extras] =
       options.getValue[Path]("extras").map(extrasPath => ExtrasParser().parse(extrasPath))
     if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
@@ -239,51 +241,57 @@ object Main {
         }
       }
     }
-    // other non-flag options
-    val compileMode: CompilerFlag =
-      options.getValueOrElse[CompilerFlag]("compileMode", CompilerFlag.All)
-    val (project, folder) = getDestination(options)
-    val defaults: Option[Path] = options.getValue[Path]("defaults")
+
+    val compileMode: CompilerMode =
+      options.getValueOrElse[CompilerMode]("compileMode", CompilerMode.All)
+
+    // generate IR
+    val rawBundle =
+      try {
+        val language = options.getValue[Language]("language")
+        val Vector(locked, reorg) = Vector("locked", "reorg").map(options.getFlag(_))
+        val translator = TranslatorFactory.create(
+            sourceFile,
+            language,
+            extras,
+            locked,
+            if (reorg) Some(true) else None,
+            baseFileResolver
+        )
+        translator.apply
+      } catch {
+        case e: Throwable =>
+          return Failure(exception = Some(e))
+      }
+
+    // if there are inputs they need to be translated to dx inputs
     val inputs: Vector[Path] = options.getList[Path]("inputs")
-    val runtimeTraceLevel: Int =
-      options.getValueOrElse[Int]("runtimeDebugLevel", DefaultRuntimeTraceLevel)
-    // flags
-    val Vector(
-        archive,
-        force,
-        leaveWorkflowsOpen,
-        locked,
-        projectWideReuse,
-        reorg,
-        streamAllFiles
-    ) = Vector(
-        "archive",
-        "force",
-        "leaveWorkflowsOpen",
-        "locked",
-        "projectWideReuse",
-        "reorg",
-        "streamAllFiles"
-    ).map(options.getFlag(_))
+    // if there are defaults, they need to be "embedded" in the bundle
+    val defaults: Option[Path] = options.getValue[Path]("defaults")
+    val hasInputs = inputs.nonEmpty || defaults.nonEmpty
+
+    // quit here if the target is IR and there are no inputs to translate
+    if (!hasInputs && compileMode == CompilerMode.IR) {
+      return SuccessIR(rawBundle)
+    }
+
+    // a destination is only required if we are doing input translation and/or
+    // compiling native apps
+    val (project, folder) = getDestination(options)
+
+    val (bundle, fileResolver) = if (hasInputs) {
+      val inputTranslator = InputTranslator(rawBundle, inputs, defaults, project, baseFileResolver)
+      inputTranslator.writeTranslatedInputs()
+      if (compileMode == CompilerMode.IR) {
+        // if we're only performing translation to IR, we can quit early
+        return SuccessIR(inputTranslator.bundleWithDefaults)
+      }
+      (inputTranslator.bundleWithDefaults, inputTranslator.fileResolver)
+    } else {
+      (rawBundle, baseFileResolver)
+    }
 
     try {
-      // generate IR
-      val language = options.getValue[Language]("language")
-      val translator = Translator(extras, fileResolver)
-      val bundle = translator.apply(
-          sourceFile,
-          project,
-          language,
-          inputs,
-          defaults,
-          locked,
-          if (reorg) Some(true) else None
-      )
-      if (compileMode == CompilerFlag.IR) {
-        return SuccessIR(bundle)
-      }
-      // compile to native
-      val includeAsset = compileMode == CompilerFlag.NativeWithoutRuntimeAsset
       val dxPathConfig = DxWorkerPaths()
       val scatterChunkSize: Int = options.getValue[Int]("scatterChunkSize") match {
         case None => Native.JobPerScatterDefault
@@ -300,6 +308,24 @@ object Main {
             size
           }
       }
+      val runtimeTraceLevel: Int =
+        options.getValueOrElse[Int]("runtimeDebugLevel", DefaultRuntimeTraceLevel)
+      val includeAsset = compileMode == CompilerMode.NativeWithoutRuntimeAsset
+      val Vector(
+          archive,
+          force,
+          leaveWorkflowsOpen,
+          locked,
+          projectWideReuse,
+          streamAllFiles
+      ) = Vector(
+          "archive",
+          "force",
+          "leaveWorkflowsOpen",
+          "locked",
+          "projectWideReuse",
+          "streamAllFiles"
+      ).map(options.getFlag(_))
       val compiler = Compiler(
           extras,
           dxPathConfig,
@@ -328,12 +354,14 @@ object Main {
             case ExecTreeFormat.Pretty =>
               SuccessPrettyTree(ExecutableTree.prettyPrint(treeJs.asJsObject))
           }
-        case _ => Success(results.executableIds.mkString(","))
+        case _ =>
+          Success(results.executableIds.mkString(","))
       }
     } catch {
       case e: Throwable =>
         Failure(exception = Some(e))
     }
+
   }
 
   // DxNI
@@ -349,7 +377,7 @@ object Main {
       "r" -> FlagOptionSpec.Default.copy(alias = Some("recursive"))
   )
 
-  private[compiler] def dxni(args: Vector[String]): Termination = {
+  def dxni(args: Vector[String]): Termination = {
     val options =
       try {
         parseCommandLine(args, CommonOptions ++ DxNIOptions)
@@ -417,7 +445,7 @@ object Main {
       "pretty" -> FlagOptionSpec.Default
   )
 
-  private[compiler] def describe(args: Vector[String]): Termination = {
+  def describe(args: Vector[String]): Termination = {
     val workflowId = args.headOption.getOrElse(
         throw OptionParseException(
             "Missing required positional argument <WDL file>"
