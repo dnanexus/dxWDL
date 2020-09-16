@@ -252,7 +252,7 @@ def build(project, folder, version_id, top_dir, path_dict):
         shutil.move(os.path.join(top_dir, jar_path),
                     all_in_one_jar)
     else:
-        print(f"Found asset dxWDLrt (remove it if you need to rebuild dxWDL jar locally):", asset)
+        print(f"Found asset dxWDLrt (remove it if you need to rebuild dxWDL jar locally): {asset}")
 
     region = dxpy.describe(project.get_id())['region']
     ad = AssetDesc(region, asset.get_id(), project)
