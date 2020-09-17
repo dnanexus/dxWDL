@@ -31,7 +31,7 @@ object Main {
       }
     initLogger(options)
     try {
-      val jobMeta = JobMeta(homeDir)
+      val jobMeta = WorkerJobMeta(homeDir)
       kind match {
         case "task" =>
           val taskAction =
@@ -54,7 +54,7 @@ object Main {
                 return BadUsageTermination(s"Unknown action ${args(0)}")
             }
           val executor = WorkflowExecutor(jobMeta)
-          val successMessage = executor.apply(workflowAction)
+          val (_, successMessage) = executor.apply(workflowAction)
           Success(successMessage)
         case _ =>
           BadUsageTermination()

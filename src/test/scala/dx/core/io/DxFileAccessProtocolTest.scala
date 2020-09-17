@@ -26,7 +26,7 @@ class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
          |""".stripMargin
 
     val (doc, _) = Utils.parseSourceString(wdlCode)
-    val declarations = doc.elements.collect {
+    val declarations: Vector[TAT.Declaration] = doc.elements.collect {
       case decl: TAT.Declaration => decl
     }
     val fileResolver = FileSourceResolver.create(userProtocols = Vector(DxFileAccessProtocol()))

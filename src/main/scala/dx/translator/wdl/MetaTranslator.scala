@@ -4,6 +4,7 @@ import dx.api.ConstraintOper
 import dx.core.ir.Value._
 import dx.core.ir.{CallableAttribute, ParameterAttribute, Value}
 import dx.core.languages.wdl
+import dx.core.languages.wdl.DxMetaHints
 import dx.translator.{CallableAttributes, ParameterAttributes}
 import wdlTools.eval.Meta
 import wdlTools.eval.WdlValues._
@@ -113,7 +114,7 @@ abstract class MetaTranslator(wdlVersion: WdlVersion,
 }
 
 case class ApplicationMetaTranslator(wdlVersion: WdlVersion,
-                                     metaSection: Option[TAT.MetaSection],
+                                     metaSection: Option[TAT.MetaSection] = None,
                                      adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
     extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
   override protected def translate(name: String, value: V): Option[CallableAttribute] = {
@@ -126,7 +127,7 @@ case class ApplicationMetaTranslator(wdlVersion: WdlVersion,
 }
 
 case class WorkflowMetaTranslator(wdlVersion: WdlVersion,
-                                  metaSection: Option[TAT.MetaSection],
+                                  metaSection: Option[TAT.MetaSection] = None,
                                   adjunctFiles: Vector[Adjuncts.AdjunctFile] = Vector.empty)
     extends MetaTranslator(wdlVersion, metaSection, adjunctFiles) {
   override protected def translate(name: String, value: V): Option[CallableAttribute] = {
@@ -371,20 +372,24 @@ object ParameterMetaTranslator {
   // have the same type as the parameter.
   def translate(paramMeta: Option[V], wdlType: T): Vector[ParameterAttribute] = {
     paramMeta match {
-      case None => Vector.empty
-      // If the parameter metadata is a string, treat it as help
-      case Some(V_String(text)) => Vector(ParameterAttributes.HelpAttribute(text))
+      case None =>
+        Vector.empty
+      case Some(V_String(text)) if text != DxMetaHints.ParameterMetaStream =>
+        // If the parameter metadata is a string, treat it as help
+        // (as long as it isn't the reserved value 'stream', which
+        // indicates (at runtime) that the file should be streamed
+        Vector(ParameterAttributes.HelpAttribute(text))
       case Some(V_Object(obj)) => {
         // Whether to use 'description' in place of help
         val noHelp = !obj.contains(Help)
         // Use flatmap to get the parameter metadata keys if they exist
-        obj.flatMap {
-          case (Group, V_String(text)) => Some(ParameterAttributes.GroupAttribute(text))
-          case (Help, V_String(text))  => Some(ParameterAttributes.HelpAttribute(text))
+        obj.collect {
+          case (Group, V_String(text)) => ParameterAttributes.GroupAttribute(text)
+          case (Help, V_String(text))  => ParameterAttributes.HelpAttribute(text)
           // Use 'description' in place of 'help' if the former is present and the latter is not
           case (Description, V_String(text)) if noHelp =>
-            Some(ParameterAttributes.HelpAttribute(text))
-          case (Label, V_String(text)) => Some(ParameterAttributes.LabelAttribute(text))
+            ParameterAttributes.HelpAttribute(text)
+          case (Label, V_String(text)) => ParameterAttributes.LabelAttribute(text)
           // Try to parse the patterns key
           // First see if it's an array
           case (Patterns, V_Array(array)) =>
@@ -392,32 +397,30 @@ object ParameterMetaTranslator {
               case V_String(s) => s
               case _           => throw new Exception("Expected MetaValueString")
             }
-            Some(ParameterAttributes.PatternsAttribute(ParameterAttributes.PatternsArray(patterns)))
+            ParameterAttributes.PatternsAttribute(ParameterAttributes.PatternsArray(patterns))
           // See if it's an object, and if it is, parse out the optional key, class, and tag keys
           // Note all three are optional
           case (Patterns, V_Object(obj)) =>
-            Some(ParameterAttributes.PatternsAttribute(metaPatternsObjToIR(obj)))
+            ParameterAttributes.PatternsAttribute(metaPatternsObjToIR(obj))
           // Try to parse the choices key, which will be an array of either values or objects
           case (Choices, V_Array(array)) =>
             val wt = MetaUtils.unwrapWdlArrayType(wdlType)
-            Some(ParameterAttributes.ChoicesAttribute(metaChoicesArrayToIR(array, wt)))
+            ParameterAttributes.ChoicesAttribute(metaChoicesArrayToIR(array, wt))
           case (Suggestions, V_Array(array)) =>
             val wt = MetaUtils.unwrapWdlArrayType(wdlType)
-            Some(ParameterAttributes.SuggestionsAttribute(metaSuggestionsArrayToIR(array, wt)))
+            ParameterAttributes.SuggestionsAttribute(metaSuggestionsArrayToIR(array, wt))
           case (Type, dxType: V) =>
             val wt = MetaUtils.unwrapWdlArrayType(wdlType)
             wt match {
-              case T_File => Some(ParameterAttributes.TypeAttribute(metaConstraintToIR(dxType)))
+              case T_File => ParameterAttributes.TypeAttribute(metaConstraintToIR(dxType))
               case _      => throw new Exception("'dx_type' can only be specified for File parameters")
             }
           case (Default, default: V) =>
-            Some(ParameterAttributes.DefaultAttribute(metaDefaultToIR(default, wdlType)))
-          case _ => None
+            ParameterAttributes.DefaultAttribute(metaDefaultToIR(default, wdlType))
         }.toVector
       }
-      case _ =>
-        // TODO: or throw exception?
-        Vector.empty
+      case other =>
+        throw new Exception(s"invalid parameter_meta ${other}")
     }
   }
 }
@@ -428,5 +431,9 @@ case class ParameterMetaTranslator(wdlVersion: WdlVersion, metaSection: Option[T
   def translate(name: String, parameterType: T): Vector[ParameterAttribute] = {
     val metaValue = meta.get(name)
     ParameterMetaTranslator.translate(metaValue, parameterType)
+  }
+
+  def translate(declarations: Vector[TAT.Variable]): Map[String, Vector[ParameterAttribute]] = {
+    declarations.map(decl => decl.name -> translate(decl.name, decl.wdlType)).toMap
   }
 }

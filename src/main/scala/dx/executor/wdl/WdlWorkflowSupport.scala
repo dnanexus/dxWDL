@@ -29,6 +29,42 @@ case class WorkflowIO(workflow: TAT.Workflow, logger: Logger)
   override protected def outputOrder: Vector[String] = workflow.outputs.map(_.name)
 }
 
+object WdlWorkflowSupport {
+  implicit class FoldLeftWhile[A](trav: IterableOnce[A]) {
+    def foldLeftWhile[B](init: B)(where: B => Boolean)(op: (B, A) => B): B = {
+      trav.iterator.foldLeft(init)((acc, next) => if (where(acc)) op(acc, next) else acc)
+    }
+  }
+
+  // this method is exposed for unit testing
+  def getComplexScatterName(items: Iterator[Option[String]], size: Int): String = {
+    // Create a name by concatenating the initial elements of the array.
+    // Limit the total size of the name.
+    val (_, strings) =
+      items.foldLeftWhile((0, Vector.empty[String]))(_._1 < WorkflowSupport.JobNameLengthLimit) {
+        case ((size, strings), Some(s)) =>
+          val newSize = size + s.length
+          if (newSize > WorkflowSupport.JobNameLengthLimit) {
+            (newSize, strings)
+          } else {
+            (newSize, strings :+ s)
+          }
+        case ((size, strings), None) =>
+          (size, strings)
+      }
+    val itemStr = strings.mkString(", ")
+    if (strings.size < size) {
+      s"${itemStr}, ..."
+    } else {
+      itemStr
+    }
+  }
+
+  def getComplexScatterName(items: Vector[Any], size: Int): String = {
+    getComplexScatterName(items.map(i => Some(i.toString)).iterator, size)
+  }
+}
+
 case class WdlWorkflowSupport(workflow: TAT.Workflow,
                               wdlVersion: WdlVersion,
                               tasks: Map[String, TAT.Task],
@@ -180,6 +216,25 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     }
   }
 
+  object WdlBlockContext {
+    private[wdl] def evaluateCallInputs(
+        call: TAT.Call,
+        env: Map[String, (T, V)] = Map.empty
+    ): Map[String, (T, V)] = {
+      val calleeInputs = call.callee.input
+      call.inputs.map {
+        case (key, expr) =>
+          val actualCalleeType: T = calleeInputs.get(key) match {
+            case Some((t, _)) => t
+            case None =>
+              throw new Exception(s"Callee ${call.callee.name} doesn't have input ${key}")
+          }
+          val value = evaluateExpression(expr, actualCalleeType, env)
+          key -> (actualCalleeType, value)
+      }
+    }
+  }
+
   case class WdlBlockContext(block: WdlBlock, env: Map[String, (T, V)])
       extends BlockContext[WdlBlock] {
     private def call: TAT.Call = block.call
@@ -188,18 +243,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     private def evaluateCallInputs(
         extraEnv: Map[String, (T, V)] = Map.empty
     ): Map[String, (T, V)] = {
-      val calleeInputs = call.callee.input
-      val callEnv = env ++ extraEnv
-      block.call.inputs.map {
-        case (key, expr) =>
-          val actualCalleeType: T = calleeInputs.get(key) match {
-            case Some((t, _)) => t
-            case None =>
-              throw new Exception(s"Callee ${call.callee.name} doesn't have input ${key}")
-          }
-          val value = evaluateExpression(expr, actualCalleeType, callEnv)
-          key -> (actualCalleeType, value)
-      }
+      WdlBlockContext.evaluateCallInputs(call, env ++ extraEnv)
     }
 
     private def launchCall(
@@ -433,46 +477,17 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
     private def evaluateScatterCollection(expr: TAT.Expr): (Vector[V], Option[Int]) = {
       evaluateExpression(expr, expr.wdlType, env) match {
-        case V_Array(array) if scatterStart == 0 && array.size <= scatterSize =>
+        case V_Array(array) if jobMeta.scatterStart == 0 && array.size <= jobMeta.scatterSize =>
           (array, None)
         case V_Array(array) =>
-          val scatterEnd = scatterStart + scatterSize
+          val scatterEnd = jobMeta.scatterStart + jobMeta.scatterSize
           if (scatterEnd < array.size) {
-            (array.slice(scatterStart, scatterEnd), Some(scatterEnd))
+            (array.slice(jobMeta.scatterStart, scatterEnd), Some(scatterEnd))
           } else {
-            (array.drop(scatterStart), None)
+            (array.drop(jobMeta.scatterStart), None)
           }
         case other =>
           throw new AppInternalException(s"scatter value ${other} is not an array")
-      }
-    }
-
-    implicit class FoldLeftWhile[A](trav: IterableOnce[A]) {
-      def foldLeftWhile[B](init: B)(where: B => Boolean)(op: (B, A) => B): B = {
-        trav.iterator.foldLeft(init)((acc, next) => if (where(acc)) op(acc, next) else acc)
-      }
-    }
-
-    private def getComplexScatterName(items: Iterator[Option[String]], size: Int): String = {
-      // Create a name by concatenating the initial elements of the array.
-      // Limit the total size of the name.
-      val (_, strings) =
-        items.foldLeftWhile((0, Vector.empty[String]))(_._1 < WorkflowSupport.JobNameLengthLimit) {
-          case ((size, strings), Some(s)) =>
-            val newSize = size + s.length
-            if (newSize > WorkflowSupport.JobNameLengthLimit) {
-              (newSize, strings)
-            } else {
-              (newSize, strings :+ s)
-            }
-          case ((size, strings), None) =>
-            (size, strings)
-        }
-      val itemStr = strings.mkString(", ")
-      if (strings.size < size) {
-        s"${itemStr}, ..."
-      } else {
-        itemStr
       }
     }
 
@@ -491,10 +506,11 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
             case _                      => None
           }
         case V_Array(array) =>
-          val itemStr = getComplexScatterName(array.iterator.map(getScatterName), array.size)
+          val itemStr =
+            WdlWorkflowSupport.getComplexScatterName(array.iterator.map(getScatterName), array.size)
           Some(s"[${itemStr}]")
         case V_Map(members) =>
-          val memberStr = getComplexScatterName(
+          val memberStr = WdlWorkflowSupport.getComplexScatterName(
               members.iterator.map {
                 case (k, v) =>
                   (getScatterName(k), getScatterName(v)) match {
@@ -506,7 +522,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
           )
           Some(s"{${memberStr}}")
         case V_Object(members) =>
-          val memberStr = getComplexScatterName(
+          val memberStr = WdlWorkflowSupport.getComplexScatterName(
               members.iterator.map {
                 case (k, v) =>
                   getScatterName(v) match {
@@ -518,7 +534,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
           )
           Some(s"{${memberStr}}")
         case V_Struct(name, members) =>
-          val memberStr = getComplexScatterName(
+          val memberStr = WdlWorkflowSupport.getComplexScatterName(
               members.iterator.map {
                 case (k, v) =>
                   getScatterName(v) match {
@@ -586,14 +602,12 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       * @return
       */
     private def createSubjobDetails(nextStart: Option[Int] = None): JsValue = {
-      val parents = jobMeta.jobDesc.details match {
-        case Some(JsObject(fields)) if fields.contains(WorkflowSupport.ParentsKey) =>
-          JsUtils.getValues(fields(WorkflowSupport.ParentsKey)).map(JsUtils.getString(_))
-        case _ =>
-          Vector.empty
+      val parents = jobMeta.getJobDetail(WorkflowSupport.ParentsKey) match {
+        case Some(JsArray(array)) => array.map(JsUtils.getString(_))
+        case _                    => Vector.empty
       }
       // add the current job to the list of parents
-      val allParents = parents :+ jobMeta.jobDesc.id
+      val allParents = parents :+ jobMeta.jobId
       val details = Map(WorkflowSupport.ParentsKey -> JsArray(allParents.map(JsString(_))))
       val continueDetails = nextStart match {
         case Some(i) => Map(Native.ContinueStart -> JsNumber(i))
@@ -787,21 +801,20 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       * @return
       */
     private def getScatterJobs: Vector[ChildExecution] = {
-      val childExecs = jobMeta.jobDesc.details match {
-        case Some(JsObject(fields)) if fields.contains(WorkflowSupport.ParentsKey) =>
-          val parentJobIds =
-            JsUtils.getValues(fields(WorkflowSupport.ParentsKey)).map(JsUtils.getString(_))
-          val excludeJobIds = parentJobIds.toSet + jobMeta.jobDesc.id
+      val childExecs = jobMeta.getJobDetail(WorkflowSupport.ParentsKey) match {
+        case Some(JsArray(array)) =>
+          val parentJobIds = array.map(JsUtils.getString(_))
+          val excludeJobIds = parentJobIds.toSet + jobMeta.jobId
           parentJobIds.flatMap { parentJobId =>
             findChildExecutions(Some(parentJobId), excludeJobIds)
           }
         case _ =>
-          val parentJob = jobMeta.jobDesc.parentJob match {
+          val parentJob = jobMeta.parentJob match {
             case Some(job) => job
             case None =>
               throw new Exception(s"Can't get parent job for $jobMeta.jobDesc")
           }
-          findChildExecutions(Some(parentJob.id), Set(jobMeta.jobDesc.id))
+          findChildExecutions(Some(parentJob.id), Set(jobMeta.jobId))
       }
       logger.trace(s"childExecs=${childExecs}")
       childExecs
@@ -852,7 +865,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         case BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex =>
           launchConditional()
         case BlockKind.ScatterOneCall | BlockKind.ScatterComplex =>
-          assert(scatterStart == 0)
+          assert(jobMeta.scatterStart == 0)
           launchScatter()
         case BlockKind.ExpressionsOnly =>
           Map.empty
@@ -865,7 +878,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     override def continue(): Map[String, ParameterLink] = {
       val outputs: Map[String, ParameterLink] = block.kind match {
         case BlockKind.ScatterOneCall | BlockKind.ScatterComplex =>
-          assert(scatterStart > 0)
+          assert(jobMeta.scatterStart > 0)
           launchScatter()
         case _ =>
           throw new RuntimeException(s"cannot continue non-scatter block ${block}")
@@ -887,7 +900,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
   override def evaluateBlockInputs(
       jobInputs: Map[String, (Type, Value)]
   ): BlockContext[WdlBlock] = {
-    val block: WdlBlock = Block.getSubBlockAt(WdlBlock.createBlocks(workflow.body), blockPath)
+    val block: WdlBlock =
+      Block.getSubBlockAt(WdlBlock.createBlocks(workflow.body), jobMeta.blockPath)
     // Some of the inputs could be optional. If they are missing,
     // add in a None value.
     val irInputEnv: Map[String, (Type, Value)] = block.inputs.collect {

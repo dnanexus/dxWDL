@@ -3,7 +3,7 @@ package dx.compiler
 import java.nio.file.{Path, Paths}
 
 import dx.Assumptions.isLoggedIn
-import dx.Tags.{ApiTest, NativeTest}
+import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.{SuccessJsonTree, SuccessPrettyTree}
 import dx.core.util.MainUtils.Success

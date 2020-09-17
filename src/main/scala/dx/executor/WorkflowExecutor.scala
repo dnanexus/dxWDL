@@ -5,7 +5,6 @@ import dx.api.{DxAnalysis, DxApp, DxApplet, DxExecution, DxFile, DxWorkflow, Fie
 import dx.core.io.DxWorkerPaths
 import dx.core.{Native, getVersion}
 import dx.core.ir.{Block, ExecutableLink, Parameter, ParameterLink, Type, TypeSerde, Value}
-import dx.executor.WorkflowAction.WorkflowAction
 import dx.executor.wdl.WdlWorkflowSupportFactory
 import spray.json._
 import wdlTools.util.{Enum, TraceLevel}
@@ -58,7 +57,7 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
   def evaluateBlockInputs(jobInputs: Map[String, (Type, Value)]): BlockContext[B]
 
   lazy val execLinkInfo: Map[String, ExecutableLink] =
-    jobMeta.executableDetails.get("execLinkInfo") match {
+    jobMeta.getExecutableDetail("execLinkInfo") match {
       case Some(JsObject(fields)) =>
         fields.map {
           case (key, link) =>
@@ -77,20 +76,8 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
     )
   }
 
-  lazy val blockPath: Vector[Int] = jobMeta.executableDetails.get("blockPath") match {
-    case Some(JsArray(arr)) if arr.nonEmpty =>
-      arr.map {
-        case JsNumber(n) => n.toInt
-        case _           => throw new Exception("Bad value ${arr}")
-      }
-    case None =>
-      Vector.empty
-    case other =>
-      throw new Exception(s"Bad value ${other}")
-  }
-
   lazy val fqnDictTypes: Map[String, Type] =
-    jobMeta.executableDetails.get(Native.WfFragmentInputs) match {
+    jobMeta.getExecutableDetail(Native.WfFragmentInputs) match {
       case Some(JsObject(fields)) =>
         fields.map {
           case (key, value) =>
@@ -103,23 +90,6 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
       case other =>
         throw new Exception(s"Bad value ${other}")
     }
-
-  lazy val scatterStart: Int = jobMeta.jobDesc.details match {
-    case Some(JsObject(fields)) if fields.contains(Native.ContinueStart) =>
-      fields(Native.ContinueStart) match {
-        case JsNumber(s) => s.toIntExact
-        case other =>
-          throw new Exception(s"Invalid value ${other} for  ${Native.ContinueStart}")
-      }
-    case _ => 0
-  }
-
-  lazy val scatterSize: Int = jobMeta.executableDetails.get(Native.ScatterChunkSize) match {
-    case Some(JsNumber(n)) => n.toIntExact
-    case None              => Native.JobPerScatterDefault
-    case other =>
-      throw new Exception(s"Invalid value ${other} for ${Native.ScatterChunkSize}")
-  }
 
   protected def launchJob(executableLink: ExecutableLink,
                           name: String,
@@ -201,12 +171,12 @@ object WorkflowExecutor {
   }
 }
 
-case class WorkflowExecutor(jobMeta: JobMeta) {
+case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPaths] = None) {
   // Setup the standard paths used for applets. These are used at runtime, not at compile time.
   // On the cloud instance running the job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private val workerPaths = DxWorkerPaths.default
-  private val workflowSupport: WorkflowSupport[_] =
+  private val workerPaths = dxWorkerPaths.getOrElse(DxWorkerPaths(jobMeta.homeDir))
+  private[executor] val workflowSupport: WorkflowSupport[_] =
     WorkflowExecutor.createWorkflowSupport(jobMeta, workerPaths)
   private val dxApi = jobMeta.dxApi
   private val logger = jobMeta.logger
@@ -250,7 +220,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
     }
     val blockCtx = workflowSupport.evaluateBlockInputs(jobInputs)
     logger.traceLimited(
-        s"""|Block ${workflowSupport.blockPath} to execute:
+        s"""|Block ${jobMeta.blockPath} to execute:
             |${blockCtx.block.prettyFormat}
             |""".stripMargin
     )
@@ -289,7 +259,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
 
   private def reorganizeOutputsDefault(): Map[String, ParameterLink] = {
     logger.traceLimited(s"dxWDL version: ${getVersion}")
-    val analysis = jobMeta.jobDesc.analysis.get
+    val analysis = jobMeta.analysis.get
     val analysisFiles = getAnalysisOutputFiles(analysis)
     if (analysisFiles.isEmpty) {
       logger.trace(s"no output files to reorganize for analysis ${analysis.id}")
@@ -338,7 +308,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
     Map.empty
   }
 
-  def apply(action: WorkflowAction): String = {
+  def apply(action: WorkflowAction.WorkflowAction): (Map[String, ParameterLink], String) = {
     try {
       val outputs: Map[String, ParameterLink] = action match {
         case WorkflowAction.Inputs =>
@@ -359,7 +329,7 @@ case class WorkflowExecutor(jobMeta: JobMeta) {
           throw new Exception(s"Illegal workflow fragment operation ${action}")
       }
       jobMeta.writeOutputLinks(outputs)
-      s"success ${action}"
+      (outputs, s"success ${action}")
     } catch {
       case e: Throwable =>
         jobMeta.error(e)

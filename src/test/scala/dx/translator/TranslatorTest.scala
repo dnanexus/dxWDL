@@ -2,18 +2,22 @@ package dx.translator
 
 import java.nio.file.{Path, Paths}
 
+import dx.Tags.EdgeTest
 import dx.api._
 import dx.compiler.Main
 import dx.compiler.Main.SuccessIR
-import dx.core.ir.{ExecutableKindApplet, _}
-import dx.core.languages.wdl.{Utils => WdlUtils}
+import dx.core.ir.Type._
+import dx.core.ir.Value._
+import dx.core.ir._
+import dx.translator.CallableAttributes._
+import dx.translator.ParameterAttributes._
+import dx.translator.RunSpec._
 import dx.core.util.MainUtils.{Failure, UnsuccessfulTermination}
+import dx.translator.wdl.WdlDocumentSource
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
@@ -24,12 +28,6 @@ class TranslatorTest extends AnyFlatSpec with Matchers {
   private def pathFromBasename(dir: String, basename: String): Path = {
     val p = getClass.getResource(s"/${dir}/${basename}").getPath
     Paths.get(p)
-  }
-
-  private def pathAndDocument(dir: String, basename: String): (Path, TAT.Document) = {
-    val path = pathFromBasename(dir, basename)
-    val (doc, _) = WdlUtils.parseSourceFile(path)
-    (path, doc)
   }
 
   private val dxProject = dxApi.currentProject
@@ -55,12 +53,11 @@ class TranslatorTest extends AnyFlatSpec with Matchers {
                       "--project",
                       dxProject.id)
 
-  private def getParamMeta(task: TAT.Task, iDef: TAT.InputDefinition): Option[TAT.MetaValue] = {
-    task.parameterMeta match {
-      case None                          => None
-      case Some(TAT.MetaSection(kvs, _)) => kvs.get(iDef.name)
+  private def getApplicationByName(name: String, bundle: Bundle): Application =
+    bundle.allCallables(name) match {
+      case a: Application => a
+      case _              => throw new Exception(s"${name} is not an applet")
     }
-  }
 
   it should "IR compile a single WDL task" in {
     val path = pathFromBasename("compiler", "add.wdl")
@@ -280,30 +277,8 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     retval shouldBe a[SuccessIR]
   }
 
-  private def getApplicationByName(name: String, bundle: Bundle): Application =
-    bundle.allCallables(name) match {
-      case a: Application => a
-      case _              => throw new Exception(s"${name} is not an applet")
-    }
-
-  private def getTaskByName(name: String, bundle: Bundle, doc: TAT.Document): TAT.Task = {
-    val applet = getApplicationByName(name, bundle)
-    val task: TAT.Task = applet.kind match {
-      case ExecutableKindApplet =>
-        doc.elements
-          .collectFirst {
-            case task: TAT.Task if task.name == name => task
-          }
-          .getOrElse(
-              throw new Exception(s"no task names ${name}")
-          )
-      case _ => throw new Exception(s"${name} is not a task")
-    }
-    task
-  }
-
   // Check parameter_meta `pattern` keyword
-  it should "recognize pattern in parameters_meta via CVar for input CVars" in {
+  it should "recognize pattern in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "pattern_params.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -319,179 +294,37 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
             "in_file",
             Type.TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrHelp("The input file to be searched"),
-                    IOAttrPatterns(PatternsReprArray(Vector("*.txt", "*.tsv"))),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Input file")
-                )
+            Vector(
+                HelpAttribute("The input file to be searched"),
+                PatternsAttribute(PatternsArray(Vector("*.txt", "*.tsv"))),
+                GroupAttribute("Common"),
+                LabelAttribute("Input file")
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrHelp("The pattern to use to search in_file"),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Search pattern")
-                )
+            Vector(
+                HelpAttribute("The pattern to use to search in_file"),
+                GroupAttribute("Common"),
+                LabelAttribute("Search pattern")
             )
         )
     )
     cgrepApplication.outputs shouldBe Vector(
-        CVar("count", WdlTypes.T_Int, None, None),
-        CVar(
+        Parameter("count", TInt, None, Vector.empty),
+        Parameter(
             "out_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            None
+            Vector.empty
         )
     )
   }
 
   // Check parameter_meta `pattern` keyword
-  it should "recognize pattern object in parameters_obj_meta via CVar for input CVars" in {
-    val (path, doc) = pathAndDocument("compiler", "pattern_obj_params.wdl")
-    val args = path.toString :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-
-    val cgrepApplication = getApplicationByName("pattern_params_obj_cgrep", bundle, doc)
-    cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
-            "in_file",
-            WdlTypes.T_File,
-            None,
-            Some(
-                Vector(
-                    IOAttrHelp("The input file to be searched"),
-                    IOAttrPatterns(
-                        PatternsReprObj(
-                            Some(Vector("*.txt", "*.tsv")),
-                            Some("file"),
-                            Some(Vector("foo", "bar"))
-                        )
-                    ),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Input file")
-                )
-            )
-        ),
-        CVar(
-            "pattern",
-            WdlTypes.T_String,
-            None,
-            Some(
-                Vector(
-                    IOAttrHelp("The pattern to use to search in_file"),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Search pattern")
-                )
-            )
-        )
-    )
-    cgrepApplication.outputs shouldBe Vector(
-        CVar("count", WdlTypes.T_Int, None, None),
-        CVar(
-            "out_file",
-            WdlTypes.T_File,
-            None,
-            None
-        )
-    )
-  }
-
-  // Check parameter_meta pattern: ["array"]
-  it should "recognize pattern in parameters_meta via WDL" in {
-    val path = pathFromBasename("compiler", "pattern_params.wdl")
-    val args = path.toString :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-
-    val cgrepTask = getTaskByName("pattern_params_cgrep", bundle)
-    val sansText = Map(
-        "in_file" -> MetaValueObject(
-            Map(
-                "help" -> MetaValueString("The input file to be searched"),
-                "patterns" -> MetaValueArray(
-                    Vector(
-                        MetaValueString("*.txt"),
-                        MetaValueString("*.tsv")
-                    )
-                ),
-                "group" ->
-                  MetaValueString("Common"),
-                "label" ->
-                  MetaValueString("Input file")
-            )
-        ),
-        "pattern" -> MetaValueObject(
-            Map(
-                "help" ->
-                  MetaValueString("The pattern to use to search in_file"),
-                "group" ->
-                  MetaValueString("Common"),
-                "label" ->
-                  MetaValueString("Search pattern")
-            )
-        ),
-        "out_file" -> MetaValueObject(
-            Map(
-                "patterns" -> MetaValueArray(
-                    Vector(
-                        MetaValueString("*.txt"),
-                        MetaValueString("*.tsv")
-                    )
-                ),
-                "group" -> MetaValueString("Common"),
-                "label" -> MetaValueString("Output file")
-            )
-        )
-    )
-
-    inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe sansText
-    }
-
-    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    val sansText2 =
-      MetaValueObject(
-          Map(
-              "group" ->
-                MetaValueString("Common"),
-              "help" ->
-                MetaValueString("The input file to be searched"),
-              "patterns" -> MetaValueArray(
-                  Vector(
-                      MetaValueString("*.txt"),
-                      MetaValueString("*.tsv")
-                  )
-              ),
-              "label" ->
-                MetaValueString("Input file")
-          )
-      )
-
-    inside(getParamMeta(cgrepTask, iDef)) {
-      case Some(metaValue) =>
-        translate(metaValue) shouldBe sansText2
-    }
-  }
-
-  // Check parameter_meta pattern: {"object"}
-  it should "recognize pattern object in parameters_meta via WDL" in {
+  it should "recognize pattern object in parameters_obj_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -501,89 +334,49 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
       case _                => throw new Exception("unexpected")
     }
 
-    val cgrepTask = getTaskByName("pattern_params_obj_cgrep", bundle)
-    val sansText =
-      Map(
-          "in_file" -> MetaValueObject(
-              Map(
-                  "help" ->
-                    MetaValueString("The input file to be searched"),
-                  "patterns" -> MetaValueObject(
-                      Map(
-                          "class" -> MetaValueString("file"),
-                          "tag" -> MetaValueArray(
-                              Vector(MetaValueString("foo"), MetaValueString("bar"))
-                          ),
-                          "name" -> MetaValueArray(
-                              Vector(MetaValueString("*.txt"), MetaValueString("*.tsv"))
-                          )
-                      )
-                  ),
-                  "group" ->
-                    MetaValueString("Common"),
-                  "label" ->
-                    MetaValueString("Input file")
-              )
-          ),
-          "pattern" -> MetaValueObject(
-              Map(
-                  "help" ->
-                    MetaValueString("The pattern to use to search in_file"),
-                  "group" ->
-                    MetaValueString("Common"),
-                  "label" ->
-                    MetaValueString("Search pattern")
-              )
-          ),
-          "out_file" -> MetaValueObject(
-              Map(
-                  "patterns" -> MetaValueArray(
-                      Vector(
-                          MetaValueString("*.txt"),
-                          MetaValueString("*.tsv")
-                      )
-                  ),
-                  "group" -> MetaValueString("Common"),
-                  "label" -> MetaValueString("Output file")
-              )
-          )
-      )
-    inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe sansText
-    }
-
-    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    val sansText2 =
-      MetaValueObject(
-          Map(
-              "group" ->
-                MetaValueString("Common"),
-              "help" ->
-                MetaValueString("The input file to be searched"),
-              "patterns" -> MetaValueObject(
-                  Map(
-                      "class" -> MetaValueString("file"),
-                      "tag" -> MetaValueArray(
-                          Vector(MetaValueString("foo"), MetaValueString("bar"))
-                      ),
-                      "name" -> MetaValueArray(
-                          Vector(MetaValueString("*.txt"), MetaValueString("*.tsv"))
-                      )
-                  )
-              ),
-              "label" ->
-                MetaValueString("Input file")
-          )
-      )
-    inside(getParamMeta(cgrepTask, iDef)) {
-      case Some(metaValue) =>
-        translate(metaValue) shouldBe sansText2
-    }
+    val cgrepApplication = getApplicationByName("pattern_params_obj_cgrep", bundle)
+    cgrepApplication.inputs.iterator sameElements Vector(
+        Parameter(
+            "in_file",
+            TFile,
+            None,
+            Vector(
+                HelpAttribute("The input file to be searched"),
+                PatternsAttribute(
+                    PatternsObject(
+                        Vector("*.txt", "*.tsv"),
+                        Some("file"),
+                        Vector("foo", "bar")
+                    )
+                ),
+                GroupAttribute("Common"),
+                LabelAttribute("Input file")
+            )
+        ),
+        Parameter(
+            "pattern",
+            TString,
+            None,
+            Vector(
+                HelpAttribute("The pattern to use to search in_file"),
+                GroupAttribute("Common"),
+                LabelAttribute("Search pattern")
+            )
+        )
+    )
+    cgrepApplication.outputs shouldBe Vector(
+        Parameter("count", TInt, None, Vector.empty),
+        Parameter(
+            "out_file",
+            TFile,
+            None,
+            Vector.empty
+        )
+    )
   }
 
   // Check parameter_meta `choices` keyword
-  it should "recognize choices in parameters_meta via CVar for input CVars" in {
+  it should "recognize choices in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "choice_values.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -595,38 +388,34 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("choice_values_cgrep", bundle)
     cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrChoices(
-                        Vector(
-                            ChoiceReprFile(
-                                name = None,
-                                value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
-                            ),
-                            ChoiceReprFile(
-                                name = None,
-                                value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
-                            )
+            Vector(
+                ChoicesAttribute(
+                    Vector(
+                        FileChoice(
+                            name = None,
+                            value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                        ),
+                        FileChoice(
+                            name = None,
+                            value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                         )
                     )
                 )
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrChoices(
-                        Vector(
-                            ChoiceReprString(value = "A"),
-                            ChoiceReprString(value = "B")
-                        )
+            Vector(
+                ChoicesAttribute(
+                    Vector(
+                        SimpleChoice(value = VString("A")),
+                        SimpleChoice(value = VString("B"))
                     )
                 )
             )
@@ -635,7 +424,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Check parameter_meta `choices` keyword with annotated values
-  it should "recognize annotated choices in parameters_meta via CVar for input CVars" in {
+  it should "recognize annotated choices in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "choice_obj_values.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -647,38 +436,34 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("choice_values_cgrep", bundle)
     cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrChoices(
-                        Vector(
-                            ChoiceReprFile(
-                                name = Some("file1"),
-                                value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
-                            ),
-                            ChoiceReprFile(
-                                name = Some("file2"),
-                                value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
-                            )
+            Vector(
+                ChoicesAttribute(
+                    Vector(
+                        FileChoice(
+                            name = Some("file1"),
+                            value = "dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"
+                        ),
+                        FileChoice(
+                            name = Some("file2"),
+                            value = "dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"
                         )
                     )
                 )
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrChoices(
-                        Vector(
-                            ChoiceReprString(value = "A"),
-                            ChoiceReprString(value = "B")
-                        )
+            Vector(
+                ChoicesAttribute(
+                    Vector(
+                        SimpleChoice(value = VString("A")),
+                        SimpleChoice(value = VString("B"))
                     )
                 )
             )
@@ -696,7 +481,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Check parameter_meta `suggestions` keyword
-  it should "recognize suggestions in parameters_meta via CVar for input CVars" in {
+  it should "recognize suggestions in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "suggestion_values.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -708,42 +493,38 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("suggestion_values_cgrep", bundle)
     cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrSuggestions(
-                        Vector(
-                            SuggestionReprFile(
-                                name = None,
-                                value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
-                                project = None,
-                                path = None
-                            ),
-                            SuggestionReprFile(
-                                name = None,
-                                value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
-                                project = None,
-                                path = None
-                            )
+            Vector(
+                SuggestionsAttribute(
+                    Vector(
+                        FileSuggestion(
+                            name = None,
+                            value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                            project = None,
+                            path = None
+                        ),
+                        FileSuggestion(
+                            name = None,
+                            value = Some("dx://file-Fg5PgBj0ffPP0Jjv3zfv0yxq"),
+                            project = None,
+                            path = None
                         )
                     )
                 )
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrSuggestions(
-                        Vector(
-                            SuggestionReprString(value = "A"),
-                            SuggestionReprString(value = "B")
-                        )
+            Vector(
+                SuggestionsAttribute(
+                    Vector(
+                        SimpleSuggestion(value = VString("A")),
+                        SimpleSuggestion(value = VString("B"))
                     )
                 )
             )
@@ -752,7 +533,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Check parameter_meta `suggestions` keyword with annotated values
-  it should "recognize annotated suggestions in parameters_meta via CVar for input CVars" in {
+  it should "recognize annotated suggestions in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "suggestion_obj_values.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -764,42 +545,38 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("suggestion_values_cgrep", bundle)
     cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrSuggestions(
-                        Vector(
-                            SuggestionReprFile(
-                                name = Some("file1"),
-                                value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
-                                project = None,
-                                path = None
-                            ),
-                            SuggestionReprFile(
-                                name = Some("file2"),
-                                value = None,
-                                project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
-                                path = Some("/test_data/f2.txt.gz")
-                            )
+            Vector(
+                SuggestionsAttribute(
+                    Vector(
+                        FileSuggestion(
+                            name = Some("file1"),
+                            value = Some("dx://file-Fg5PgBQ0ffP7B8bg3xqB115G"),
+                            project = None,
+                            path = None
+                        ),
+                        FileSuggestion(
+                            name = Some("file2"),
+                            value = None,
+                            project = Some("project-FGpfqjQ0ffPF1Q106JYP2j3v"),
+                            path = Some("/test_data/f2.txt.gz")
                         )
                     )
                 )
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrSuggestions(
-                        Vector(
-                            SuggestionReprString(value = "A"),
-                            SuggestionReprString(value = "B")
-                        )
+            Vector(
+                SuggestionsAttribute(
+                    Vector(
+                        SimpleSuggestion(value = VString("A")),
+                        SimpleSuggestion(value = VString("B"))
                     )
                 )
             )
@@ -826,7 +603,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Check parameter_meta `dx_type` keyword
-  it should "recognize dx_type in parameters_meta via CVar for input CVars" in {
+  it should "recognize dx_type in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "add_dx_type.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -838,33 +615,29 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("add_dx_type", bundle)
     cgrepApplication.inputs shouldBe Vector(
-        CVar(
+        Parameter(
             "a",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrType(ConstraintReprString("fastq"))
-                )
+            Vector(
+                TypeAttribute(StringConstraint("fastq"))
             )
         ),
-        CVar(
+        Parameter(
             "b",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrType(
-                        ConstraintReprOper(
-                            ConstraintOper.And,
-                            Vector(
-                                ConstraintReprString("fastq"),
-                                ConstraintReprOper(
-                                    ConstraintOper.Or,
-                                    Vector(
-                                        ConstraintReprString("Read1"),
-                                        ConstraintReprString("Read2")
-                                    )
+            Vector(
+                TypeAttribute(
+                    CompoundConstraint(
+                        ConstraintOper.And,
+                        Vector(
+                            StringConstraint("fastq"),
+                            CompoundConstraint(
+                                ConstraintOper.Or,
+                                Vector(
+                                    StringConstraint("Read1"),
+                                    StringConstraint("Read2")
                                 )
                             )
                         )
@@ -885,7 +658,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   }
 
   // Check parameter_meta `default` keyword
-  it should "recognize default in parameters_meta via CVar for input CVars" in {
+  it should "recognize default in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "add_default.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -897,17 +670,17 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("add_default", bundle)
     cgrepApplication.inputs shouldBe Vector(
-        CVar(
+        Parameter(
             "a",
-            WdlTypes.T_Int,
-            Some(WdlValues.V_Int(1)),
-            None
+            TInt,
+            Some(VInt(1)),
+            Vector.empty
         ),
-        CVar(
+        Parameter(
             "b",
-            WdlTypes.T_Optional(WdlTypes.T_Int),
+            TOptional(TInt),
             None,
-            Some(Vector(IOAttrDefault(DefaultReprInteger(2))))
+            Vector(DefaultAttribute(VInt(2)))
         )
     )
   }
@@ -922,82 +695,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     // TODO: make assertion about exception message
   }
 
-  it should "recognize help, group, and label in parameters_meta via WDL" in {
-    val path = pathFromBasename("compiler", "help_input_params.wdl")
-    val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-
-    val cgrepTask = getTaskByName("help_input_params_cgrep", bundle)
-    val sansText =
-      Map(
-          "in_file" -> MetaValueObject(
-              Map(
-                  "help" ->
-                    MetaValueString("The input file to be searched"),
-                  "group" -> MetaValueString("Common"),
-                  "label" -> MetaValueString("Input file")
-              )
-          ),
-          "pattern" -> MetaValueObject(
-              Map(
-                  "description" ->
-                    MetaValueString("The pattern to use to search in_file"),
-                  "group" -> MetaValueString("Common"),
-                  "label" -> MetaValueString("Search pattern")
-              )
-          ),
-          "s" -> MetaValueString("This is help for s")
-      )
-    inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe sansText
-    }
-
-    val sansText2 =
-      MetaValueObject(
-          Map(
-              "help" ->
-                MetaValueString("The input file to be searched"),
-              "group" -> MetaValueString("Common"),
-              "label" -> MetaValueString("Input file")
-          )
-      )
-    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    inside(getParamMeta(cgrepTask, iDef)) {
-      case Some(metaValue) =>
-        translate(metaValue) shouldBe sansText2
-    }
-
-    val diffTask = getTaskByName("help_input_params_diff", bundle)
-
-    inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map(
-            "a" -> MetaValueObject(
-                Map(
-                    "help" -> MetaValueString("lefthand file"),
-                    "group" -> MetaValueString("Files"),
-                    "label" -> MetaValueString("File A")
-                )
-            ),
-            "b" -> MetaValueObject(
-                Map(
-                    "help" -> MetaValueString("righthand file"),
-                    "group" -> MetaValueString("Files"),
-                    "label" -> MetaValueString("File B")
-                )
-            )
-        )
-    }
-  }
-
-  it should "recognize help in parameters_meta via CVar for input CVars" in {
+  it should "recognize help in parameters_meta via Parameter for input Parameters" in {
     val path = pathFromBasename("compiler", "help_input_params.wdl")
     val args = path.toString :: cFlags
     val retval =
@@ -1010,38 +708,32 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("help_input_params_cgrep", bundle)
     cgrepApplication.inputs.iterator sameElements Vector(
-        CVar(
+        Parameter(
             "s",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrHelp("This is help for s")
-                )
+            Vector(
+                HelpAttribute("This is help for s")
             )
         ),
-        CVar(
+        Parameter(
             "in_file",
-            WdlTypes.T_File,
+            TFile,
             None,
-            Some(
-                Vector(
-                    IOAttrHelp("The input file to be searched"),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Input file")
-                )
+            Vector(
+                HelpAttribute("The input file to be searched"),
+                GroupAttribute("Common"),
+                LabelAttribute("Input file")
             )
         ),
-        CVar(
+        Parameter(
             "pattern",
-            WdlTypes.T_String,
+            TString,
             None,
-            Some(
-                Vector(
-                    IOAttrHelp("The pattern to use to search in_file"),
-                    IOAttrGroup("Common"),
-                    IOAttrLabel("Search pattern")
-                )
+            Vector(
+                HelpAttribute("The pattern to use to search in_file"),
+                GroupAttribute("Common"),
+                LabelAttribute("Search pattern")
             )
         )
     )
@@ -1050,7 +742,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   // This is actually more of a test to confirm that symbols that are not input
   // variables are ignored. WDL doesn't include a paramMeta member for the output
   // var class anyways, so it's basically impossible for this to happen
-  it should "ignore help in parameters_meta via CVar for output CVars" in {
+  it should "ignore help in parameters_meta via Parameter for output Parameters" in {
     val path = pathFromBasename("compiler", "help_output_params.wdl")
     val args = path.toString :: cFlags
     val retval =
@@ -1063,11 +755,11 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
     val cgrepApplication = getApplicationByName("help_output_params_cgrep", bundle)
     cgrepApplication.outputs shouldBe Vector(
-        CVar(
+        Parameter(
             "count",
-            WdlTypes.T_Int,
+            TInt,
             None,
-            None
+            Vector.empty
         )
     )
   }
@@ -1084,47 +776,47 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     }
 
     val cgrepApplication = getApplicationByName("add", bundle)
-    cgrepApplication.meta.iterator sameElements
+    cgrepApplication.attributes.iterator sameElements
       Vector(
-          TaskAttrDeveloperNotes("Check out my sick bash expression! Three dolla signs!!!"),
-          TaskAttrDescription(
+          DeveloperNotesAttribute("Check out my sick bash expression! Three dolla signs!!!"),
+          DescriptionAttribute(
               "Adds two int together. This app adds together two integers and returns the sum"
           ),
-          TaskAttrTags(Vector("add", "ints")),
-          TaskAttrOpenSource(true),
-          TaskAttrVersion("1.0"),
-          TaskAttrProperties(Map("foo" -> "bar")),
-          TaskAttrCategories(Vector("Assembly")),
-          TaskAttrDetails(
+          TagsAttribute(Vector("add", "ints")),
+          OpenSourceAttribute(true),
+          VersionAttribute("1.0"),
+          PropertiesAttribute(Map("foo" -> "bar")),
+          CategoriesAttribute(Vector("Assembly")),
+          DetailsAttribute(
               Map(
-                  "contactEmail" -> MetaValueString("joe@dev.com"),
-                  "upstreamVersion" -> MetaValueString("1.0"),
-                  "upstreamAuthor" -> MetaValueString("Joe Developer"),
-                  "upstreamUrl" -> MetaValueString("https://dev.com/joe"),
-                  "upstreamLicenses" -> MetaValueArray(
+                  "contactEmail" -> VString("joe@dev.com"),
+                  "upstreamVersion" -> VString("1.0"),
+                  "upstreamAuthor" -> VString("Joe Developer"),
+                  "upstreamUrl" -> VString("https://dev.com/joe"),
+                  "upstreamLicenses" -> VArray(
                       Vector(
-                          MetaValueString("MIT")
+                          VString("MIT")
                       )
                   ),
-                  "whatsNew" -> MetaValueArray(
+                  "whatsNew" -> VArray(
                       Vector(
-                          MetaValueObject(
+                          VHash(
                               Map(
-                                  "version" -> MetaValueString("1.1"),
-                                  "changes" -> MetaValueArray(
+                                  "version" -> VString("1.1"),
+                                  "changes" -> VArray(
                                       Vector(
-                                          MetaValueString("Added parameter --foo"),
-                                          MetaValueString("Added cowsay easter-egg")
+                                          VString("Added parameter --foo"),
+                                          VString("Added cowsay easter-egg")
                                       )
                                   )
                               )
                           ),
-                          MetaValueObject(
+                          VHash(
                               Map(
-                                  "version" -> MetaValueString("1.0"),
-                                  "changes" -> MetaValueArray(
+                                  "version" -> VString("1.0"),
+                                  "changes" -> VArray(
                                       Vector(
-                                          MetaValueString("Initial version")
+                                          VString("Initial version")
                                       )
                                   )
                               )
@@ -1133,8 +825,8 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
                   )
               )
           ),
-          TaskAttrTitle("Add Ints"),
-          TaskAttrTypes(Vector("Adder"))
+          TitleAttribute("Add Ints"),
+          TypesAttribute(Vector("Adder"))
       )
   }
 
@@ -1150,16 +842,16 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     }
 
     val cgrepApplication = getApplicationByName("add_runtime_hints", bundle)
-    cgrepApplication.runtimeHints shouldBe Some(
+    cgrepApplication.requirements shouldBe Some(
         Vector(
-            RuntimeHintIgnoreReuse(true),
-            RuntimeHintRestart(
+            IgnoreReuseRequirement(true),
+            RestartRequirement(
                 max = Some(5),
                 default = Some(1),
-                errors = Some(Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2))
+                errors = Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2)
             ),
-            RuntimeHintTimeout(hours = Some(12), minutes = Some(30)),
-            RuntimeHintAccess(network = Some(Vector("*")), developer = Some(true))
+            TimeoutRequirement(hours = Some(12), minutes = Some(30)),
+            AccessRequirement(network = Vector("*"), developer = Some(true))
         )
     )
   }
@@ -1173,100 +865,6 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     retval match {
       case SuccessIR(ir, _) => ir
       case _                => throw new Exception("unexpected")
-    }
-  }
-
-  it should "handle streaming files" in {
-    val path = pathFromBasename("compiler", "streaming_files.wdl")
-    val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-
-    val cgrepTask = getTaskByName("cgrep", bundle)
-    inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map("in_file" -> MetaValueString("stream"))
-    }
-
-    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-
-    inside(getParamMeta(cgrepTask, iDef)) {
-      case Some(metaValue) =>
-        translate(metaValue) shouldBe MetaValueString("stream")
-    }
-
-    val diffTask = getTaskByName("diff", bundle)
-    inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map(
-            "a" -> MetaValueString("stream"),
-            "b" -> MetaValueString("stream")
-        )
-    }
-  }
-
-  it should "recognize the streaming object annotation" in {
-    val path = pathFromBasename("compiler", "streaming_files_obj.wdl")
-    val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-
-    val cgrepTask = getTaskByName("cgrep", bundle)
-    inside(cgrepTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map(
-            "in_file" -> MetaValueObject(
-                Map("stream" -> MetaValueBoolean(true))
-            )
-        )
-    }
-    val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-    inside(getParamMeta(cgrepTask, iDef)) {
-      case Some(metaValue) =>
-        translate(metaValue) shouldBe MetaValueObject(
-            Map("stream" -> MetaValueBoolean(true))
-        )
-    }
-
-    val diffTask = getTaskByName("diff", bundle)
-    inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map(
-            "a" -> MetaValueObject(
-                Map("stream" -> MetaValueBoolean(true))
-            ),
-            "b" -> MetaValueObject(
-                Map("stream" -> MetaValueBoolean(true))
-            )
-        )
-    }
-  }
-
-  it should "recognize the streaming annotation for wdl draft2" in {
-    val path = pathFromBasename("draft2", "streaming.wdl")
-    val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
-    retval shouldBe a[SuccessIR]
-    val bundle = retval match {
-      case SuccessIR(ir, _) => ir
-      case _                => throw new Exception("unexpected")
-    }
-    val diffTask = getTaskByName("diff", bundle)
-    inside(diffTask.parameterMeta) {
-      case Some(TAT.ParameterMetaSection(kvs, _)) =>
-        translateMetaKVs(kvs) shouldBe Map("a" -> MetaValueString("stream"),
-                                           "b" -> MetaValueString("stream"))
     }
   }
 
@@ -1288,14 +886,15 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
   it should "recognize that an argument with a default can be omitted at the call site" in {
     val path = pathFromBasename("compiler", "call_level2.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "check for reserved symbols" in {
     val path = pathFromBasename("compiler", "reserved.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
-
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     inside(retval) {
       case Failure(_, Some(e)) =>
         e.getMessage should include("reserved substring ___")
@@ -1304,56 +903,61 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
   it should "do nested scatters" in {
     val path = pathFromBasename("compiler", "nested_scatter.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "handle struct imported several times" in {
     val path = pathFromBasename("struct/struct_imported_twice", "file3.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "handle file constants in a workflow" in {
     val path = pathFromBasename("compiler", "wf_constants.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "respect import flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
-    val retval = Main.compile(path.toString :: "--imports" :: libraryPath.toString :: cFlags)
+    val args = path.toString :: "--imports" :: libraryPath.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "respect import -p flag" in {
     val path = pathFromBasename("compiler/imports", "A.wdl")
     val libraryPath = path.getParent.resolve("lib")
-    val retval = Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
+    val args = path.toString :: "--p" :: libraryPath.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "pass environment between deep stages" in {
     val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "handle multiple struct definitions" in {
     val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order", "file3.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "retain all characters in a WDL task" in {
     val path = pathFromBasename("bugs", "missing_chars_in_task.wdl")
-    val retval = Main.compile(
-        path.toString
-//                                      :: "--verbose"
-//                                      :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    )
+    val args = path.toString :: cFlags
+    //                                      :: "--verbose"
+    //                                      :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
 
     val commandSection =
@@ -1375,25 +979,28 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
         callable shouldBe a[Application]
         val task = callable.asInstanceOf[Application]
         val generator = WdlV1Generator()
-        val taskSource = generator.generateDocument(task.document).mkString("\n")
+        val wdlDoc = task.document match {
+          case WdlDocumentSource(doc) => doc
+          case _                      => throw new Exception("expected a WDL document")
+        }
+        val taskSource = generator.generateDocument(wdlDoc).mkString("\n")
         taskSource should include(commandSection)
     }
   }
 
   it should "correctly flatten a workflow with imports" in {
     val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "detect a request for GPU" in {
     val path = pathFromBasename("compiler", "GPU.wdl")
-    val retval = Main.compile(
-        path.toString
-        //                                      :: "--verbose"
-        //                                      :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    )
+    val args = path.toString :: cFlags
+    //                                      :: "--verbose"
+    //                                      :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
 
     inside(retval) {
@@ -1402,22 +1009,21 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[Application]
         val task = callable.asInstanceOf[Application]
-        task.instanceType shouldBe InstanceTypeConst(Some("mem3_ssd1_gpu_x8"),
-                                                     None,
-                                                     None,
-                                                     None,
-                                                     None)
+        task.instanceType shouldBe StaticInstanceType(Some("mem3_ssd1_gpu_x8"),
+                                                      None,
+                                                      None,
+                                                      None,
+                                                      None,
+                                                      None)
     }
   }
 
   it should "compile a scatter with a sub-workflow that has an optional argument" in {
     val path = pathFromBasename("compiler", "scatter_subworkflow_with_optional.wdl")
-    val retval = Main.compile(
-        path.toString
-//                                      :: "--verbose"
-//                                      :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    )
+    val args = path.toString :: cFlags
+    //                                      :: "--verbose"
+    //                                      :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
 
     val bundle = retval match {
@@ -1435,27 +1041,23 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     val samtools = wf.inputs.find { case (cVar, _) => cVar.name == "samtools_memory" }
     inside(samtools) {
       /*case Some((cVar, _)) =>
-       cVar.wdlType shouldBe (WdlTypes.T_Optional(WdlTypes.T_String))*/
+       cVar.wdlType shouldBe (TOptional(TString))*/
       case None => ()
     }
   }
   it should "compile a workflow taking arguments from a Pair" in {
     val path = pathFromBasename("draft2", "pawdl")
-    val retval = Main.compile(
-        path.toString
-        //                                      :: "--verbose"
-        //                                      :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    )
+    val args = path.toString :: cFlags
+    //                                      :: "--verbose"
+    //                                      :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   it should "pass as subworkflows do not have expression statement in output block" in {
     val path = pathFromBasename("subworkflows", basename = "trains.wdl")
-
     val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
@@ -1468,20 +1070,17 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
      * check_route   workflow
      * concat        task
      */
-    val retval = Main.compile(
-        path.toString
-//          :: "--verbose"
-//          :: "--verboseKey" :: "GenerateIR"
-          :: cFlags
-    )
+    val args = path.toString :: cFlags
+    //          :: "--verbose"
+    //          :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
   }
 
   ignore should "recognize workflow metadata" in {
     val path = pathFromBasename("compiler", "wf_meta.wdl")
     val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -1491,18 +1090,16 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
       case Some(wf: Workflow) => wf
       case _                  => throw new Exception("primaryCallable is not a workflow")
     }
-    workflow.meta shouldBe Some(
+    workflow.attributes shouldBe Some(
         Vector(
-            WorkflowAttrDescription("This is a workflow that defines some metadata"),
-            WorkflowAttrTags(Vector("foo", "bar")),
-            WorkflowAttrVersion("1.0"),
-            WorkflowAttrProperties(Map("foo" -> "bar")),
-            WorkflowAttrDetails(
-                Map("whatsNew" -> MetaValueString("v1.0: First release"))
-            ),
-            WorkflowAttrTitle("Workflow with metadata"),
-            WorkflowAttrTypes(Vector("calculator")),
-            WorkflowAttrSummary("A workflow that defines some metadata")
+            DescriptionAttribute("This is a workflow that defines some metadata"),
+            TagsAttribute(Vector("foo", "bar")),
+            VersionAttribute("1.0"),
+            PropertiesAttribute(Map("foo" -> "bar")),
+            DetailsAttribute(Map("whatsNew" -> VString("v1.0: First release"))),
+            TitleAttribute("Workflow with metadata"),
+            TypesAttribute(Vector("calculator")),
+            SummaryAttribute("A workflow that defines some metadata")
         )
     )
   }
@@ -1510,8 +1107,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
   ignore should "recognize workflow parameter metadata" in {
     val path = pathFromBasename("compiler", "wf_param_meta.wdl")
     val args = path.toString :: cFlags
-    val retval =
-      Main.compile(args.toVector)
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
     val bundle = retval match {
       case SuccessIR(ir, _) => ir
@@ -1521,31 +1117,27 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
       case Some(wf: Workflow) => wf
       case _                  => throw new Exception("primaryCallable is not a workflow")
     }
-    val input_cvars: Vector[CVar] = workflow.inputs.map {
-      case (c: CVar, _) => c
-      case _            => throw new Exception("Invalid workflow input ${other}")
+    val input_cvars: Vector[Parameter] = workflow.inputs.map {
+      case (c: Parameter, _) => c
+      case _                 => throw new Exception("Invalid workflow input ${other}")
     }
     input_cvars.sortWith(_.name < _.name) shouldBe Vector(
-        CVar(
+        Parameter(
             "x",
-            WdlTypes.T_Int,
-            Some(WdlValues.V_Int(3)),
-            Some(
-                Vector(
-                    IOAttrLabel("Left-hand side"),
-                    IOAttrDefault(DefaultReprInteger(3))
-                )
+            TInt,
+            Some(VInt(3)),
+            Vector(
+                LabelAttribute("Left-hand side"),
+                DefaultAttribute(VInt(3))
             )
         ),
-        CVar(
+        Parameter(
             "y",
-            WdlTypes.T_Int,
-            Some(WdlValues.V_Int(5)),
-            Some(
-                Vector(
-                    IOAttrLabel("Right-hand side"),
-                    IOAttrDefault(DefaultReprInteger(5))
-                )
+            TInt,
+            Some(VInt(5)),
+            Vector(
+                LabelAttribute("Right-hand side"),
+                DefaultAttribute(VInt(5))
             )
         )
     )
@@ -1553,7 +1145,8 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
 
   ignore should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
-    val retval = Main.compile(path.toString :: cFlags)
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
 
     val bundle = retval match {
@@ -1565,61 +1158,214 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
       case Some(wf: Workflow) => wf
       case _                  => throw new Exception("primaryCallable is not a workflow")
     }
-    workflow.meta match {
-      case Some(array) =>
-        array.size shouldBe 1
-        array.foreach({
-          case WorkflowAttrDescription(desc) =>
-            desc shouldBe "This is the readme for the wf_linear workflow."
-          case other => throw new Exception(s"Unexpected workflow meta ${other}")
-        })
-      case _ => throw new Exception("Expected workflow meta")
+    workflow.attributes match {
+      case Vector(DescriptionAttribute(desc)) =>
+        desc shouldBe "This is the readme for the wf_linear workflow."
+      case _ =>
+        throw new Exception("Expected one workflow description attribute")
     }
 
     val addApp = getApplicationByName("add", bundle)
-    addApp.meta match {
-      case Some(v: Vector[TaskAttr]) =>
-        v.size shouldBe 2
-        v.foreach {
-          case TaskAttrDescription(text) =>
-            text shouldBe "This is the readme for the wf_linear add task."
-          case TaskAttrDeveloperNotes(text) =>
-            text shouldBe "Developer notes defined in WDL"
-          case other => throw new Exception(s"Invalid TaskAttr for add task ${other}")
-        }
-      case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for add task")
+    addApp.attributes.size shouldBe 2
+    addApp.attributes.foreach {
+      case DescriptionAttribute(text) =>
+        text shouldBe "This is the readme for the wf_linear add task."
+      case DeveloperNotesAttribute(text) =>
+        text shouldBe "Developer notes defined in WDL"
+      case other => throw new Exception(s"Invalid  for add task ${other}")
     }
 
     val mulApp = getApplicationByName("mul", bundle)
-    mulApp.meta match {
-      case Some(v: Vector[TaskAttr]) =>
-        v.size shouldBe 1
-        v.foreach {
-          case TaskAttrDescription(text) =>
-            text shouldBe "Description defined in WDL"
-          case other => throw new Exception(s"Invalid TaskAttr for mul task ${other}")
-        }
-      case _ => throw new Exception("meta is None or is not a Vector of TaskAttr for mul task")
+    mulApp.attributes match {
+      case Vector(DescriptionAttribute(text)) =>
+        text shouldBe "Description defined in WDL"
+      case other =>
+        throw new Exception(s"expected one description attribute, not ${other}")
     }
 
     val incApp = getApplicationByName("inc", bundle)
-    incApp.meta match {
-      case Some(v: Vector[TaskAttr]) => v.size shouldBe 0
-      case None                      => None
-      case _                         => throw new Exception("meta is not None or empty for inc task")
-    }
+    incApp.attributes.size shouldBe 0
   }
 
   it should "work correctly with pairs in a scatter" taggedAs EdgeTest in {
     val path = pathFromBasename("subworkflows", basename = "scatter_subworkflow_with_optional.wdl")
-
     val cFlagsNotQuiet = cFlags.filter(_ != "-quiet")
-    val retval = Main.compile(
-        path.toString
-//          :: "--verbose"
-//          :: "--verboseKey" :: "GenerateIR"
-          :: cFlagsNotQuiet
-    )
+    val args = path.toString :: cFlagsNotQuiet
+    //          :: "--verbose"
+    //          :: "--verboseKey" :: "GenerateIR"
+    val retval = Main.compile(args.toVector)
     retval shouldBe a[SuccessIR]
+  }
+
+  // Check parameter_meta pattern: ["array"]
+  it should "recognize pattern in parameters_meta via WDL" in {
+    val path = pathFromBasename("compiler", "pattern_params.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+
+    val cgrepTask = getApplicationByName("pattern_params_cgrep", bundle)
+    cgrepTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "in_file" -> Vector(
+            HelpAttribute("The input file to be searched"),
+            PatternsArray(Vector("*.txt", "*.tsv")),
+            GroupAttribute("Common"),
+            LabelAttribute("Input file")
+        ),
+        "pattern" -> Vector(
+            HelpAttribute("The pattern to use to search in_file"),
+            GroupAttribute("Common"),
+            LabelAttribute("Search pattern")
+        ),
+        "out_file" -> Vector(
+            PatternsArray(
+                Vector("*.txt", "*.tsv")
+            ),
+            GroupAttribute("Common"),
+            LabelAttribute("Output file")
+        )
+    )
+  }
+
+  // Check parameter_meta pattern: {"object"}
+  it should "recognize pattern object in parameters_meta via WDL" in {
+    val path = pathFromBasename("compiler", "pattern_obj_params.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+
+    val cgrepTask = getApplicationByName("pattern_params_obj_cgrep", bundle)
+    cgrepTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "in_file" -> Vector(
+            HelpAttribute("The input file to be searched"),
+            PatternsAttribute(
+                PatternsObject(
+                    Vector("*.txt", "*.tsv"),
+                    Some("file"),
+                    Vector("foo", "bar")
+                )
+            ),
+            GroupAttribute("Common"),
+            LabelAttribute("Input file")
+        ),
+        "pattern" -> Vector(
+            HelpAttribute("The pattern to use to search in_file"),
+            GroupAttribute("Common"),
+            LabelAttribute("Search pattern")
+        ),
+        "out_file" -> Vector(
+            PatternsArray(Vector("*.txt", "*.tsv")),
+            GroupAttribute("Common"),
+            LabelAttribute("Output file")
+        )
+    )
+  }
+
+  it should "recognize help, group, and label in parameters_meta via WDL" in {
+    val path = pathFromBasename("compiler", "help_input_params.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+
+    val cgrepTask = getApplicationByName("help_input_params_cgrep", bundle)
+    cgrepTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "in_file" -> Vector(
+            HelpAttribute("The input file to be searched"),
+            GroupAttribute("Common"),
+            LabelAttribute("Input file")
+        ),
+        "pattern" -> Vector(
+            DescriptionAttribute("The pattern to use to search in_file"),
+            GroupAttribute("Common"),
+            LabelAttribute("Search pattern")
+        ),
+        "s" -> Vector(HelpAttribute("This is help for s"))
+    )
+
+    val diffTask = getApplicationByName("help_input_params_diff", bundle)
+    diffTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "a" -> Vector(
+            HelpAttribute("lefthand file"),
+            GroupAttribute("Files"),
+            LabelAttribute("File A")
+        ),
+        "b" -> Vector(
+            HelpAttribute("righthand file"),
+            GroupAttribute("Files"),
+            LabelAttribute("File B")
+        )
+    )
+  }
+
+  // `paramter: "stream"` should not be converted to an attribute - it is only accessed at runtime
+  it should "ignore stream attribute" in {
+    val path = pathFromBasename("compiler", "streaming_files.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+    val cgrepTask = getApplicationByName("cgrep", bundle)
+    cgrepTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "in_file" -> Vector()
+    )
+    val diffTask = getApplicationByName("diff", bundle)
+    diffTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "a" -> Vector(),
+        "b" -> Vector()
+    )
+  }
+
+  // `paramter: {stream: true}` should not be converted to an attribute - it is only accessed at runtime
+  it should "ignore the streaming object annotation" in {
+    val path = pathFromBasename("compiler", "streaming_files_obj.wdl")
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+    val cgrepTask = getApplicationByName("cgrep", bundle)
+    cgrepTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "in_file" -> Vector()
+    )
+    val diffTask = getApplicationByName("diff", bundle)
+    diffTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "a" -> Vector(),
+        "b" -> Vector()
+    )
+  }
+
+  it should "ignore the streaming annotation for wdl draft2" in {
+    val path = pathFromBasename("draft2", "streaming.wdl")
+    val args = path.toString :: cFlags
+    val retval =
+      Main.compile(args.toVector)
+    retval shouldBe a[SuccessIR]
+    val bundle = retval match {
+      case SuccessIR(ir, _) => ir
+      case _                => throw new Exception("unexpected")
+    }
+    val diffTask = getApplicationByName("diff", bundle)
+    diffTask.inputs.map(param => param.name -> param.attributes).iterator sameElements Vector(
+        "a" -> Vector(),
+        "b" -> Vector()
+    )
   }
 }

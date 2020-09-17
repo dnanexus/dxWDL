@@ -5,7 +5,7 @@ import dx.translator.RunSpec._
 import dx.core.ir.{ExecutableKind, ExecutableKindNative, ExecutableType, RuntimeRequirement, Value}
 import dx.core.languages.wdl.{DxRuntimeHint, Runtime, Utils => WdlUtils}
 import wdlTools.eval.WdlValues._
-import wdlTools.eval.{Eval, EvalException, Hints, Meta, VBindings}
+import wdlTools.eval.{Eval, EvalException, Meta, VBindings}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
@@ -51,12 +51,13 @@ object RuntimeTranslator {
           "restart",
           Vector(T_Int, T_Object)
       )
-  case object Stream
-      extends DxRuntimeHint(
-          Some("dx_stream"),
-          "stream",
-          Vector(T_Boolean)
-      )
+  // TODO: this is an input file hint
+//  case object Stream
+//      extends DxRuntimeHint(
+//          Some("dx_stream"),
+//          "stream",
+//          Vector(T_Boolean)
+//      )
   case object Timeout
       extends DxRuntimeHint(
           Some("dx_timeout"),
@@ -327,23 +328,12 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
     }
   }
 
-  def translateStream: Option[StreamingRequirement] = {
-    runtime
-      .get(Hints.Keys.LocalizationOptional)
-      .orElse(runtime.getDxHint(RuntimeTranslator.Stream))
-      .map {
-        case V_Boolean(b) => StreamingRequirement(b)
-        case other        => throw new Exception(s"invalid stream value ${other}")
-      }
-  }
-
   def translateRequirements: Vector[RuntimeRequirement] = {
     Vector(
         translateAccess,
         translateIgnoreReuse,
         translateRestart,
-        translateTimeout,
-        translateStream
+        translateTimeout
     ).flatten
   }
 }

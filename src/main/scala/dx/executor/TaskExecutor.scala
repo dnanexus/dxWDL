@@ -5,7 +5,6 @@ import java.nio.file.{Path, Paths}
 import dx.api.DxJob
 import dx.core.getVersion
 import dx.core.io.{DxWorkerPaths, DxdaManifest, DxfuseManifest}
-import dx.executor.TaskAction.TaskAction
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
 import wdlTools.util.{Enum, FileSource, FileUtils, RealFileSource, SysUtils, TraceLevel}
@@ -82,14 +81,16 @@ object TaskExecutor {
   }
 }
 
-case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLimit: Int = 10000) {
+case class TaskExecutor(jobMeta: JobMeta,
+                        streamAllFiles: Boolean,
+                        dxWorkerPaths: Option[DxWorkerPaths] = None,
+                        fileUploader: FileUploader = SerialFileUploader(),
+                        traceLengthLimit: Int = 10000) {
   // Setup the standard paths used for applets. These are used at runtime, not at compile time.
   // On the cloud instance running the job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private val workerPaths = DxWorkerPaths.default
-  // TODO: swap this out for a parallelized version
-  private val fileUploader = SerialFileUploader()
-  private val taskSupport: TaskSupport =
+  private val workerPaths = dxWorkerPaths.getOrElse(DxWorkerPaths(jobMeta.homeDir))
+  private[executor] val taskSupport: TaskSupport =
     TaskExecutor.createTaskSupport(jobMeta, workerPaths, fileUploader)
   private val logger = jobMeta.logger
 
@@ -113,8 +114,8 @@ case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLi
     // calculate the required instance type
     val reqInstanceType: String = taskSupport.getRequiredInstanceType
     trace(s"required instance type: ${reqInstanceType}")
-    val curInstanceType = jobMeta.jobDesc.instanceType.getOrElse(
-        throw new Exception(s"Cannot get instance type for job ${jobMeta.jobDesc.id}")
+    val curInstanceType = jobMeta.instanceType.getOrElse(
+        throw new Exception(s"Cannot get instance type for job ${jobMeta.jobId}")
     )
     trace(s"current instance type: ${curInstanceType}")
     val isSufficient =
@@ -211,7 +212,7 @@ case class TaskExecutor(jobMeta: JobMeta, streamAllFiles: Boolean, traceLengthLi
     taskSupport.linkOutputs(dxSubJob)
   }
 
-  def apply(action: TaskAction): String = {
+  def apply(action: TaskAction.TaskAction): String = {
     try {
       // setup the utility directories that the task-runner employs
       workerPaths.createCleanDirs()
