@@ -57,10 +57,11 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private lazy val cFlagsReorg = List("-compileMode",
                                       "NativeWithoutRuntimeAsset",
-                                      "--project",
+                                      "-project",
                                       dxTestProject.getId,
+                                      "-force",
                                       "-quiet",
-                                      "--folder",
+                                      "-folder",
                                       "/reorg_tests")
 
   override def beforeAll(): Unit = {
