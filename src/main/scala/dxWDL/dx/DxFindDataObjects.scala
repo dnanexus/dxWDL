@@ -201,13 +201,13 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       } else {
         // Make a conjunction of all the legal names. For example:
         // ["Nice", "Foo", "Bar"] ===>
-        //  [(Nice)|(Foo)|(Bar)]
+        //  ^Nice$|^Foo$|^Bar$
         val orAll = nameConstraints
           .map { x =>
-            s"(${x})"
+            s"^${x}$$"
           }
           .mkString("|")
-        Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
+        Map("name" -> JsObject("regexp" -> JsString(orAll)))
       }
 
     val idField =
