@@ -11,7 +11,8 @@ import dx.api.{
   DxFindDataObjects,
   DxObjectDescribe,
   DxProject,
-  DxWorkflow
+  DxWorkflow,
+  Field
 }
 import dx.core.Native
 import dx.core.ir.Bundle
@@ -88,7 +89,7 @@ case class DxExecutableDirectory(bundle: Bundle,
               allExecutableNames.toVector,
               withInputOutputSpec = false,
               Vector.empty,
-              Set.empty
+              Set(Field.Details)
           )
         val t1 = System.nanoTime()
         val diffMSec = (t1 - t0) / (1000 * 1000)

@@ -42,7 +42,15 @@ case class DxApi(logger: Logger = Logger.get,
                  dxEnv: DXEnvironment = DXEnvironment.create(),
                  limit: Int = DxApi.MAX_RESULTS_PER_CALL) {
   require(limit > 0 && limit <= DxApi.MAX_RESULTS_PER_CALL)
-  lazy val currentProject: DxProject = DxProject(this, dxEnv.getProjectContext)
+  val currentProjectId: Option[String] = dxEnv.getProjectContext match {
+    case null      => None
+    case projectId => Some(projectId)
+  }
+  lazy val currentProject: DxProject = currentProjectId
+    .map(DxProject(this, _))
+    .getOrElse(
+        throw new Exception("no current project selected")
+    )
   lazy val currentJob: DxJob = DxJob(this, dxEnv.getJob)
   // Convert from spray-json to jackson JsonNode
   // Used to convert into the JSON datatype used by dxjava
@@ -223,6 +231,14 @@ case class DxApi(logger: Logger = Logger.get,
         }
       case other =>
         throw new Exception(s"unexpected whoami result ${other}")
+    }
+  }
+
+  lazy val isLoggedIn: Boolean = {
+    try {
+      whoami() != null
+    } catch {
+      case _: Throwable => false
     }
   }
 

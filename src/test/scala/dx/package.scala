@@ -26,13 +26,7 @@ object Assumptions {
     * Tests that the user is logged in.
     * @return
     */
-  lazy val isLoggedIn: Boolean = {
-    try {
-      dxApi.whoami() != null
-    } catch {
-      case _: Throwable => false
-    }
-  }
+  def isLoggedIn: Boolean = dxApi.isLoggedIn
 
   /**
     * Tests that the dx toolkit is installed and in the path.

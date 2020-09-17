@@ -198,8 +198,11 @@ object Main {
         throw OptionParseException(s"Invalid folder <${folder}>")
       case (Some(folder), Some(project), _) if folder.startsWith("/") =>
         (project, folder)
-      case (Some(folder), None, _) if folder.startsWith("/") =>
-        throw OptionParseException("Project is unspecified")
+      case (Some(folder), None, _)
+          if folder.startsWith("/") && DxApi.get.currentProjectId.isDefined =>
+        val project = DxApi.get.currentProjectId.get
+        Logger.get.warning(s"Project is unspecified...using currently select project ${project}")
+        (project, folder)
       case (Some(other), _, _) =>
         throw OptionParseException(s"Invalid destination <${other}>")
       case (None, Some(project), Some(folder)) =>
@@ -273,6 +276,11 @@ object Main {
     // quit here if the target is IR and there are no inputs to translate
     if (!hasInputs && compileMode == CompilerMode.IR) {
       return SuccessIR(rawBundle)
+    }
+
+    // for everything past this point, the user needs to be logged in
+    if (!DxApi.get.isLoggedIn) {
+      return Failure(s"You must be logged in to compile using mode ${compileMode}")
     }
 
     // a destination is only required if we are doing input translation and/or
@@ -386,6 +394,12 @@ object Main {
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
     val (fileResolver, _) = initCommon(options)
+
+    // make sure the user is logged in
+    if (!DxApi.get.isLoggedIn) {
+      return Failure(s"You must be logged in to generate stubs for native app(let)s")
+    }
+
     val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
     val dxni = DxNativeInterface(fileResolver)
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
@@ -458,6 +472,11 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
+    initLogger(options)
+    // make sure the user is logged in
+    if (!DxApi.get.isLoggedIn) {
+      return Failure(s"You must be logged in to generate stubs to describe a workflow")
+    }
     try {
       val wf = DxApi.get.workflow(workflowId)
       val execTreeJS = ExecutableTree.fromDxWorkflow(wf)
@@ -468,7 +487,8 @@ object Main {
         SuccessJsonTree(execTreeJS)
       }
     } catch {
-      case e: Throwable => BadUsageTermination(exception = Some(e))
+      case e: Throwable =>
+        BadUsageTermination(exception = Some(e))
     }
   }
 
@@ -552,8 +572,8 @@ object Main {
         |Common options
         |    -destination <string>    Full platform path (project:/folder)
         |    -f | force               Delete existing applets/workflows
-        |    -folder <string>         Platform folder
-        |    -project <string>        Platform project
+        |    -folder <string>         Platform folder (defaults to '/')
+        |    -project <string>        Platform project (defaults to currently selected project)
         |    -language <string> [ver] Which language to use? (wdl or cwl; can optionally specify version)
         |    -quiet                   Do not print warnings or informational outputs
         |    -verbose                 Print detailed progress reports

@@ -158,7 +158,7 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Details)
+    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
     fields ++= extraFields
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)

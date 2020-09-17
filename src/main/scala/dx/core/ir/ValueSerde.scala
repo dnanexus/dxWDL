@@ -83,7 +83,7 @@ object ValueSerde extends DefaultJsonProtocol {
       if (v.isDefined) {
         return v.get
       }
-      jsValue match {
+      innerValue match {
         case JsNull                               => VNull
         case JsBoolean(b)                         => VBoolean(b.booleanValue)
         case JsNumber(value) if value.isValidLong => VInt(value.toLongExact)
@@ -125,6 +125,7 @@ object ValueSerde extends DefaultJsonProtocol {
       }
       (innerType, innerValue) match {
         case (TOptional(_), JsNull)                       => VNull
+        case (TOptional(t), _)                            => inner(innerValue, t)
         case (TBoolean, JsBoolean(b))                     => VBoolean(b.booleanValue)
         case (TInt, JsNumber(value)) if value.isValidLong => VInt(value.toLongExact)
         case (TFloat, JsNumber(value))                    => VFloat(value.toDouble)
@@ -136,13 +137,18 @@ object ValueSerde extends DefaultJsonProtocol {
         case (TArray(t, _), JsArray(array)) =>
           VArray(array.map(x => inner(x, t)))
         case (TMap(keyType, valueType), map: JsObject) if isMapObject(map) =>
-          VMap(
-              (inner(map.fields("keys"), keyType), inner(map.fields("values"), valueType)) match {
-                case (VArray(keys), VArray(values)) => keys.zip(values).toMap
-                case _ =>
-                  throw new Exception(s"Could not deserialize object that looks like a Map ${map}")
-              }
-          )
+          try {
+            val keys = JsUtils.getValues(map.fields("keys")).map(k => inner(k, keyType))
+            val values = JsUtils.getValues(map.fields("values")).map(v => inner(v, valueType))
+            VMap(keys.zip(values).toMap)
+          } catch {
+            case e: Throwable =>
+              throw new Exception(s"Could not deserialize object that looks like a Map ${map}", e)
+          }
+        case (TMap(TString, valueType), JsObject(fields)) =>
+          VMap(fields.map {
+            case (key, value) => VString(key) -> inner(value, valueType)
+          })
         case (TSchema(name, memberTypes), JsObject(members)) =>
           // ensure 1) members keys are a subset of memberTypes keys, 2) members
           // values are convertable to the corresponding types, and 3) any keys

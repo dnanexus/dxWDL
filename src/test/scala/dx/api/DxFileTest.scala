@@ -132,7 +132,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
                               Vector(publicProject, publicProject, publicProject)))
   }
 
-  it should "describe files in bulk with extrafields" taggedAs ApiTest in {
+  it should "describe files in bulk with extra fields" taggedAs ApiTest in {
     val expected = Vector(
         createFile(FILE_IN_TWO_PROJS,
                    "File_copied_to_another_project",
@@ -143,7 +143,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
     checkFileDesc(Vector(FILE_IN_TWO_PROJS, FILE2), expected, compareDetails = true)
   }
 
-  it should "Describe files in bulk without extrafield values - details value should be none" taggedAs ApiTest in {
+  it should "Describe files in bulk without extra field values - details value should be none" taggedAs ApiTest in {
     val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
     results.foreach(f => f.describe().details shouldBe None)
   }
