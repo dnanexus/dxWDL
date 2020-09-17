@@ -4,7 +4,6 @@ import dx.core.ir.Type._
 import dx.core.ir.Value._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import spray.json._
 
 class ValueSerializationTest extends AnyFlatSpec with Matchers {
   val valueTestCases: Vector[(Type, Value)] = Vector(
@@ -40,13 +39,6 @@ class ValueSerializationTest extends AnyFlatSpec with Matchers {
         val jsv = ValueSerde.serialize(v)
         val irValue = ValueSerde.deserializeWithType(jsv, t)
         irValue shouldBe v
-    }
-  }
-
-  it should "detect bad JSON" in {
-    val badJson = JsObject("a" -> JsNumber(1), "b" -> JsString("hello"))
-    assertThrows[Exception] {
-      ValueSerde.deserialize(badJson)
     }
   }
 }

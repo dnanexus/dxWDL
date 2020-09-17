@@ -44,6 +44,33 @@ import wdlTools.util.{
   TraceLevel
 }
 
+object WdlTaskSupport {
+  def serializeValues(
+      values: Map[String, (WdlTypes.T, V)]
+  ): Map[String, JsValue] = {
+    values.map {
+      case (name, (t, v)) =>
+        val jsType = WdlUtils.serializeType(t)
+        val jsValue = WdlValueSerde.serialize(v)
+        name -> JsObject("type" -> jsType, "value" -> jsValue)
+    }
+  }
+
+  def deserializeValues(
+      values: Map[String, JsValue],
+      typeAliases: Map[String, WdlTypes.T_Struct]
+  ): Map[String, (WdlTypes.T, V)] = {
+    values.map {
+      case (name, JsObject(fields)) =>
+        val t = WdlUtils.deserializeType(fields("type"), typeAliases)
+        val v = WdlValueSerde.deserialize(fields("value"))
+        name -> (t, v)
+      case other =>
+        throw new Exception(s"unexpected value ${other}")
+    }
+  }
+}
+
 case class WdlTaskSupport(task: TAT.Task,
                           wdlVersion: WdlVersion,
                           typeAliases: DefaultBindings[WdlTypes.T_Struct],
@@ -152,30 +179,6 @@ case class WdlTaskSupport(task: TAT.Task,
   }
 
   private lazy val parameterMeta = Meta.create(wdlVersion, task.parameterMeta)
-
-  private def serializeValues(
-      values: Map[String, (WdlTypes.T, V)]
-  ): Map[String, JsValue] = {
-    values.map {
-      case (name, (t, v)) =>
-        val jsType = WdlUtils.serializeType(t)
-        val jsValue = WdlValueSerde.serialize(v)
-        name -> JsObject("type" -> jsType, "value" -> jsValue)
-    }
-  }
-
-  private def deserializeValues(
-      values: Map[String, JsValue]
-  ): Map[String, (WdlTypes.T, V)] = {
-    values.map {
-      case (name, JsObject(fields)) =>
-        val t = WdlUtils.deserializeType(fields("type"), typeAliases.bindings)
-        val v = WdlValueSerde.deserialize(fields("value"))
-        name -> (t, v)
-      case other =>
-        throw new Exception(s"unexpected value ${other}")
-    }
-  }
 
   /**
     * Input files are represented as dx URLs (dx://proj-xxxx:file-yyyy::/A/B/C.txt)
@@ -294,7 +297,7 @@ case class WdlTaskSupport(task: TAT.Task,
       inputs.view.mapValues(v => WdlValueUtils.transform(v, pathTranslator)).toMap
 
     // serialize the updated inputs
-    val localizedInputsJs = serializeValues(localizedInputs.map {
+    val localizedInputsJs = WdlTaskSupport.serializeValues(localizedInputs.map {
       case (name, value) => name -> (inputDefs(name).wdlType, value)
     })
 
@@ -304,7 +307,7 @@ case class WdlTaskSupport(task: TAT.Task,
   override def writeCommandScript(
       localizedInputs: Map[String, JsValue]
   ): Map[String, JsValue] = {
-    val inputs = deserializeValues(localizedInputs)
+    val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
     val inputValues = inputs.map {
       case (name, (_, v)) => name -> v
     }
@@ -335,7 +338,7 @@ case class WdlTaskSupport(task: TAT.Task,
         Some(img, execPaths)
     }
     generator.apply(command, execPaths, container)
-    serializeValues(ctx.bindings.map {
+    WdlTaskSupport.serializeValues(ctx.bindings.map {
       case (name, value) => name -> (inputDefs(name).wdlType, value)
     })
   }
@@ -350,7 +353,7 @@ case class WdlTaskSupport(task: TAT.Task,
   override def evaluateOutputs(localizedInputs: Map[String, JsValue],
                                fileSourceToPath: Map[FileSource, Path],
                                fileUploader: FileUploader): Unit = {
-    val inputs = deserializeValues(localizedInputs)
+    val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
     val inputValues = inputs.map {
       case (name, (_, v)) => name -> v
     }

@@ -7,6 +7,8 @@ import dx.Tags.EdgeTest
 import dx.api.{DiskType, DxAnalysis, DxApi, DxInstanceType, DxJob, DxProject, InstanceTypeDB}
 import dx.core.Native
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
+import dx.core.ir.Type._
+import dx.core.ir.Value._
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
 import dx.core.languages.wdl.{Utils => WdlUtils}
 import dx.core.util.CompressionUtils
@@ -299,5 +301,37 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "run a python script" in {
     runTask("python_heredoc")
+  }
+
+  it should "deserialize good JSON" in {
+    val goodJson = Map(
+        "a" -> JsObject(
+            Map(
+                "type" -> JsString("Int"),
+                "value" -> JsNumber(5)
+            )
+        ),
+        "b" -> JsObject(
+            Map(
+                "type" -> JsObject(
+                    "name" -> JsString("Array"),
+                    "type" -> JsString("Float"),
+                    "nonEmpty" -> JsBoolean(false)
+                ),
+                "value" -> JsArray(Vector(JsNumber(1.0), JsNumber(2.5)))
+            )
+        )
+    )
+    WdlTaskSupport.deserializeValues(goodJson, Map.empty) shouldBe Map(
+        "a" -> (TInt, VInt(5)),
+        "b" -> (TArray(TFloat), VArray(Vector(VFloat(1.0), VFloat(2.5))))
+    )
+  }
+
+  it should "detect bad JSON" in {
+    val badJson = Map("a" -> JsNumber(1), "b" -> JsString("hello"))
+    assertThrows[Exception] {
+      WdlTaskSupport.deserializeValues(badJson, Map.empty)
+    }
   }
 }
