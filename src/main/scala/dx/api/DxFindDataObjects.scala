@@ -150,12 +150,19 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties) ++ extraFields
-    if (withInputOutputSpec) {
-      fields ++= Set(Field.InputSpec, Field.OutputSpec)
+    val requiredDescFields = Set(Field.Name,
+                                 Field.Folder,
+                                 Field.Size,
+                                 Field.ArchivalState,
+                                 Field.Properties) ++ extraFields
+    val ioSpecDescFields = if (withInputOutputSpec) {
+      Set(Field.InputSpec, Field.OutputSpec)
+    } else {
+      Set.empty
     }
-    val reqFields =
-      Map("visibility" -> JsString("either"), "describe" -> DxObject.requestFields(fields))
+    val requiredFields =
+      Map("visibility" -> JsString("either"),
+          "describe" -> DxObject.requestFields(requiredDescFields ++ ioSpecDescFields))
     val projField = dxProject match {
       case None    => Map.empty
       case Some(p) => Map("project" -> JsString(p.getId))
@@ -184,7 +191,6 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
           prop -> JsBoolean(true)
         }.toMap))
       }
-
     val namePcreField =
       if (nameConstraints.isEmpty) {
         Map.empty
@@ -202,7 +208,6 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
           .mkString("|")
         Map("name" -> JsObject("regexp" -> JsString(orAll)))
       }
-
     val idField =
       if (idConstraints.isEmpty) {
         Map.empty
@@ -212,18 +217,18 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
         }))
       }
 
-    val request = reqFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ propertiesField ++
+    val request = requiredFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ propertiesField ++
       namePcreField ++ idField
-    val repJs = dxApi.findDataObjects(request)
-    val next: Option[JsValue] = repJs.fields.get("next") match {
+    val responseJs = dxApi.findDataObjects(request)
+    val next: Option[JsValue] = responseJs.fields.get("next") match {
       case None                  => None
       case Some(JsNull)          => None
       case Some(other: JsObject) => Some(other)
       case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
     }
     val results: Vector[(DxDataObject, DxObjectDescribe)] =
-      repJs.fields.get("results") match {
-        case None                   => throw new Exception(s"missing results field ${repJs}")
+      responseJs.fields.get("results") match {
+        case None                   => throw new Exception(s"missing results field ${responseJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
         case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
       }
