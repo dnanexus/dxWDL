@@ -150,7 +150,7 @@ case class WdlTaskSupport(task: TAT.Task,
     val runtime = createRuntime(env)
     val request = runtime.parseInstanceType
     logger.traceLimited(s"calcInstanceType $request")
-    jobMeta.instanceTypeDb.apply(request)
+    jobMeta.instanceTypeDb.apply(request).name
   }
 
   override lazy val getRequiredInstanceType: String = getRequiredInstanceType(getInputs)

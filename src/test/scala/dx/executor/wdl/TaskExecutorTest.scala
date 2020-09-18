@@ -73,7 +73,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet
   private val dxApi = DxApi(logger)
   private val unicornInstance = DxInstanceType(
-      "mem_ssd_unicorn",
+      TaskTestJobMeta.InstanceType,
       100,
       100,
       4,
@@ -82,7 +82,8 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
       Some(DiskType.SSD),
       Some(1.00f)
   )
-  private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
+  private val instanceTypeDB =
+    InstanceTypeDB(Map(TaskTestJobMeta.InstanceType -> unicornInstance), pricingAvailable = true)
 
   // Note: if the file doesn't exist, this throws a null pointer exception
   private def pathFromBasename(basename: String): Path = {

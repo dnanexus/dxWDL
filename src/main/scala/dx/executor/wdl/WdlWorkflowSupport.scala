@@ -291,7 +291,11 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         }
       }
       val (dxExecution, execName) =
-        launchJob(executableLink, call.actualName, callInputsIR, nameDetail, instanceType)
+        launchJob(executableLink,
+                  call.actualName,
+                  callInputsIR,
+                  nameDetail,
+                  instanceType.map(_.name))
       (dxExecution, executableLink, execName)
     }
 
@@ -647,7 +651,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       // We need to provide the exact same inputs.
       val dxSubJob: DxExecution = dxApi.runSubJob(
           "continue",
-          Some(jobMeta.instanceTypeDb.defaultInstanceType),
+          Some(jobMeta.instanceTypeDb.defaultInstanceType.name),
           JsObject(jobMeta.jsInputs),
           childJobs,
           jobMeta.delayWorkspaceDestruction,
@@ -663,7 +667,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       // We need to provide the exact same inputs.
       val dxSubJob: DxExecution = dxApi.runSubJob(
           "continue",
-          Some(jobMeta.instanceTypeDb.defaultInstanceType),
+          Some(jobMeta.instanceTypeDb.defaultInstanceType.name),
           JsObject(jobMeta.jsInputs),
           childJobs,
           jobMeta.delayWorkspaceDestruction,

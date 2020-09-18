@@ -1,6 +1,7 @@
 package dx.api
 
 import dx.Tags.{ApiTest, EdgeTest}
+import dx.api.InstanceTypeDB.instanceTypeDBFormat
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -137,9 +138,9 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
         val memoryMB = intOfJs(traits("totalMemoryMB"))
         val diskGB = intOfJs(traits("ephemeralStorageGB"))
         val cpu = intOfJs(traits("numCores"))
-        DxInstanceType(name, memoryMB, diskGB, cpu, gpu = false, Vector.empty, None, price)
-    }.toVector
-    InstanceTypeDB(pricingInfo, db)
+        name -> DxInstanceType(name, memoryMB, diskGB, cpu, gpu = false, Vector.empty, None, price)
+    }
+    InstanceTypeDB(db, pricingInfo)
   }
 
   private val dxApi: DxApi = DxApi(Logger.Quiet)
@@ -147,16 +148,23 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
   private val dbNoPrices = genTestDB(false)
 
   it should "compare two instance types" in {
-    dbFull.lteqByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be(true)
-    dbFull.lteqByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be(false)
+    dbFull.compareByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be < 0
+    dbFull.compareByResources("mem1_ssd1_x4", "mem3_ssd1_x2") shouldBe 0
     // non existant instance
-    dbFull.lteqByResources("mem1_ssd2_x2", "ggxx") should be(false)
+    assertThrows[Exception] {
+      dbFull.compareByResources("mem1_ssd2_x2", "ggxx") shouldBe 0
+    }
   }
 
   it should "Work even without access to pricing information" in {
     // parameters are:          RAM,     disk,     cores
-    dbNoPrices.chooseAttrs(None, None, None, None, None) should equal("mem1_ssd1_x2")
-    dbNoPrices.chooseAttrs(Some(1000), None, Some(3), None, None) should equal("mem1_ssd1_x4")
+    dbNoPrices.selectOptimal(InstanceTypeRequest.empty) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_x2" =>
+    }
+    dbNoPrices
+      .selectOptimal(InstanceTypeRequest(memoryMB = Some(1000), cpu = Some(3))) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_x4" =>
+    }
   }
 
   it should "perform JSON serialization" in {
@@ -172,9 +180,8 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   it should "work on large instances (JIRA-1258)" in {
     val db = InstanceTypeDB(
-        pricingAvailable = true,
-        Vector(
-            DxInstanceType(
+        Map(
+            "mem3_ssd1_x32" -> DxInstanceType(
                 "mem3_ssd1_x32",
                 245751,
                 32,
@@ -184,7 +191,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 Some(DiskType.SSD),
                 Some(13.0.toFloat)
             ),
-            DxInstanceType(
+            "mem4_ssd1_x128" -> DxInstanceType(
                 "mem4_ssd1_x128",
                 1967522,
                 128,
@@ -194,88 +201,97 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 Some(DiskType.SSD),
                 Some(14.0.toFloat)
             )
-        )
+        ),
+        pricingAvailable = true
     )
 
-    db.chooseAttrs(Some(239 * 1024), Some(18), Some(32), None, None) should equal("mem3_ssd1_x32")
-    db.chooseAttrs(Some(240 * 1024), Some(18), Some(32), None, None) should equal("mem4_ssd1_x128")
+    db.selectOptimal(
+        InstanceTypeRequest(memoryMB = Some(239 * 1024), diskGB = Some(18), cpu = Some(32))
+    ) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem3_ssd1_x32" =>
+    }
+    db.selectOptimal(
+        InstanceTypeRequest(memoryMB = Some(240 * 1024), diskGB = Some(18), cpu = Some(32))
+    ) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem4_ssd1_x128" =>
+    }
   }
 
   it should "prefer v2 instances over v1's" in {
     val db = InstanceTypeDB(
-        pricingAvailable = true,
-        Vector(
-            DxInstanceType("mem1_ssd1_v2_x4",
-                           8000,
-                           80,
-                           4,
-                           gpu = false,
-                           Vector(("Ubuntu", "16.04")),
-                           Some(DiskType.SSD),
-                           Some(0.2.toFloat)),
-            DxInstanceType("mem1_ssd1_x4",
-                           8000,
-                           80,
-                           4,
-                           gpu = false,
-                           Vector(("Ubuntu", "16.04")),
-                           Some(DiskType.SSD),
-                           Some(0.2.toFloat))
-        )
+        Map(
+            "mem1_ssd1_v2_x4" -> DxInstanceType("mem1_ssd1_v2_x4",
+                                                8000,
+                                                80,
+                                                4,
+                                                gpu = false,
+                                                Vector(("Ubuntu", "16.04")),
+                                                Some(DiskType.SSD),
+                                                Some(0.2.toFloat)),
+            "mem1_ssd1_x4" -> DxInstanceType("mem1_ssd1_x4",
+                                             8000,
+                                             80,
+                                             4,
+                                             gpu = false,
+                                             Vector(("Ubuntu", "16.04")),
+                                             Some(DiskType.SSD),
+                                             Some(0.2.toFloat))
+        ),
+        pricingAvailable = true
     )
 
-    db.chooseAttrs(None, None, Some(4), None, None) should equal("mem1_ssd1_v2_x4")
+    db.selectOptimal(InstanceTypeRequest(cpu = Some(4))) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_v2_x4" =>
+    }
   }
 
   it should "respect requests for GPU instances" taggedAs EdgeTest in {
     val db = InstanceTypeDB(
-        pricingAvailable = true,
-        Vector(
-            DxInstanceType("mem1_ssd1_v2_x4",
-                           8000,
-                           80,
-                           4,
-                           gpu = false,
-                           Vector(("Ubuntu", "16.04")),
-                           Some(DiskType.SSD),
-                           Some(0.2.toFloat)),
-            DxInstanceType("mem1_ssd1_x4",
-                           8000,
-                           80,
-                           4,
-                           gpu = false,
-                           Vector(("Ubuntu", "16.04")),
-                           Some(DiskType.SSD),
-                           Some(0.2.toFloat)),
-            DxInstanceType("mem3_ssd1_gpu_x8",
-                           30000,
-                           100,
-                           8,
-                           gpu = true,
-                           Vector(("Ubuntu", "16.04")),
-                           Some(DiskType.SSD),
-                           Some(1.0.toFloat))
-        )
+        Map(
+            "mem1_ssd1_v2_x4" -> DxInstanceType("mem1_ssd1_v2_x4",
+                                                8000,
+                                                80,
+                                                4,
+                                                gpu = false,
+                                                Vector(("Ubuntu", "16.04")),
+                                                Some(DiskType.SSD),
+                                                Some(0.2.toFloat)),
+            "mem1_ssd1_x4" -> DxInstanceType("mem1_ssd1_x4",
+                                             8000,
+                                             80,
+                                             4,
+                                             gpu = false,
+                                             Vector(("Ubuntu", "16.04")),
+                                             Some(DiskType.SSD),
+                                             Some(0.2.toFloat)),
+            "mem3_ssd1_gpu_x8" -> DxInstanceType("mem3_ssd1_gpu_x8",
+                                                 30000,
+                                                 100,
+                                                 8,
+                                                 gpu = true,
+                                                 Vector(("Ubuntu", "16.04")),
+                                                 Some(DiskType.SSD),
+                                                 Some(1.0.toFloat))
+        ),
+        pricingAvailable = true
     )
 
-    db.chooseAttrs(None, None, Some(4), Some(true), None) should equal("mem3_ssd1_gpu_x8")
-
-    assertThrows[Exception] {
-      // No non-GPU instance has 8 cpus
-      db.chooseAttrs(None, None, Some(8), Some(false), None)
+    db.selectOptimal(InstanceTypeRequest(cpu = Some(4), gpu = Some(true))) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem3_ssd1_gpu_x8" =>
     }
+
+    // No non-GPU instance has 8 cpus
+    db.selectOptimal(InstanceTypeRequest(cpu = Some(8), gpu = Some(false))) shouldBe None
   }
 
   // FIXME: This test will not pass on CI/CD as we are using scoped-token.
-  ignore should "Query returns correct pricing models for org and user" taggedAs (ApiTest) in {
+  ignore should "Query returns correct pricing models for org and user" taggedAs ApiTest in {
     val userBilltoProject = dxApi.project("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
-    val orgBilltoProject = dxApi.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
-
-    val query = InstanceTypeDbQuery(dxApi)
-    val userResult = query.query(userBilltoProject)
-    val orgResult = query.query(orgBilltoProject)
-
+    val userResult = InstanceTypeDB.create(userBilltoProject)
     userResult.pricingAvailable shouldBe true
+
+    val orgBilltoProject = dxApi.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
+    val orgResult = InstanceTypeDB.create(orgBilltoProject)
     orgResult.pricingAvailable shouldBe true
   }
 }

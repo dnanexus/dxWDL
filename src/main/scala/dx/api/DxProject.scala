@@ -9,7 +9,8 @@ case class DxProjectDescribe(id: String,
                              properties: Option[Map[String, String]],
                              details: Option[JsValue],
                              billTo: Option[String],
-                             region: Option[String])
+                             region: Option[String],
+                             availableInstanceTypes: Option[JsValue])
     extends DxObjectDescribe
 
 case class FolderContents(dataObjects: Vector[DxDataObject], subFolders: Vector[String])
@@ -30,7 +31,7 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
     }
     val desc = descJs.getFields("id", "name", "created", "modified") match {
       case Seq(JsString(id), JsString(name), JsNumber(created), JsNumber(modified)) =>
-        DxProjectDescribe(id, name, created.toLong, modified.toLong, None, None, None, None)
+        DxProjectDescribe(id, name, created.toLong, modified.toLong, None, None, None, None, None)
       case _ =>
         throw new Exception(s"malformed JSON ${descJs}")
     }
@@ -44,7 +45,12 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
       case Some(JsString(x)) => Some(x)
       case _                 => None
     }
-    desc.copy(details = details, properties = props, billTo = billTo, region = region)
+    val availableInstanceTypes = descJs.fields.get("availableInstanceTypes")
+    desc.copy(details = details,
+              properties = props,
+              billTo = billTo,
+              region = region,
+              availableInstanceTypes = availableInstanceTypes)
   }
 
   def listFolder(path: String): FolderContents = {
@@ -131,23 +137,6 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
         dxApi.containerRemoveObjects(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
-    }
-  }
-
-  def listAvailableInstanceTypes(): JsObject = {
-    val request = Map("fields" -> DxObject.requestFields(Set(Field.AvailableInstanceTypes)))
-    val descJs = id match {
-      case _ if id.startsWith("project-") =>
-        dxApi.projectDescribe(id, request)
-      case _ if id.startsWith("container-") =>
-        dxApi.containerDescribe(id, request)
-      case _ =>
-        throw new Exception(s"invalid project id ${id}")
-    }
-    descJs.getFields("availableInstanceTypes") match {
-      case Seq(obj: JsObject) => obj
-      case _ =>
-        throw new Exception(s"Field 'availableInstanceTypes' is missing ${descJs.prettyPrint}")
     }
   }
 }

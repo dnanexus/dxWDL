@@ -81,7 +81,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
                    Vector(("Ubuntu", "16.04")),
                    Some(DiskType.SSD),
                    Some(1.00f))
-  private val instanceTypeDB = InstanceTypeDB(pricingAvailable = true, Vector(unicornInstance))
+  private val instanceTypeDB = InstanceTypeDB(
+      Map(WorkflowTestJobMeta.InstanceType -> unicornInstance),
+      pricingAvailable = true
+  )
 
   private def setup(): DxWorkerPaths = {
     // Create a clean temp directory for the task to use

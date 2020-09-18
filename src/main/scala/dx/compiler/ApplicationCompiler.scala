@@ -4,10 +4,10 @@ import dx.api.{
   DxAccessLevel,
   DxApi,
   DxFile,
+  DxInstanceType,
   DxPath,
   DxUtils,
   InstanceTypeDB,
-  InstanceTypeDbQuery,
   InstanceTypeRequest
 }
 import dx.core.Native
@@ -113,7 +113,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
 
   private def createRunSpec(applet: Application): (JsValue, Map[String, JsValue]) = {
     // find the dxWDL asset
-    val instanceType: String = applet.instanceType match {
+    val instanceType: DxInstanceType = applet.instanceType match {
       case StaticInstanceType(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu) =>
         val request = InstanceTypeRequest(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu)
         instanceTypeDb.apply(request)
@@ -129,7 +129,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         "systemRequirements" ->
           JsObject(
               "main" ->
-                JsObject("instanceType" -> JsString(instanceType))
+                JsObject("instanceType" -> JsString(instanceType.name))
           ),
         "distribution" -> JsString("Ubuntu"),
         "release" -> JsString(DefaultUbuntuVersion)
@@ -336,7 +336,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     // compress and base64 encode the source code
     val sourceEncoded = CompressionUtils.gzipAndBase64Encode(applet.document.toString)
     // serialize the pricing model, and make the prices opaque.
-    val dbOpaque = InstanceTypeDbQuery(dxApi).opaquePrices(instanceTypeDb)
+    val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDb)
     val dbOpaqueEncoded = CompressionUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     // serilize default runtime attributes
     val defaultRuntimeAttributes =

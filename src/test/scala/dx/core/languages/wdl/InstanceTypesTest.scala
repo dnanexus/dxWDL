@@ -1,15 +1,7 @@
 package dx.core.languages.wdl
 
-import dx.Assumptions.isLoggedIn
 import dx.Tags.ApiTest
-import dx.api.{
-  DiskType,
-  DxApi,
-  DxInstanceType,
-  InstanceTypeDB,
-  InstanceTypeDbQuery,
-  InstanceTypeRequest
-}
+import dx.api.{DiskType, DxInstanceType, InstanceTypeDB, InstanceTypeRequest}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -153,16 +145,20 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
           case _                       => None
         }
         val cpu = intOfJs(traits("numCores"))
-        DxInstanceType(name, memoryMB, diskGB, cpu, gpu = false, Vector.empty, diskType, price)
-    }.toVector
-    InstanceTypeDB(pricingInfo, db)
+        name -> DxInstanceType(name,
+                               memoryMB,
+                               diskGB,
+                               cpu,
+                               gpu = false,
+                               Vector.empty,
+                               diskType,
+                               price)
+    }
+    InstanceTypeDB(db, pricingInfo)
   }
 
   private val dbFull = genTestDB(true)
-  private lazy val dbOpaque = {
-    assume(isLoggedIn)
-    InstanceTypeDbQuery(DxApi(Logger.Quiet)).opaquePrices(dbFull)
-  }
+  private lazy val dbOpaque = InstanceTypeDB.opaquePrices(dbFull)
   private val evaluator: Eval =
     Eval(EvalPaths.empty, Some(WdlVersion.V1), FileSourceResolver.get, Logger.get)
 
@@ -191,43 +187,61 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
   }
 
   private def useDB(db: InstanceTypeDB): Unit = {
-    db.chooseAttrs(None, None, None, None, None) should equal("mem1_ssd1_x2")
-    db.chooseAttrs(Some(3 * 1024), Some(100), Some(5), None, None) should equal("mem1_ssd1_x8")
-    db.chooseAttrs(Some(2 * 1024), Some(20), None, None, None) should equal("mem1_ssd1_x2")
-    db.chooseAttrs(Some(30 * 1024), Some(128), Some(8), None, None) should equal("mem3_ssd1_x8")
-
-    assertThrows[Exception] {
-      // no instance with 1024 CPUs
-      db.chooseAttrs(None, None, Some(1024), None, None)
+    db.selectOptimal(InstanceTypeRequest.empty) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_x2" =>
+    }
+    db.selectOptimal(
+        InstanceTypeRequest(memoryMB = Some(3 * 1024), diskGB = Some(100), cpu = Some(5))
+    ) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_x8" =>
+    }
+    db.selectOptimal(InstanceTypeRequest(memoryMB = Some(2 * 1024), diskGB = Some(20))) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem1_ssd1_x2" =>
+    }
+    db.selectOptimal(
+        InstanceTypeRequest(memoryMB = Some(30 * 1024), diskGB = Some(128), cpu = Some(8))
+    ) should matchPattern {
+      case Some(instanceType: DxInstanceType) if instanceType.name == "mem3_ssd1_x8" =>
     }
 
-    db.apply(
-        createRuntime(None, Some("3 GB"), Some("local-disk 10 HDD"), Some("1"), None).parseInstanceType
-    ) should equal("mem1_ssd1_x2")
-    db.apply(
-        createRuntime(None, Some("37 GB"), Some("local-disk 10 HDD"), Some("6"), None).parseInstanceType
-    ) should equal("mem3_ssd1_x8")
-    db.apply(
-        createRuntime(None, Some("2 GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
-    ) should equal("mem1_ssd1_x8")
-    db.apply(
-        createRuntime(None, Some("2.1GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
-    ) should equal("mem1_ssd1_x8")
-
-    db.apply(createRuntime(Some("mem3_ssd1_x8"), None, None, None, None).parseInstanceType) should equal(
-        "mem3_ssd1_x8"
-    )
+    // no instance with 1024 CPUs
+    db.selectOptimal(InstanceTypeRequest(cpu = Some(1024))) shouldBe None
 
     db.apply(
-        createRuntime(None, Some("235 GB"), Some("local-disk 550 HDD"), Some("32"), None).parseInstanceType
-    ) should equal("mem3_ssd1_x32")
-    db.apply(createRuntime(Some("mem3_ssd1_x32"), None, None, None, None).parseInstanceType) should equal(
-        "mem3_ssd1_x32"
-    )
+          createRuntime(None, Some("3 GB"), Some("local-disk 10 HDD"), Some("1"), None).parseInstanceType
+      )
+      .name should equal("mem1_ssd1_x2")
+    db.apply(
+          createRuntime(None, Some("37 GB"), Some("local-disk 10 HDD"), Some("6"), None).parseInstanceType
+      )
+      .name should equal("mem3_ssd1_x8")
+    db.apply(
+          createRuntime(None, Some("2 GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
+      )
+      .name should equal("mem1_ssd1_x8")
+    db.apply(
+          createRuntime(None, Some("2.1GB"), Some("local-disk 100 HDD"), None, None).parseInstanceType
+      )
+      .name should equal("mem1_ssd1_x8")
 
-    db.apply(createRuntime(None, None, None, Some("8"), None).parseInstanceType) should equal(
-        "mem1_ssd1_x8"
-    )
+    db.apply(
+          createRuntime(Some("mem3_ssd1_x8"), None, None, None, None).parseInstanceType
+      )
+      .name should equal("mem3_ssd1_x8")
+
+    db.apply(
+          createRuntime(None, Some("235 GB"), Some("local-disk 550 HDD"), Some("32"), None).parseInstanceType
+      )
+      .name should equal("mem3_ssd1_x32")
+    db.apply(
+          createRuntime(Some("mem3_ssd1_x32"), None, None, None, None).parseInstanceType
+      )
+      .name should equal("mem3_ssd1_x32")
+
+    db.apply(
+          createRuntime(None, None, None, Some("8"), None).parseInstanceType
+      )
+      .name should equal("mem1_ssd1_x8")
   }
 
   it should "Choose reasonable platform instance types" in {
@@ -239,37 +253,64 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
   }
 
   it should "catch parsing errors" in {
-    assertThrows[Exception] {
-      // illegal request format
-      createRuntime(Some("4"), None, None, None, None)
-    }
+    // TODO: due to coercion, an int value is able to be coerced to
+    //  a string, so this doesn't actually throw an exception at
+    //  parse time, though it will throw an exception when the value
+    //  is not found in the instance type DB
+//    assertThrows[Exception] {
+//      // illegal request format
+//      Runtime(
+//          WdlVersion.V1,
+//          Some(
+//              TAT.RuntimeSection(
+//                  Map(Runtime.DxInstanceTypeKey -> TAT.ValueInt(4, WdlTypes.T_Int, null)),
+//                  null
+//              )
+//          ),
+//          None,
+//          evaluator,
+//          WdlValueBindings.empty
+//      ).parseInstanceType
+//    }
 
     // memory specification
-    createRuntime(None, Some("230MB"), None, None, None) shouldBe
-      InstanceTypeRequest(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None, None)
+    createRuntime(None, Some("230MB"), None, None, None).parseInstanceType shouldBe
+      InstanceTypeRequest(
+          None,
+          Some(Math.ceil((230d * 1000d * 1000d) / (1024d * 1024d)).toLong),
+          None,
+          None,
+          None
+      )
 
-    createRuntime(None, Some("230MiB"), None, None, None) shouldBe
+    createRuntime(None, Some("230MiB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(None, Some(230), None, None, None)
 
-    createRuntime(None, Some("230GB"), None, None, None) shouldBe
-      InstanceTypeRequest(None,
-                          Some(((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
-                          None,
-                          None,
-                          None)
+    createRuntime(None, Some("230GB"), None, None, None).parseInstanceType shouldBe
+      InstanceTypeRequest(
+          None,
+          Some(
+              Math.ceil((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toLong
+          ),
+          None,
+          None,
+          None
+      )
 
     createRuntime(None, Some("230GiB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(None, Some(230 * 1024), None, None, None)
 
     createRuntime(None, Some("1000 TB"), None, None, None).parseInstanceType shouldBe
-      InstanceTypeRequest(None,
-                          Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt),
-                          None,
-                          None,
-                          None)
+      InstanceTypeRequest(
+          None,
+          Some(Math.ceil((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toLong),
+          None,
+          None,
+          None
+      )
 
     createRuntime(None, Some("1000 TiB"), None, None, None).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(1000 * 1024 * 1024), None, None, None)
+      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), None, None, None)
 
     assertThrows[Exception] {
       createRuntime(None, Some("230 44 34 GB"), None, None, None).parseInstanceType
@@ -280,9 +321,10 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     assertThrows[Exception] {
       createRuntime(None, Some("230.x GB"), None, None, None).parseInstanceType
     }
-    assertThrows[Exception] {
-      createRuntime(None, Some("230.3"), None, None, None).parseInstanceType
-    }
+    // this one is fine - 230.3 is just rounded up to 231
+//    assertThrows[Exception] {
+//      createRuntime(None, Some("230.3"), None, None, None).parseInstanceType
+//    }
     assertThrows[Exception] {
       createRuntime(None, Some("230 XXB"), None, None, None).parseInstanceType
     }
@@ -325,9 +367,9 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
 
     // gpu
     createRuntime(None, Some("1000 TiB"), None, None, Some(true)).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(1000 * 1024 * 1024), None, None, None, Some(true))
+      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), None, None, None, Some(true))
 
-    createRuntime(None, None, None, None, Some(false)) shouldBe
+    createRuntime(None, None, None, None, Some(false)).parseInstanceType shouldBe
       InstanceTypeRequest(None, None, None, None, None, Some(false))
   }
 }

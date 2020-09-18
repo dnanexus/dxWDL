@@ -17,7 +17,7 @@ import dx.api.{
   DxWorkflow,
   DxWorkflowDescribe,
   Field,
-  InstanceTypeDbQuery
+  InstanceTypeDB
 }
 import dx.core.{Native, getVersion}
 import dx.core.io.DxWorkerPaths
@@ -61,9 +61,6 @@ case class Compiler(extras: Option[Extras],
   // logger for extra trace info
   private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
 
-  // query interface for fetching instance types by user/org
-  private lazy val instanceTypeDbQuery: InstanceTypeDbQuery = InstanceTypeDbQuery(dxApi)
-
   // temp dir where applications will be compiled - it is deleted on shutdown
   private lazy val appCompileDirPath: Path = {
     val p = Files.createTempDirectory("dxWDL_Compile")
@@ -76,7 +73,8 @@ case class Compiler(extras: Option[Extras],
   private case class BundleCompiler(bundle: Bundle, project: DxProject, folder: String) {
     private val parameterLinkSerializer = ParameterLinkSerializer(fileResolver)
     // database of available instance types for the user/org that owns the project
-    private val instanceTypeDb = instanceTypeDbQuery.query(project)
+    private val instanceTypeDb =
+      InstanceTypeDB.create(project, dxApi = Some(dxApi), logger = logger)
     // directory of the currently existing applets - we don't want to build them
     // if we don't have to.
     private val executableDir =

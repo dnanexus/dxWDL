@@ -82,9 +82,9 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
 
   def parseInstanceType: InstanceTypeRequest = {
     getDxHint(Runtime.InstanceType) match {
-      case None => ()
       case Some(V_String(dxInstanceType)) =>
         return InstanceTypeRequest(Some(dxInstanceType))
+      case None  => ()
       case other => throw new Exception(s"Invalid dxInstanceType ${other}")
     }
 
@@ -92,8 +92,10 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
     val memoryMB = memory.map(mem => EUtils.floatToInt(mem.toDouble / Runtime.MiB))
     // we don't provide multiple disk mounts - instead we just add up all the
     // requested disk space
-    val diskGB =
-      runtimeAttrs.runtime.map(r => EUtils.floatToInt(r.disks.map(_.size).sum / Runtime.GiB))
+    val diskGB = runtimeAttrs.runtime.map(_.disks.map(_.size)) match {
+      case Some(v) if v.nonEmpty => Some(EUtils.floatToInt(v.sum / Runtime.GiB))
+      case _                     => None
+    }
     val diskType =
       runtimeAttrs.runtime.map(_.disks.flatMap(_.diskType.map(_.toUpperCase)).distinct) match {
         case Some(Vector(diskType))       => Some(DiskType.withNameIgnoreCase(diskType))
