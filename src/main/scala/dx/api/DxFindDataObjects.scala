@@ -133,17 +133,9 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
   private def buildScope(dxProject: DxProject,
                          folder: Option[String],
                          recurse: Boolean): JsValue = {
-    val part1 = Map("project" -> JsString(dxProject.getId))
-    val part2 = folder match {
-      case None       => Map.empty
-      case Some(path) => Map("folder" -> JsString(path))
-    }
-    val part3 =
-      if (recurse)
-        Map("recurse" -> JsBoolean(true))
-      else
-        Map("recurse" -> JsBoolean(false))
-    JsObject(part1 ++ part2 ++ part3)
+    val scopeFields = Map("project" -> JsString(dxProject.getId), "recurse" -> JsBoolean(recurse))
+    val folderFields = folder.map(path => Map("folder" -> JsString(path))).getOrElse(Map.empty)
+    JsObject(scopeFields ++ folderFields)
   }
 
   // Submit a request for a limited number of objects
@@ -158,13 +150,19 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
-    fields ++= extraFields
-    if (withInputOutputSpec) {
-      fields ++= Set(Field.InputSpec, Field.OutputSpec)
+    val requiredDescFields = Set(Field.Name,
+                                 Field.Folder,
+                                 Field.Size,
+                                 Field.ArchivalState,
+                                 Field.Properties) ++ extraFields
+    val ioSpecDescFields = if (withInputOutputSpec) {
+      Set(Field.InputSpec, Field.OutputSpec)
+    } else {
+      Set.empty
     }
-    val reqFields =
-      Map("visibility" -> JsString("either"), "describe" -> DxObject.requestFields(fields))
+    val requiredFields =
+      Map("visibility" -> JsString("either"),
+          "describe" -> DxObject.requestFields(requiredDescFields ++ ioSpecDescFields))
     val projField = dxProject match {
       case None    => Map.empty
       case Some(p) => Map("project" -> JsString(p.getId))
@@ -193,7 +191,6 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
           prop -> JsBoolean(true)
         }.toMap))
       }
-
     val namePcreField =
       if (nameConstraints.isEmpty) {
         Map.empty
@@ -203,15 +200,14 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
       } else {
         // Make a conjunction of all the legal names. For example:
         // ["Nice", "Foo", "Bar"] ===>
-        //  [(Nice)|(Foo)|(Bar)]
+        //  ^Nice$|^Foo$|^Bar$
         val orAll = nameConstraints
           .map { x =>
-            s"(${x})"
+            s"^${x}$$"
           }
           .mkString("|")
-        Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
+        Map("name" -> JsObject("regexp" -> JsString(orAll)))
       }
-
     val idField =
       if (idConstraints.isEmpty) {
         Map.empty
@@ -221,19 +217,18 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
         }))
       }
 
-    val repJs = dxApi.findDataObjects(
-        reqFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ propertiesField ++
-          namePcreField ++ idField
-    )
-    val next: Option[JsValue] = repJs.fields.get("next") match {
+    val request = requiredFields ++ projField ++ scopeField ++ cursorField ++ limitField ++ classField ++ propertiesField ++
+      namePcreField ++ idField
+    val responseJs = dxApi.findDataObjects(request)
+    val next: Option[JsValue] = responseJs.fields.get("next") match {
       case None                  => None
       case Some(JsNull)          => None
       case Some(other: JsObject) => Some(other)
       case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
     }
     val results: Vector[(DxDataObject, DxObjectDescribe)] =
-      repJs.fields.get("results") match {
-        case None                   => throw new Exception(s"missing results field ${repJs}")
+      responseJs.fields.get("results") match {
+        case None                   => throw new Exception(s"missing results field ${responseJs}")
         case Some(JsArray(results)) => results.map(parseOneResult)
         case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
       }
@@ -255,10 +250,7 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
         throw new Exception("class limitation must be one of {record, file, applet, workflow}")
     }
 
-    val scope: Option[JsValue] = dxProject match {
-      case None    => None
-      case Some(p) => Some(buildScope(p, folder, recurse))
-    }
+    val scope: Option[JsValue] = dxProject.map(p => buildScope(p, folder, recurse))
     var allResults = Map.empty[DxDataObject, DxObjectDescribe]
     var cursor: Option[JsValue] = None
     do {

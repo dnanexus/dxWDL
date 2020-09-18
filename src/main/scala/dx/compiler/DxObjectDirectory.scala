@@ -57,6 +57,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
   // use by a regular dnanexus applet/workflow.
   private def bulkLookup(): Map[String, Vector[DxObjectInfo]] = {
     // find applets
+    dxApi.logger.trace(s"Searching for applets in ${dxProject.getId} folder=${folder}")
     val t0 = System.nanoTime()
     val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(dxApi, None)
@@ -80,6 +81,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     )
 
     // find workflows
+    dxApi.logger.trace(s"Searching for workflows in ${dxProject.getId} folder=${folder}")
     val t2 = System.nanoTime()
     val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
       DxFindDataObjects(dxApi, None)
