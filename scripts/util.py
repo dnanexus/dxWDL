@@ -22,7 +22,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 # If there isn't, lookup the latest version at docker hub
 #    https://hub.docker.com/r/dnanexus/dxda/tags?page=1&ordering=last_updated
 dxda_version = "sha-7aceaf3"
-dxfuse_version = "v0.22.3"
+dxfuse_version = "v0.22.4"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
