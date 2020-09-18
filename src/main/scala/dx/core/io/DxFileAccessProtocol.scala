@@ -99,7 +99,7 @@ case class DxFileAccessProtocol(dxApi: DxApi = DxApi.get,
                                 dxFileCache: DxFileDescCache = DxFileDescCache.empty,
                                 encoding: Charset = FileUtils.DefaultEncoding)
     extends FileAccessProtocol {
-  val prefixes = Vector(DxFileAccessProtocol.DX_URI_PREFIX)
+  val prefixes = Vector(DxFileAccessProtocol.DxUriScheme)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
 
   private def resolveFileUri(uri: String): DxFile = {
@@ -128,7 +128,7 @@ case class DxFileAccessProtocol(dxApi: DxApi = DxApi.get,
 }
 
 object DxFileAccessProtocol {
-  val DX_URI_PREFIX = "dx"
+  val DxUriScheme = "dx"
 
   def fromDxFile(dxFile: DxFile, protocols: Vector[FileAccessProtocol]): DxFileSource = {
     protocols

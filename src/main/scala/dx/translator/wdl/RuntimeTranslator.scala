@@ -20,7 +20,7 @@ object RuntimeTranslator {
   // options in the hints section (2.0 and later)
   val DxKey = "dnanexus"
   // dx-specific keys that are used in meta
-  val ExecutableType = "type"
+  val ExecutableTypeKey = "type"
   val ExecutableId = "id"
   val ExecutableTypeNative = "native"
   val AppName = "name"
@@ -146,7 +146,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
           return try {
             kindFromId(id)
           } catch {
-            case _: dx.IllegalArgumentException =>
+            case _: IllegalArgumentException =>
               if (id.startsWith("/")) {
                 Some(ExecutableKindNative(ExecutableType.Applet, path = Some(id)))
               } else {
@@ -165,7 +165,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
           val name = getStringField(RuntimeTranslator.AppName)
           val project = getStringField(RuntimeTranslator.AppletProject)
           val path = getStringField(RuntimeTranslator.AppletPath)
-          getStringField(RuntimeTranslator.ExecutableType) match {
+          getStringField(RuntimeTranslator.ExecutableTypeKey) match {
             case Some(executableType) =>
               Some(
                   ExecutableKindNative(
@@ -188,7 +188,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
         case other => throw new Exception(s"invalid app value ${other}")
       }
     }
-    (meta.get(RuntimeTranslator.ExecutableType), meta.get(RuntimeTranslator.ExecutableId)) match {
+    (meta.get(RuntimeTranslator.ExecutableTypeKey), meta.get(RuntimeTranslator.ExecutableId)) match {
       case (Some(V_String(RuntimeTranslator.ExecutableTypeNative)), Some(V_String(id))) =>
         kindFromId(id)
       case _ => None

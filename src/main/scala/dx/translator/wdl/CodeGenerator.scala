@@ -23,18 +23,27 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
   }
 
   private lazy val typeAliasDefinitions: Vector[TAT.StructDefinition] = {
-    // Determine dependency order
-    val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases.toMap)
-    val dependencyOrder = GraphUtils.toOrderedVector(typeAliasGraph)
-    // create struct definitions
-    dependencyOrder.map { name =>
-      typeAliases(name) match {
-        case wdlType: WdlTypes.T_Struct =>
-          TAT.StructDefinition(name, wdlType, wdlType.members, SourceLocation.empty)
-        case other =>
-          throw new RuntimeException(s"Unexpected type alias ${other}")
-      }
+    val ordered: Map[String, WdlTypes.T_Struct] = if (typeAliases.bindings.size <= 1) {
+      typeAliases.bindings
+    } else {
+      // Determine dependency order
+      val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases.toMap)
+      GraphUtils
+        .toOrderedVector(typeAliasGraph)
+        .map { name =>
+          typeAliases(name) match {
+            case wdlType: WdlTypes.T_Struct =>
+              name -> wdlType
+            case other =>
+              throw new RuntimeException(s"Unexpected type alias ${other}")
+          }
+        }
+        .toMap
     }
+    ordered.map {
+      case (name, wdlType) =>
+        TAT.StructDefinition(name, wdlType, wdlType.members, SourceLocation.empty)
+    }.toVector
   }
 
   // create a wdl-value of a specific type.

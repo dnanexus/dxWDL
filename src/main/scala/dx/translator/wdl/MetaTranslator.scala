@@ -374,11 +374,15 @@ object ParameterMetaTranslator {
     paramMeta match {
       case None =>
         Vector.empty
-      case Some(V_String(text)) if text != DxMetaHints.ParameterMetaStream =>
+      case Some(V_String(text)) =>
         // If the parameter metadata is a string, treat it as help
         // (as long as it isn't the reserved value 'stream', which
         // indicates (at runtime) that the file should be streamed
-        Vector(ParameterAttributes.HelpAttribute(text))
+        if (text == DxMetaHints.ParameterMetaStream) {
+          Vector.empty
+        } else {
+          Vector(ParameterAttributes.HelpAttribute(text))
+        }
       case Some(V_Object(obj)) => {
         // Whether to use 'description' in place of help
         val noHelp = !obj.contains(Help)

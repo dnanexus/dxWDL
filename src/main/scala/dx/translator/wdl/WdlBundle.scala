@@ -21,11 +21,12 @@ object WdlBundle {
     * Check that a declaration name is not any dx-reserved names.
     */
   private def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
-    decls.foreach {
-      case TAT.Declaration(name, _, _, _) if name == Parameter.ComplexValueKey =>
-        throw new Exception(
-            s"Variable ${name} is reserved by DNAnexus and cannot be used as a variable name "
-        )
+    val invalidNames = decls.map(_.name).filter(_.contains(Parameter.ComplexValueKey))
+    if (invalidNames.nonEmpty) {
+      throw new Exception(
+          s"""Variable(s) ${invalidNames.mkString(",")} is using the substring 
+             |'${Parameter.ComplexValueKey}', which is reserved by DNAnexus""".stripMargin
+      )
     }
   }
 

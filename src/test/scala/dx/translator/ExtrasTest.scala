@@ -15,12 +15,12 @@ import wdlTools.util.Logger
 class ExtrasTest extends AnyFlatSpec with Matchers {
   private val dxApi = DxApi(Logger.Quiet)
   private val extrasParser = ExtrasParser(dxApi)
-  private val testProject: String = "project-FJ90qPj0jy8zYvVV9yz3F5gv"
+  private val testProject: String = "dxWDL_playground"
   private lazy val project: DxProject = {
     try {
       dxApi.resolveProject(testProject)
     } catch {
-      case _: Exception =>
+      case _: ResourceNotFoundException =>
         throw new Exception(
             s"""|Could not find project ${testProject}, you probably need to be logged into
                 |the platform on staging.""".stripMargin
@@ -271,9 +271,8 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
       extrasParser.parse(reorg)
     }
 
-    //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
-    thrown.getMessage should be(
-        "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
+    thrown.getMessage should include(
+        "'conf' must be specified as a valid DNAnexus"
     )
   }
 
@@ -312,7 +311,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
     }
 
     thrown.getMessage should be(
-        s"dxId must match applet-[A-Za-z0-9]{24}"
+        s"Invalid reorg app(let) ID applet-123456"
     )
   }
 
@@ -349,11 +348,11 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[dx.IllegalArgumentException] {
+    val thrown = intercept[IllegalArgumentException] {
       extrasParser.parse(reorg)
     }
     thrown.getMessage should include(
-        "is not a valid object ID"
+        "'conf' must be specified as a valid DNAnexus"
     )
   }
   it should "throw ResourceNotFoundException due to non-existant file" taggedAs ApiTest in {
@@ -401,7 +400,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
   it should "take app id as well as applet id for custom reorg" taggedAs (ApiTest, EdgeTest) in {
     assume(isLoggedIn)
-    val appId: String = dxApi.resolveOneApp("app-cloud_workstation").id
+    val appId: String = dxApi.resolveOneApp("cloud_workstation").id
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {

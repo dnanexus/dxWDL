@@ -24,7 +24,7 @@ object DxUtils {
       case objectIdRegexp(idType, idHash) =>
         (idType, idHash)
       case _ =>
-        throw new dx.IllegalArgumentException(s"${dxId} is not a valid object ID")
+        throw new IllegalArgumentException(s"${dxId} is not a valid object ID")
     }
   }
 
@@ -33,7 +33,7 @@ object DxUtils {
       case dataObjectIdRegexp(idType, idHash) =>
         (idType, idHash)
       case _ =>
-        throw new dx.IllegalArgumentException(s"${dxId} is not a valid data object ID")
+        throw new IllegalArgumentException(s"${dxId} is not a valid data object ID")
     }
   }
 
@@ -42,7 +42,7 @@ object DxUtils {
       parseDataObjectId(objName)
       true
     } catch {
-      case _: dx.IllegalArgumentException => false
+      case _: IllegalArgumentException => false
     }
   }
 

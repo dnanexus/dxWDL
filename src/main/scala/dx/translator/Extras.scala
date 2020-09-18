@@ -6,7 +6,6 @@ package dx.translator
 import java.nio.file.Path
 
 import dx.api._
-import dx.core.io.DxFileAccessProtocol
 import dx.core.ir.{Value, ValueSerde}
 import spray.json.DefaultJsonProtocol._
 import spray.json._
@@ -604,14 +603,16 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       throw new dx.PermissionDeniedException(
           s"""ERROR: App(let) for custom reorg stage ${reorgAppId} does not 
              |have CONTRIBUTOR or ADMINISTRATOR access and this is required.""".stripMargin
+            .replaceAll("\n", "")
       )
     }
     val reorgConf: Option[String] = checkedParseStringFieldReplaceNull(fields, "conf") match {
-      case Some(uri) if uri.trim.isEmpty                                        => None
-      case Some(uri) if uri.trim.startsWith(DxFileAccessProtocol.DX_URI_PREFIX) =>
+      case Some(uri) if uri.trim.isEmpty =>
+        None
+      case Some(uri) if uri.trim.startsWith(DxPath.DxUriPrefix) =>
         // if provided, check that the fileID is valid and present
         // format dx file ID
-        val reorgFileID: String = uri.trim.replace(DxFileAccessProtocol.DX_URI_PREFIX, "")
+        val reorgFileID: String = uri.trim.replace(DxPath.DxUriPrefix, "")
         // if input file ID is invalid, DxFile.getInstance will thow an IllegalArgumentException
         // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
         logger.ignore(dxApi.file(reorgFileID).describe())
@@ -620,7 +621,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
         throw new IllegalArgumentException(
             """In the 'custom_reorg' section of extras, 'conf' must be specified as 
               |a valid DNAnexus file in the form 'dx://file-XXX'. Please set the value 
-              |to null if there is no configuration file.""".stripMargin
+              |to null if there is no configuration file.""".stripMargin.replaceAll("\n", "")
         )
     }
     logger.trace(

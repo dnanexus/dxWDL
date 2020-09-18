@@ -12,5 +12,3 @@ class PermissionDeniedException(message: String) extends Exception(message) {
     initCause(cause)
   }
 }
-
-class IllegalArgumentException(s: String) extends Exception(s)

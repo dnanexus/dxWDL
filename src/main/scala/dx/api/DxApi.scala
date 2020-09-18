@@ -5,12 +5,12 @@ import java.nio.file.{Files, Path}
 import com.dnanexus.{DXAPI, DXEnvironment}
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.api.DxPath.DxPathComponents
-import dx.{AppInternalException, IllegalArgumentException}
+import dx.AppInternalException
 import spray.json._
 import wdlTools.util.{FileUtils, Logger, SysUtils}
 
 object DxApi {
-  val MAX_RESULTS_PER_CALL = 1000
+  val ResultsPerCallLimit = 1000
 
   private var instance: Option[DxApi] = None
 
@@ -40,8 +40,8 @@ object DxApi {
 case class DxApi(logger: Logger = Logger.get,
                  version: String = "1.0.0",
                  dxEnv: DXEnvironment = DXEnvironment.create(),
-                 limit: Int = DxApi.MAX_RESULTS_PER_CALL) {
-  require(limit > 0 && limit <= DxApi.MAX_RESULTS_PER_CALL)
+                 limit: Int = DxApi.ResultsPerCallLimit) {
+  require(limit > 0 && limit <= DxApi.ResultsPerCallLimit)
   val currentProjectId: Option[String] = dxEnv.getProjectContext match {
     case null      => None
     case projectId => Some(projectId)
@@ -55,8 +55,8 @@ case class DxApi(logger: Logger = Logger.get,
   // Convert from spray-json to jackson JsonNode
   // Used to convert into the JSON datatype used by dxjava
   private lazy val objMapper: ObjectMapper = new ObjectMapper()
-  private val DOWNLOAD_RETRY_LIMIT = 3
-  private val UPLOAD_RETRY_LIMIT = 3
+  private val DownloadRetryLimit = 3
+  private val UploadRetryLimit = 3
 
   // We are expecting string like:
   //    record-FgG51b00xF63k86F13pqFv57
@@ -599,7 +599,7 @@ case class DxApi(logger: Logger = Logger.get,
         true
       } catch {
         case e: Throwable =>
-          if (counter < DOWNLOAD_RETRY_LIMIT)
+          if (counter < DownloadRetryLimit)
             false
           else throw e
       }
@@ -612,7 +612,7 @@ case class DxApi(logger: Logger = Logger.get,
     }
     var rc = false
     var counter = 0
-    while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
+    while (!rc && counter < DownloadRetryLimit) {
       logger.traceLimited(s"downloading file ${path.toString} (try=${counter})")
       rc = downloadOneFile(path, dxfile, counter)
       counter = counter + 1
@@ -641,14 +641,14 @@ case class DxApi(logger: Logger = Logger.get,
         Some(outmsg.trim())
       } catch {
         case e: Throwable =>
-          if (counter < UPLOAD_RETRY_LIMIT)
+          if (counter < UploadRetryLimit)
             None
           else throw e
       }
     }
 
     var counter = 0
-    while (counter < UPLOAD_RETRY_LIMIT) {
+    while (counter < UploadRetryLimit) {
       logger.traceLimited(s"upload file ${path.toString} (try=${counter})")
       uploadOneFile(path, counter) match {
         case Some(fid) => return file(fid, None)
