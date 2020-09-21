@@ -313,41 +313,27 @@ object Utils {
   /**
     * Pair.left key that can be used in WDL input files.
     */
-  val PairLeftUser = "left"
+  val PairLeftKey = "left"
 
   /**
     * Pair.right key that can be used in WDL input files.
     */
-  val PairRightUser = "right"
-
-  /**
-    * Pair.left key that must be used in dx input files.
-    */
-  val PairLeftReserved = s"${PairLeftUser}___"
-
-  /**
-    * Pair.right key that must be used in dx input files.
-    */
-  val PairRightReserved = s"${PairRightUser}___"
+  val PairRightKey = "right"
 
   def createPairSchema(left: Type, right: Type): TSchema = {
     val name = s"${PairSchemaPrefix}(${TypeSerde.toString(left)}, ${TypeSerde.toString(right)})"
-    TSchema(name, Map(PairLeftReserved -> left, PairRightReserved -> right))
+    TSchema(name, Map(PairLeftKey -> left, PairRightKey -> right))
   }
 
   def isPairSchema(t: TSchema): Boolean = {
     t.name.startsWith(PairSchemaPrefix) && t.members.size == 2 && t.members.keySet == Set(
-        PairLeftReserved,
-        PairRightReserved
+        PairLeftKey,
+        PairRightKey
     )
   }
 
-  def isUserPairValue(fields: Map[String, _]): Boolean = {
-    fields.size == 2 && fields.keySet == Set(PairLeftUser, PairRightUser)
-  }
-
-  def isReservedPairValue(fields: Map[String, _]): Boolean = {
-    fields.size == 2 && fields.keySet == Set(PairLeftReserved, PairRightReserved)
+  def isPairValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(PairLeftKey, PairRightKey)
   }
 
   /**
@@ -358,42 +344,28 @@ object Utils {
   /**
     * Map.keys key that can be used in WDL input files.
     */
-  val MapKeysUser = "keys"
+  val MapKeysKey = "keys"
 
   /**
     * Map.values key that can be used in WDL  input files.
     */
-  val MapValuesUser = "values"
-
-  /**
-    * Map.keys key that must be used in dx input files.
-    */
-  val MapKeysReserved = s"${MapKeysUser}___"
-
-  /**
-    * Map.values key that must be used in dx input files.
-    */
-  val MapValuesReserved = s"${MapValuesUser}___"
+  val MapValuesKey = "values"
 
   def createMapSchema(keyType: Type, valueType: Type): TSchema = {
     val name =
       s"${MapSchemaPrefix}(${TypeSerde.toString(keyType)}, ${TypeSerde.toString(valueType)})"
-    TSchema(name, Map(MapKeysReserved -> TArray(keyType), MapValuesReserved -> TArray(valueType)))
+    TSchema(name, Map(MapKeysKey -> TArray(keyType), MapValuesKey -> TArray(valueType)))
   }
 
   def isMapSchema(t: TSchema): Boolean = {
     t.name.startsWith(MapSchemaPrefix) && t.members.size == 2 && t.members.keySet == Set(
-        MapKeysReserved,
-        MapValuesReserved
+        MapKeysKey,
+        MapValuesKey
     )
   }
 
-  def isUserMapValue(fields: Map[String, _]): Boolean = {
-    fields.size == 2 && fields.keySet == Set(MapKeysUser, MapValuesUser)
-  }
-
-  def isReservedMapValue(fields: Map[String, _]): Boolean = {
-    fields.size == 2 && fields.keySet == Set(MapKeysReserved, MapValuesReserved)
+  def isMapValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(MapKeysKey, MapValuesKey)
   }
 
   def toIRType(wdlType: T): Type = {
@@ -443,11 +415,9 @@ object Utils {
         case TSchema(name, _) if typeAliases.contains(name) =>
           typeAliases(name)
         case pairSchema: TSchema if isPairSchema(pairSchema) =>
-          T_Pair(inner(pairSchema.members(PairLeftReserved)),
-                 inner(pairSchema.members(PairRightReserved)))
+          T_Pair(inner(pairSchema.members(PairLeftKey)), inner(pairSchema.members(PairRightKey)))
         case mapSchema: TSchema if isMapSchema(mapSchema) =>
-          T_Map(inner(mapSchema.members(MapKeysReserved)),
-                inner(mapSchema.members(MapValuesReserved)))
+          T_Map(inner(mapSchema.members(MapKeysKey)), inner(mapSchema.members(MapValuesKey)))
         case TSchema(name, _) =>
           throw new Exception(s"Unknown type ${name}")
         case _ =>
@@ -472,8 +442,8 @@ object Utils {
         // encode this as a hash with 'left' and 'right' keys
         VHash(
             Map(
-                PairLeftReserved -> toIRValue(left),
-                PairRightReserved -> toIRValue(right)
+                PairLeftKey -> toIRValue(left),
+                PairRightKey -> toIRValue(right)
             )
         )
       case V_Map(members) =>
@@ -483,8 +453,8 @@ object Utils {
         }.unzip
         VHash(
             Map(
-                MapKeysReserved -> VArray(keys.toVector),
-                MapValuesReserved -> VArray(values.toVector)
+                MapKeysKey -> VArray(keys.toVector),
+                MapValuesKey -> VArray(values.toVector)
             )
         )
       case V_Object(members) =>
@@ -525,8 +495,8 @@ object Utils {
         // encode this as a hash with left and right keys
         VHash(
             Map(
-                PairLeftReserved -> toIRValue(leftValue, leftType),
-                PairRightReserved -> toIRValue(rightValue, rightType)
+                PairLeftKey -> toIRValue(leftValue, leftType),
+                PairRightKey -> toIRValue(rightValue, rightType)
             )
         )
       case (T_Map(keyType, valueType), V_Map(members)) =>
@@ -536,37 +506,45 @@ object Utils {
         }.unzip
         VHash(
             Map(
-                MapKeysReserved -> VArray(keys.toVector),
-                MapValuesReserved -> VArray(values.toVector)
+                MapKeysKey -> VArray(keys.toVector),
+                MapValuesKey -> VArray(values.toVector)
             )
         )
-      case (T_Struct(name, memberTypes), V_Object(members)) =>
-        // ensure 1) members keys are a subset of memberTypes keys, 2) members
-        // values are convertable to the corresponding types, and 3) any keys
-        // in memberTypes that do not appear in members are optional
-        val keys1 = members.keySet
-        val keys2 = memberTypes.keySet
-        val extra = keys2.diff(keys1)
-        if (extra.nonEmpty) {
-          throw new Exception(
-              s"struct ${name} value has members that do not appear in the struct definition: ${extra}"
-          )
-        }
-        val missingNonOptional = keys1.diff(keys2).map(key => key -> memberTypes(key)).filterNot {
-          case (_, T_Optional(_)) => false
-          case _                  => true
-        }
-        if (missingNonOptional.nonEmpty) {
-          throw new Exception(
-              s"struct ${name} value is missing non-optional members ${missingNonOptional}"
-          )
-        }
-        VHash(members.map {
-          case (key, value) => key -> toIRValue(value, memberTypes(key))
-        })
+      case (T_Struct(name, memberTypes), V_Struct(vName, memberValues)) if name == vName =>
+        structToIRValue(name, memberValues, memberTypes)
+      case (T_Struct(name, memberTypes), V_Object(memberValues)) =>
+        structToIRValue(name, memberValues, memberTypes)
       case _ =>
         throw new Exception(s"Invalid (type, value) combination (${wdlType}, ${wdlValue})")
     }
+  }
+
+  private def structToIRValue(name: String,
+                              memberValues: Map[String, V],
+                              memberTypes: Map[String, T]): VHash = {
+    // ensure 1) members keys are a subset of memberTypes keys, 2) members
+    // values are convertable to the corresponding types, and 3) any keys
+    // in memberTypes that do not appear in members are optional
+    val keys1 = memberValues.keySet
+    val keys2 = memberTypes.keySet
+    val extra = keys2.diff(keys1)
+    if (extra.nonEmpty) {
+      throw new Exception(
+          s"struct ${name} value has members that do not appear in the struct definition: ${extra}"
+      )
+    }
+    val missingNonOptional = keys1.diff(keys2).map(key => key -> memberTypes(key)).filterNot {
+      case (_, T_Optional(_)) => false
+      case _                  => true
+    }
+    if (missingNonOptional.nonEmpty) {
+      throw new Exception(
+          s"struct ${name} value is missing non-optional members ${missingNonOptional}"
+      )
+    }
+    VHash(memberValues.map {
+      case (key, value) => key -> toIRValue(value, memberTypes(key))
+    })
   }
 
   def toIR(wdl: Map[String, (T, V)]): Map[String, (Type, Value)] = {
@@ -591,15 +569,15 @@ object Utils {
         V_Array(array.zipWithIndex.map {
           case (v, i) => fromIRValue(v, name.map(n => s"${n}[${i}]"))
         })
-      case VHash(fields) if isReservedPairValue(fields) =>
+      case VHash(fields) if isPairValue(fields) =>
         V_Pair(
-            fromIRValue(fields(PairLeftReserved), name.map(n => s"${n}.${PairLeftReserved}")),
-            fromIRValue(fields(PairRightReserved), name.map(n => s"${n}.${PairRightReserved}"))
+            fromIRValue(fields(PairLeftKey), name.map(n => s"${n}.${PairLeftKey}")),
+            fromIRValue(fields(PairRightKey), name.map(n => s"${n}.${PairRightKey}"))
         )
-      case VHash(fields) if isReservedMapValue(fields) =>
-        val keys = fromIRValue(fields(MapKeysReserved), name.map(n => s"${n}[${MapKeysReserved}]"))
+      case VHash(fields) if isMapValue(fields) =>
+        val keys = fromIRValue(fields(MapKeysKey), name.map(n => s"${n}[${MapKeysKey}]"))
         val values =
-          fromIRValue(fields(MapValuesReserved), name.map(n => s"${n}[${MapValuesReserved}]"))
+          fromIRValue(fields(MapValuesKey), name.map(n => s"${n}[${MapValuesKey}]"))
         (keys, values) match {
           case (V_Array(keyArray), V_Array(valueArray)) =>
             V_Map(keyArray.zip(valueArray).toMap)
@@ -639,14 +617,14 @@ object Utils {
           V_Array(array.zipWithIndex.map {
             case (v, i) => inner(v, t, s"${innerName}[${i}]")
           })
-        case (T_Pair(leftType, rightType), VHash(fields)) if isReservedPairValue(fields) =>
+        case (T_Pair(leftType, rightType), VHash(fields)) if isPairValue(fields) =>
           V_Pair(
-              inner(fields(PairLeftReserved), leftType, s"${name}.${PairLeftReserved}"),
-              inner(fields(PairRightReserved), rightType, s"${name}.${PairRightReserved}")
+              inner(fields(PairLeftKey), leftType, s"${name}.${PairLeftKey}"),
+              inner(fields(PairRightKey), rightType, s"${name}.${PairRightKey}")
           )
-        case (T_Map(keyType, valueType), VHash(fields)) if isReservedMapValue(fields) =>
-          val keys = inner(fields(MapKeysReserved), keyType, s"${name}[${MapKeysReserved}]")
-          val values = inner(fields(MapValuesReserved), valueType, s"${name}[${MapValuesReserved}]")
+        case (T_Map(keyType, valueType), VHash(fields)) if isMapValue(fields) =>
+          val keys = inner(fields(MapKeysKey), keyType, s"${name}[${MapKeysKey}]")
+          val values = inner(fields(MapValuesKey), valueType, s"${name}[${MapValuesKey}]")
           (keys, values) match {
             case (V_Array(keyArray), V_Array(valueArray)) =>
               V_Map(keyArray.zip(valueArray).toMap)
@@ -719,13 +697,13 @@ object Utils {
         val a = array.map(irValueToExpr)
         val t = ensureUniformType(a)
         TAT.ExprArray(a, t, loc)
-      case VHash(fields) if isReservedPairValue(fields) =>
-        val left = irValueToExpr(fields(PairLeftReserved))
-        val right = irValueToExpr(fields(PairRightReserved))
+      case VHash(fields) if isPairValue(fields) =>
+        val left = irValueToExpr(fields(PairLeftKey))
+        val right = irValueToExpr(fields(PairRightKey))
         TAT.ExprPair(left, right, T_Pair(left.wdlType, right.wdlType), loc)
-      case VHash(fields) if isReservedMapValue(fields) =>
-        val keys = irValueToExpr(fields(MapKeysReserved))
-        val values = irValueToExpr(fields(MapValuesReserved))
+      case VHash(fields) if isMapValue(fields) =>
+        val keys = irValueToExpr(fields(MapKeysKey))
+        val values = irValueToExpr(fields(MapValuesKey))
         (keys, values) match {
           case (TAT.ExprArray(keyArray, keyType, _), TAT.ExprArray(valueArray, valueType, _)) =>
             TAT.ExprMap(keyArray.zip(valueArray).toMap, T_Map(keyType, valueType), loc)

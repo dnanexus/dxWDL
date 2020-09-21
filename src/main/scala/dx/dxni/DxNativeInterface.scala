@@ -78,9 +78,7 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
     if (Files.exists(outputPath)) {
       if (!force) {
         throw new Exception(
-            s"""|Output file ${outputPath.toString} already exists,
-                |use -force to overwrite it""".stripMargin
-              .replaceAll("\n", " ")
+            s"Output file ${outputPath.toString} already exists, use -force to overwrite it"
         )
       }
       outputPath.toFile.delete

@@ -366,8 +366,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                       throw new Exception(
                           s"""|input <${param.name}, ${param.dxType}> to call <${callFqn}>
                               |is missing from the environment. We don't have ${id} in the environment.
-                              |""".stripMargin
-                            .replaceAll("\n", " ")
+                              |""".stripMargin.replaceAll("\n", " ")
                       )
                   }
                 case TAT.ExprAt(expr, index, _, _) =>
@@ -442,7 +441,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         case _ =>
           throw new Exception(
               s"""|Callable ${calleeName} should exist but is missing from the list of known 
-                  |tasks/workflows ${dependencies.keys}|""".stripMargin
+                  |tasks/workflows ${dependencies.keys}|""".stripMargin.replaceAll("\n", " ")
           )
       }
       // Extract the input values/links from the environment
@@ -783,6 +782,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                 throw new Exception(
                     s"""|Internal error: (${output.expr}) requires evaluation,
                         |which requires constructing an output applet and a stage""".stripMargin
+                      .replaceAll("\n", " ")
                 )
             }
         }

@@ -269,7 +269,8 @@ object ParameterMetaTranslator {
       case (T_File, file) =>
         val s = ParameterAttributes.FileSuggestion(
             file.collect {
-              case V_File(path) => path
+              case V_String(path) => path
+              case V_File(path)   => path
             },
             name.collect {
               case V_String(str) => str
@@ -281,7 +282,7 @@ object ParameterMetaTranslator {
               case V_String(str) => str
             }
         )
-        if (s.name.isEmpty && (s.project.isEmpty || s.path.isEmpty)) {
+        if (s.value.isEmpty && (s.project.isEmpty || s.path.isEmpty)) {
           throw new Exception(
               "If 'value' is not defined for a file-type suggestion, then both 'project' and 'path' "
                 + "must be defined"

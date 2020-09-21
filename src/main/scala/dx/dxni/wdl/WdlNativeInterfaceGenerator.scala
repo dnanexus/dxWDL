@@ -129,9 +129,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
       if (both.nonEmpty) {
         val bothStr = "[" + both.mkString(", ") + "]"
         throw new Exception(
-            s"""|Parameters ${bothStr} used as both input and
-                |output in applet ${dxAppDesc.name}""".stripMargin
-              .replaceAll("\n", " ")
+            s"Parameters ${bothStr} used as both input and output in applet ${dxAppDesc.name}"
         )
       }
       Some(createDnanexusAppletStub(dxAppDesc.id, dxAppDesc.name, inputSpec, outputSpec))

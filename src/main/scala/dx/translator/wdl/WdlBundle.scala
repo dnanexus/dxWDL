@@ -24,8 +24,9 @@ object WdlBundle {
     val invalidNames = decls.map(_.name).filter(_.contains(Parameter.ComplexValueKey))
     if (invalidNames.nonEmpty) {
       throw new Exception(
-          s"""Variable(s) ${invalidNames.mkString(",")} is using the substring 
+          s"""Variable(s) ${invalidNames.mkString(",")} is using the substring
              |'${Parameter.ComplexValueKey}', which is reserved by DNAnexus""".stripMargin
+            .replaceAll("\n", " ")
       )
     }
   }

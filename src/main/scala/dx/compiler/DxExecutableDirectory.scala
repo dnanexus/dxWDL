@@ -94,9 +94,7 @@ case class DxExecutableDirectory(bundle: Bundle,
         val t1 = System.nanoTime()
         val diffMSec = (t1 - t0) / (1000 * 1000)
         dxApi.logger.trace(
-            s"""|Found ${dxObjectsInFolder.size} ${dxClass}
-                |in ${project.getId} folder=${folder} (${diffMSec} millisec)""".stripMargin
-              .replaceAll("\n", " ")
+            s"Found ${dxObjectsInFolder.size} ${dxClass} in ${project.getId} folder=${folder} (${diffMSec} millisec)"
         )
         dxObjectsInFolder.toVector
       }

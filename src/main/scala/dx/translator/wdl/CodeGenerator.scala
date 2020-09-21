@@ -1,7 +1,6 @@
 package dx.translator.wdl
 
 import dx.core.ir.{Application, Callable, ExecutableKindApplet}
-import dx.core.languages.Language
 import dx.core.languages.wdl.{Utils => WdlUtils}
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
@@ -222,33 +221,28 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
           TAT.OutputDefinition(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }
 
-    language match {
-      case Language.WdlVDraft2 | Language.WdlV1_0 | Language.WdlV2_0 =>
-        TAT.Task(
+    TAT.Task(
+        callable.name,
+        WdlTypes.T_Task(
             callable.name,
-            WdlTypes.T_Task(
-                callable.name,
-                inputs.map {
-                  case TAT.RequiredInputDefinition(name, wdlType, _) =>
-                    name -> (wdlType, false)
-                  case other: TAT.InputDefinition =>
-                    other.name -> (other.wdlType, true)
-                }.toMap,
-                outputs.map(d => d.name -> d.wdlType).toMap
-            ),
-            inputs,
-            outputs,
-            TAT.CommandSection(Vector.empty, SourceLocation.empty),
-            Vector.empty,
-            None,
-            None,
-            None,
-            None,
-            SourceLocation.empty
-        )
-      case other =>
-        throw new Exception(s"Unsupported language version ${other}")
-    }
+            inputs.map {
+              case TAT.RequiredInputDefinition(name, wdlType, _) =>
+                name -> (wdlType, false)
+              case other: TAT.InputDefinition =>
+                other.name -> (other.wdlType, true)
+            }.toMap,
+            outputs.map(d => d.name -> d.wdlType).toMap
+        ),
+        inputs,
+        outputs,
+        TAT.CommandSection(Vector.empty, SourceLocation.empty),
+        Vector.empty,
+        None,
+        None,
+        None,
+        None,
+        SourceLocation.empty
+    )
   }
 
   /**

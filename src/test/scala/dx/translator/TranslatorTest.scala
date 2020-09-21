@@ -33,16 +33,11 @@ class TranslatorTest extends AnyFlatSpec with Matchers {
   private val dxProject = dxApi.currentProject
 
   // task compilation
-  private val cFlags = List("--compileMode",
-                            "ir",
-                            "-quiet",
-                            "-fatalValidationWarnings",
-                            "--locked",
-                            "--project",
-                            dxProject.getId)
+  private val cFlags =
+    List("--compileMode", "ir", "-quiet", "--locked", "--project", dxProject.getId)
 
   private val cFlagsUnlocked =
-    List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings", "--project", dxProject.getId)
+    List("--compileMode", "ir", "-quiet", "--project", dxProject.getId)
 
   val dbgFlags = List("--compileMode",
                       "ir",
@@ -312,13 +307,17 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
             )
         )
     )
-    cgrepApplication.outputs shouldBe Vector(
+    cgrepApplication.outputs.iterator sameElements Vector(
         Parameter("count", TInt, None, Vector.empty),
         Parameter(
             "out_file",
             TFile,
             None,
-            Vector.empty
+            Vector(
+                PatternsAttribute(PatternsArray(Vector("*.txt", "*.tsv"))),
+                GroupAttribute("Common"),
+                LabelAttribute("Output file")
+            )
         )
     )
   }
@@ -364,13 +363,17 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
             )
         )
     )
-    cgrepApplication.outputs shouldBe Vector(
+    cgrepApplication.outputs.iterator sameElements Vector(
         Parameter("count", TInt, None, Vector.empty),
         Parameter(
             "out_file",
             TFile,
             None,
-            Vector.empty
+            Vector(
+                PatternsAttribute(PatternsArray(Vector("*.txt", "*.tsv"))),
+                GroupAttribute("Common"),
+                LabelAttribute("Input file")
+            )
         )
     )
   }
@@ -754,7 +757,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     }
 
     val cgrepApplication = getApplicationByName("help_output_params_cgrep", bundle)
-    cgrepApplication.outputs shouldBe Vector(
+    cgrepApplication.outputs.iterator sameElements Vector(
         Parameter(
             "count",
             TInt,
@@ -842,18 +845,17 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     }
 
     val cgrepApplication = getApplicationByName("add_runtime_hints", bundle)
-    cgrepApplication.requirements shouldBe Some(
-        Vector(
-            IgnoreReuseRequirement(true),
-            RestartRequirement(
-                max = Some(5),
-                default = Some(1),
-                errors = Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2)
-            ),
-            TimeoutRequirement(hours = Some(12), minutes = Some(30)),
-            AccessRequirement(network = Vector("*"), developer = Some(true))
-        )
-    )
+    cgrepApplication.requirements.iterator sameElements
+      Vector(
+          IgnoreReuseRequirement(true),
+          RestartRequirement(
+              max = Some(5),
+              default = Some(1),
+              errors = Map("UnresponsiveWorker" -> 2, "ExecutionError" -> 2)
+          ),
+          TimeoutRequirement(hours = Some(12), minutes = Some(30)),
+          AccessRequirement(network = Vector("*"), developer = Some(true))
+      )
   }
 
   it should "ignore dx_instance_type when evaluating runtime hints" in {
@@ -897,7 +899,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     val retval = Main.compile(args.toVector)
     inside(retval) {
       case Failure(_, Some(e)) =>
-        e.getMessage should include("reserved substring ___")
+        e.getMessage should include("using the substring '___'")
     }
   }
 
@@ -1046,7 +1048,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     }
   }
   it should "compile a workflow taking arguments from a Pair" in {
-    val path = pathFromBasename("draft2", "pawdl")
+    val path = pathFromBasename("draft2", "pair.wdl")
     val args = path.toString :: cFlags
     //                                      :: "--verbose"
     //                                      :: "--verboseKey" :: "GenerateIR"
@@ -1077,7 +1079,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     retval shouldBe a[SuccessIR]
   }
 
-  ignore should "recognize workflow metadata" in {
+  it should "recognize workflow metadata" in {
     val path = pathFromBasename("compiler", "wf_meta.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -1090,21 +1092,20 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
       case Some(wf: Workflow) => wf
       case _                  => throw new Exception("primaryCallable is not a workflow")
     }
-    workflow.attributes shouldBe Some(
-        Vector(
-            DescriptionAttribute("This is a workflow that defines some metadata"),
-            TagsAttribute(Vector("foo", "bar")),
-            VersionAttribute("1.0"),
-            PropertiesAttribute(Map("foo" -> "bar")),
-            DetailsAttribute(Map("whatsNew" -> VString("v1.0: First release"))),
-            TitleAttribute("Workflow with metadata"),
-            TypesAttribute(Vector("calculator")),
-            SummaryAttribute("A workflow that defines some metadata")
-        )
-    )
+    workflow.attributes.iterator sameElements
+      Vector(
+          DescriptionAttribute("This is a workflow that defines some metadata"),
+          TagsAttribute(Vector("foo", "bar")),
+          VersionAttribute("1.0"),
+          PropertiesAttribute(Map("foo" -> "bar")),
+          DetailsAttribute(Map("whatsNew" -> VString("v1.0: First release"))),
+          TitleAttribute("Workflow with metadata"),
+          TypesAttribute(Vector("calculator")),
+          SummaryAttribute("A workflow that defines some metadata")
+      )
   }
 
-  ignore should "recognize workflow parameter metadata" in {
+  it should "recognize workflow parameter metadata" in {
     val path = pathFromBasename("compiler", "wf_param_meta.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)
@@ -1143,7 +1144,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
     )
   }
 
-  ignore should "handle adjunct files in workflows and tasks" in {
+  it should "handle adjunct files in workflows and tasks" in {
     val path = pathFromBasename("compiler", "wf_readme.wdl")
     val args = path.toString :: cFlags
     val retval = Main.compile(args.toVector)

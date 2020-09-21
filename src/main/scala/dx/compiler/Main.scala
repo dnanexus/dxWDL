@@ -147,8 +147,7 @@ object Main {
       } catch {
         case t: Throwable =>
           throw new Exception(
-              s"""|Could not find project ${project}, you probably need to be logged into
-                  |the platform""".stripMargin,
+              s"Could not find project ${project}, you probably need to be logged into the platform",
               t
           )
       }

@@ -34,21 +34,12 @@ case class WdlInputTranslator(bundle: Bundle,
       case (pairType: TSchema, JsArray(pair))
           if WdlUtils.isPairSchema(pairType) && pair.size == 2 =>
         // pair represented as [left, right]
-        JsObject(WdlUtils.PairLeftReserved -> pair(0), WdlUtils.PairRightReserved -> pair(1))
-      case (pairType: TSchema, JsObject(fields))
-          if WdlUtils.isPairSchema(pairType) && WdlUtils.isUserPairValue(fields) =>
-        JsObject(WdlUtils.PairLeftReserved -> fields(WdlUtils.PairLeftUser),
-                 WdlUtils.PairRightReserved -> fields(WdlUtils.PairRightUser))
+        JsObject(WdlUtils.PairLeftKey -> pair(0), WdlUtils.PairRightKey -> pair(1))
       case (mapType: TSchema, JsObject(fields))
-          if WdlUtils.isMapSchema(mapType) && WdlUtils.isUserMapValue(fields) =>
-        // map represented using keys with the the '___' suffix
-        JsObject(WdlUtils.MapKeysReserved -> fields(WdlUtils.MapKeysUser),
-                 WdlUtils.MapValuesReserved -> fields(WdlUtils.MapValuesUser))
-      case (mapType: TSchema, JsObject(fields))
-          if WdlUtils.isMapSchema(mapType) && !WdlUtils.isReservedMapValue(fields) =>
+          if WdlUtils.isMapSchema(mapType) && !WdlUtils.isMapValue(fields) =>
         // map represented as a JSON object (i.e. has keys that are coercible from String)
-        JsObject(WdlUtils.MapKeysReserved -> JsArray(fields.keys.map(JsString(_)).toVector),
-                 WdlUtils.MapValuesReserved -> JsArray(fields.values.toVector))
+        JsObject(WdlUtils.MapKeysKey -> JsArray(fields.keys.map(JsString(_)).toVector),
+                 WdlUtils.MapValuesKey -> JsArray(fields.values.toVector))
       case _ =>
         jsv
     }

@@ -245,8 +245,9 @@ case class Compiler(extras: Option[Extras],
               return Some(existingInfo.dataObj)
           }
         case v =>
-          dxApi.logger.warning(s"""|More than one ${v.head.dxClass} ${name} found in
-                                   |path ${project.id}:${folder}""".stripMargin)
+          dxApi.logger.warning(
+              s"More than one ${v.head.dxClass} ${name} found in path ${project.id}:${folder}"
+          )
       }
 
       if (archive) {

@@ -654,9 +654,9 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       case k if !ExtraAttrs.contains(k) => k
     }
     if (invalid.nonEmpty) {
-      throw new Exception(s"""|Unsupported extra option(s) ${invalid},
-                              |we currently support ${ExtraAttrs}
-                              |""".stripMargin.replaceAll("\n", ""))
+      throw new Exception(
+          s"Unsupported extra option(s) ${invalid}, we currently support ${ExtraAttrs}"
+      )
     }
     // parse the individual task dx attributes
     val perTaskDxAttrs: Map[String, DxAppJson] =

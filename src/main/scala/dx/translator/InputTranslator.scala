@@ -71,9 +71,9 @@ abstract class InputTranslator(bundle: Bundle,
     defaults.map(InputTranslator.loadJsonFileWithComments).getOrElse(Map.empty)
 
   /**
-    * Overridable function that converts a language-specific JSON value to one that can be
-    * deserialized to an IR Value. This is the mechanism to support compile-time inputs/
-    * defaults that do not map implicitly to an IR type.
+    * Converts a language-specific JSON value to one that can be deserialized to an IR Value.
+    * This is the mechanism to support compile-time inputs/defaults that do not map implicitly
+    * to an IR type.
     * @return
     */
   protected def translateJsInput(jsv: JsValue, t: Type): JsValue

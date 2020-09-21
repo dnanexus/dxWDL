@@ -130,7 +130,7 @@ case class DxApi(logger: Logger = Logger.get,
       case _ =>
         throw new Exception(
             s"""Bad response from systemFindProject API call (${responseJs.prettyPrint}),
-               |when resolving project ${projName}.""".stripMargin
+               |when resolving project ${projName}.""".stripMargin.replaceAll("\n", " ")
         )
     }
     if (results.length > 1) {
