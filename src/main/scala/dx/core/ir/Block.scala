@@ -27,7 +27,16 @@ object BlockKind extends Enum {
 }
 
 trait Block[Self <: Block[Self]] { this: Self =>
+
+  /**
+    * The kind of block this is.
+    */
   def kind: BlockKind.BlockKind
+
+  /**
+    * The index of this block within its parent list.
+    */
+  def index: Int
 
   /**
     * Create a human readable name for a block of statements

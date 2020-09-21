@@ -13,7 +13,7 @@ import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.util.MainUtils._
 import dx.dxni.DxNativeInterface
-import dx.translator.{Extras, ExtrasParser, InputTranslator, TranslatorFactory}
+import dx.translator.{Extras, ExtrasParser, TranslatorFactory}
 import spray.json._
 import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
 
@@ -248,12 +248,11 @@ object Main {
     val compileMode: CompilerMode =
       options.getValueOrElse[CompilerMode]("compileMode", CompilerMode.All)
 
-    // generate IR
-    val rawBundle =
+    val translator =
       try {
         val language = options.getValue[Language]("language")
         val Vector(locked, reorg) = Vector("locked", "reorg").map(options.getFlag(_))
-        val translator = TranslatorFactory.create(
+        TranslatorFactory.create(
             sourceFile,
             language,
             extras,
@@ -261,10 +260,18 @@ object Main {
             if (reorg) Some(true) else None,
             baseFileResolver
         )
+      } catch {
+        case e: Throwable =>
+          return Failure(s"Error creating translator for ${sourceFile}", exception = Some(e))
+      }
+
+    // generate IR
+    val rawBundle =
+      try {
         translator.apply
       } catch {
         case e: Throwable =>
-          return Failure(exception = Some(e))
+          return Failure(s"Error translating ${sourceFile} to IR", exception = Some(e))
       }
 
     // if there are inputs they need to be translated to dx inputs
@@ -285,16 +292,29 @@ object Main {
 
     // a destination is only required if we are doing input translation and/or
     // compiling native apps
-    val (project, folder) = getDestination(options)
+    val (project, folder) =
+      try {
+        getDestination(options)
+      } catch {
+        case optEx: OptionParseException =>
+          return BadUsageTermination(exception = Some(optEx))
+        case ex: Throwable =>
+          return Failure("Could not resolve destination", Some(ex))
+      }
 
     val (bundle, fileResolver) = if (hasInputs) {
-      val inputTranslator = InputTranslator(rawBundle, inputs, defaults, project, baseFileResolver)
-      inputTranslator.writeTranslatedInputs()
+      val (bundleWithDefaults, fileResolver) =
+        try {
+          translator.translateInputs(rawBundle, inputs, defaults, project)
+        } catch {
+          case ex: Throwable =>
+            return Failure("Error translating inputs", Some(ex))
+        }
       if (compileMode == CompilerMode.IR) {
         // if we're only performing translation to IR, we can quit early
-        return SuccessIR(inputTranslator.bundleWithDefaults)
+        return SuccessIR(bundleWithDefaults)
       }
-      (inputTranslator.bundleWithDefaults, inputTranslator.fileResolver)
+      (bundleWithDefaults, fileResolver)
     } else {
       (rawBundle, baseFileResolver)
     }

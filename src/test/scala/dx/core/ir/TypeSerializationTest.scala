@@ -15,9 +15,6 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
       // arrays
       Type.TArray(Type.TString),
       Type.TArray(Type.TFile, nonEmpty = true),
-      // maps
-      Type.TMap(Type.TString, Type.TFile),
-      Type.TMap(Type.TString, Type.TMap(Type.TFloat, Type.TInt)),
       // optionals
       Type.TOptional(Type.TInt),
       Type.TOptional(Type.TArray(Type.TBoolean))
@@ -37,7 +34,7 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
   )
   private val structTestCases: Vector[Type] = Vector(
       personType,
-      Type.TMap(personType, houseType),
+      Type.TArray(houseType),
       Type.TOptional(houseType)
   )
 

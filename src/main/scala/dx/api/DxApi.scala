@@ -706,16 +706,15 @@ case class DxApi(logger: Logger = Logger.get,
   private def triage(
       allDxPaths: Seq[String]
   ): (Map[String, DxDataObject], Vector[DxPathComponents]) = {
-    var alreadyResolved = Map.empty[String, DxDataObject]
-    var rest = Vector.empty[DxPathComponents]
-
-    allDxPaths.foreach { p =>
-      triageOne(DxPath.parse(p)) match {
-        case Left(dxObjWithProj) => alreadyResolved += (p -> dxObjWithProj)
-        case Right(components)   => rest :+= components
-      }
+    allDxPaths.toSet.foldLeft((Map.empty[String, DxDataObject], Vector.empty[DxPathComponents])) {
+      case ((alreadyResolved, rest), p) =>
+        triageOne(DxPath.parse(p)) match {
+          case Left(dxObjWithProj) =>
+            (alreadyResolved + (p -> dxObjWithProj), rest)
+          case Right(components) =>
+            (alreadyResolved, rest :+ components)
+        }
     }
-    (alreadyResolved, rest)
   }
 
   // Create a request from a path like:
@@ -783,22 +782,20 @@ case class DxApi(logger: Logger = Logger.get,
       // that do not have a network connection.
       return Map.empty
     }
-
     // peel off objects that have already been resolved
     val (alreadyResolved, dxPathsToResolve) = triage(dxPaths)
-    if (dxPathsToResolve.isEmpty)
-      return alreadyResolved
-
-    // Limit on number of objects in one API request
-    val slices = dxPathsToResolve.grouped(limit).toList
-
-    // iterate on the ranges
-    val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {
-      case (accu, pathsRange) =>
-        accu ++ submitRequest(pathsRange, dxProject)
+    if (dxPathsToResolve.isEmpty) {
+      alreadyResolved
+    } else {
+      // Limit on number of objects in one API request
+      val slices = dxPathsToResolve.grouped(limit).toList
+      // iterate on the ranges
+      val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {
+        case (accu, pathsRange) =>
+          accu ++ submitRequest(pathsRange, dxProject)
+      }
+      alreadyResolved ++ resolved
     }
-
-    alreadyResolved ++ resolved
   }
 
   def resolveOnePath(dxPath: String,
@@ -817,10 +814,11 @@ case class DxApi(logger: Logger = Logger.get,
         submitRequest(Vector(dxPathsToResolve), proj).values.toVector
     }
 
-    found.size match {
-      case 0 =>
+    found match {
+      case Vector(result) =>
+        result
+      case Vector() =>
         throw new Exception(s"Could not find ${dxPath} in project ${proj.getId}")
-      case 1 => found.head
       case _ =>
         throw new Exception(
             s"Found more than one dx:object in path ${dxPath}, project=${proj.getId}"

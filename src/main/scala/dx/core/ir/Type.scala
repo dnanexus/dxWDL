@@ -40,14 +40,6 @@ object Type {
   case object THash extends Type
 
   /**
-    * A special type of hash that encodes a map with arbitrary key type as an
-    * object with two keys ("keys" and "values").
-    * @param key key type
-    * @param value value type
-    */
-  case class TMap(key: Type, value: Type) extends Type
-
-  /**
     * Represents a user-defined type. Values of this type are represented
     * as VHash.
     * @param name type name

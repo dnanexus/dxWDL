@@ -175,7 +175,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
 
     // create a stand-alone task
     val (doc, typeAliases) = WdlUtils.parseSourceFile(wdlFile)
-    val codegen = CodeGenerator(typeAliases, doc.version.value, logger)
+    val codegen = CodeGenerator(typeAliases.bindings, doc.version.value, logger)
     val tasks: Vector[TAT.Task] = doc.elements.collect {
       case task: TAT.Task => task
     }

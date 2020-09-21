@@ -35,10 +35,4 @@ object Value {
     * A JSON object.
     */
   case class VHash(value: Map[String, Value]) extends Value
-
-  /**
-    * A JSON object that represents a map with arbitrary key type.
-    * @param value the map values
-    */
-  case class VMap(value: Map[Value, Value]) extends Value
 }

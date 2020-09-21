@@ -20,10 +20,10 @@ import dx.translator.ReorgAttributes
 import wdlTools.eval.{Eval, EvalException, EvalPaths}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes._
-import wdlTools.util.{Adjuncts, DefaultBindings, FileSourceResolver, Logger}
+import wdlTools.util.{Adjuncts, FileSourceResolver, Logger}
 
 case class CallableTranslator(wdlBundle: WdlBundle,
-                              typeAliases: DefaultBindings[T_Struct],
+                              typeAliases: Map[String, T_Struct],
                               locked: Boolean,
                               defaultRuntimeAttrs: Map[String, Value],
                               reorgAttrs: ReorgAttributes,
@@ -33,6 +33,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
   private lazy val evaluator: Eval =
     Eval(EvalPaths.empty, Some(wdlBundle.version), fileResolver, logger)
+  private lazy val codegen = CodeGenerator(typeAliases, wdlBundle.version, logger)
 
   private case class WdlTaskTranslator(task: TAT.Task) {
     private lazy val runtime =
@@ -47,7 +48,6 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       wdlBundle.adjunctFiles.getOrElse(task.name, Vector.empty)
     private lazy val meta = ApplicationMetaTranslator(wdlBundle.version, task.meta, adjunctFiles)
     private lazy val parameterMeta = ParameterMetaTranslator(wdlBundle.version, task.parameterMeta)
-    private lazy val codegen = CodeGenerator(typeAliases, wdlBundle.version, logger)
 
     private def translateInput(input: TAT.InputDefinition): Parameter = {
       val wdlType = input.wdlType
@@ -158,7 +158,6 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       wdlBundle.adjunctFiles.getOrElse(wf.name, Vector.empty)
     private lazy val meta = WorkflowMetaTranslator(wdlBundle.version, wf.meta, adjunctFiles)
     private lazy val parameterMeta = ParameterMetaTranslator(wdlBundle.version, wf.parameterMeta)
-    private lazy val codegen = CodeGenerator(typeAliases, wdlBundle.version, logger)
     private lazy val standAloneWorkflow =
       WdlDocumentSource(codegen.standAloneWorkflow(wf, dependencies.values.toVector))
     // Only the toplevel workflow may be unlocked. This happens
@@ -352,7 +351,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           EmptyInput
         case Some(expr) =>
           // first try to treat it as a constant
-          val wdlType = WdlUtils.fromIRType(param.dxType)
+          val wdlType = WdlUtils.fromIRType(param.dxType, typeAliases)
           try {
             val value = evaluator.applyConstAndCoerce(expr, wdlType)
             StaticInput(WdlUtils.toIRValue(value, wdlType))
@@ -628,21 +627,24 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         .trace(s"category : ${block.kind}")
 
       val (innerCall, auxCallables): (Option[String], Vector[Callable]) =
-        (block.kind, block.target) match {
-          case (BlockKind.ExpressionsOnly, _) =>
+        block.kind match {
+          case BlockKind.ExpressionsOnly =>
             (None, Vector.empty)
-          case (BlockKind.CallDirect, _) =>
+          case BlockKind.CallDirect =>
             throw new Exception(s"a direct call should not reach this stage")
-          case (_, call: TAT.Call) =>
+          case BlockKind.CallWithSubexpressions | BlockKind.CallFragment |
+              BlockKind.ConditionalOneCall | BlockKind.ScatterOneCall =>
             // a block with no nested sub-blocks, and a single call, or
             // a conditional/scatter with exactly one call in the sub-block
-            (Some(call.unqualifiedName), Vector.empty)
-          case (BlockKind.ConditionalComplex, cond: TAT.Conditional) =>
+            (Some(block.call.unqualifiedName), Vector.empty)
+          case BlockKind.ConditionalComplex =>
             // a conditional/scatter with multiple calls or other nested elements
             // in the sub-block
-            val (callable, aux) = translateNestedBlock(wfName, cond.body, blockPath, env)
+            val conditional = block.conditional
+            val (callable, aux) = translateNestedBlock(wfName, conditional.body, blockPath, env)
             (Some(callable.name), aux :+ callable)
-          case (BlockKind.ScatterComplex, scatter: TAT.Scatter) =>
+          case BlockKind.ScatterComplex =>
+            val scatter = block.scatter
             // add the iteration variable to the inner environment
             val varType = scatter.expr.wdlType match {
               case WdlTypes.T_Array(t, _) => WdlUtils.toIRType(t)
@@ -654,7 +656,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
             val (callable, aux) = translateNestedBlock(wfName, scatter.body, blockPath, innerEnv)
             (Some(callable.name), aux :+ callable)
           case _ =>
-            throw new Exception(s"unexpected block ${block}")
+            throw new Exception(s"unexpected block ${block.prettyFormat}")
         }
 
       val applet = Application(

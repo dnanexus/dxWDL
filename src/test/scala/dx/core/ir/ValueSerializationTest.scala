@@ -17,17 +17,8 @@ class ValueSerializationTest extends AnyFlatSpec with Matchers {
       (TArray(TInt), VArray(Vector(VInt(4), VInt(5)))),
       // compounds
       (TOptional(TInt), VInt(13)),
-      // map with string keys
-      (TMap(TString, TInt),
-       VMap(
-           Map(VString("A") -> VInt(1),
-               VString("C") -> VInt(4),
-               VString("G") -> VInt(5),
-               VString("T") -> VInt(5))
-       )),
-      // map with non-string keys
-      (TMap(TInt, TFile),
-       VMap(Map(VInt(1) -> VFile("/tmp/A.txt"), VInt(3) -> VFile("/tmp/B.txt")))),
+      // hash
+      (THash, VHash(Map("A" -> VInt(1), "C" -> VInt(4), "G" -> VInt(5), "T" -> VInt(5)))),
       // structs
       (TSchema("Person", Map("name" -> TString, "age" -> TInt)),
        VHash(Map("name" -> VString("Bradly"), "age" -> VInt(42))))

@@ -2,7 +2,7 @@ package dx.core.languages.wdl
 
 import java.nio.file.Path
 
-import dx.core.ir.{Type, Value}
+import dx.core.ir.{Type, TypeSerde, Value}
 import dx.core.ir.Type._
 import dx.core.ir.TypeSerde.UnknownTypeException
 import dx.core.ir.Value._
@@ -299,6 +299,103 @@ object Utils {
     inner(jsValue)
   }
 
+  // Functions to convert between WDL and IR types and values.
+  // WDL has two types that IR does not: Pair and Map. These
+  // are represented as objects with specific keys ('left' and
+  // 'right' for Pair, 'keys' and 'values' for Map). We define
+  // a special TSchema for each of these types.
+
+  /**
+    * Name prefix for Pair-type schemas.
+    */
+  val PairSchemaPrefix = "Pair___"
+
+  /**
+    * Pair.left key that can be used in WDL input files.
+    */
+  val PairLeftUser = "left"
+
+  /**
+    * Pair.right key that can be used in WDL input files.
+    */
+  val PairRightUser = "right"
+
+  /**
+    * Pair.left key that must be used in dx input files.
+    */
+  val PairLeftReserved = s"${PairLeftUser}___"
+
+  /**
+    * Pair.right key that must be used in dx input files.
+    */
+  val PairRightReserved = s"${PairRightUser}___"
+
+  def createPairSchema(left: Type, right: Type): TSchema = {
+    val name = s"${PairSchemaPrefix}(${TypeSerde.toString(left)}, ${TypeSerde.toString(right)})"
+    TSchema(name, Map(PairLeftReserved -> left, PairRightReserved -> right))
+  }
+
+  def isPairSchema(t: TSchema): Boolean = {
+    t.name.startsWith(PairSchemaPrefix) && t.members.size == 2 && t.members.keySet == Set(
+        PairLeftReserved,
+        PairRightReserved
+    )
+  }
+
+  def isUserPairValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(PairLeftUser, PairRightUser)
+  }
+
+  def isReservedPairValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(PairLeftReserved, PairRightReserved)
+  }
+
+  /**
+    * Name prefix for Map-type schemas.
+    */
+  val MapSchemaPrefix = "Map___"
+
+  /**
+    * Map.keys key that can be used in WDL input files.
+    */
+  val MapKeysUser = "keys"
+
+  /**
+    * Map.values key that can be used in WDL  input files.
+    */
+  val MapValuesUser = "values"
+
+  /**
+    * Map.keys key that must be used in dx input files.
+    */
+  val MapKeysReserved = s"${MapKeysUser}___"
+
+  /**
+    * Map.values key that must be used in dx input files.
+    */
+  val MapValuesReserved = s"${MapValuesUser}___"
+
+  def createMapSchema(keyType: Type, valueType: Type): TSchema = {
+    val name =
+      s"${MapSchemaPrefix}(${TypeSerde.toString(keyType)}, ${TypeSerde.toString(valueType)})"
+    TSchema(name, Map(MapKeysReserved -> TArray(keyType), MapValuesReserved -> TArray(valueType)))
+  }
+
+  def isMapSchema(t: TSchema): Boolean = {
+    t.name.startsWith(MapSchemaPrefix) && t.members.size == 2 && t.members.keySet == Set(
+        MapKeysReserved,
+        MapValuesReserved
+    )
+  }
+
+  def isUserMapValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(MapKeysUser, MapValuesUser)
+  }
+
+  def isReservedMapValue(fields: Map[String, _]): Boolean = {
+    fields.size == 2 && fields.keySet == Set(MapKeysReserved, MapValuesReserved)
+  }
+
   def toIRType(wdlType: T): Type = {
     wdlType match {
       case T_Boolean     => TBoolean
@@ -311,16 +408,14 @@ object Utils {
       case T_Optional(t) => TOptional(toIRType(t))
       case T_Array(t, nonEmpty) =>
         TArray(toIRType(t), nonEmpty)
-      case T_Map(keyType, valueType) =>
-        val key = toIRType(keyType)
-        val value = toIRType(valueType)
-        TMap(key, value)
-      case _: T_Pair =>
-        THash
       case T_Struct(name, members) =>
         TSchema(name, members.map {
           case (key, value) => key -> toIRType(value)
         })
+      case T_Pair(leftType, rightType) =>
+        createPairSchema(toIRType(leftType), toIRType(rightType))
+      case T_Map(keyType, valueType) =>
+        createMapSchema(toIRType(keyType), toIRType(valueType))
       case _ =>
         throw new Exception(s"Cannot convert WDL type ${wdlType} to IR")
     }
@@ -345,12 +440,14 @@ object Utils {
         case TOptional(t) => T_Optional(inner(t))
         case TArray(t, nonEmpty) =>
           T_Array(inner(t), nonEmpty = nonEmpty)
-        case TMap(key, value) =>
-          val keyType = inner(key)
-          val valueType = inner(value)
-          T_Map(keyType, valueType)
         case TSchema(name, _) if typeAliases.contains(name) =>
           typeAliases(name)
+        case pairSchema: TSchema if isPairSchema(pairSchema) =>
+          T_Pair(inner(pairSchema.members(PairLeftReserved)),
+                 inner(pairSchema.members(PairRightReserved)))
+        case mapSchema: TSchema if isMapSchema(mapSchema) =>
+          T_Map(inner(mapSchema.members(MapKeysReserved)),
+                inner(mapSchema.members(MapValuesReserved)))
         case TSchema(name, _) =>
           throw new Exception(s"Unknown type ${name}")
         case _ =>
@@ -371,16 +468,23 @@ object Utils {
       case V_Directory(path) => VDirectory(path)
       case V_Array(array) =>
         VArray(array.map(v => toIRValue(v)))
-      case V_Map(m) =>
-        VMap(m.map {
-          case (key, value) => toIRValue(key) -> toIRValue(value)
-        })
       case V_Pair(left, right) =>
-        // encode this as a hash with left and right keys
+        // encode this as a hash with 'left' and 'right' keys
         VHash(
             Map(
-                "left" -> toIRValue(left),
-                "right" -> toIRValue(right)
+                PairLeftReserved -> toIRValue(left),
+                PairRightReserved -> toIRValue(right)
+            )
+        )
+      case V_Map(members) =>
+        // encode this as a hash with 'keys' and 'values' keys
+        val (keys, values) = members.map {
+          case (k, v) => (toIRValue(k), toIRValue(v))
+        }.unzip
+        VHash(
+            Map(
+                MapKeysReserved -> VArray(keys.toVector),
+                MapValuesReserved -> VArray(values.toVector)
             )
         )
       case V_Object(members) =>
@@ -417,17 +521,23 @@ object Utils {
         )
       case (T_Array(t, _), V_Array(array)) =>
         VArray(array.map(v => toIRValue(v, t)))
-      case (T_Map(keyType, valueType), V_Map(m)) =>
-        VMap(m.map {
-          case (key, value) =>
-            toIRValue(key, keyType) -> toIRValue(value, valueType)
-        })
       case (T_Pair(leftType, rightType), V_Pair(leftValue, rightValue)) =>
         // encode this as a hash with left and right keys
         VHash(
             Map(
-                "left" -> toIRValue(leftValue, leftType),
-                "right" -> toIRValue(rightValue, rightType)
+                PairLeftReserved -> toIRValue(leftValue, leftType),
+                PairRightReserved -> toIRValue(rightValue, rightType)
+            )
+        )
+      case (T_Map(keyType, valueType), V_Map(members)) =>
+        // encode this as a hash with 'keys' and 'values' keys
+        val (keys, values) = members.map {
+          case (k, v) => (toIRValue(k, keyType), toIRValue(v, valueType))
+        }.unzip
+        VHash(
+            Map(
+                MapKeysReserved -> VArray(keys.toVector),
+                MapValuesReserved -> VArray(values.toVector)
             )
         )
       case (T_Struct(name, memberTypes), V_Object(members)) =>
@@ -468,10 +578,6 @@ object Utils {
     }
   }
 
-  def isPairHash(fields: Map[String, Value]): Boolean = {
-    fields.size == 2 && fields.keySet == Set("left", "right")
-  }
-
   def fromIRValue(value: Value, name: Option[String]): V = {
     value match {
       case VNull         => V_Null
@@ -485,37 +591,34 @@ object Utils {
         V_Array(array.zipWithIndex.map {
           case (v, i) => fromIRValue(v, name.map(n => s"${n}[${i}]"))
         })
-      case VMap(fields) =>
-        V_Map(fields.map {
-          case (key, value) =>
-            val elementName = name.map(n => s"${n}[${key}]")
-            fromIRValue(key, elementName) -> fromIRValue(value, elementName)
-        })
-      case VHash(fields) if isPairHash(fields) =>
+      case VHash(fields) if isReservedPairValue(fields) =>
         V_Pair(
-            fromIRValue(fields("left"), name.map(n => s"${n}.left")),
-            fromIRValue(fields("right"), name.map(n => s"${n}.right"))
+            fromIRValue(fields(PairLeftReserved), name.map(n => s"${n}.${PairLeftReserved}")),
+            fromIRValue(fields(PairRightReserved), name.map(n => s"${n}.${PairRightReserved}"))
         )
+      case VHash(fields) if isReservedMapValue(fields) =>
+        val keys = fromIRValue(fields(MapKeysReserved), name.map(n => s"${n}[${MapKeysReserved}]"))
+        val values =
+          fromIRValue(fields(MapValuesReserved), name.map(n => s"${n}[${MapValuesReserved}]"))
+        (keys, values) match {
+          case (V_Array(keyArray), V_Array(valueArray)) =>
+            V_Map(keyArray.zip(valueArray).toMap)
+          case other =>
+            throw new Exception(s"invalid map value ${other}")
+        }
       case VHash(fields) =>
         V_Object(fields.map {
           case (key, value) => key -> fromIRValue(value, name.map(n => s"${n}[${key}]"))
         })
       case _ =>
         throw new Exception(
-            s"Cannot convert ${name.getOrElse("IR")} value ${value} to WDL value"
+            s"cannot convert ${name.getOrElse("IR")} value ${value} to WDL value"
         )
     }
   }
 
-  def fromIRValue(value: Value,
-                  wdlType: T,
-                  name: String,
-                  handler: Option[(Value, T, String) => Option[V]] = None): V = {
+  def fromIRValue(value: Value, wdlType: T, name: String): V = {
     def inner(innerValue: Value, innerType: T, innerName: String): V = {
-      val v = handler.flatMap(_(innerValue, innerType, innerName))
-      if (v.isDefined) {
-        return v.get
-      }
       (wdlType, value) match {
         case (T_Optional(_), VNull)          => V_Null
         case (T_Boolean, VBoolean(b))        => V_Boolean(value = b)
@@ -536,17 +639,20 @@ object Utils {
           V_Array(array.zipWithIndex.map {
             case (v, i) => inner(v, t, s"${innerName}[${i}]")
           })
-        case (T_Map(keyType, valueType), VMap(m)) =>
-          V_Map(m.map {
-            case (key, value) =>
-              val elementName = s"${innerName}[${key}]"
-              inner(key, keyType, elementName) -> inner(value, valueType, elementName)
-          })
-        case (T_Pair(leftType, rightType), VHash(fields)) if isPairHash(fields) =>
+        case (T_Pair(leftType, rightType), VHash(fields)) if isReservedPairValue(fields) =>
           V_Pair(
-              inner(fields("left"), leftType, s"${name}.left"),
-              inner(fields("right"), rightType, s"${name}.right")
+              inner(fields(PairLeftReserved), leftType, s"${name}.${PairLeftReserved}"),
+              inner(fields(PairRightReserved), rightType, s"${name}.${PairRightReserved}")
           )
+        case (T_Map(keyType, valueType), VHash(fields)) if isReservedMapValue(fields) =>
+          val keys = inner(fields(MapKeysReserved), keyType, s"${name}[${MapKeysReserved}]")
+          val values = inner(fields(MapValuesReserved), valueType, s"${name}[${MapValuesReserved}]")
+          (keys, values) match {
+            case (V_Array(keyArray), V_Array(valueArray)) =>
+              V_Map(keyArray.zip(valueArray).toMap)
+            case other =>
+              throw new Exception(s"invalid map value ${other}")
+          }
         case (T_Struct(structName, memberTypes), VHash(members)) =>
           // ensure 1) members keys are a subset of memberTypes keys, 2) members
           // values are convertable to the corresponding types, and 3) any keys
@@ -613,24 +719,26 @@ object Utils {
         val a = array.map(irValueToExpr)
         val t = ensureUniformType(a)
         TAT.ExprArray(a, t, loc)
-      case VMap(members) =>
-        val m = members.map {
-          case (key, value) => irValueToExpr(key) -> irValueToExpr(value)
-        }
-        val keyType = ensureUniformType(m.keys)
-        val valueType = ensureUniformType(m.values)
-        TAT.ExprMap(m, T_Map(keyType, valueType), loc)
-      case VHash(fields) if isPairHash(fields) =>
-        val left = irValueToExpr(fields("left"))
-        val right = irValueToExpr(fields("right"))
+      case VHash(fields) if isReservedPairValue(fields) =>
+        val left = irValueToExpr(fields(PairLeftReserved))
+        val right = irValueToExpr(fields(PairRightReserved))
         TAT.ExprPair(left, right, T_Pair(left.wdlType, right.wdlType), loc)
+      case VHash(fields) if isReservedMapValue(fields) =>
+        val keys = irValueToExpr(fields(MapKeysReserved))
+        val values = irValueToExpr(fields(MapValuesReserved))
+        (keys, values) match {
+          case (TAT.ExprArray(keyArray, keyType, _), TAT.ExprArray(valueArray, valueType, _)) =>
+            TAT.ExprMap(keyArray.zip(valueArray).toMap, T_Map(keyType, valueType), loc)
+          case other =>
+            throw new Exception(s"invalid map value ${other}")
+        }
       case VHash(members) =>
         val m: Map[TAT.Expr, TAT.Expr] = members.map {
           case (key, value) => TAT.ValueString(key, T_String, loc) -> irValueToExpr(value)
         }
         TAT.ExprObject(m, T_Object, loc)
       case _ =>
-        throw new Exception(s"Cannot convert IR value ${value} to WDL")
+        throw new Exception(s"cannot convert IR value ${value} to WDL")
     }
   }
 
@@ -915,13 +1023,13 @@ object Utils {
       }
   }
 
-  def prettyFormat(node: TAT.WorkflowElement, indent: String = "    "): String = {
-    node match {
+  def prettyFormat(element: TAT.WorkflowElement, indent: String = "    "): String = {
+    element match {
       case TAT.Scatter(varName, expr, body, _) =>
         val collection = TUtils.prettyFormatExpr(expr)
         val innerBlock = body
-          .map { node =>
-            prettyFormat(node, indent + "  ")
+          .map { innerElement =>
+            prettyFormat(innerElement, indent + "  ")
           }
           .mkString("\n")
         s"""|${indent}scatter (${varName} in ${collection}) {
@@ -932,8 +1040,8 @@ object Utils {
       case TAT.Conditional(expr, body, _) =>
         val innerBlock =
           body
-            .map { node =>
-              prettyFormat(node, indent + "  ")
+            .map { innerElement =>
+              prettyFormat(innerElement, indent + "  ")
             }
             .mkString("\n")
         s"""|${indent}if (${TUtils.prettyFormatExpr(expr)}) {

@@ -7,9 +7,9 @@ import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.{GraphUtils, TypeGraph, WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{DefaultBindings, Logger, StringFileSource}
+import wdlTools.util.{Logger, StringFileSource}
 
-case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
+case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
                          wdlVersion: WdlVersion,
                          logger: Logger = Logger.get) {
   // A self contained WDL workflow
@@ -23,11 +23,11 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
   }
 
   private lazy val typeAliasDefinitions: Vector[TAT.StructDefinition] = {
-    val ordered: Map[String, WdlTypes.T_Struct] = if (typeAliases.bindings.size <= 1) {
-      typeAliases.bindings
+    val ordered: Map[String, WdlTypes.T_Struct] = if (typeAliases.size <= 1) {
+      typeAliases
     } else {
       // Determine dependency order
-      val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases.toMap)
+      val typeAliasGraph = TypeGraph.buildFromStructTypes(typeAliases)
       GraphUtils
         .toOrderedVector(typeAliasGraph)
         .map { name =>
@@ -201,7 +201,7 @@ case class CodeGenerator(typeAliases: DefaultBindings[WdlTypes.T_Struct],
       callable.inputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = WdlUtils.fromIRType(parameter.dxType)
+          val wdlType = WdlUtils.fromIRType(parameter.dxType, typeAliases)
           parameter.defaultValue match {
             case None =>
               TAT.RequiredInputDefinition(parameter.name, wdlType, SourceLocation.empty)

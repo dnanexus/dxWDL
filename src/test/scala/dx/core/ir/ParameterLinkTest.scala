@@ -49,21 +49,22 @@ class ParameterLinkTest extends AnyFlatSpec with Matchers {
 
   it should "handle compound WDL types" in {
     val testCases = Vector(
-        // pairs
+        // optional
+        makeElement(Type.TOptional(Type.TFile), Value.VFile("ddd")),
+        // arrays
         makeElement(
             Type.TArray(Type.TBoolean),
             Value.VArray(Vector(Value.VBoolean(true), Value.VBoolean(false)))
         ),
-        makeElement(Type.TOptional(Type.TFile), Value.VFile("ddd")),
-        // maps
+        // objects
         makeElement(
-            Type.TMap(Type.TString, Type.TBoolean),
-            Value.VMap(
+            Type.THash,
+            Value.VHash(
                 Map(
-                    Value.VString("A") -> Value.VBoolean(true),
-                    Value.VString("C") -> Value.VBoolean(false),
-                    Value.VString("G") -> Value.VBoolean(true),
-                    Value.VString("H") -> Value.VBoolean(false)
+                    "A" -> Value.VBoolean(true),
+                    "C" -> Value.VBoolean(false),
+                    "G" -> Value.VBoolean(true),
+                    "H" -> Value.VBoolean(false)
                 )
             )
         )

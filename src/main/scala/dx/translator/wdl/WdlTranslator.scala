@@ -2,15 +2,58 @@ package dx.translator.wdl
 
 import java.nio.file.Path
 
-import dx.api.DxApi
+import dx.api.{DxApi, DxProject}
+import dx.core.ir.Type.TSchema
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Utils => WdlUtils}
-import dx.translator.{ReorgAttributes, Translator, TranslatorFactory}
+import dx.translator.{InputTranslator, ReorgAttributes, Translator, TranslatorFactory}
+import spray.json.{JsArray, JsObject, JsString, JsValue}
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
-import wdlTools.util.{DefaultBindings, FileSourceResolver, Logger}
+import wdlTools.util.{FileSourceResolver, Logger}
+
+case class WdlInputTranslator(bundle: Bundle,
+                              inputs: Vector[Path],
+                              defaults: Option[Path],
+                              project: DxProject,
+                              baseFileResolver: FileSourceResolver = FileSourceResolver.get,
+                              dxApi: DxApi = DxApi.get,
+                              logger: Logger = Logger.get)
+    extends InputTranslator(bundle, inputs, defaults, project, baseFileResolver, dxApi, logger) {
+
+  /**
+    * Overridable function converts a language-specific JSON value to one that can be
+    * deserialized to an IR Value.
+    *
+    * @return
+    */
+  override protected def translateJsInput(jsv: JsValue, t: Type): JsValue = {
+    (t, jsv) match {
+      case (pairType: TSchema, JsArray(pair))
+          if WdlUtils.isPairSchema(pairType) && pair.size == 2 =>
+        // pair represented as [left, right]
+        JsObject(WdlUtils.PairLeftReserved -> pair(0), WdlUtils.PairRightReserved -> pair(1))
+      case (pairType: TSchema, JsObject(fields))
+          if WdlUtils.isPairSchema(pairType) && WdlUtils.isUserPairValue(fields) =>
+        JsObject(WdlUtils.PairLeftReserved -> fields(WdlUtils.PairLeftUser),
+                 WdlUtils.PairRightReserved -> fields(WdlUtils.PairRightUser))
+      case (mapType: TSchema, JsObject(fields))
+          if WdlUtils.isMapSchema(mapType) && WdlUtils.isUserMapValue(fields) =>
+        // map represented using keys with the the '___' suffix
+        JsObject(WdlUtils.MapKeysReserved -> fields(WdlUtils.MapKeysUser),
+                 WdlUtils.MapValuesReserved -> fields(WdlUtils.MapValuesUser))
+      case (mapType: TSchema, JsObject(fields))
+          if WdlUtils.isMapSchema(mapType) && !WdlUtils.isReservedMapValue(fields) =>
+        // map represented as a JSON object (i.e. has keys that are coercible from String)
+        JsObject(WdlUtils.MapKeysReserved -> JsArray(fields.keys.map(JsString(_)).toVector),
+                 WdlUtils.MapValuesReserved -> JsArray(fields.values.toVector))
+      case _ =>
+        jsv
+    }
+  }
+}
 
 /**
   * Compiles WDL to IR.
@@ -18,7 +61,7 @@ import wdlTools.util.{DefaultBindings, FileSourceResolver, Logger}
   * TODO: rewrite sortByDependencies using a graph data structure
   */
 case class WdlTranslator(doc: TAT.Document,
-                         typeAliases: DefaultBindings[WdlTypes.T_Struct],
+                         typeAliases: Map[String, WdlTypes.T_Struct],
                          locked: Boolean,
                          defaultRuntimeAttrs: Map[String, Value],
                          reorgAttrs: ReorgAttributes,
@@ -136,10 +179,19 @@ case class WdlTranslator(doc: TAT.Document,
       logger2.trace(s"allCallables: ${allCallables.keys}")
       logger2.trace(s"allCallablesSorted: ${allCallablesSortedNames}")
     }
-    val irTypeAliases = typeAliases.toMap.map {
+    val irTypeAliases = typeAliases.map {
       case (name, struct: WdlTypes.T_Struct) => name -> WdlUtils.toIRType(struct)
     }
     Bundle(primaryCallable, allCallables, allCallablesSortedNames, irTypeAliases)
+  }
+
+  override def translateInputs(bundle: Bundle,
+                               inputs: Vector[Path],
+                               defaults: Option[Path],
+                               project: DxProject): (Bundle, FileSourceResolver) = {
+    val inputTranslator = WdlInputTranslator(bundle, inputs, defaults, project, fileResolver)
+    inputTranslator.writeTranslatedInputs()
+    (inputTranslator.bundleWithDefaults, inputTranslator.fileResolver)
   }
 }
 
@@ -165,7 +217,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
     }
     Some(
         WdlTranslator(doc,
-                      typeAliases,
+                      typeAliases.bindings,
                       locked,
                       defaultRuntimeAttrs,
                       reorgAttrs,

@@ -28,19 +28,7 @@ object ValueSerde extends DefaultJsonProtocol {
         case VFile(path)      => JsString(path)
         case VDirectory(path) => JsString(path)
         case VArray(array)    => JsArray(array.map(inner))
-        case VMap(members)    =>
-          // A Map is serialized as an object with "keys" and "values"
-          // members, which are arrays
-          val keys = members.keys.map(key => inner(key))
-          val values = members.values.map(value => inner(value))
-          JsObject(
-              "keys" -> JsArray(keys.toVector),
-              "values" -> JsArray(values.toVector)
-          )
-        case VHash(members) =>
-          JsObject(members.map {
-            case (key, value) => key -> inner(value)
-          })
+        case VHash(members)   => JsObject(members.view.mapValues(inner).toMap)
       }
     }
     inner(value)
@@ -89,20 +77,8 @@ object ValueSerde extends DefaultJsonProtocol {
         case JsNumber(value) if value.isValidLong => VInt(value.toLongExact)
         case JsNumber(value)                      => VFloat(value.toDouble)
         case JsString(s)                          => VString(s)
-        case JsArray(array) =>
-          VArray(array.map(x => inner(x)))
-        case map: JsObject if isMapObject(map) =>
-          VMap(
-              (inner(map.fields("keys")), inner(map.fields("values"))) match {
-                case (VArray(keys), VArray(values)) => keys.zip(values).toMap
-                case _ =>
-                  throw new Exception(s"Could not deserialize object that looks like a Map ${map}")
-              }
-          )
-        case JsObject(members) =>
-          VHash(members.map {
-            case (key, value) => key -> inner(value)
-          })
+        case JsArray(array)                       => VArray(array.map(x => inner(x)))
+        case JsObject(members)                    => VHash(members.view.mapValues(inner).toMap)
       }
     }
     inner(jsValue)
@@ -112,20 +88,17 @@ object ValueSerde extends DefaultJsonProtocol {
     * Deserializes a JsValue to a Value of the specified type.
     * @param jsValue the JsValue
     * @param t the Type
-    * @param handler an optional function for special handling of certain values
+    * @param translator an optional function for special handling of certain values
     * @return
     */
   def deserializeWithType(jsValue: JsValue,
                           t: Type,
-                          handler: Option[(JsValue, Type) => Option[Value]] = None): Value = {
+                          translator: Option[(JsValue, Type) => JsValue] = None): Value = {
     def inner(innerValue: JsValue, innerType: Type): Value = {
-      val v = handler.flatMap(_(innerValue, innerType))
-      if (v.isDefined) {
-        return v.get
-      }
-      (innerType, innerValue) match {
+      val updatedValue = translator.map(_(innerValue, innerType)).getOrElse(innerValue)
+      (innerType, updatedValue) match {
         case (TOptional(_), JsNull)                       => VNull
-        case (TOptional(t), _)                            => inner(innerValue, t)
+        case (TOptional(t), _)                            => inner(updatedValue, t)
         case (TBoolean, JsBoolean(b))                     => VBoolean(b.booleanValue)
         case (TInt, JsNumber(value)) if value.isValidLong => VInt(value.toLongExact)
         case (TFloat, JsNumber(value))                    => VFloat(value.toDouble)
@@ -136,19 +109,6 @@ object ValueSerde extends DefaultJsonProtocol {
           throw new Exception(s"Cannot convert empty array to non-empty type ${innerType}")
         case (TArray(t, _), JsArray(array)) =>
           VArray(array.map(x => inner(x, t)))
-        case (TMap(keyType, valueType), map: JsObject) if isMapObject(map) =>
-          try {
-            val keys = JsUtils.getValues(map.fields("keys")).map(k => inner(k, keyType))
-            val values = JsUtils.getValues(map.fields("values")).map(v => inner(v, valueType))
-            VMap(keys.zip(values).toMap)
-          } catch {
-            case e: Throwable =>
-              throw new Exception(s"Could not deserialize object that looks like a Map ${map}", e)
-          }
-        case (TMap(TString, valueType), JsObject(fields)) =>
-          VMap(fields.map {
-            case (key, value) => VString(key) -> inner(value, valueType)
-          })
         case (TSchema(name, memberTypes), JsObject(members)) =>
           // ensure 1) members keys are a subset of memberTypes keys, 2) members
           // values are convertable to the corresponding types, and 3) any keys

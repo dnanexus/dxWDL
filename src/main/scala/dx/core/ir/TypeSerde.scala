@@ -23,14 +23,6 @@ object TypeSerde {
                 "nonEmpty" -> JsBoolean(nonEmpty)
             )
         )
-      case TMap(keyType, valueType) =>
-        JsObject(
-            Map(
-                "name" -> JsString("Map"),
-                "keyType" -> serialize(keyType),
-                "valueType" -> serialize(valueType)
-            )
-        )
       case TOptional(inner) =>
         serialize(inner) match {
           case name: JsString =>
@@ -61,10 +53,6 @@ object TypeSerde {
               val arrayType = inner(fields("type"))
               val nonEmpty = fields.get("nonEmpty").exists(JsUtils.getBoolean(_))
               TArray(arrayType, nonEmpty)
-            case JsString("Map") =>
-              val keyType = inner(fields("keyType"))
-              val valueType = inner(fields("valueType"))
-              TMap(keyType, valueType)
             case JsString(name) =>
               resolveType(name)
             case _ =>
@@ -126,10 +114,6 @@ object TypeSerde {
       case TSchema(name, _) => name
       case TArray(memberType, _) =>
         s"Array[${toString(memberType)}]"
-      case TMap(keyType, valueType) =>
-        val k = toString(keyType)
-        val v = toString(valueType)
-        s"Map[$k, $v]"
       case TOptional(TOptional(_)) =>
         throw new Exception(s"nested optional type ${t}")
       case TOptional(inner) =>

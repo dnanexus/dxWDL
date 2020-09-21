@@ -75,7 +75,8 @@ package dx.core.languages.wdl
 
 import dx.core.ir.BlockKind.BlockKind
 import dx.core.ir.{Block, BlockKind}
-import wdlTools.eval.{Eval, EvalException, WdlValues}
+import wdlTools.eval.{Eval, EvalException, WdlValues, Utils => VUtils}
+import wdlTools.types.Utils.{prettyFormatExpr, prettyFormatType}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
 
 /**
@@ -162,6 +163,19 @@ object WdlBlockInput {
       case _: OptionalBlockInput                      => true
     }
   }
+
+  def prettyFormat(input: WdlBlockInput, indent: String = ""): String = {
+    input match {
+      case RequiredBlockInput(name, wdlType) =>
+        s"${indent}${prettyFormatType(wdlType)} ${name}"
+      case OverridableBlockInputWithStaticDefault(name, wdlType, defaultValue) =>
+        s"${indent}${prettyFormatType(wdlType)} ${name} = ${VUtils.prettyFormat(defaultValue)}"
+      case OverridableBlockInputWithDynamicDefault(name, wdlType, defaultExpr) =>
+        s"${indent}${prettyFormatType(wdlType)} ${name} = ${prettyFormatExpr(defaultExpr)}"
+      case OptionalBlockInput(name, wdlType) =>
+        s"${indent}${prettyFormatType(wdlType)} ${name}"
+    }
+  }
 }
 
 /**
@@ -189,7 +203,8 @@ object WdlBlockInput {
   *  type in the block.  For example, 'Int x' declared inside a scatter, is
   *  'Array[Int] x' outside the scatter.
   */
-case class WdlBlock(inputs: Vector[WdlBlockInput],
+case class WdlBlock(index: Int,
+                    inputs: Vector[WdlBlockInput],
                     outputs: Vector[TAT.OutputDefinition],
                     elements: Vector[TAT.WorkflowElement])
     extends Block[WdlBlock] {
@@ -255,10 +270,30 @@ case class WdlBlock(inputs: Vector[WdlBlockInput],
     calls.head
   }
 
+  def conditional: TAT.Conditional = {
+    (kind, target) match {
+      case (BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex, cond: TAT.Conditional) =>
+        cond
+      case _ =>
+        throw new Exception(s"block ${this} is not a conditional")
+    }
+  }
+
+  def scatter: TAT.Scatter = {
+    (kind, target) match {
+      case (BlockKind.ScatterOneCall | BlockKind.ScatterComplex, scatter: TAT.Scatter) =>
+        scatter
+      case _ =>
+        throw new Exception(s"block ${this} is not a scatter")
+    }
+  }
+
   def innerElements: Vector[TAT.WorkflowElement] = {
     (kind, target) match {
-      case (BlockKind.ConditionalComplex, cond: TAT.Conditional) => cond.body
-      case (BlockKind.ScatterComplex, scatter: TAT.Scatter)      => scatter.body
+      case (BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex | BlockKind.ScatterOneCall |
+            BlockKind.ScatterComplex,
+            block: TAT.BlockElement) =>
+        block.body
       case _ =>
         throw new UnsupportedOperationException(
             s"block ${this} does not have inner elements"
@@ -274,7 +309,14 @@ case class WdlBlock(inputs: Vector[WdlBlockInput],
   override lazy val outputNames: Set[String] = outputs.map(_.name).toSet
 
   override lazy val prettyFormat: String = {
-    elements.map(Utils.prettyFormat(_)).mkString("\n")
+    val inputStr = inputs.map(WdlBlockInput.prettyFormat(_))
+    val outputStr = outputs.map(TUtils.prettyFormatOutput(_))
+    val bodyStr = elements.map(Utils.prettyFormat(_)).mkString("\n")
+    s"""Block(${index}, ${kind})
+       |Inputs: ${inputStr}
+       |Outputs: ${outputStr}
+       |Body:
+       |${bodyStr}""".stripMargin
   }
 }
 
@@ -346,10 +388,10 @@ object WdlBlock {
     }
 
     // convert to blocks - keep only non-empty blocks
-    parts.collect {
-      case v if v.nonEmpty =>
+    parts.filter(_.nonEmpty).zipWithIndex.map {
+      case (v, index) =>
         val (inputs, outputs) = Utils.getInputOutputClosure(v)
-        WdlBlock(WdlBlockInput.create(inputs), outputs.values.toVector, v)
+        WdlBlock(index, WdlBlockInput.create(inputs), outputs.values.toVector, v)
     }
   }
 }

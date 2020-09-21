@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import dx.api.{DxApi, DxFile, DxProject}
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
-import dx.core.ir.Type.{TArray, TFile, THash, TMap, TOptional, TSchema}
+import dx.core.ir.Type._
 import dx.core.ir.{
   Application,
   Bundle,
@@ -14,7 +14,6 @@ import dx.core.ir.{
   StaticInput,
   Type,
   Value,
-  ValueSerde,
   Workflow
 }
 import spray.json.{JsArray, JsNull, JsObject, JsString, JsValue}
@@ -58,64 +57,60 @@ object InputTranslator {
   }
 }
 
-case class InputTranslator(bundle: Bundle,
-                           inputs: Vector[Path],
-                           defaults: Option[Path],
-                           project: DxProject,
-                           baseFileResolver: FileSourceResolver = FileSourceResolver.get,
-                           dxApi: DxApi = DxApi.get,
-                           logger: Logger = Logger.get) {
+abstract class InputTranslator(bundle: Bundle,
+                               inputs: Vector[Path],
+                               defaults: Option[Path],
+                               project: DxProject,
+                               baseFileResolver: FileSourceResolver = FileSourceResolver.get,
+                               dxApi: DxApi = DxApi.get,
+                               logger: Logger = Logger.get) {
 
   private lazy val inputsJs: Map[Path, Map[String, JsValue]] =
     inputs.map(path => path -> InputTranslator.loadJsonFileWithComments(path)).toMap
   private lazy val defaultsJs =
     defaults.map(InputTranslator.loadJsonFileWithComments).getOrElse(Map.empty)
 
-  private def extractDxFiles(t: Type, jsv: JsValue): Vector[JsValue] = {
-    (t, jsv) match {
+  /**
+    * Overridable function that converts a language-specific JSON value to one that can be
+    * deserialized to an IR Value. This is the mechanism to support compile-time inputs/
+    * defaults that do not map implicitly to an IR type.
+    * @return
+    */
+  protected def translateJsInput(jsv: JsValue, t: Type): JsValue
+
+  /**
+    * Extract Dx files from a JSON input.
+    * Can be over-ridden to extract files in a language-specific way.
+    * @param t the parameter type
+    * @param jsv the JSON value
+    * @return a Vector of JSON values that describe Dx files
+    */
+  private def extractDxFiles(jsv: JsValue, t: Type): Vector[JsValue] = {
+    val updatedValue = translateJsInput(jsv, t)
+    (t, updatedValue) match {
       case (TOptional(_), JsNull)   => Vector.empty
-      case (TOptional(inner), _)    => extractDxFiles(inner, jsv)
-      case (TFile, jsv)             => Vector(jsv)
+      case (TOptional(inner), _)    => extractDxFiles(updatedValue, inner)
+      case (TFile, fileValue)       => Vector(fileValue)
       case _ if Type.isPrimitive(t) => Vector.empty
-
       case (TArray(elementType, _), JsArray(array)) =>
-        array.flatMap(element => extractDxFiles(elementType, element))
-
-      // Maps may be serialized as an object with a keys array and a values array.
-      case (TMap(keyType, valueType), JsObject(fields)) if ValueSerde.isMapObject(jsv) =>
-        val keys = fields("keys") match {
-          case JsArray(keys) => keys.flatMap(k => extractDxFiles(keyType, k))
-          case other         => throw new Exception(s"invalid map keys ${other}")
-        }
-        val values = fields("values") match {
-          case JsArray(keys) => keys.flatMap(v => extractDxFiles(valueType, v))
-          case other         => throw new Exception(s"invalid map keys ${other}")
-        }
-        keys ++ values
-
-      // Maps with String keys may also be serialized as an object
-      case (TMap(keyType, valueType), JsObject(fields)) =>
-        val keys = fields.keys.flatMap(k => extractDxFiles(keyType, JsString(k))).toVector
-        val values = fields.values.flatMap(v => extractDxFiles(valueType, v)).toVector
-        keys ++ values
-
+        array.flatMap(element => extractDxFiles(element, elementType))
       case (TSchema(name, members), JsObject(fields)) =>
         members.flatMap {
           case (memberName, memberType) =>
             fields.get(memberName) match {
-              case Some(jsv)                           => extractDxFiles(memberType, jsv)
-              case None if Type.isOptional(memberType) => Vector.empty
+              case Some(memberValue) =>
+                extractDxFiles(memberValue, memberType)
+              case None if Type.isOptional(memberType) =>
+                Vector.empty
               case _ =>
                 throw new Exception(s"missing value for struct ${name} member ${memberName}")
             }
         }.toVector
-
       case (THash, JsObject(_)) =>
         // anonymous objects will never result in file-typed members, so just skip these
         Vector.empty
-
       case _ =>
-        throw new Exception(s"value ${jsv} cannot be deserialized to ${t}")
+        throw new Exception(s"value ${updatedValue} cannot be deserialized to ${t}")
     }
   }
 
@@ -127,7 +122,7 @@ case class InputTranslator(bundle: Bundle,
         val fqn = s"${callable.name}.${param.name}"
         allInputs
           .get(fqn)
-          .map(jsv => extractDxFiles(param.dxType, jsv))
+          .map(jsv => extractDxFiles(jsv, param.dxType))
           .getOrElse(Vector.empty)
       }
     }
@@ -136,7 +131,7 @@ case class InputTranslator(bundle: Bundle,
         (files :+ DxFile.fromJson(dxApi, obj), paths)
       case ((files, paths), JsString(path)) =>
         (files, paths :+ path)
-      case other =>
+      case (_, other) =>
         throw new Exception(s"invalid file ${other}")
     }
     val resolvedPaths = dxApi
@@ -170,7 +165,9 @@ case class InputTranslator(bundle: Bundle,
             case None => param
             case Some(default: JsValue) =>
               val irValue =
-                parameterLinkDeserializer.deserializeInputWithType(default, param.dxType)
+                parameterLinkDeserializer.deserializeInputWithType(default,
+                                                                   param.dxType,
+                                                                   Some(translateJsInput))
               param.copy(defaultValue = Some(irValue))
           }
         }
@@ -187,7 +184,9 @@ case class InputTranslator(bundle: Bundle,
                     stageInput
                   case Some(default: JsValue) =>
                     val irValue =
-                      parameterLinkDeserializer.deserializeInputWithType(default, param.dxType)
+                      parameterLinkDeserializer.deserializeInputWithType(default,
+                                                                         param.dxType,
+                                                                         Some(translateJsInput))
                     StaticInput(irValue)
                 }
                 (param, stageInputWithDefault)
@@ -213,7 +212,9 @@ case class InputTranslator(bundle: Bundle,
                       stageInput
                     case Some(default: JsValue) =>
                       val irValue =
-                        parameterLinkDeserializer.deserializeInputWithType(default, param.dxType)
+                        parameterLinkDeserializer.deserializeInputWithType(default,
+                                                                           param.dxType,
+                                                                           Some(translateJsInput))
                       StaticInput(irValue)
                   }
               }
@@ -264,7 +265,9 @@ case class InputTranslator(bundle: Bundle,
             // are variable uses.
             logger.trace(s"checkAndBind, found: ${fqn} -> dxName")
             val irValue =
-              parameterLinkDeserializer.deserializeInputWithType(value, parameter.dxType)
+              parameterLinkDeserializer.deserializeInputWithType(value,
+                                                                 parameter.dxType,
+                                                                 Some(translateJsInput))
             Map(dxName -> (parameter.dxType, irValue))
         }
       }.toMap

@@ -87,7 +87,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       jobInputs: Map[String, (Type, Value)]
   ): Map[String, (Type, Value)] = {
     if (logger.isVerbose) {
-      logger.trace(workflow.inputs.map(TUtils.prettyFormatInput).mkString("\n"))
+      logger.trace(workflow.inputs.map(TUtils.prettyFormatInput(_)).mkString("\n"))
     }
     val workflowInputs = workflow.inputs.map(inp => inp.name -> inp).toMap
     // convert IR to WDL values
@@ -114,7 +114,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       addReorgStatus: Boolean
   ): Map[String, (Type, Value)] = {
     if (logger.isVerbose) {
-      logger.trace(workflow.outputs.map(TUtils.prettyFormatOutput).mkString("\n"))
+      logger.trace(workflow.outputs.map(TUtils.prettyFormatOutput(_)).mkString("\n"))
     }
     // convert IR to WDL
     // Some of the inputs could be optional. If they are missing, add in a None value.
