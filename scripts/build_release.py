@@ -17,7 +17,7 @@ top_dir = os.path.dirname(os.path.abspath(here))
 HOME_REGION = "aws:us-east-1"
 URL_DURATION = 60 * 60 * 24
 SLEEP_TIME = 5
-COPY_FILE_APP_NAME = "dxwdl_copy_file"
+COPY_FILE_APP_NAME = "dxwdl_copy"
 COPY_FILE_APP = dxpy.find_one_app(zero_ok=False, more_ok=False, name=COPY_FILE_APP_NAME, return_handler=True)
 NUM_RETRIES = 1
 
@@ -33,7 +33,8 @@ RELEASE_DICT = {
     "aws:ap-southeast-2" : "dxWDL_Sydney",
     "azure:westus" : "dxWDL_Azure",
     "azure:westeurope" : "dxWDL_Amsterdam",
-    "aws:eu-central-1" : "dxWDL_Berlin"
+    "aws:eu-central-1" : "dxWDL_Berlin",
+    "aws:eu-west-2": "dxWDL_London"
 }
 
 # 1. Use the clone-asset app to copy the file into [region].
