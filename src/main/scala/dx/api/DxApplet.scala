@@ -18,7 +18,7 @@ case class DxAppletDescribe(project: String,
                             summary: Option[String] = None,
                             title: Option[String] = None,
                             types: Option[Vector[String]] = None,
-                            tags: Option[Vector[String]] = None,
+                            tags: Option[Set[String]] = None,
                             runSpec: Option[JsValue] = None,
                             access: Option[JsValue] = None,
                             ignoreReuse: Option[Boolean] = None)
@@ -81,7 +81,7 @@ case class DxApplet(dxApi: DxApi, id: String, project: Option[DxProject])
     val summary = descFields.get("summary").flatMap(unwrapString)
     val title = descFields.get("title").flatMap(unwrapString)
     val types = descFields.get("types").flatMap(unwrapStringArray)
-    val tags = descFields.get("tags").flatMap(unwrapStringArray)
+    val tags = descFields.get("tags").flatMap(unwrapStringArray).map(_.toSet)
     val runSpec = descFields.get("runSpec")
     val access = descFields.get("access")
     val ignoreReuse = descFields.get("ignoreReuse").flatMap(unwrapBoolean)

@@ -1,7 +1,7 @@
 package dx.compiler
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 
 import dx.Assumptions.{isLoggedIn, toolkitCallable}
 import dx.Tags.NativeTest
@@ -9,15 +9,12 @@ import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.core.Native
 import dx.core.ir.Callable
-import dx.core.languages.wdl.parseWdlTasks
 import dx.core.util.MainUtils.Success
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.util.{Logger, SysUtils}
-
-import scala.io.Source
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -69,22 +66,20 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                                       "-folder",
                                       "/reorg_tests")
 
+  private val reorgAppletFolder = s"/${unitTestsPath}/reorg_applets/"
+  private val reorgAppletPath = s"${reorgAppletFolder}/functional_reorg_test"
+
   override def beforeAll(): Unit = {
     // build the directory with the native applets
-
-    dxTestProject.newFolder(s"/${unitTestsPath}/applets/", parents = true)
+    dxTestProject.removeFolder(reorgAppletFolder, recurse = true)
+    dxTestProject.newFolder(reorgAppletFolder, parents = true)
     // building necessary applets before starting the tests
-    val nativeApplets = Vector("native_concat",
-                               "native_diff",
-                               "native_mk_list",
-                               "native_sum",
-                               "native_sum_012",
-                               "functional_reorg_test")
+    val nativeApplets = Vector("functional_reorg_test")
     val topDir = Paths.get(System.getProperty("user.dir"))
     nativeApplets.foreach { app =>
       try {
         SysUtils.execCommand(
-            s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
+            s"dx build $topDir/test/applets/$app --destination ${testProject}:${reorgAppletFolder}",
             logger = Logger.Quiet
         )
       } catch {
@@ -112,6 +107,8 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     desc.id
   }
 
+  private lazy val reorgAppletId = getAppletId(reorgAppletPath)
+
   private def createExtras(extrasContent: String): String = {
     val tmpExtras = File.createTempFile("reorg-", ".json")
     tmpExtras.deleteOnExit()
@@ -138,7 +135,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "Native compile a draft2 workflow" taggedAs NativeTest in {
     val path = pathFromBasename("draft2", "shapes.wdl")
-    val args = path.toString :: "--force" :: cFlags
+    val args = path.toString :: cFlags
     Main.compile(args.toVector) shouldBe a[Success]
   }
 
@@ -149,104 +146,6 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
             :: "--verboseKey" :: "Native"
             :: "--verboseKey" :: "GenerateIR"*/
     Main.compile(args.toVector) shouldBe a[Success]
-  }
-
-  it should "be able to build interfaces to native applets" taggedAs NativeTest in {
-    val outputPath: Path = Files.createTempFile("dx_extern", ".wdl")
-    val args = List("--force",
-                    "--quiet",
-                    "--folder",
-                    s"/${unitTestsPath}/applets",
-                    "--project",
-                    dxTestProject.getId,
-                    "--language",
-                    "wdl_draft2",
-                    "--output",
-                    outputPath.toString)
-    Main.dxni(args.toVector) shouldBe a[Success]
-
-    // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath.toFile)
-    val content =
-      try {
-        src.getLines.mkString("\n")
-      } finally {
-        src.close()
-      }
-
-    val (tasks, _, _) = parseWdlTasks(content)
-
-    tasks.keySet shouldBe Set(
-        "native_sum",
-        "native_sum_012",
-        "functional_reorg_test",
-        "native_mk_list",
-        "native_diff",
-        "native_concat"
-    )
-  }
-
-  it should "be able to build an interface to a specific applet" taggedAs NativeTest in {
-    val outputPath: Path = Files.createTempFile("dx_extern_one", ".wdl")
-    val args = List(
-        "--force",
-        "--quiet",
-        "--path",
-        s"/${unitTestsPath}/applets/native_sum",
-        "--project",
-        dxTestProject.getId,
-        "--language",
-        "wdl_1_0",
-        "--output",
-        outputPath.toString
-    )
-    Main.dxni(args.toVector) shouldBe a[Success]
-
-    // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath.toFile)
-    val content =
-      try {
-        src.getLines.mkString("\n")
-      } finally {
-        src.close()
-      }
-
-    val (tasks, _, _) = parseWdlTasks(content)
-
-    tasks.keySet shouldBe Set("native_sum")
-  }
-
-  it should "build an interface to an applet specified by ID" taggedAs NativeTest in {
-    val dxObj = dxApi.resolveOnePath(
-        s"${DxPath.DxUriPrefix}${dxTestProject.id}:/${unitTestsPath}/applets/native_sum"
-    )
-    dxObj shouldBe a[DxApplet]
-    val applet = dxObj.asInstanceOf[DxApplet]
-    val outputPath: Path = Files.createTempFile("dx_extern_one", ".wdl")
-    val args = List("--force",
-                    "--quiet",
-                    "--path",
-                    applet.id,
-                    "--project",
-                    dxTestProject.getId,
-                    "--language",
-                    "wdl_1_0",
-                    "--output",
-                    outputPath.toString)
-    Main.dxni(args.toVector) shouldBe a[Success]
-
-    // check that the generated file contains the correct tasks
-    val src = Source.fromFile(outputPath.toFile)
-    val content =
-      try {
-        src.getLines.mkString("\n")
-      } finally {
-        src.close()
-      }
-
-    val (tasks, _, _) = parseWdlTasks(content)
-
-    tasks.keySet shouldBe Set("native_sum")
   }
 
   ignore should "be able to include pattern information in inputSpec" in {
@@ -864,7 +763,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "make default task timeout 48 hours" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
-    val args = path.toString :: "--force" :: cFlags
+    val args = path.toString :: cFlags
     val appId = Main.compile(args.toVector) match {
       case Success(x) => x
       case _          => throw new Exception("unexpected")
@@ -934,11 +833,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "Compile a workflow with subworkflows on the platform with the reorg app" in {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     val extrasContent =
       s"""|{
           | "custom_reorg" : {
-          |    "app_id" : "${appletId}",
+          |    "app_id" : "${reorgAppletId}",
           |    "conf" : null
           |  }
           |}
@@ -963,7 +861,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val reorgStage = wfStages.last
 
     reorgStage.id shouldBe "stage-reorg"
-    reorgStage.executable shouldBe appletId
+    reorgStage.executable shouldBe reorgAppletId
 
     // There should be 3 inputs, the output from output stage and the custom reorg config file.
     val reorgInput: JsObject = reorgStage.input match {
@@ -980,7 +878,6 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   it should "Compile a workflow with subworkflows on the platform with the reorg app with config file in the input" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
     val (_, uploadOut, _) = SysUtils.execCommand(
         s"dx upload ${path.toString} --destination /reorg_tests --brief"
@@ -989,7 +886,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val extrasContent =
       s"""|{
           | "custom_reorg" : {
-          |    "app_id" : "${appletId}",
+          |    "app_id" : "${reorgAppletId}",
           |    "conf" : "dx://$fileId"
           |  }
           |}
@@ -1024,12 +921,11 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
-    val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
     val extrasContent =
       s"""|{
           | "custom_reorg" : {
-          |    "app_id" : "${appletId}",
+          |    "app_id" : "${reorgAppletId}",
           |    "conf" : null
           |  }
           |}
@@ -1114,7 +1010,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |}
          |""".stripMargin
     val extrasPath = createExtras(extrasContent)
-    val args = path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    val args = path.toString :: "-extras" :: extrasPath :: cFlags
     val retval = Main.compile(args.toVector)
     retval shouldBe a[Success]
 
@@ -1139,7 +1035,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |}
          |""".stripMargin
     val extrasPath = createExtras(extrasContent)
-    val args = path.toString :: "-extras" :: extrasPath :: "--force" :: cFlags
+    val args = path.toString :: "-extras" :: extrasPath :: cFlags
     val retval = Main.compile(args.toVector)
     retval shouldBe a[Success]
 
@@ -1155,5 +1051,4 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
   }
-
 }

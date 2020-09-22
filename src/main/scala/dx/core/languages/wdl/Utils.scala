@@ -95,11 +95,11 @@ object Utils {
       (tDoc, ctx.aliases)
     } catch {
       case se: SyntaxException =>
-        logger.error(s"WDL code is syntactically invalid -----\n${sourceCode}")
+        logger.error(s"WDL code is syntactically invalid -----\n${sourceCode.readString}")
         throw se
       case te: TypeException =>
         logger.error(
-            s"WDL code is syntactically valid BUT it fails type-checking -----\n${sourceCode}"
+            s"WDL code is syntactically valid BUT it fails type-checking -----\n${sourceCode.readString}"
         )
         throw te
     }

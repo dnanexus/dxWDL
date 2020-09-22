@@ -98,12 +98,31 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
   def newFolder(folderPath: String, parents: Boolean): Unit = {
     val request = Map("project" -> JsString(id),
                       "folder" -> JsString(folderPath),
-                      "parents" -> (if (parents) JsTrue else JsFalse))
+                      "parents" -> JsBoolean(parents))
     id match {
       case _ if id.startsWith("project-") =>
         dxApi.projectNewFolder(id, request)
       case _ if id.startsWith("container-") =>
         dxApi.containerNewFolder(id, request)
+      case _ =>
+        throw new Exception(s"invalid project id ${id}")
+    }
+  }
+
+  def removeFolder(folderPath: String,
+                   recurse: Boolean,
+                   partial: Boolean = false,
+                   force: Boolean = true): Boolean = {
+    val request = Map("project" -> JsString(id),
+                      "folder" -> JsString(folderPath),
+                      "recurse" -> JsBoolean(recurse),
+                      "partial" -> JsBoolean(partial),
+                      "force" -> JsBoolean(force))
+    id match {
+      case _ if id.startsWith("project-") =>
+        dxApi.projectRemoveFolder(id, request)
+      case _ if id.startsWith("container-") =>
+        dxApi.containerRemoveFolder(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
     }

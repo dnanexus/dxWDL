@@ -7,13 +7,24 @@ import dx.core.Native
 import dx.core.getVersion
 import dx.core.languages.Language.Language
 import dx.dxni.wdl.WdlDxNativeInterfaceFactory
-import wdlTools.util.{FileSourceResolver, FileUtils}
+import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
+
+trait NativeInterfaceGenerator {
+  def generate(apps: Vector[DxApp] = Vector.empty,
+               applets: Vector[DxApplet] = Vector.empty,
+               headerLines: Vector[String]): Vector[String]
+}
+
+trait NativeInterfaceGeneratorFactory {
+  def create(language: Language): Option[NativeInterfaceGenerator]
+}
 
 case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolver.get,
-                             dxApi: DxApi = DxApi.get) {
+                             dxApi: DxApi = DxApi.get,
+                             logger: Logger = Logger.get) {
 
   private val generatorFactories = Vector(
-      WdlDxNativeInterfaceFactory(fileResolver = fileResolver, dxApi = dxApi)
+      WdlDxNativeInterfaceFactory(fileResolver = fileResolver, dxApi = dxApi, logger = logger)
   )
 
   private def getGenerator(language: Language): NativeInterfaceGenerator = {
@@ -48,19 +59,20 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
                Some(folder),
                recursive,
                classRestriction = Some("applet"),
-               withInputOutputSpec = true)
-        .keySet
+               withInputOutputSpec = true,
+               extraFields = Set(Field.Tags))
         .collect {
-          case applet: DxApplet
-              if applet
-                .describe(Set(Field.Details))
-                .details
-                .exists(_.asJsObject.fields.contains(Native.Checksum)) =>
+          // ignore any applets with the compiler tag set - it indicates an applet
+          // that was compiled with dxCompiler (and thus not "native"
+          case (applet: DxApplet, desc: DxAppletDescribe)
+              if !desc.tags.exists(_.contains(Native.CompilerTag)) =>
             applet
         }
         .toVector
     if (applets.isEmpty) {
-      dxApi.logger.trace(s"Found no applets in project ${dxProject.id}/${folder}")
+      logger.warning(s"Found no applets in ${dxProject.id}/${folder}")
+    } else {
+      logger.trace(s"Found ${applets.size} applets in ${dxProject.id}/${folder}")
     }
     applets
   }
@@ -69,7 +81,9 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
     val apps: Vector[DxApp] = DxFindApps(dxApi)
       .apply(published = Some(true), withInputOutputSpec = true)
     if (apps.isEmpty) {
-      dxApi.logger.warning(s"Found no DX global apps")
+      logger.warning(s"Found no DX global apps")
+    } else {
+      logger.trace(s"Found ${apps.size} DX global apps")
     }
     apps
   }
@@ -121,9 +135,14 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
             path: Option[String] = None,
             applet: Option[DxApplet] = None,
             recursive: Boolean = false,
+            includeApps: Boolean = true,
             force: Boolean = false): Unit = {
     val generator = getGenerator(language)
-    val apps = searchApps
+    val apps = if (includeApps) {
+      searchApps
+    } else {
+      Vector.empty
+    }
     val (applets: Vector[DxApplet], search) = (folder, path, applet) match {
       case (Some(folder), None, None) => (searchApplets(dxProject, folder, recursive), folder)
       case (None, Some(path), None)   => (Vector(getApplet(dxProject, path)), path)

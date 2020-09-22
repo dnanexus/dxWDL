@@ -27,13 +27,15 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
     * @param outputSpec the applet outputs
     * @return an AST.Task
     */
-  private def createDnanexusAppletStub(
+  private def createDnanexusStub(
       id: String,
       appletName: String,
       inputSpec: Map[String, WdlTypes.T],
       outputSpec: Map[String, WdlTypes.T],
       loc: SourceLocation = Utils.locPlaceholder
   ): TAT.Task = {
+    // DNAnexus allows '-' in app(let) names, WDL does not
+    val normalizedName = appletName.replaceAll("[-.]", "_")
     val meta = TAT.MetaSection(
         Map(
             "type" -> TAT.MetaValueString("native", loc),
@@ -42,8 +44,8 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
         loc
     )
     TAT.Task(
-        appletName,
-        T_Task(appletName, inputSpec.map {
+        normalizedName,
+        T_Task(normalizedName, inputSpec.map {
           case (name, wdlType) => name -> (wdlType, false)
         }, outputSpec),
         inputSpec.map {
@@ -132,10 +134,10 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
             s"Parameters ${bothStr} used as both input and output in applet ${dxAppDesc.name}"
         )
       }
-      Some(createDnanexusAppletStub(dxAppDesc.id, dxAppDesc.name, inputSpec, outputSpec))
+      Some(createDnanexusStub(dxAppDesc.id, dxAppDesc.name, inputSpec, outputSpec))
     } catch {
       case e: Throwable =>
-        dxApi.logger.warning(
+        logger.warning(
             s"Unable to construct a WDL interface for app ${appName}",
             exception = Some(e)
         )
@@ -151,7 +153,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
       aplName: String,
       desc: DxAppletDescribe
   ): (Map[String, WdlTypes.T], Map[String, WdlTypes.T]) = {
-    dxApi.logger.trace(s"analyzing applet ${aplName}")
+    logger.trace(s"analyzing applet ${aplName}")
     val inputSpec: Map[String, WdlTypes.T] =
       desc.inputSpec.get.map { iSpec =>
         iSpec.name -> wdlTypeFromDxClass(aplName, iSpec.name, iSpec.ioClass, iSpec.optional)
@@ -176,13 +178,13 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
       if (both.nonEmpty) {
         val bothStr = "[" + both.mkString(", ") + "]"
         throw new Exception(
-            s"""Parameters ${bothStr} used as both input and output in applet ${appletName}"""
+            s"Parameters ${bothStr} used as both input and output in applet ${appletName}"
         )
       }
-      Some(createDnanexusAppletStub(dxAppletDesc.id, appletName, inputSpec, outputSpec))
+      Some(createDnanexusStub(dxAppletDesc.id, appletName, inputSpec, outputSpec))
     } catch {
       case e: Throwable =>
-        dxApi.logger.warning(
+        logger.warning(
             s"Unable to construct a WDL interface for applet ${appletName}",
             exception = Some(e)
         )
@@ -216,8 +218,8 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
         Some(task)
       } catch {
         case e: Throwable =>
-          dxApi.logger.warning(s"Unable to construct a WDL interface for applet ${task.name}")
-          dxApi.logger.warning(e.getMessage)
+          logger.warning(s"Unable to construct a WDL interface for applet ${task.name}",
+                         exception = Some(e))
           None
       }
     }
@@ -245,12 +247,6 @@ case class WdlDxNativeInterfaceFactory(fileResolver: FileSourceResolver = FileSo
     extends NativeInterfaceGeneratorFactory {
   private def create(wdlVersion: WdlVersion): WdlNativeInterfaceGenerator = {
     wdlVersion match {
-      case WdlVersion.Draft_2 =>
-        Logger.get.warning("Upgrading draft-2 input to verion 1.0")
-        WdlNativeInterfaceGenerator(WdlVersion.V1,
-                                    fileResolver = fileResolver,
-                                    dxApi = dxApi,
-                                    logger = logger)
       case WdlVersion.V1 =>
         WdlNativeInterfaceGenerator(WdlVersion.V1,
                                     fileResolver = fileResolver,

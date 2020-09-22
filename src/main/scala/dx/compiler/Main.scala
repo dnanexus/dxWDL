@@ -38,9 +38,9 @@ object Main {
       }
       val language = values match {
         case Vector(language) =>
-          Language.parse(Some(language))
+          Language.parse(language)
         case Vector(language, version) =>
-          Language.parse(Some(version), Some(language))
+          Language.parse(version, Some(language))
         case _ =>
           throw OptionParseException(s"Unexpected value ${values} to option ${name}")
       }
@@ -162,8 +162,10 @@ object Main {
         // validate the file
         val dataObj = DxApi.get.resolveOnePath(p, Some(dxProject))
         Right(dataObj)
+      case (None, None) =>
+        Left("/")
       case _ =>
-        throw OptionParseException("must specify exactly one of (folder, path)")
+        throw OptionParseException("must specify only one of (folder, path)")
     }
     Logger.get.trace(s"""|project ID: ${dxProject.id}
                          |path: ${folderOrPath}""".stripMargin)
@@ -393,9 +395,14 @@ object Main {
 
   // DxNI
 
+  private object AppsOption extends Enum {
+    type AppsOption = Value
+    val Include, Exclude, Only = Value
+  }
+
   private def DxNIOptions: InternalOptions = Map(
       "appsOnly" -> FlagOptionSpec.Default,
-      "apps" -> FlagOptionSpec.Default.copy(alias = Some("appsOnly")),
+      "apps" -> StringOptionSpec(choices = AppsOption.names.map(_.toLowerCase).toVector),
       "path" -> StringOptionSpec.One,
       "outputFile" -> PathOptionSpec.Default,
       "output" -> PathOptionSpec.Default.copy(alias = Some("outputFile")),
@@ -419,8 +426,8 @@ object Main {
       return Failure(s"You must be logged in to generate stubs for native app(let)s")
     }
 
-    val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
     val dxni = DxNativeInterface(fileResolver)
+    val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
     // flags
     val Vector(
@@ -432,7 +439,17 @@ object Main {
         "force",
         "recursive"
     ).map(options.getFlag(_))
-    if (appsOnly) {
+    val apps = options
+      .getValue[String]("apps")
+      .map(AppsOption.withNameIgnoreCase)
+      .getOrElse(
+          if (appsOnly) {
+            AppsOption.Only
+          } else {
+            AppsOption.Include
+          }
+      )
+    if (apps == AppsOption.Only) {
       try {
         dxni.apply(language, outputFile, force)
         Success()
@@ -452,13 +469,14 @@ object Main {
                        dxProject,
                        folder = Some(folder),
                        recursive = recursive,
+                       includeApps = apps == AppsOption.Include,
                        force = force)
           case Right(applet: DxApplet) =>
             dxni.apply(language,
                        outputFile,
                        dxProject,
                        applet = Some(applet),
-                       recursive = recursive,
+                       includeApps = apps == AppsOption.Include,
                        force = force)
           case _ =>
             throw OptionParseException(
@@ -583,7 +601,7 @@ object Main {
         |    tasks in a local file. Allows calling existing platform executables
         |    without modification. Default is to look for applets.
         |    options:
-        |      -appsOnly              Search only for global apps.
+        |      -apps                  Whether to 'include' apps, 'exclude' apps, or 'only' generate app stubs.
         |      -path <string>         Path to a specific applet
         |      -o <string>            Destination file for WDL task definitions
         |      -r | recursive         Recursive search
@@ -597,6 +615,7 @@ object Main {
         |    -quiet                   Do not print warnings or informational outputs
         |    -verbose                 Print detailed progress reports
         |    -verboseKey <module>     Detailed information for a specific module
+        |    -logFile <path>          File to use for logging output; defaults to stderr
         |""".stripMargin
 
   def main(args: Vector[String]): Unit = {

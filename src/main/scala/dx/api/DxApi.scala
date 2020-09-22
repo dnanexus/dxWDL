@@ -293,6 +293,16 @@ case class DxApi(logger: Logger = Logger.get,
     logger.ignore(result)
   }
 
+  def containerRemoveFolder(id: String, fields: Map[String, JsValue]): Boolean = {
+    val result = callObject(DXAPI.containerRemoveFolder[JsonNode], id, fields)
+    result.fields.get("completed") match {
+      case Some(JsBoolean(completed)) => completed
+      case None                       => true
+      case other =>
+        throw new Exception(s"Invalid 'completed' value ${other}")
+    }
+  }
+
   def containerRemoveObjects(id: String, fields: Map[String, JsValue]): Unit = {
     val result = callObject(DXAPI.containerRemoveObjects[JsonNode], id, fields)
     logger.ignore(result)
@@ -447,6 +457,16 @@ case class DxApi(logger: Logger = Logger.get,
   def projectNewFolder(id: String, fields: Map[String, JsValue]): Unit = {
     val result = callObject(DXAPI.projectNewFolder[JsonNode], id, fields)
     logger.ignore(result)
+  }
+
+  def projectRemoveFolder(id: String, fields: Map[String, JsValue]): Boolean = {
+    val result = callObject(DXAPI.projectRemoveFolder[JsonNode], id, fields)
+    result.fields.get("completed") match {
+      case Some(JsBoolean(completed)) => completed
+      case None                       => true
+      case other =>
+        throw new Exception(s"Invalid 'completed' value ${other}")
+    }
   }
 
   def projectRemoveObjects(id: String, fields: Map[String, JsValue]): Unit = {

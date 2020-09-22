@@ -31,27 +31,36 @@ object Language extends Enum {
     version.trim.toLowerCase.replaceAll("[._-]", "")
   }
 
+  private val languageRegexp = s"(cwl|wdl)[_ ]?(.*)".r
+
   /**
-    * Parse a version string.
+    * Parses a version string.
     * @param version The version specifier. Should be "<language> <version>", but the language may be omitted if
-    *                `hint` is specified.
-    * @param hint Hint about which language is being used, when `version` does not include the language specifier.
+    *                `hint` is specified, or if the version is unambiguous.
+    * @param languageHint Hint about which language is being used, when `version`
+    *                     does not include the language specifier.
     * @return
     */
-  def parse(version: Option[String], hint: Option[String] = None): Value = {
-    (version.map(normalizeVersion), hint.map(normalizeVersion)) match {
-      case (None, Some("wdl"))                            => WdlDefault
-      case (None, Some("cwl"))                            => CwlDefault
-      case (Some("wdl"), _)                               => WdlDefault
-      case (Some("cwl"), _)                               => CwlDefault
-      case (Some("wdl draft2"), _)                        => Language.WdlVDraft2
-      case (Some("draft2"), Some("wdl"))                  => Language.WdlVDraft2
-      case (Some("wdl draft3" | "wdl 10"), _)             => Language.WdlV1_0
-      case (Some("draft3" | "10"), Some("wdl"))           => Language.WdlV1_0
-      case (Some("wdl development" | "wdl 20"), _)        => Language.WdlV2_0
-      case (Some("development" | "20"), Some("wdl"))      => Language.WdlV2_0
-      case (Some(v), _) if v.startsWith("cwl v120")       => Language.CwlV1_2
-      case (Some(v), Some("cwl")) if v.startsWith("v120") => Language.CwlV1_2
+  def parse(version: String, languageHint: Option[String] = None): Value = {
+    val (lang: Option[String], ver: Option[String]) = version.toLowerCase match {
+      case languageRegexp(l, _) if languageHint.nonEmpty && l != languageHint.get =>
+        throw new Exception(s"language hints don't match ${l} ${languageHint.get}")
+      case languageRegexp(l, v) if v.nonEmpty =>
+        (Some(l), Some(normalizeVersion(v)))
+      case languageRegexp(l, _) =>
+        (Some(l), None)
+      case _ if version.nonEmpty =>
+        (languageHint.map(normalizeVersion), Some(normalizeVersion(version)))
+      case _ =>
+        (languageHint.map(normalizeVersion), None)
+    }
+    (lang, ver) match {
+      case (Some("wdl"), None)                                      => WdlDefault
+      case (Some("cwl"), None)                                      => CwlDefault
+      case (None | Some("wdl"), Some("draft2"))                     => Language.WdlVDraft2
+      case (None | Some("wdl"), Some("draft3" | "10"))              => Language.WdlV1_0
+      case (None | Some("wdl"), Some("wdl development" | "wdl 20")) => Language.WdlV2_0
+      case (None | Some("cwl"), Some(v)) if v.startsWith("v120")    => Language.CwlV1_2
       case other =>
         throw new Exception(s"Unrecognized/unsupported language ${other}")
     }

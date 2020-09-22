@@ -210,7 +210,8 @@ object MainUtils {
       "quiet" -> FlagOptionSpec.Default,
       "verbose" -> FlagOptionSpec.Default,
       "verboseKey" -> StringOptionSpec.List,
-      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2))
+      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2)),
+      "logFile" -> PathOptionSpec.Default
   )
 
   // Split arguments into sub-lists, one per each option.
@@ -289,7 +290,11 @@ object MainUtils {
             TraceLevel.None
           }
       )
-    val logger = Logger(quiet = options.getFlag("quiet"), traceLevel = traceLevel, verboseKeys)
+    val logFile = options.getValue[Path]("logFile")
+    val logger = Logger(quiet = options.getFlag("quiet"),
+                        traceLevel = traceLevel,
+                        keywords = verboseKeys,
+                        logFile = logFile)
     Logger.set(logger)
     logger
   }
