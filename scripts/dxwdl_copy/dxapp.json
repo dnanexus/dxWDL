@@ -3,7 +3,7 @@
   "title": "Copy File",
   "summary": "Copy a file to a different region",
   "dxapi": "1.0.0",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "billTo": "org-dnanexus_apps",
   "developers": [
     "org-dnanexus_apps"
