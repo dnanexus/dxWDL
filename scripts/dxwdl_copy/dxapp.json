@@ -3,7 +3,14 @@
   "title": "Copy File",
   "summary": "Copy a file to a different region",
   "dxapi": "1.0.0",
-  "version": "0.2.0",
+  "version": "0.0.0",
+  "billTo": "org-dnanexus_apps",
+  "developers": [
+    "org-dnanexus_apps"
+  ],
+  "authorizedUsers": [
+    "org-dnanexus_apps"
+  ],
   "inputSpec": [
     {
       "name": "url",
@@ -43,9 +50,6 @@
     "version": "0",
     "file": "code.sh"
   },
-  "authorizedUsers": [
-    "PUBLIC"
-  ],
   "regionalOptions": {
     "aws:us-east-1": {
       "systemRequirements": {
