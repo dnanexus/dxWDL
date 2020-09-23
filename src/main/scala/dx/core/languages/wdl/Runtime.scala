@@ -65,6 +65,9 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
     wdlVersion match {
       case WdlVersion.V2 if dxHints.contains(hint.hintsKey) =>
         dxHints.get(hint.hintsKey, hint.wdlTypes)
+      case WdlVersion.V2 if hint.runtimeKey.isDefined && dxHints.contains(hint.runtimeKey.get) =>
+        // deprecated
+        dxHints.get(hint.runtimeKey.get, hint.wdlTypes)
       case _ if hint.runtimeKey.isDefined =>
         runtimeAttrs.get(hint.runtimeKey.get, hint.wdlTypes)
       case _ =>
@@ -92,7 +95,7 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
     val memoryMB = memory.map(mem => EUtils.floatToInt(mem.toDouble / Runtime.MiB))
     // we don't provide multiple disk mounts - instead we just add up all the
     // requested disk space
-    val diskGB = runtimeAttrs.runtime.map(_.disks.map(_.size)) match {
+    val diskGB: Option[Long] = runtimeAttrs.runtime.map(_.disks.map(_.size)) match {
       case Some(v) if v.nonEmpty => Some(EUtils.floatToInt(v.sum / Runtime.GiB))
       case _                     => None
     }

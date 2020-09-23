@@ -14,6 +14,10 @@ object Native {
   val Checksum = "checksum"
   val Version = "version"
 
+  // deprecated properties that we still need to check for old applets
+  val ChecksumPropertyDeprecated = "dxWDL_checksum"
+  val VersionPropertyDeprecated = "dxWDL_version"
+
   // parameter names used in "special" native applets
   val ReorgStatus = "reorg_status___"
   val ReorgStatusCompleted = "completed"

@@ -75,7 +75,7 @@ class ExecutableCompiler(extras: Option[Extras],
           case ParameterAttributes.PatternsObject(name, klass, tags) =>
             Vector(
                 if (name.isEmpty) None else Some("name" -> JsArray(name.map(JsString(_)))),
-                if (tags.isEmpty) None else Some("tags" -> JsArray(tags.map(JsString(_)))),
+                if (tags.isEmpty) None else Some("tag" -> JsArray(tags.map(JsString(_)))),
                 klass.map("class" -> JsString(_))
             ).flatten match {
               case Vector() => None
@@ -227,7 +227,7 @@ class ExecutableCompiler(extras: Option[Extras],
 
   // Match everything up to the first period; truncate after 50 characters.
   private val MaxSummaryLength = 50
-  private val firstLineRegex = s"^([^.]{1,${MaxSummaryLength}).*".r
+  private lazy val firstLineRegex = s"^([^.]{1,${MaxSummaryLength}}).*".r
 
   private def summaryToNative(summary: Option[String],
                               description: Option[String]): Map[String, JsValue] = {

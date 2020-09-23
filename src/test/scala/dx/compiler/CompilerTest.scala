@@ -47,25 +47,36 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private lazy val username = System.getProperty("user.name")
   private lazy val unitTestsPath = s"unit_tests/${username}"
-  private lazy val cFlags = List("-compileMode",
-                                 "NativeWithoutRuntimeAsset",
-                                 "-project",
-                                 dxTestProject.getId,
-                                 "-folder",
-                                 "/" + unitTestsPath,
-                                 "-force",
-                                 "-locked",
-                                 "-quiet")
+  private lazy val cFlagsBase: List[String] = List(
+      "-project",
+      dxTestProject.getId,
+      "-quiet",
+      "-force"
+  )
+  private lazy val cFlags: List[String] = cFlagsBase ++ List("-compileMode",
+                                                             "NativeWithoutRuntimeAsset",
+                                                             "-folder",
+                                                             s"/${unitTestsPath}",
+                                                             "-locked")
+  private lazy val cFlagsReorg: List[String] = cFlagsBase ++
+    List("-compileMode", "NativeWithoutRuntimeAsset", "-folder", "/reorg_tests")
 
-  private lazy val cFlagsReorg = List("-compileMode",
-                                      "NativeWithoutRuntimeAsset",
-                                      "-project",
-                                      dxTestProject.getId,
-                                      "-quiet",
-                                      "-force",
-                                      "-folder",
-                                      "/reorg_tests")
-
+//  val irArgs = path.toString :: "--extras" :: extraPath.toString :: (cFlagsBase ++ List(
+//    "-compileMode",
+//    "IR",
+//    "-folder",
+//    s"/${unitTestsPath}",
+//    "-locked"
+//  ))
+//  val bundle = Main.compile(irArgs.toVector) match {
+//    case SuccessIR(x, _) => x
+//    case other           => throw new Exception(s"Unexpected result ${other}")
+//  }
+//  val task = bundle.primaryCallable match {
+//    case Some(task: Application) => task
+//    case _                       => throw new Exception("boo")
+//  }
+//  println(task.requirements)
   private val reorgAppletFolder = s"/${unitTestsPath}/reorg_applets/"
   private val reorgAppletPath = s"${reorgAppletFolder}/functional_reorg_test"
 
@@ -537,7 +548,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _       => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("Adds two int together")
-    desc.tags shouldBe Some(Vector("add", "ints", "dxWDL"))
+    desc.tags shouldBe Some(Set("add", "ints", Native.CompilerTag))
     desc.title shouldBe Some("Add Ints")
     desc.types shouldBe Some(Vector("Adder"))
   }
@@ -601,6 +612,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("compiler", "add_runtime_hints.wdl")
     val extraPath = pathFromBasename("compiler/extras", "short_timeout.json")
     val args = path.toString :: "--extras" :: extraPath.toString :: cFlags
+
     //:: "--verbose"
     val appId = Main.compile(args.toVector) match {
       case Success(x) => x
@@ -727,7 +739,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _       => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("A workflow that defines some metadata")
-    desc.tags shouldBe Some(Vector("foo", "bar", "dxWDL"))
+    desc.tags shouldBe Some(Vector("foo", "bar", Native.CompilerTag))
     desc.title shouldBe Some("Workflow with metadata")
     desc.types shouldBe Some(Vector("calculator"))
   }
@@ -918,7 +930,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     reorgInput.fields.keys shouldBe Set(Native.ReorgStatus, ReorgConfig)
   }
 
-  it should "Checks subworkflow with custom reorg app do not contain reorg attribute" in {
+  it should "ensure subworkflow with custom reorg app does not contain reorg attribute" in {
     // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     // upload random file

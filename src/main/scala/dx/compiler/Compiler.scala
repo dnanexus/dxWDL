@@ -233,7 +233,7 @@ case class Compiler(extras: Option[Extras],
           return None
         case Vector(existingInfo) =>
           // Check if applet code has changed
-          existingInfo.digest match {
+          existingInfo.checksum match {
             case None =>
               throw new Exception(s"There is an existing non-dxWDL applet ${name}")
             case Some(existingDigest) if digest != existingDigest =>

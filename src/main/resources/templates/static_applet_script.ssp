@@ -1,4 +1,4 @@
-<% val dockerPreamble: String %>
+<%@ val dockerPreamble: String %>
 set -exo pipefail
 ${dockerPreamble}
 

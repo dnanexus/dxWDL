@@ -149,7 +149,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       case Some(dta) => dta.getRunSpecJson
     }
     // runtime hints in the task override defaults from extras
-    val taskOverrides = applet.requirements
+    val taskOverrides: Map[String, JsValue] = applet.requirements
       .collect {
         case RestartRequirement(max, default, errors) =>
           val defaultMap: Map[String, Long] = default match {
@@ -160,7 +160,8 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         case TimeoutRequirement(days, hours, minutes) =>
           DxTimeout(days.orElse(Some(0)), hours.orElse(Some(0)), minutes.orElse(Some(0))).toJson
       }
-      .reduce(_ ++ _)
+      .flatten
+      .toMap
     // task-specific settings from extras override runtime hints in the task
     val taskSpecificOverrides = applet.kind match {
       case ExecutableKindApplet =>
@@ -280,14 +281,24 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       executableDict: Map[String, ExecutableLink]
   ): Map[String, JsValue] = {
     logger.trace(s"Building /applet/new request for ${applet.name}")
-    // convert inputs to dxapp inputSpec
-    val inputSpec: Vector[JsValue] = applet.inputs
-      .sortWith(_.name < _.name)
-      .flatMap(parameterToNative)
-    // convert outputs to dxapp outputSpec
-    val outputSpec: Vector[JsValue] = applet.outputs
-      .sortWith(_.name < _.name)
-      .flatMap(parameterToNative)
+    // convert inputs and outputs to dxapp inputSpec
+    def parametersToNative(params: Vector[Parameter], paramType: String): Vector[JsValue] = {
+      params
+        .sortWith(_.name < _.name)
+        .flatMap { param =>
+          try {
+            parameterToNative(param)
+          } catch {
+            case ex: Throwable =>
+              throw new Exception(
+                  s"Error converting ${paramType} parameter ${param} to native type",
+                  ex
+              )
+          }
+        }
+    }
+    val inputSpec: Vector[JsValue] = parametersToNative(applet.inputs, "input")
+    val outputSpec: Vector[JsValue] = parametersToNative(applet.outputs, "output")
     // build the dxapp runSpec
     val (runSpec, runSpecDetails) = createRunSpec(applet)
     // A fragemnt is hidden, not visible under default settings. This

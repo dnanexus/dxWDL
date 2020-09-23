@@ -19,19 +19,21 @@ task add_runtime_hints {
   }
 
   hints {
-    dx_ignore_reuse: true
-    dx_restart: {
-      default: 1,
-      max: 5,
-      errors: {
-        UnresponsiveWorker: 2,
-        ExecutionError: 2
+    dnanexus: {
+      ignore_reuse: true,
+      restart: {
+        default: 1,
+        max: 5,
+        errors: {
+          UnresponsiveWorker: 2,
+          ExecutionError: 2
+        }
+      },
+      timeout: "12H30M",
+      access: {
+        network: ["*"],
+        developer: true
       }
-    }
-    dx_timeout: "12H30M"
-    dx_access: {
-      network: ["*"],
-      developer: true
     }
   }
 }

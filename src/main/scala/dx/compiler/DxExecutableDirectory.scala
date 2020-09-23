@@ -22,7 +22,7 @@ import wdlTools.util.{JsUtils, Logger}
 trait DxExecutableInfo {
   val dataObj: DxDataObject
   val desc: Option[DxObjectDescribe]
-  val digest: Option[String]
+  val checksum: Option[String]
   val createdDate: Option[LocalDateTime]
   def name: String
 
@@ -63,12 +63,12 @@ case class DxExecutableDirectory(bundle: Bundle,
     * Information about a Dx data object.
     * @param dataObj the actual data object
     * @param dxDesc the object description
-    * @param digest the object checksum
+    * @param checksum the object checksum
     * @param createdDate created date
     */
   case class DxExecutableWithDesc(dataObj: DxDataObject,
                                   dxDesc: DxObjectDescribe,
-                                  digest: Option[String],
+                                  checksum: Option[String],
                                   createdDate: Option[LocalDateTime] = None)
       extends DxExecutableInfo {
     def name: String = dxDesc.name
@@ -76,7 +76,7 @@ case class DxExecutableDirectory(bundle: Bundle,
   }
 
   private def findExecutables(folder: Option[String]): Vector[(DxDataObject, DxObjectDescribe)] = {
-    Vector("applets", "workflows")
+    Vector("applet", "workflow")
       .flatMap { dxClass =>
         val t0 = System.nanoTime()
         val dxObjectsInFolder: Map[DxDataObject, DxObjectDescribe] =
@@ -100,6 +100,13 @@ case class DxExecutableDirectory(bundle: Bundle,
       }
   }
 
+  private def getChecksum(desc: DxObjectDescribe): Option[String] = {
+    desc.details
+      .flatMap(_.asJsObject.fields.get(Native.Checksum))
+      .map(JsUtils.getString(_))
+      .orElse(desc.properties.flatMap(_.get(Native.ChecksumPropertyDeprecated)))
+  }
+
   /**
     * Instead of looking up applets/workflows one by one, perform a bulk lookup, and
     * find all the objects in the target directory. Setup an easy to
@@ -119,8 +126,9 @@ case class DxExecutableDirectory(bundle: Bundle,
           val creationDate = new java.util.Date(desc.created)
           val creationTime: LocalDateTime =
             LocalDateTime.ofInstant(creationDate.toInstant, ZoneId.systemDefault())
-          val checksum =
-            desc.details.flatMap(_.asJsObject.fields.get(Native.Checksum)).map(JsUtils.getString(_))
+          // checksum is stored in details, but used to be stored as a property, so
+          // look in both places
+          val checksum = getChecksum(desc)
           DxExecutableWithDesc(dxObj, desc, checksum, Some(creationTime))
       }
       .groupBy(_.name)
@@ -147,12 +155,14 @@ case class DxExecutableDirectory(bundle: Bundle,
     */
   private def findExecutablesInProject(): Map[String, Vector[DxExecutableInfo]] = {
     findExecutables(None)
-      .collect {
-        case (obj, desc) if desc.details.exists(_.asJsObject.fields.contains(Native.Checksum)) =>
-          val JsString(digest) = desc.details.get.asJsObject.fields(Native.Checksum)
-          DxExecutableWithDesc(obj, desc, Some(digest))
+      .flatMap {
+        case (obj, desc) =>
+          getChecksum(desc) match {
+            case Some(checksum) => Some(DxExecutableWithDesc(obj, desc, Some(checksum)))
+            case None           => None
+          }
       }
-      .groupBy(_.digest.get)
+      .groupBy(_.checksum.get)
   }
 
   // A map from checksum to dx:executable, across the entire
@@ -196,7 +206,7 @@ case class DxExecutableDirectory(bundle: Bundle,
   case class DxExecutableInserted(
       name: String,
       dataObj: DxDataObject,
-      digest: Option[String],
+      checksum: Option[String],
       createdDate: Option[LocalDateTime] = Some(LocalDateTime.now)
   ) extends DxExecutableInfo {
     override val desc: Option[DxObjectDescribe] = None

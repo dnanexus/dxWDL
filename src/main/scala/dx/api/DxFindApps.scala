@@ -97,7 +97,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
           prop -> JsBoolean(true)
         }.toMap))
       }
-    val namePcreField =
+    val nameField =
       if (nameConstraints.isEmpty) {
         Map.empty
       } else if (nameConstraints.size == 1) {
@@ -105,14 +105,9 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
         Map("name" -> JsString(nameConstraints(0)))
       } else {
         // Make a conjunction of all the legal names. For example:
-        // ["Nice", "Foo", "Bar"] ===>
-        //  [(Nice)|(Foo)|(Bar)]
-        val orAll = nameConstraints
-          .map { x =>
-            s"(${x})"
-          }
-          .mkString("|")
-        Map("name" -> JsObject("regexp" -> JsString(s"[${orAll}]")))
+        // ["Nice", "Foo", "Bar"] => ^Nice$|^Foo$|^Bar$
+        val orRegexp = nameConstraints.map(x => s"^${x}$$").mkString("|")
+        Map("name" -> JsObject("regexp" -> JsString(orRegexp)))
       }
     val idField =
       if (idConstraints.isEmpty) {
@@ -123,7 +118,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
         }))
       }
     val response = dxApi.findApps(
-        requestFields ++ cursorField ++ publishedField ++ propertiesField ++ namePcreField ++ idField
+        requestFields ++ cursorField ++ publishedField ++ propertiesField ++ nameField ++ idField
     )
     val next: Option[JsValue] = response.fields.get("next") match {
       case None                  => None

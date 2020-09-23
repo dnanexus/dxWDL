@@ -597,7 +597,7 @@ object Utils {
 
   def fromIRValue(value: Value, wdlType: T, name: String): V = {
     def inner(innerValue: Value, innerType: T, innerName: String): V = {
-      (wdlType, value) match {
+      (innerType, innerValue) match {
         case (T_Optional(_), VNull)          => V_Null
         case (T_Boolean, VBoolean(b))        => V_Boolean(value = b)
         case (T_Int, VInt(i))                => V_Int(i)

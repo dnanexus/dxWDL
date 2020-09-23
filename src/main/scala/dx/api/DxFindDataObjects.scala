@@ -171,7 +171,7 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
     }
     val classField = klass.map(k => Map("class" -> JsString(k))).getOrElse(Map.empty)
     val tagsField = tagConstraints.map(JsString(_)) match {
-      case tags if tags.nonEmpty => Map("tags" -> JsArray(tags))
+      case tags if tags.nonEmpty => Map("tagsArray" -> JsArray(tags))
       case _                     => Map.empty
     }
     val nameField = nameConstraints match {
@@ -229,9 +229,12 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
             withInputOutputSpec: Boolean,
             idConstraints: Vector[String] = Vector.empty,
             extraFields: Set[Field.Value] = Set.empty): Map[DxDataObject, DxObjectDescribe] = {
-    classRestriction.foreach { k =>
-      if (!(Set("record", "file", "applet", "workflow") contains k))
-        throw new Exception("class limitation must be one of {record, file, applet, workflow}")
+    val allowedClasses = Set("record", "file", "applet", "workflow")
+    val invalidClasses = classRestriction.filterNot(allowedClasses.contains)
+    if (invalidClasses.nonEmpty) {
+      throw new Exception(
+          s"invalid class limitation ${invalidClasses.mkString(",")}; must be one of {record, file, applet, workflow}"
+      )
     }
     val scope: Option[JsValue] = dxProject.map(p => createScope(p, folder, recurse))
     val allResults: Map[DxDataObject, DxObjectDescribe] = Iterator

@@ -26,7 +26,6 @@ price       comparative price
   */
 package dx.api
 
-import dx.api.DiskType.DiskType
 import wdlTools.util.{Enum, JsUtils, Logger}
 import wdlTools.util.Enum.enumFormat
 import spray.json.{RootJsonFormat, _}
@@ -43,7 +42,7 @@ object DiskType extends Enum {
 case class InstanceTypeRequest(dxInstanceType: Option[String] = None,
                                memoryMB: Option[Long] = None,
                                diskGB: Option[Long] = None,
-                               diskType: Option[DiskType] = None,
+                               diskType: Option[DiskType.DiskType] = None,
                                cpu: Option[Long] = None,
                                gpu: Option[Boolean] = None) {
   override def toString: String = {
@@ -67,7 +66,7 @@ case class DxInstanceType(name: String,
                           cpu: Int,
                           gpu: Boolean,
                           os: Vector[(String, String)],
-                          diskType: Option[DiskType] = None,
+                          diskType: Option[DiskType.DiskType] = None,
                           price: Option[Float] = None)
     extends Ordered[DxInstanceType] {
 

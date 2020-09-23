@@ -61,35 +61,16 @@ object Type {
   }
 
   /**
-    * Is this a WDL type that maps to a primitive, non-optional native DX type?
-    * @param t IR Type
-    * @return
-    */
-  def isDxPrimitiveType(t: Type): Boolean = {
-    t match {
-      case TBoolean   => true
-      case TInt       => true
-      case TFloat     => true
-      case TString    => true
-      case TFile      => true
-      case TDirectory => true // ?
-      case THash      => true // ?
-      case _          => false
-    }
-  }
-
-  /**
-    * Is this a WDL type that maps to a native DX type?
+    * Is this an IR type that maps to a native DX type?
     * @param t IR type
     * @return
     */
   def isDxType(t: Type): Boolean = {
     t match {
-      case _ if isDxPrimitiveType(t)   => true
-      case TArray(inner, _)            => isDxPrimitiveType(inner)
-      case TOptional(TArray(inner, _)) => isDxPrimitiveType(inner)
-      case TOptional(inner)            => isDxPrimitiveType(inner)
-      case _                           => false
+      case _ if isPrimitive(t) => true
+      case TArray(inner, _)    => isPrimitive(inner)
+      case TOptional(inner)    => isPrimitive(inner)
+      case _                   => false
     }
   }
 

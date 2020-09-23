@@ -73,14 +73,16 @@ object TypeSerde {
   def toNativeType(t: Type): (String, Boolean) = {
     def inner(innerType: Type, array: Boolean = false): String = {
       innerType match {
-        case o: TOptional =>
-          throw new Exception(s"nested optional type ${o}")
         case TBoolean => "boolean"
         case TInt     => "int"
         case TFloat   => "float"
         case TString  => "string"
         case TFile    => "file"
-        //case TDirectory => "Directory"
+        // TODO: case TDirectory =>
+        case TOptional(t) =>
+          // DNAnexus does not have nested optional types - null values in
+          // arrays are just ignored
+          inner(t, array)
         // arrays of primitives translate to e.g. 'array:file' -
         // everything else is a complex type represented as a hash
         case TArray(memberType, _) if !array =>

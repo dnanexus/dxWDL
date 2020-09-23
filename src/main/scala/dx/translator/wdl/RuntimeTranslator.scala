@@ -64,8 +64,10 @@ object RuntimeTranslator {
           "timeout",
           Vector(T_String, T_Object)
       )
-  // case object Regions
-  // This key is used in the restart object value to represent "*"
+  // TODO: case object Regions
+  /**
+    * This key is used in the restart object value to represent "*"
+    */
   val AllKey = "All"
 }
 
@@ -316,7 +318,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
   }
 
   def translateTimeout: Option[TimeoutRequirement] = {
-    runtime.getDxHint(RuntimeTranslator.Restart).map {
+    runtime.getDxHint(RuntimeTranslator.Timeout).map {
       case V_String(s) => parseDuration(s)
       case V_Object(fields) =>
         TimeoutRequirement(

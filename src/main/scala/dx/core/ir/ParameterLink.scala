@@ -142,8 +142,8 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
       } else {
         bindName
       }
-    val wdlType = Type.unwrapOptional(link.dxType)
-    if (Type.isDxType(wdlType)) {
+    val dxType = Type.unwrapOptional(link.dxType)
+    if (Type.isDxType(dxType)) {
       // Types that are supported natively in DX
       val jsv: JsValue = link match {
         case ParameterLinkValue(jsLinkvalue, _) => jsLinkvalue
