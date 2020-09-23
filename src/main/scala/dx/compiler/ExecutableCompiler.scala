@@ -1,7 +1,6 @@
 package dx.compiler
 
 import dx.api.{ConstraintOper, DxApi, DxConstraint, DxIOSpec}
-import dx.core.ir.Type.TArray
 import dx.core.ir.Value._
 import dx.core.ir.{
   Callable,
@@ -9,7 +8,6 @@ import dx.core.ir.{
   ParameterAttribute,
   ParameterLink,
   ParameterLinkSerializer,
-  Type,
   TypeSerde,
   Value,
   ValueSerde
@@ -166,7 +164,7 @@ class ExecutableCompiler(extras: Option[Extras],
         parameterLinkSerializer.createFields(name, parameter.dxType, wdlValue).toMap
     }
     val attributes = parameterAttributesToNative(parameter.attributes, defaultVals.contains(name))
-    val (nativeType, optional) = TypeSerde.toNativeType(parameter.dxType)
+    val (nativeType, optional) = TypeSerde.toNative(parameter.dxType)
 
     def defaultValueToNative(name: String): Map[String, JsValue] = {
       defaultVals.get(name) match {
@@ -183,45 +181,35 @@ class ExecutableCompiler(extras: Option[Extras],
       }
     }
 
-    Type.unwrapOptional(parameter.dxType) match {
-      case t if Type.isPrimitive(t) =>
-        Vector(
-            JsObject(
-                Map("name" -> JsString(name), "class" -> JsString(nativeType))
-                  ++ optionalToNative(optional)
-                  ++ defaultValueToNative(name)
-                  ++ attributes
-            )
-        )
-      case TArray(inner, nonEmpty) if Type.isPrimitive(inner) =>
-        Vector(
-            JsObject(
-                Map("name" -> JsString(name), "class" -> JsString(nativeType))
-                  ++ optionalToNative(optional || !nonEmpty)
-                  ++ defaultValueToNative(name)
-                  ++ attributes
-            )
-        )
-      case _ =>
-        // A JSON structure passed as a hash, and a vector of platform files
-        val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
-        Vector(
-            JsObject(
-                Map("name" -> JsString(name), "class" -> JsString("hash"))
-                  ++ optionalToNative(optional)
-                  ++ defaultValueToNative(name)
-                  ++ attributes
-            ),
-            JsObject(
-                Map(
-                    "name" -> JsString(filesName),
-                    "class" -> JsString("array:file"),
-                    "optional" -> JsBoolean(true)
-                )
-                  ++ defaultValueToNative(filesName)
-                  ++ attributes
-            )
-        )
+    if (nativeType == "hash") {
+      // A JSON structure passed as a hash, and a vector of platform files
+      val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
+      Vector(
+          JsObject(
+              Map("name" -> JsString(name), "class" -> JsString("hash"))
+                ++ optionalToNative(optional)
+                ++ defaultValueToNative(name)
+                ++ attributes
+          ),
+          JsObject(
+              Map(
+                  "name" -> JsString(filesName),
+                  "class" -> JsString("array:file"),
+                  "optional" -> JsBoolean(true)
+              )
+                ++ defaultValueToNative(filesName)
+                ++ attributes
+          )
+      )
+    } else {
+      Vector(
+          JsObject(
+              Map("name" -> JsString(name), "class" -> JsString(nativeType))
+                ++ optionalToNative(optional)
+                ++ defaultValueToNative(name)
+                ++ attributes
+          )
+      )
     }
   }
 

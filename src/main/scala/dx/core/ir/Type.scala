@@ -60,17 +60,34 @@ object Type {
     }
   }
 
+  def isNativePrimitive(t: Type): Boolean = {
+    t match {
+      case TBoolean => true
+      case TInt     => true
+      case TFloat   => true
+      case TString  => true
+      case TFile    => true
+      // TODO: TDirectory
+      case _ => false
+    }
+  }
+
   /**
     * Is this an IR type that maps to a native DX type?
+    * DNAnexus only supports primitives, optionals of primitives, and arrays of primitives
+    * (with no nested optional types).
     * @param t IR type
     * @return
     */
-  def isDxType(t: Type): Boolean = {
+  def isNative(t: Type): Boolean = {
     t match {
-      case _ if isPrimitive(t) => true
-      case TArray(inner, _)    => isPrimitive(inner)
-      case TOptional(inner)    => isPrimitive(inner)
-      case _                   => false
+      case TOptional(TArray(inner, _)) =>
+        // TODO: should an optional non-empty array be considered native? Currently it is
+        //  allowed, and must always agree with the type conversion logic in TypeSerde.toNative.
+        isNativePrimitive(inner)
+      case TOptional(inner) => isNativePrimitive(inner)
+      case TArray(inner, _) => isNativePrimitive(inner)
+      case _                => isNativePrimitive(t)
     }
   }
 

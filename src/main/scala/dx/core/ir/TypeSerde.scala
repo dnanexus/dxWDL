@@ -70,34 +70,33 @@ object TypeSerde {
     inner(jsValue)
   }
 
-  def toNativeType(t: Type): (String, Boolean) = {
-    def inner(innerType: Type, array: Boolean = false): String = {
-      innerType match {
-        case TBoolean => "boolean"
-        case TInt     => "int"
-        case TFloat   => "float"
-        case TString  => "string"
-        case TFile    => "file"
-        // TODO: case TDirectory =>
-        case TOptional(t) =>
-          // DNAnexus does not have nested optional types - null values in
-          // arrays are just ignored
-          inner(t, array)
-        // arrays of primitives translate to e.g. 'array:file' -
-        // everything else is a complex type represented as a hash
-        case TArray(memberType, _) if !array =>
-          inner(memberType, array = true) match {
-            case native if native == "hash" || native.startsWith("array") =>
-              "hash"
-            case primitiveType =>
-              s"array:${primitiveType}"
-          }
-        case _ => "hash"
-      }
-    }
+  private def toNativePrimitive(t: Type): String = {
     t match {
-      case TOptional(innerType) => (inner(innerType), true)
-      case _                    => (inner(t), false)
+      case TBoolean => "boolean"
+      case TInt     => "int"
+      case TFloat   => "float"
+      case TString  => "string"
+      case TFile    => "file"
+      // TODO: case TDirectory =>
+      case _ => throw new Exception(s"not a primitive type")
+    }
+  }
+
+  def toNative(t: Type): (String, Boolean) = {
+    val (innerType, optional) = t match {
+      case TOptional(innerType) => (innerType, true)
+      case _                    => (t, false)
+    }
+    innerType match {
+      case _ if Type.isNativePrimitive(innerType) =>
+        (toNativePrimitive(innerType), optional)
+      case TArray(memberType, nonEmpty) if Type.isNativePrimitive(memberType) =>
+        // arrays of primitives translate to e.g. 'array:file' -
+        val nativeInnerType = toNativePrimitive(memberType)
+        (s"array:${nativeInnerType}", !nonEmpty || optional)
+      case _ =>
+        // everything else is a complex type represented as a hash
+        ("hash", optional)
     }
   }
 
