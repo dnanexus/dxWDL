@@ -194,15 +194,20 @@ case class DxAppJson(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
 
 case class DockerRegistry(registry: String, username: String, credentials: String)
 
-case class ReorgAttributes(enabled: Boolean = true,
-                           appUri: Option[String] = None,
-                           reorgConfigFile: Option[String] = None)
+sealed trait ReorgSettings {
+  val enabled: Boolean
+}
+case class DefaultReorgSettings(enabled: Boolean) extends ReorgSettings
+case class CustomReorgSettings(appUri: String,
+                               reorgConfigFile: Option[String] = None,
+                               enabled: Boolean = true)
+    extends ReorgSettings
 
 case class Extras(defaultRuntimeAttributes: Map[String, Value],
                   defaultTaskDxAttributes: Option[DxAppJson],
                   perTaskDxAttributes: Map[String, DxAppJson],
                   dockerRegistry: Option[DockerRegistry],
-                  customReorgAttributes: Option[ReorgAttributes],
+                  customReorgAttributes: Option[CustomReorgSettings],
                   ignoreReuse: Option[Boolean],
                   delayWorkspaceDestruction: Option[Boolean]) {
   def getDefaultAccess: DxAccess = {
@@ -557,7 +562,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
     Some(DockerRegistry(registry, username, credentials))
   }
 
-  def parseCustomReorgAttrs(jsv: JsValue): Option[ReorgAttributes] = {
+  def parseCustomReorgAttrs(jsv: JsValue): Option[CustomReorgSettings] = {
     if (jsv == JsNull) {
       return None
     }
@@ -638,7 +643,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
             |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
             """.stripMargin.replaceAll("\n", " ")
     )
-    Some(ReorgAttributes(appUri = Some(reorgAppId), reorgConfigFile = reorgConf))
+    Some(CustomReorgSettings(reorgAppId, reorgConf))
   }
 
   def parse(path: Path): Extras = {

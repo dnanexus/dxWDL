@@ -14,19 +14,25 @@ object Native {
   val Checksum = "checksum"
   val Version = "version"
 
+  // keys used in details of jobs of native applets
+  val ContinueStart = "continue_start___"
+
+  // parameter names used in "special" native applets
+  val ReorgConfig = "reorg_conf___"
+  val ReorgStatus = "reorg_status___"
+  val ReorgStatusCompleted = "completed"
+
   // deprecated properties that we still need to check for old applets
   val ChecksumPropertyDeprecated = "dxWDL_checksum"
   val VersionPropertyDeprecated = "dxWDL_version"
 
-  // parameter names used in "special" native applets
-  val ReorgStatus = "reorg_status___"
-  val ReorgStatusCompleted = "completed"
-  val ContinueStart = "continue_start___"
-
   // Limits imposed on native apps.
   val JobsPerScatterLimit = 1000
   val JobPerScatterDefault = 500
-  // Very long strings cause problems with bash and the UI, so we set
-  // a max limit of 32k characters
+
+  /**
+    * Very long strings cause problems with bash and the UI, so we set
+    * a max limit of 32k characters
+    */
   val StringLengthLimit: Int = 32 * 1024
 }

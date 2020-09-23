@@ -22,7 +22,7 @@ trait TranslatorFactory {
              language: Option[Language],
              locked: Boolean,
              defaultRuntimeAttrs: Map[String, Value],
-             reorgAttrs: ReorgAttributes,
+             reorgAttrs: ReorgSettings,
              fileResolver: FileSourceResolver,
              dxApi: DxApi = DxApi.get,
              logger: Logger = Logger.get): Option[Translator]
@@ -48,8 +48,8 @@ object TranslatorFactory {
     val reorgAttrs = (extras.flatMap(_.customReorgAttributes), reorgEnabled) match {
       case (Some(attr), None)    => attr
       case (Some(attr), Some(b)) => attr.copy(enabled = b)
-      case (None, Some(b))       => ReorgAttributes(enabled = b)
-      case (None, None)          => ReorgAttributes(enabled = false)
+      case (None, Some(b))       => DefaultReorgSettings(b)
+      case (None, None)          => DefaultReorgSettings(false)
     }
     translatorFactories
       .collectFirst { factory =>

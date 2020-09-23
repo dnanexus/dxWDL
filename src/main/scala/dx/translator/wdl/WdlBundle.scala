@@ -72,8 +72,9 @@ object WdlBundle {
       x.name -> x
     }.toMap
     val primaryCallable: Option[TAT.Callable] = doc.workflow match {
+      case Some(wf)                => Some(wf)
       case None if tasks.size == 1 => Some(tasks.values.head)
-      case wf                      => wf
+      case _                       => None
     }
     WdlBundle(doc.version.value,
               primaryCallable,
@@ -129,9 +130,9 @@ object WdlBundle {
   // recurse into the imported packages
   // Check the uniqueness of tasks, Workflows, and Types
   // merge everything into one bundle.
-  def flattenDepthFirst(tDoc: TAT.Document): WdlBundle = {
-    val topLevelInfo = bundleInfoFromDoc(tDoc)
-    val imports: Vector[TAT.ImportDoc] = tDoc.elements.collect {
+  def flattenDepthFirst(doc: TAT.Document): WdlBundle = {
+    val topLevelInfo = bundleInfoFromDoc(doc)
+    val imports: Vector[TAT.ImportDoc] = doc.elements.collect {
       case x: TAT.ImportDoc => x
     }
     imports.foldLeft(topLevelInfo) {

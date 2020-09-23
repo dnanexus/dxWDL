@@ -1,6 +1,6 @@
 package dx.compiler
 
-import java.io.{BufferedWriter, File, FileWriter}
+import java.io.File
 import java.nio.file.{Path, Paths}
 
 import dx.Assumptions.{isLoggedIn, toolkitCallable}
@@ -9,12 +9,12 @@ import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.core.Native
 import dx.core.ir.Callable
-import dx.core.util.MainUtils.Success
+import dx.core.util.MainUtils.{Success, Termination}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.util.{Logger, SysUtils}
+import wdlTools.util.{FileUtils, Logger, SysUtils}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -58,7 +58,9 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                                                              "-folder",
                                                              s"/${unitTestsPath}",
                                                              "-locked")
-  private lazy val cFlagsReorg: List[String] = cFlagsBase ++
+  private lazy val cFlagsReorgIR: List[String] = cFlagsBase ++
+    List("-compileMode", "IR", "-folder", "/reorg_tests")
+  private lazy val cFlagsReorgCompile: List[String] = cFlagsBase ++
     List("-compileMode", "NativeWithoutRuntimeAsset", "-folder", "/reorg_tests")
 
 //  val irArgs = path.toString :: "--extras" :: extraPath.toString :: (cFlagsBase ++ List(
@@ -120,15 +122,16 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
   private lazy val reorgAppletId = getAppletId(reorgAppletPath)
 
-  private def createExtras(extrasContent: String): String = {
-    val tmpExtras = File.createTempFile("reorg-", ".json")
-    tmpExtras.deleteOnExit()
-
-    val bw = new BufferedWriter(new FileWriter(tmpExtras))
-    bw.write(extrasContent)
-    bw.close()
-
-    tmpExtras.toString
+  private object WithExtras {
+    def apply(extrasContent: String)(f: String => Termination): Termination = {
+      val tmpExtras = File.createTempFile("reorg-", ".json")
+      FileUtils.writeFileContent(tmpExtras.toPath, extrasContent)
+      try {
+        f(tmpExtras.toString)
+      } finally {
+        tmpExtras.delete()
+      }
+    }
   }
 
   it should "Native compile a linear WDL workflow" taggedAs NativeTest in {
@@ -853,11 +856,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           |  }
           |}
           |""".stripMargin
-
-    val tmpFile = createExtras(extrasContent)
-    // remove locked workflow flag
-    val args = path.toString :: "-extras" :: tmpFile :: cFlagsReorg
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlagsReorgCompile
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
     val wfId: String = retval match {
       case Success(id) => id
@@ -903,12 +905,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           |  }
           |}
           |""".stripMargin
-
-    val tmpFile = createExtras(extrasContent)
-    // remove locked workflow flag
-    val args = path.toString :: "-extras" :: tmpFile :: cFlagsReorg
-    val retval = Main.compile(args.toVector)
-
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlagsReorgCompile
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
     val wfId: String = retval match {
       case Success(wfId) => wfId
@@ -931,7 +931,6 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   }
 
   it should "ensure subworkflow with custom reorg app does not contain reorg attribute" in {
-    // This works in conjunction with "Compile a workflow with subworkflows on the platform with the reorg app".
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     // upload random file
     val extrasContent =
@@ -942,14 +941,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           |  }
           |}
           |""".stripMargin
-
-    val tmpFile = createExtras(extrasContent)
-
-    // remove compile mode
-    val args = path.toString :: "-extras" :: tmpFile :: "-compileMode" :: "IR" :: cFlagsReorg.drop(
-        2
-    )
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlagsReorgIR
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[SuccessIR]
 
     val bundle = retval match {
@@ -969,11 +964,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |  "ignoreReuse": true
          |}
          |""".stripMargin
-    val extrasPath = createExtras(extrasContent)
-
-    // compile the task while
-    val args = path.toString :: "--extras" :: extrasPath :: cFlags
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "--extras" :: extrasPath :: cFlags
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
 
     val appletId = retval match {
@@ -995,11 +989,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |  "ignoreReuse": true
          |}
          |""".stripMargin
-    val extrasPath = createExtras(extrasContent)
-
-    // remove compile mode
-    val args = path.toString :: "-extras" :: extrasPath :: cFlags
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlags
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
 
     val wfId = retval match {
@@ -1021,9 +1014,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |  "delayWorkspaceDestruction": true
          |}
          |""".stripMargin
-    val extrasPath = createExtras(extrasContent)
-    val args = path.toString :: "-extras" :: extrasPath :: cFlags
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlags
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
 
     val appletId = retval match {
@@ -1046,9 +1040,10 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
          |  "delayWorkspaceDestruction": true
          |}
          |""".stripMargin
-    val extrasPath = createExtras(extrasContent)
-    val args = path.toString :: "-extras" :: extrasPath :: cFlags
-    val retval = Main.compile(args.toVector)
+    val retval = WithExtras(extrasContent) { extrasPath =>
+      val args = path.toString :: "-extras" :: extrasPath :: cFlags
+      Main.compile(args.toVector)
+    }
     retval shouldBe a[Success]
 
     val wfId = retval match {

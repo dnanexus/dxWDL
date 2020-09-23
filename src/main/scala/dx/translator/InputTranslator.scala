@@ -297,7 +297,10 @@ abstract class InputTranslator(bundle: Bundle,
         val commonInputs = checkAndBindCallableInputs(wf, Some(commonStage))
         // filter out auxiliary stages
         val auxStages =
-          Set(s"stage-${CommonStage}", s"stage-${OutputSection}", s"stage-${ReorgStage}")
+          Set(s"stage-${CommonStage}",
+              s"stage-${EvalStage}",
+              s"stage-${OutputStage}",
+              s"stage-${ReorgStage}")
         val middleStages = wf.stages.filterNot(stg => auxStages.contains(stg.id.getId))
         // Inputs for top level calls
         val middleInputs = middleStages.flatMap { stage =>

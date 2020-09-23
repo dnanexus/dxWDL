@@ -233,9 +233,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val extras = extrasParser.parse(reorg)
-    extras.customReorgAttributes should be(
-        Some(ReorgAttributes(enabled = true, Some(appletId), Some(fileId)))
-    )
+    extras.customReorgAttributes shouldBe Some(CustomReorgSettings(appletId, Some(fileId)))
   }
 
   it should "throw IllegalArgumentException due to missing applet id" taggedAs ApiTest in {
@@ -288,9 +286,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val extras = extrasParser.parse(reorg)
-    extras.customReorgAttributes should be(
-        Some(ReorgAttributes(enabled = true, Some(appletId), None))
-    )
+    extras.customReorgAttributes shouldBe Some(CustomReorgSettings(appletId))
   }
 
   it should "throw IllegalArgumentException due to invalid applet ID" taggedAs ApiTest in {
@@ -411,7 +407,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val extras = extrasParser.parse(reorg)
-    extras.customReorgAttributes should be(Some(ReorgAttributes(enabled = true, Some(appId), None)))
+    extras.customReorgAttributes shouldBe Some(CustomReorgSettings(appId))
   }
 
   it should "generate valid JSON execution policy" in {

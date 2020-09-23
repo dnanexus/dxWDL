@@ -8,7 +8,7 @@ import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import dx.core.languages.wdl.{Utils => WdlUtils}
-import dx.translator.{InputTranslator, ReorgAttributes, Translator, TranslatorFactory}
+import dx.translator.{InputTranslator, ReorgSettings, Translator, TranslatorFactory}
 import spray.json.{JsArray, JsObject, JsString, JsValue}
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
@@ -55,7 +55,7 @@ case class WdlTranslator(doc: TAT.Document,
                          typeAliases: Map[String, WdlTypes.T_Struct],
                          locked: Boolean,
                          defaultRuntimeAttrs: Map[String, Value],
-                         reorgAttrs: ReorgAttributes,
+                         reorgAttrs: ReorgSettings,
                          fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
@@ -140,7 +140,7 @@ case class WdlTranslator(doc: TAT.Document,
     val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle, logger2)
     if (logger.isVerbose) {
       logger2.trace(s"all tasks: ${wdlBundle.tasks.keySet}")
-      logger2.trace(s"all callables in dependency order: ${depOrder.map { _.name }}")
+      logger2.trace(s"all callables in dependency order: ${depOrder.map(_.name)}")
     }
     // translate callables
     val callableTranslator = CallableTranslator(
@@ -192,7 +192,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
                       language: Option[Language],
                       locked: Boolean,
                       defaultRuntimeAttrs: Map[String, Value],
-                      reorgAttrs: ReorgAttributes,
+                      reorgAttrs: ReorgSettings,
                       fileResolver: FileSourceResolver,
                       dxApi: DxApi = DxApi.get,
                       logger: Logger = Logger.get): Option[WdlTranslator] = {

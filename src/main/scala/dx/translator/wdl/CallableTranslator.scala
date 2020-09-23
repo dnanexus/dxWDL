@@ -1,22 +1,30 @@
 package dx.translator.wdl
 
 import dx.api.{DxApi, DxUtils, DxWorkflowStage}
+import dx.core.Native
 import dx.translator.RunSpec.{DefaultInstanceType, DxFileDockerImage, NoImage}
-import dx.translator.{CommonStage, CustomReorgConfig, EvalStage, OutputSection, ReorgStage}
+import dx.translator.{
+  CommonStage,
+  CustomReorgSettings,
+  DefaultReorgSettings,
+  EvalStage,
+  OutputStage,
+  ReorgSettings,
+  ReorgStage
+}
 import dx.core.ir._
 import dx.core.ir.Type._
 import dx.core.ir.Value._
 import dx.core.Native.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{
-  WdlBlockInput,
   OptionalBlockInput,
   OverridableBlockInputWithDynamicDefault,
   OverridableBlockInputWithStaticDefault,
   RequiredBlockInput,
   WdlBlock,
+  WdlBlockInput,
   Utils => WdlUtils
 }
-import dx.translator.ReorgAttributes
 import wdlTools.eval.{Eval, EvalException, EvalPaths}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes._
@@ -26,7 +34,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                               typeAliases: Map[String, T_Struct],
                               locked: Boolean,
                               defaultRuntimeAttrs: Map[String, Value],
-                              reorgAttrs: ReorgAttributes,
+                              reorgAttrs: ReorgSettings,
                               dxApi: DxApi = DxApi.get,
                               fileResolver: FileSourceResolver = FileSourceResolver.get,
                               logger: Logger = Logger.get) {
@@ -165,7 +173,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     private lazy val isLocked: Boolean = {
       wdlBundle.primaryCallable match {
         case Some(wf2: TAT.Workflow) =>
-          wf.name != wf2.name || locked
+          (wf.name != wf2.name) || locked
         case _ =>
           true
       }
@@ -833,7 +841,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // workflow (custom reorg applet doesn't apply to locked workflows), add an output
       // variable for reorg status.
       val (applicationKind, updatedOutputVars) = reorgAttrs match {
-        case ReorgAttributes(_, Some(_), _) if !locked =>
+        case CustomReorgSettings(_, _, true) if !isLocked =>
           val updatedOutputVars = outputVars :+ Parameter(
               ReorgStatus,
               TString,
@@ -844,7 +852,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           (ExecutableKindWfOutputs, outputVars)
       }
       val application = Application(
-          s"${wfName}_$OutputSection",
+          s"${wfName}_$OutputStage",
           inputVars.map(_._1),
           updatedOutputVars,
           DefaultInstanceType,
@@ -853,8 +861,8 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           standAloneWorkflow
       )
       val stage = Stage(
-          OutputSection,
-          genFragId(Some(OutputSection)),
+          OutputStage,
+          genFragId(Some(OutputStage)),
           application.name,
           inputVars.map(_._2),
           updatedOutputVars
@@ -882,7 +890,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         outputs: Vector[TAT.OutputDefinition],
         blockPath: Vector[Int],
         subBlocks: Vector[WdlBlock],
-        level: Level.Value
+        level: Level.Level
     ): (Workflow, Vector[Callable], Vector[LinkedVar]) = {
       // translate wf inputs, and also get a Vector of any non-constant
       // expressions that need to be evaluated in the common stage
@@ -1129,7 +1137,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val configFile: Option[VFile] = reorgConfigFile.map(VFile)
       val appInputs = Vector(
           statusParam,
-          Parameter(CustomReorgConfig, TFile, configFile)
+          Parameter(Native.ReorgConfig, TFile, configFile)
       )
       val appletKind = ExecutableKindWorkflowCustomReorg(appletId)
       val applet = Application(
@@ -1166,10 +1174,10 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         }
       // add a reorg applet if necessary
       val (updatedWf, updatedCallables) = reorgAttrs match {
-        case ReorgAttributes(true, None, None) =>
+        case DefaultReorgSettings(true) =>
           val (reorgStage, reorgApl) = createReorgStage(wf.name, irOutputs)
           (irWf.copy(stages = irWf.stages :+ reorgStage), irCallables :+ reorgApl)
-        case ReorgAttributes(true, Some(appUri), reorgConfigFile) =>
+        case CustomReorgSettings(appUri, reorgConfigFile, true) if !isLocked =>
           val (reorgStage, reorgApl) = createCustomReorgStage(irOutputs, appUri, reorgConfigFile)
           (irWf.copy(stages = irWf.stages :+ reorgStage), irCallables :+ reorgApl)
         case _ =>

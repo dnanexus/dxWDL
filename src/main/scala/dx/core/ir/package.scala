@@ -3,7 +3,6 @@ package dx.core.ir
 import dx.api.DxWorkflowStage
 import dx.translator.RunSpec.{ContainerImage, InstanceType}
 import dx.core.ir.ExecutableType.ExecutableType
-import dx.core.ir.Level.Level
 import wdlTools.util.Enum
 
 trait ParameterAttribute
@@ -232,7 +231,7 @@ case class Workflow(name: String,
                     stages: Vector[Stage],
                     document: WorkflowSource,
                     locked: Boolean,
-                    level: Level,
+                    level: Level.Level,
                     attributes: Vector[CallableAttribute] = Vector.empty)
     extends Callable {
   def inputVars: Vector[Parameter] = inputs.map { case (cVar, _)   => cVar }

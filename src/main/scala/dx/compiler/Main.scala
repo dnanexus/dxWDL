@@ -236,13 +236,12 @@ object Main {
 
     val extras: Option[Extras] =
       options.getValue[Path]("extras").map(extrasPath => ExtrasParser().parse(extrasPath))
-    if (extras.isDefined && extras.get.customReorgAttributes.isDefined) {
-      Set("reorg", "locked").foreach { opt =>
-        if (options.contains(opt)) {
-          throw OptionParseException(
-              s"ERROR: cannot provide --reorg option when ${opt} is specified in extras."
-          )
-        }
+    if (extras.exists(_.customReorgAttributes.isDefined)) {
+      val conflictingOpts = Set("reorg", "locked").filter(options.contains)
+      if (conflictingOpts.nonEmpty) {
+        throw OptionParseException(
+            s"ERROR: cannot provide --reorg option when ${conflictingOpts.mkString(",")} is specified in extras."
+        )
       }
     }
 
