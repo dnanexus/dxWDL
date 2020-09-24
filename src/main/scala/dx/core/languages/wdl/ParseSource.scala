@@ -43,6 +43,11 @@ case class ParseSource(dxApi: DxApi) {
                              |${existing}
                              |""".stripMargin)
             throw new Exception(s"callable ${name} appears twice, with two different definitions")
+          case Some(_) =>
+            logger.trace(
+                s"callable ${name} appears twice, with identical definitions"
+            )
+            accu
           case _ =>
             // The same task/workflow appears twice
             accu
