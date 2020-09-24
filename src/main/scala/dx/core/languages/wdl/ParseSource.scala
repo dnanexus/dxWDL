@@ -36,10 +36,10 @@ case class ParseSource(dxApi: DxApi) {
           // unequal.
           case Some(existing) if existing != callable =>
             logger.error(s"""|${name} appears with two different callable definitions
-                             |1)
+                             |1) in ${callable.asInstanceOf[TAT.Element].loc.source}
                              |${callable}
                              |
-                             |2)
+                             |2) in ${existing.asInstanceOf[TAT.Element].loc.source}
                              |${existing}
                              |""".stripMargin)
             throw new Exception(s"callable ${name} appears twice, with two different definitions")

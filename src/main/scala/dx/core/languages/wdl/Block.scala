@@ -290,7 +290,7 @@ object Block {
             .toVector
             .flatten
 
-        case TAT.ExprPlaceholderEqual(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
+        case TAT.ExprPlaceholderCondition(t: TAT.Expr, f: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(t) ++ inner(f) ++ inner(value)
         case TAT.ExprPlaceholderDefault(default: TAT.Expr, value: TAT.Expr, _, _) =>
           inner(default) ++ inner(value)
