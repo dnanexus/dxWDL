@@ -6,7 +6,8 @@ import dx.Assumptions.isLoggedIn
 import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.{SuccessJsonTree, SuccessPrettyTree}
-import dx.core.util.MainUtils.Success
+import dx.core.Native
+import dx.core.util.MainUtils.{Failure, Success}
 import dx.core.util.CompressionUtils
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -42,43 +43,51 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
 
   private lazy val username = System.getProperty("user.name")
   private lazy val unitTestsPath = s"unit_tests/${username}"
-  private lazy val cFlags = List("-compileMode",
-                                 "NativeWithoutRuntimeAsset",
-                                 "-project",
-                                 dxTestProject.getId,
-                                 "-folder",
-                                 "/" + unitTestsPath,
-                                 "-force",
-                                 "-locked",
-                                 "-quiet")
+  private lazy val cFlagsUnlocked = Vector("-compileMode",
+                                           "NativeWithoutRuntimeAsset",
+                                           "-project",
+                                           dxTestProject.getId,
+                                           "-folder",
+                                           "/" + unitTestsPath,
+                                           "-force",
+                                           "-quiet")
+  private lazy val cFlagsLocked = cFlagsUnlocked :+ "-locked"
 
   // linear workflow
   it should "Native compile a linear WDL workflow without expressions" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val args = path.toString :: "--execTree" :: "json" :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessJsonTree]
+    val args = Vector(path.toString, "-execTree", "json") ++ cFlagsLocked
+    val retval = Main.compile(args)
+    val treeJs = retval match {
+      case SuccessJsonTree(treeJs: JsValue) => treeJs
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
+    }
 
-    inside(retval) {
-      case SuccessJsonTree(jsv) =>
-        jsv.asJsObject.getFields("name", "kind", "stages") match {
-          case Seq(JsString(name), JsString(kind), JsArray(_)) =>
-            name shouldBe "wf_linear_no_expr"
-            kind shouldBe "workflow"
-        }
+    treeJs.asJsObject.getFields("name", "kind", "stages") match {
+      case Seq(JsString(name), JsString(kind), JsArray(_)) =>
+        name shouldBe "wf_linear_no_expr"
+        kind shouldBe "workflow"
     }
   }
 
   // linear workflow
   it should "Native compile a linear WDL workflow with execTree in details" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val args = path.toString :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[Success]
-
-    val wf: DxWorkflow = retval match {
+    val args = path.toString +: cFlagsLocked
+    val retval = Main.compile(args)
+    val wf = retval match {
       case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
-      case _           => throw new Exception("unexpected")
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
 
     val description = wf.describe(Set(Field.Details))
@@ -87,8 +96,8 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case _                => throw new Exception("Expect details to be set for workflow")
     }
     // the compiled wf should at least have wdlSourceCode and execTree
-    (details.contains("womSourceCode") || details.contains("wdlSourceCode")) shouldBe true
-    details.contains("execTree") shouldBe true
+    details should contain key Native.SourceCode
+    details should contain key "execTree"
 
     val execString = details("execTree") match {
       case JsString(x) => x
@@ -113,15 +122,17 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   //able to describe linear workflow using Tree
   it should "Get execTree from a compiled workflow" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
-    val args = path.toString :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[Success]
-
-    val wf: DxWorkflow = retval match {
+    val args = path.toString +: cFlagsLocked
+    val retval = Main.compile(args)
+    val wf = retval match {
       case Success(id) => DxWorkflow(dxApi, id, Some(dxTestProject))
-      case _           => throw new Exception("unexpected")
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
-
     val treeJs = ExecutableTree.fromDxWorkflow(wf)
     treeJs.asJsObject.getFields("id", "name", "kind", "stages") match {
       case Seq(JsString(id), JsString(name), JsString(kind), JsArray(stages)) =>
@@ -134,65 +145,71 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  ignore should "Native compile a workflow with one level nesting" taggedAs NativeTest in {
+  it should "Native compile a workflow with one level nesting" taggedAs NativeTest in {
     val path = pathFromBasename("nested", "two_levels.wdl")
-    val args = path.toString :: "--force" :: "--execTree" :: "json" :: cFlags
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessJsonTree]
+    val args = Vector(path.toString, "-execTree", "json") ++ cFlagsLocked
+    val retval = Main.compile(args)
+    val treeJs = retval match {
+      case SuccessJsonTree(treeJs: JsValue) => treeJs
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
+    }
 
-    inside(retval) {
-      case SuccessJsonTree(treeJs) =>
-        treeJs.asJsObject.getFields("name", "kind", "stages") match {
-          case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
-            name shouldBe "two_levels"
-            kind shouldBe "workflow"
-            stages.size shouldBe 3
-        }
+    treeJs.asJsObject.getFields("name", "kind", "stages") match {
+      case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
+        name shouldBe "two_levels"
+        kind shouldBe "workflow"
+        println(stages.mkString("\n\n"))
+        stages.size shouldBe 4
     }
   }
 
-  ignore should "Convert JS Tree to Pretty" taggedAs NativeTest in {
+  it should "Convert JS Tree to Pretty" taggedAs NativeTest in {
     val path = pathFromBasename("nested", "four_levels.wdl")
     // remove -locked flag to create common stage
-    val nonLocked = cFlags.filterNot(x => x == "-locked")
-    val args = path.toString :: "--force" :: "--execTree" :: "json" :: "--verbose" :: "--verboseKey" :: "GenerateIR" :: nonLocked
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessJsonTree]
-    val SuccessJsonTree(treeJs: JsValue) = retval
-
+    // "-verbose", "-verboseKey", "GenerateIR"
+    val args = Vector(path.toString, "-execTree", "json") ++ cFlagsUnlocked
+    val retval = Main.compile(args)
+    val treeJs = retval match {
+      case SuccessJsonTree(treeJs: JsValue) => treeJs
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
+    }
     val prettyTree = ExecutableTree.prettyPrint(treeJs.asJsObject)
-    Logger.get.ignore(prettyTree)
-
-    // TODO: This generated tree now looks different. Also, the Tree code
-    // doesn't give good names to the scatter nested below "(i in [1, 4, 9])".
-    // This is inspite the fact that the stage names are human readable.
-    //
-    /*    val results = prettyTree.replaceAll("\u001B\\[[;\\d]*m", "")
+    val results = prettyTree.replaceAll("\u001B\\[[;\\d]*m", "")
     results shouldBe """Workflow: four_levels
                        |├───App Inputs: common
-                       |├───App Fragment: if ((username == "a"))
+                       |├───App Fragment: if (username == "a")
                        |│   └───Workflow: four_levels_block_0
                        |│       ├───App Task: c1
                        |│       └───App Task: c2
                        |├───App Fragment: scatter (i in [1, 4, 9])
-                       |│   └───App Fragment: four_levels_frag_4
-                       |│       └───Workflow: four_levels_block_1_0
-                       |│           ├───App Fragment: if ((j == "john"))
-                       |│           │   └───App Task: concat
-                       |│           └───App Fragment: if ((j == "clease"))
+                       |│   └───App Fragment: four_levels_frag_DxWorkflowStage(stage-6)
+                       |│       └───App Fragment: four_levels_frag_DxWorkflowStage(stage-4)
+                       |│           └───App Task: concat
                        |└───App Outputs: outputs""".stripMargin
-   */
   }
 
   it should "return a execTree in json when using describe with CLI" taggedAs NativeTest in {
     val path = pathFromBasename("nested", "four_levels.wdl")
-    // remove -locked flag to create common stage
-    val nonLocked = cFlags.filterNot(x => x == "-locked")
-    val args = path.toString :: "--force" :: nonLocked
-    val retval = Main.compile(args.toVector)
+    val args = path.toString +: cFlagsUnlocked
+    val retval = Main.compile(args)
     val wfID = retval match {
       case Success(wfID) => wfID
-      case _             => throw new Exception("Unable to compile workflow.")
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
 
     val describeRet = Main.describe(Vector(wfID))
@@ -211,65 +228,70 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   }
 
   // The generated tree is now different
-  ignore should "return a execTree in PrettyTree when using describe with CLI" taggedAs NativeTest in {
+  it should "return a execTree in PrettyTree when using describe with CLI" taggedAs NativeTest in {
     val path = pathFromBasename("nested", "four_levels.wdl")
-    // remove -locked flag to create common stage
-    val nonLocked = cFlags.filterNot(x => x == "-locked")
-    val args = path.toString :: "--force" :: nonLocked
-    val retval = Main.compile(args.toVector)
+    val args = path.toString +: cFlagsUnlocked
+    val retval = Main.compile(args)
     val wfID = retval match {
       case Success(wfID) => wfID
-      case _             => throw new Exception("Unable to compile workflow.")
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
 
     val describeRet = Main.describe(Vector(wfID, "-pretty"))
-    describeRet shouldBe a[SuccessPrettyTree]
-
-    inside(describeRet) {
-      case SuccessPrettyTree(pretty) =>
-        // remove colours
-        pretty.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
-                                                              |├───App Inputs: common
-                                                              |├───App Fragment: if ((username == "a"))
-                                                              |│   └───Workflow: four_levels_block_0
-                                                              |│       ├───App Task: c1
-                                                              |│       └───App Task: c2
-                                                              |├───App Fragment: scatter (i in [1, 4, 9])
-                                                              |│   └───App Fragment: four_levels_frag_4
-                                                              |│       └───Workflow: four_levels_block_1_0
-                                                              |│           ├───App Fragment: if ((j == "john"))
-                                                              |│           │   └───App Task: concat
-                                                              |│           └───App Fragment: if ((j == "clease"))
-                                                              |└───App Outputs: outputs""".stripMargin
-
+    val pretty = describeRet match {
+      case SuccessPrettyTree(pretty) => pretty
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
+
+    // remove colours
+    pretty.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
+                                                          |├───App Inputs: common
+                                                          |├───App Fragment: if (username == "a")
+                                                          |│   └───Workflow: four_levels_block_0
+                                                          |│       ├───App Task: c1
+                                                          |│       └───App Task: c2
+                                                          |├───App Fragment: scatter (i in [1, 4, 9])
+                                                          |│   └───App Fragment: four_levels_frag_DxWorkflowStage(stage-6)
+                                                          |│       └───App Fragment: four_levels_frag_DxWorkflowStage(stage-4)
+                                                          |│           └───App Task: concat
+                                                          |└───App Outputs: outputs""".stripMargin
   }
 
-  ignore should "Display pretty print of tree with deep nesting" taggedAs NativeTest in {
+  it should "Display pretty print of tree with deep nesting" taggedAs NativeTest in {
     val path = pathFromBasename("nested", "four_levels.wdl")
-    // remove -locked flag to create common stage
-    val nonLocked = cFlags.filterNot(x => x == "-locked")
-    val args = path.toString :: "--force" :: "--execTree" :: "pretty" :: nonLocked
-    val retval = Main.compile(args.toVector)
-    retval shouldBe a[SuccessPrettyTree]
-
-    inside(retval) {
-      case SuccessPrettyTree(pretty) =>
-        // remove colours
-        pretty.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
-                                                              |├───App Inputs: common
-                                                              |├───App Fragment: if ((username == "a"))
-                                                              |│   └───Workflow: four_levels_block_0
-                                                              |│       ├───App Task: c1
-                                                              |│       └───App Task: c2
-                                                              |├───App Fragment: scatter (i in [1, 4, 9])
-                                                              |│   └───App Fragment: four_levels_frag_4
-                                                              |│       └───Workflow: four_levels_block_1_0
-                                                              |│           ├───App Fragment: if ((j == "john"))
-                                                              |│           │   └───App Task: concat
-                                                              |│           └───App Fragment: if ((j == "clease"))
-                                                              |└───App Outputs: outputs""".stripMargin
-
+    val args = Vector(path.toString, "-execTree", "pretty") ++ cFlagsUnlocked
+    val retval = Main.compile(args)
+    val pretty = retval match {
+      case SuccessPrettyTree(pretty) => pretty
+      case Failure(msg, Some(exception)) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}", exception)
+      case Failure(msg, None) =>
+        throw new Exception(s"Unable to compile workflow: ${msg}")
+      case _ =>
+        throw new Exception(s"Unexpected result ${retval}")
     }
+
+    // remove colours
+    pretty.replaceAll("\u001B\\[[;\\d]*m", "") shouldBe """Workflow: four_levels
+                                                          |├───App Inputs: common
+                                                          |├───App Fragment: if (username == "a")
+                                                          |│   └───Workflow: four_levels_block_0
+                                                          |│       ├───App Task: c1
+                                                          |│       └───App Task: c2
+                                                          |├───App Fragment: scatter (i in [1, 4, 9])
+                                                          |│   └───App Fragment: four_levels_frag_DxWorkflowStage(stage-6)
+                                                          |│       └───App Fragment: four_levels_frag_DxWorkflowStage(stage-4)
+                                                          |│           └───App Task: concat
+                                                          |└───App Outputs: outputs""".stripMargin
   }
 }

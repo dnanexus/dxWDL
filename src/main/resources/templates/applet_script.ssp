@@ -53,21 +53,20 @@
 
        # run dxfuse so that it will not exit after the bash script exists.
        echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-       dxfuse_log=/root/.dxfuse/dxfuse.log
-
        dxfuse -readOnly ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString}
        dxfuse_err_code=${bashDollar}?
+
        if [[ ${bashDollar}dxfuse_err_code != 0 ]]; then
            echo "error starting dxfuse, rc=${bashDollar}dxfuse_err_code"
+           dxfuse_log=/root/.dxfuse/dxfuse.log
+           # wait a second for the log to sync
+           sleep 1
            if [[ -f ${bashDollar}dxfuse_log ]]; then
                cat ${bashDollar}dxfuse_log
            fi
            exit 1
        fi
 
-       # do we really need this?
-       sleep 1
-       cat ${bashDollar}dxfuse_log
        echo ""
        ls -Rl ${dxPathConfig.dxfuseMountpoint.toString}
     fi
