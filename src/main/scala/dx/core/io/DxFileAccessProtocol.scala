@@ -103,7 +103,7 @@ case class DxFileAccessProtocol(dxApi: DxApi = DxApi.get,
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
 
   private def resolveFileUri(uri: String): DxFile = {
-    dxApi.resolveDxUriFile(uri.split("::")(0))
+    dxApi.resolveFile(uri.split("::")(0))
   }
 
   override def resolve(uri: String): DxFileSource = {

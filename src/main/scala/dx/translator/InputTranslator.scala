@@ -135,14 +135,14 @@ abstract class InputTranslator(bundle: Bundle,
         throw new Exception(s"invalid file ${other}")
     }
     val resolvedPaths = dxApi
-      .resolveBulk(dxPaths, project)
+      .resolveDataObjectBulk(dxPaths, project)
       .map {
         case (key, dxFile: DxFile) => key -> dxFile
         case (_, dxobj) =>
           throw new Exception(s"Scanning the input file produced ${dxobj} which is not a file")
       }
     // lookup platform files in bulk
-    dxApi.fileBulkDescribe(dxFiles ++ resolvedPaths.values)
+    dxApi.describeFilesBulk(dxFiles ++ resolvedPaths.values)
   }
 
   lazy val dxFileDescCache: DxFileDescCache = DxFileDescCache(dxFiles)

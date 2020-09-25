@@ -12,41 +12,36 @@ case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
   def apply(fileToLocalMapping: Map[DxFile, Path],
-            dxFileDescCache: DxFileDescCache,
             workerPaths: DxWorkerPaths): Option[DxfuseManifest] = {
     if (fileToLocalMapping.isEmpty) {
       return None
     }
 
-    // Check that the files are not archived
-    val dxFiles = fileToLocalMapping.keys.toVector
-    val fileDescs = dxApi.fileBulkDescribe(dxFiles)
-    fileDescs.map(_.describe()).foreach { desc =>
-      if (desc.archivalState != DxArchivalState.Live)
-        throw new Exception(
-            s"file ${desc.id} is not live, it is in ${desc.archivalState} state"
-        )
-    }
-
     val files = fileToLocalMapping.map {
       case (dxFile, path) =>
-        val parentDir = path.getParent.toString
+        // we expect that the files will have already been bulk described
+        assert(dxFile.hasCachedDesc)
+        // check that the files are not archived
+        if (dxFile.describe().archivalState != DxArchivalState.Live) {
+          throw new Exception(s"file ${dxFile} is not live")
+        }
 
+        val parentDir = path.getParent.toString
         // remove the mountpoint from the directory. We need
         // paths that are relative to the mount point.
         val mountDir = workerPaths.getDxfuseMountDir().toString
         assert(parentDir.startsWith(mountDir))
-        val relParentDir = "/" + parentDir.stripPrefix(mountDir)
+        val relParentDir = s"/${parentDir.stripPrefix(mountDir)}"
 
-        val fDesc = dxFileDescCache.updateFileFromCache(dxFile).describe()
+        val desc = dxFile.describe()
         JsObject(
-            "proj_id" -> JsString(fDesc.project),
             "file_id" -> JsString(dxFile.id),
             "parent" -> JsString(relParentDir),
-            "fname" -> JsString(fDesc.name),
-            "size" -> JsNumber(fDesc.size),
-            "ctime" -> JsNumber(fDesc.created),
-            "mtime" -> JsNumber(fDesc.modified)
+            "proj_id" -> JsString(desc.project),
+            "fname" -> JsString(desc.name),
+            "size" -> JsNumber(desc.size),
+            "ctime" -> JsNumber(desc.created),
+            "mtime" -> JsNumber(desc.modified)
         )
     }.toVector
 

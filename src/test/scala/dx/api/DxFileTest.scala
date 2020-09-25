@@ -35,7 +35,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
                             compareDetails: Boolean = false): Unit = {
     assume(isLoggedIn)
     val extraArgs = if (compareDetails) Set(Field.Details) else Set.empty[Field.Value]
-    val result = dxApi.fileBulkDescribe(query, extraArgs)
+    val result = dxApi.describeFilesBulk(query, extraArgs)
     result.size shouldBe expectedSize.getOrElse(expected.size)
     result.forall(_.hasCachedDesc) shouldBe true
     val lookup = DxFileDescCache(expected)
@@ -104,7 +104,7 @@ class DxFileTest extends AnyFlatSpec with Matchers {
   }
 
   it should "bulk describe an empty vector" taggedAs ApiTest in {
-    val result = dxApi.fileBulkDescribe(Vector.empty)
+    val result = dxApi.describeFilesBulk(Vector.empty)
     result.size shouldBe 0
   }
 
@@ -144,18 +144,18 @@ class DxFileTest extends AnyFlatSpec with Matchers {
   }
 
   it should "Describe files in bulk without extra field values - details value should be none" taggedAs ApiTest in {
-    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS, FILE2))
+    val results = dxApi.describeFilesBulk(Vector(FILE_IN_TWO_PROJS, FILE2))
     results.foreach(f => f.describe().details shouldBe None)
   }
 
   it should "bulk describe file which is in two projects, but projects where to search is given" taggedAs ApiTest in {
-    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS))
+    val results = dxApi.describeFilesBulk(Vector(FILE_IN_TWO_PROJS))
     results.forall(_.hasCachedDesc) shouldBe true
     results.size shouldBe 1
   }
 
   it should "bulk describe file which is in two projects, project where to search is not given" taggedAs ApiTest in {
-    val results = dxApi.fileBulkDescribe(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
+    val results = dxApi.describeFilesBulk(Vector(FILE_IN_TWO_PROJS_WO_PROJ))
     results.forall(_.hasCachedDesc) shouldBe true
     results.size shouldBe 2
   }

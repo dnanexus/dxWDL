@@ -43,7 +43,7 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
     path match {
       case id if id.startsWith("applet-") => dxApi.applet(id)
       case _ =>
-        dxApi.resolveOnePath(path, Some(dxProject)) match {
+        dxApi.resolveDataObject(path, Some(dxProject)) match {
           case applet: DxApplet => applet
           case _                => throw new Exception(s"DxNI only supports apps and applets")
         }

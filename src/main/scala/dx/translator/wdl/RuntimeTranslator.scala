@@ -218,7 +218,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
         // evaluation at runtime
         runtime.container.collectFirst {
           case uri if uri.startsWith(DxPath.DxUriPrefix) =>
-            val dxfile = dxApi.resolveDxUriFile(uri)
+            val dxfile = dxApi.resolveFile(uri)
             DxFileDockerImage(uri, dxfile)
         }
       } catch {

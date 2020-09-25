@@ -29,11 +29,11 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
   }
 
   private def getIdFromName(name: String): String = {
-    dxApi.resolveOnePath(name, Some(project)).id
+    dxApi.resolveDataObject(name, Some(project)).id
   }
 
   private lazy val appletId: String = getIdFromName("/release_test/mummer_nucmer_aligner")
-  private lazy val fileId: String = dxApi.resolveOnePath("Readme.md", Some(project)).id
+  private lazy val fileId: String = dxApi.resolveDataObject("Readme.md", Some(project)).id
 
   it should "recognize restartable entry points" in {
     val runtimeAttrs: JsValue =
@@ -396,7 +396,7 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
   it should "take app id as well as applet id for custom reorg" taggedAs (ApiTest, EdgeTest) in {
     assume(isLoggedIn)
-    val appId: String = dxApi.resolveOneApp("cloud_workstation").id
+    val appId: String = dxApi.resolveApp("cloud_workstation").id
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {

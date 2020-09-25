@@ -8,6 +8,7 @@ import dx.api.{
   DxApi,
   DxExecutable,
   DxExecution,
+  DxFile,
   DxJob,
   DxJobDescribe,
   DxProject,
@@ -82,12 +83,12 @@ abstract class JobMeta(val homeDir: Path, val dxApi: DxApi, val logger: Logger) 
 
   def jsInputs: Map[String, JsValue]
 
-  lazy val dxFileDescCache: DxFileDescCache = {
+  private lazy val dxFileDescCache: DxFileDescCache = {
     val allFilesReferenced = jsInputs.flatMap {
-      case (_, jsElem) => dxApi.findFiles(jsElem)
+      case (_, jsElem) => DxFile.findFiles(dxApi, jsElem)
     }.toVector
     // Describe all the files and build a lookup cache
-    DxFileDescCache(dxApi.fileBulkDescribe(allFilesReferenced))
+    DxFileDescCache(dxApi.describeFilesBulk(allFilesReferenced))
   }
 
   lazy val inputDeserializer: ParameterLinkDeserializer =

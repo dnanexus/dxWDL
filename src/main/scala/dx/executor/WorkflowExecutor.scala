@@ -229,8 +229,8 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
 
   private def getAnalysisOutputFiles(analysis: DxAnalysis): Map[String, DxFile] = {
     val desc = analysis.describe(Set(Field.Input, Field.Output))
-    val fileOutputs: Set[DxFile] = dxApi.findFiles(desc.output.get).toSet
-    val fileInputs: Set[DxFile] = dxApi.findFiles(desc.input.get).toSet
+    val fileOutputs: Set[DxFile] = DxFile.findFiles(dxApi, desc.output.get).toSet
+    val fileInputs: Set[DxFile] = DxFile.findFiles(dxApi, desc.input.get).toSet
     val analysisFiles: Vector[DxFile] = (fileOutputs -- fileInputs).toVector
     if (logger.isVerbose) {
       logger.traceLimited(s"analysis has ${fileOutputs.size} output files")
@@ -246,7 +246,7 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
       } else {
         logger.traceLimited("Checking timestamps")
         // Retain only files that were created AFTER the analysis started
-        val describedFiles = dxApi.fileBulkDescribe(analysisFiles)
+        val describedFiles = dxApi.describeFilesBulk(analysisFiles)
         val analysisCreated: java.util.Date = desc.getCreationDate
         describedFiles.collect {
           case dxFile if dxFile.describe().getCreationDate.compareTo(analysisCreated) >= 0 =>
@@ -273,7 +273,7 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
                   s"Did not find variable ${fqn} (${name}) in the block environment"
               )
             }
-            dxApi.findFiles(jsValue)
+            DxFile.findFiles(dxApi, jsValue)
         }
         .flatten
         .map(_.id)

@@ -113,7 +113,7 @@ case class Compiler(extras: Option[Extras],
       val regionalProject = dxApi.resolveProject(regionalProjectName)
       val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${RuntimeAsset}"
       logger.trace(s"Looking for asset id at ${assetUri}")
-      val dxAsset = dxApi.resolveOnePath(assetUri, Some(regionalProject)) match {
+      val dxAsset = dxApi.resolveDataObject(assetUri, Some(regionalProject)) match {
         case dxFile: DxRecord => dxFile
         case other =>
           throw new Exception(s"Found dx object of wrong type ${other} at ${assetUri}")

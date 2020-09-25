@@ -48,7 +48,7 @@ class ExecutableCompiler(extras: Option[Extras],
       case VInt(i)     => JsNumber(i)
       case VFloat(f)   => JsNumber(f)
       case VString(s)  => JsString(s)
-      case VFile(f)    => dxApi.resolveDxUriFile(f).asJson
+      case VFile(f)    => dxApi.resolveFile(f).asJson
       // TODO: case VDirectory(d) =>
       case VArray(array) => JsArray(array.map(defaultValueToNative))
       case _             => throw new Exception(s"unhandled value ${value}")
@@ -88,7 +88,7 @@ class ExecutableCompiler(extras: Option[Extras],
           case ParameterAttributes.SimpleChoice(VBoolean(value)) => JsBoolean(value)
           case ParameterAttributes.FileChoice(value, name) => {
             // TODO: support project and record choices
-            val dxLink = dxApi.resolveDxUriFile(value).asJson
+            val dxLink = dxApi.resolveFile(value).asJson
             if (name.isDefined) {
               JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
             } else {
@@ -106,7 +106,7 @@ class ExecutableCompiler(extras: Option[Extras],
           case ParameterAttributes.FileSuggestion(value, name, project, path) => {
             // TODO: support project and record suggestions
             val dxLink: Option[JsValue] = value match {
-              case Some(str) => Some(dxApi.resolveDxUriFile(str).asJson)
+              case Some(str) => Some(dxApi.resolveFile(str).asJson)
               case None      => None
             }
             if (name.isDefined || project.isDefined || path.isDefined) {

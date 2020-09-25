@@ -221,27 +221,6 @@ case class DxApi(logger: Logger = Logger.get,
     response.toString.parseJson.asJsObject
   }
 
-  def whoami(): String = {
-    call(DXAPI.systemWhoami[JsonNode]) match {
-      case JsObject(fields) =>
-        fields.get("id") match {
-          case Some(JsString(id)) => id
-          case other =>
-            throw new Exception(s"unexpected whoami result ${other}")
-        }
-      case other =>
-        throw new Exception(s"unexpected whoami result ${other}")
-    }
-  }
-
-  lazy val isLoggedIn: Boolean = {
-    try {
-      whoami() != null
-    } catch {
-      case _: Throwable => false
-    }
-  }
-
   def analysisDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.analysisDescribe[JsonNode], id, fields)
   }
@@ -316,113 +295,64 @@ case class DxApi(logger: Logger = Logger.get,
     callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }
 
-  // Describe the names of all the files in one batch. This is much more efficient
-  // than submitting file describes one-by-one.
-  def fileBulkDescribe(
-      files: Vector[DxFile],
-      extraFields: Set[Field.Value] = Set.empty
-  ): Vector[DxFile] = {
-    if (files.isEmpty) {
-      // avoid an unnessary API call; this is important for unit tests
-      // that do not have a network connection.
-      return Vector.empty
-    }
-
-    val dxFindDataObjects = DxFindDataObjects(this, None)
-
-    // Describe a large number of platform objects in bulk.
-    // DxFindDataObjects caches the desc on the DxFile object, so we only
-    // need to return the DxFile.
-    def submitRequest(objs: Vector[DxFile],
-                      extraFields: Set[Field.Value],
-                      project: Option[DxProject]): Vector[DxFile] = {
-      val ids = objs.map(file => file.getId)
-      dxFindDataObjects
-        .apply(
-            dxProject = project,
-            folder = None,
-            recurse = true,
-            classRestriction = Some("file"),
-            withInputOutputSpec = true,
-            idConstraints = ids,
-            extraFields = extraFields
-        )
-        .asInstanceOf[Map[DxFile, DxFileDescribe]]
-        .keys
-        .toVector
-    }
-
-    // group files by projects, in order to avoid searching in all projects (unless project is not specified)
-    files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
-      case (accuOuter, (proj, files)) =>
-        // Limit on number of objects in one API request
-        val slices = files.grouped(limit).toList
-        // iterate on the ranges
-        accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
-          case (accu, objRange) =>
-            accu ++ submitRequest(objRange, extraFields, proj)
-        }
-    }
-  }
-
-  def findApps(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindApps[JsonNode], fields)
-  }
-
-  def resolveOneApp(name: String): DxApp = {
-    findApps(Map("name" -> JsString(name))) match {
-      case JsObject(fields) if fields.contains("results") =>
-        fields("results") match {
-          case JsArray(results) if results.size == 1 =>
-            val result = results(0).asJsObject.fields
-            val JsString(id) = result("id")
-            val app = DxApp(this, id)
-            result.get("describe").foreach { descJs =>
-              val desc = DxApp.parseDescribeJson(descJs.asJsObject, this)
-              app.cacheDescribe(desc)
-            }
-            app
-          case other =>
-            throw new Exception(s"expected 1 result, got ${other}")
-        }
-      case other =>
-        throw new Exception(s"invalid findApps response ${other}")
-    }
-  }
-
-  def findDataObjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindDataObjects[JsonNode], fields)
-  }
-
-  def findExecutions(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindExecutions[JsonNode], fields)
-  }
-
-  // Search through a JSON value for all the dx:file links inside it. Returns
-  // those as a vector.
-  def findFiles(jsValue: JsValue): Vector[DxFile] = {
-    jsValue match {
-      case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
-        Vector.empty[DxFile]
-      case JsObject(_) if DxFile.isDxFile(jsValue) =>
-        Vector(DxFile.fromJson(this, jsValue))
-      case JsObject(fields) =>
-        fields.map { case (_, v) => findFiles(v) }.toVector.flatten
-      case JsArray(elems) =>
-        elems.flatMap(e => findFiles(e))
-    }
-  }
-
-  def findProjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemFindProjects[JsonNode], fields)
-  }
-
   def jobDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     callObject(DXAPI.jobDescribe[JsonNode], id, fields)
   }
 
   def jobNew(fields: Map[String, JsValue]): JsObject = {
     call(DXAPI.jobNew[JsonNode], fields)
+  }
+
+  def runSubJob(entryPoint: String,
+                instanceType: Option[String],
+                inputs: JsValue,
+                dependsOn: Vector[DxExecution],
+                delayWorkspaceDestruction: Option[Boolean],
+                name: Option[String] = None,
+                details: Option[JsValue] = None): DxJob = {
+    val requiredFields = Map(
+        "function" -> JsString(entryPoint),
+        "input" -> inputs
+    )
+    val instanceFields = instanceType match {
+      case None => Map.empty
+      case Some(iType) =>
+        Map(
+            "systemRequirements" -> JsObject(
+                entryPoint -> JsObject("instanceType" -> JsString(iType))
+            )
+        )
+    }
+    val dependsFields =
+      if (dependsOn.isEmpty) {
+        Map.empty
+      } else {
+        val execIds = dependsOn.map { dxExec =>
+          JsString(dxExec.id)
+        }
+        Map("dependsOn" -> JsArray(execIds))
+      }
+    val dwdFields = delayWorkspaceDestruction match {
+      case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
+      case _          => Map.empty
+    }
+    val nameFields = name match {
+      case Some(n) => Map("name" -> JsString(n))
+      case None    => Map.empty
+    }
+    val detailsFields = details match {
+      case Some(d) => Map("details" -> d)
+      case None    => Map.empty
+    }
+    val request = requiredFields ++ instanceFields ++ dependsFields ++ dwdFields ++ nameFields ++ detailsFields
+    logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
+    val response = jobNew(request)
+    val id: String = response.fields.get("id") match {
+      case Some(JsString(x)) => x
+      case _ =>
+        throw new AppInternalException(s"Bad format returned from jobNew ${response.prettyPrint}")
+    }
+    job(id)
   }
 
   def orgDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
@@ -478,10 +408,6 @@ case class DxApi(logger: Logger = Logger.get,
     callObject(DXAPI.recordDescribe[JsonNode], id, fields)
   }
 
-  def resolveDataObjects(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemResolveDataObjects[JsonNode], fields)
-  }
-
   def userDescribe(id: String, fields: Map[String, JsValue] = Map.empty): JsObject = {
     try {
       callObject(DXAPI.userDescribe[JsonNode], id, fields)
@@ -514,57 +440,277 @@ case class DxApi(logger: Logger = Logger.get,
     callObject(DXAPI.workflowRun[JsonNode], id, fields)
   }
 
-  def runSubJob(entryPoint: String,
-                instanceType: Option[String],
-                inputs: JsValue,
-                dependsOn: Vector[DxExecution],
-                delayWorkspaceDestruction: Option[Boolean],
-                name: Option[String] = None,
-                details: Option[JsValue] = None): DxJob = {
-    val requiredFields = Map(
-        "function" -> JsString(entryPoint),
-        "input" -> inputs
-    )
-    val instanceFields = instanceType match {
+  // system calls
+
+  def whoami(): String = {
+    call(DXAPI.systemWhoami[JsonNode]) match {
+      case JsObject(fields) =>
+        fields.get("id") match {
+          case Some(JsString(id)) => id
+          case other =>
+            throw new Exception(s"unexpected whoami result ${other}")
+        }
+      case other =>
+        throw new Exception(s"unexpected whoami result ${other}")
+    }
+  }
+
+  lazy val isLoggedIn: Boolean = {
+    try {
+      whoami() != null
+    } catch {
+      case _: Throwable => false
+    }
+  }
+
+  def findApps(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemFindApps[JsonNode], fields)
+  }
+
+  def resolveApp(name: String): DxApp = {
+    findApps(Map("name" -> JsString(name))) match {
+      case JsObject(fields) if fields.contains("results") =>
+        fields("results") match {
+          case JsArray(results) if results.size == 1 =>
+            val result = results(0).asJsObject.fields
+            val JsString(id) = result("id")
+            val app = DxApp(this, id)
+            result.get("describe").foreach { descJs =>
+              val desc = DxApp.parseDescribeJson(descJs.asJsObject, this)
+              app.cacheDescribe(desc)
+            }
+            app
+          case other =>
+            throw new Exception(s"expected 1 result, got ${other}")
+        }
+      case other =>
+        throw new Exception(s"invalid findApps response ${other}")
+    }
+  }
+
+  def findDataObjects(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemFindDataObjects[JsonNode], fields)
+  }
+
+  def resolveDataObjects(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemResolveDataObjects[JsonNode], fields)
+  }
+
+  private def triagePath(components: DxPathComponents): Either[DxDataObject, DxPathComponents] = {
+    if (isDataObjectId(components.name)) {
+      val dxDataObj = dataObject(components.name)
+      val dxDataObjWithProj = components.projName match {
+        case None => dxDataObj
+        case Some(pid) =>
+          val dxProj = resolveProject(pid)
+          dataObject(dxDataObj.getId, Some(dxProj))
+      }
+      Left(dxDataObjWithProj)
+    } else {
+      Right(components)
+    }
+  }
+
+  // Create a request from a path like:
+  //   "dx://dxWDL_playground:/test_data/fileB",
+  private def createResolutionRequest(components: DxPathComponents): JsValue = {
+    val reqFields: Map[String, JsValue] = Map("name" -> JsString(components.name))
+    val folderField: Map[String, JsValue] = components.folder match {
+      case None    => Map.empty
+      case Some(x) => Map("folder" -> JsString(x))
+    }
+    val projectField: Map[String, JsValue] = components.projName match {
       case None => Map.empty
-      case Some(iType) =>
-        Map(
-            "systemRequirements" -> JsObject(
-                entryPoint -> JsObject("instanceType" -> JsString(iType))
+      case Some(x) =>
+        val dxProj = resolveProject(x)
+        Map("project" -> JsString(dxProj.getId))
+    }
+    JsObject(reqFields ++ folderField ++ projectField)
+  }
+
+  private def submitResolutionRequest(dxPaths: Vector[DxPathComponents],
+                                      dxProject: DxProject): Map[String, DxDataObject] = {
+    val objectReqs: Vector[JsValue] = dxPaths.map(createResolutionRequest)
+    val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
+    val responseJs = resolveDataObjects(request)
+    val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
+      case Some(JsArray(x)) => x
+      case other            => throw new Exception(s"API call returned invalid data ${other}")
+    }
+    resultsPerObj.zipWithIndex.map {
+      case (descJs: JsValue, i) =>
+        val path = dxPaths(i).sourcePath
+        val o = descJs match {
+          case JsArray(x) if x.isEmpty =>
+            throw new Exception(
+                s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
             )
+          case JsArray(x) if x.length == 1 => x(0)
+          case JsArray(_) =>
+            throw new Exception(s"Found more than one dx object in path ${path}")
+          case obj: JsObject => obj
+          case other         => throw new Exception(s"malformed json ${other}")
+        }
+        val fields = o.asJsObject.fields
+        val dxid = fields.get("id") match {
+          case Some(JsString(x)) => x
+          case _                 => throw new Exception("no id returned")
+        }
+
+        // could be a container, not a project
+        val dxContainer: Option[DxProject] = fields.get("project") match {
+          case Some(JsString(x)) => Some(project(x))
+          case _                 => None
+        }
+
+        // safe conversion to a dx-object
+        path -> dataObject(dxid, dxContainer)
+    }.toMap
+  }
+
+  def resolveDataObject(dxPath: String,
+                        dxProject: Option[DxProject] = None,
+                        dxPathComponents: Option[DxPathComponents] = None): DxDataObject = {
+    val components = dxPathComponents.getOrElse(DxPath.parse(dxPath))
+    val proj = dxProject.getOrElse(components.projName match {
+      case Some(projName) => resolveProject(projName)
+      case None           => currentProject
+    })
+    // peel off objects that have already been resolved
+    val found = triagePath(components) match {
+      case Left(alreadyResolved) =>
+        Vector(alreadyResolved)
+      case Right(dxPathsToResolve) =>
+        submitResolutionRequest(Vector(dxPathsToResolve), proj).values.toVector
+    }
+
+    found match {
+      case Vector(result) =>
+        result
+      case Vector() =>
+        throw new Exception(s"Could not find ${dxPath} in project ${proj.getId}")
+      case _ =>
+        throw new Exception(
+            s"Found more than one dx:object in path ${dxPath}, project=${proj.getId}"
         )
     }
-    val dependsFields =
-      if (dependsOn.isEmpty) {
-        Map.empty
-      } else {
-        val execIds = dependsOn.map { dxExec =>
-          JsString(dxExec.id)
-        }
-        Map("dependsOn" -> JsArray(execIds))
-      }
-    val dwdFields = delayWorkspaceDestruction match {
-      case Some(true) => Map("delayWorkspaceDestruction" -> JsTrue)
-      case _          => Map.empty
-    }
-    val nameFields = name match {
-      case Some(n) => Map("name" -> JsString(n))
-      case None    => Map.empty
-    }
-    val detailsFields = details match {
-      case Some(d) => Map("details" -> d)
-      case None    => Map.empty
-    }
-    val request = requiredFields ++ instanceFields ++ dependsFields ++ dwdFields ++ nameFields ++ detailsFields
-    logger.traceLimited(s"subjob request=${JsObject(request).prettyPrint}")
+  }
 
-    val response = jobNew(request)
-    val id: String = response.fields.get("id") match {
-      case Some(JsString(x)) => x
-      case _ =>
-        throw new AppInternalException(s"Bad format returned from jobNew ${response.prettyPrint}")
+  // Describe the names of all the data objects in one batch. This is much more efficient
+  // than submitting object describes one-by-one.
+  def resolveDataObjectBulk(dxPaths: Seq[String],
+                            dxProject: DxProject): Map[String, DxDataObject] = {
+    if (dxPaths.isEmpty) {
+      // avoid an unnessary API call; this is important for unit tests
+      // that do not have a network connection.
+      return Map.empty
     }
-    job(id)
+    // split between files that have already been resolved (we have their file-id), and
+    // those that require lookup.
+    val (alreadyResolved, dxPathsToResolve) =
+      dxPaths.toSet.foldLeft((Map.empty[String, DxDataObject], Vector.empty[DxPathComponents])) {
+        case ((alreadyResolved, rest), p) =>
+          triagePath(DxPath.parse(p)) match {
+            case Left(dxObjWithProj) =>
+              (alreadyResolved + (p -> dxObjWithProj), rest)
+            case Right(components) =>
+              (alreadyResolved, rest :+ components)
+          }
+      }
+    if (dxPathsToResolve.isEmpty) {
+      alreadyResolved
+    } else {
+      // Limit on number of objects in one API request
+      val slices = dxPathsToResolve.grouped(limit).toList
+      // iterate on the ranges
+      val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {
+        case (accu, pathsRange) =>
+          accu ++ submitResolutionRequest(pathsRange, dxProject)
+      }
+      alreadyResolved ++ resolved
+    }
+  }
+
+  /**
+    * Describe the names of all the files in one batch. This is much more efficient
+    * than submitting file describes one-by-one.
+    * Note: this function does *not* necessarily return the files in the same order
+    * they are passed.
+    * @param files files to describe
+    * @param extraFields extra fields to describe
+    * @return
+    */
+  def describeFilesBulk(
+      files: Vector[DxFile],
+      extraFields: Set[Field.Value] = Set.empty
+  ): Vector[DxFile] = {
+    if (files.isEmpty) {
+      // avoid an unnessary API call; this is important for unit tests
+      // that do not have a network connection.
+      return Vector.empty
+    }
+
+    val dxFindDataObjects = DxFindDataObjects(this, None)
+
+    // Describe a large number of platform objects in bulk.
+    // DxFindDataObjects caches the desc on the DxFile object, so we only
+    // need to return the DxFile.
+    def submitRequest(objs: Vector[DxFile],
+                      extraFields: Set[Field.Value],
+                      project: Option[DxProject]): Vector[DxFile] = {
+      val ids = objs.map(file => file.getId)
+      dxFindDataObjects
+        .apply(
+            dxProject = project,
+            folder = None,
+            recurse = true,
+            classRestriction = Some("file"),
+            withInputOutputSpec = true,
+            idConstraints = ids,
+            extraFields = extraFields
+        )
+        .asInstanceOf[Map[DxFile, DxFileDescribe]]
+        .keys
+        .toVector
+    }
+
+    // group files by projects, in order to avoid searching in all projects (unless project is not specified)
+    files.groupBy(file => file.project).foldLeft(Vector.empty[DxFile]) {
+      case (accuOuter, (proj, files)) =>
+        // Limit on number of objects in one API request
+        val slices = files.grouped(limit).toList
+        // iterate on the ranges
+        accuOuter ++ slices.foldLeft(Vector.empty[DxFile]) {
+          case (accu, objRange) =>
+            accu ++ submitRequest(objRange, extraFields, proj)
+        }
+    }
+  }
+
+  def resolveFile(uri: String): DxFile = {
+    resolveDataObject(uri) match {
+      case dxfile: DxFile =>
+        dxfile
+      case other =>
+        throw new Exception(s"Found dx:object of the wrong type ${other}")
+    }
+  }
+
+  def resolveRecord(uri: String): DxRecord = {
+    resolveDataObject(uri) match {
+      case dxrec: DxRecord =>
+        dxrec
+      case other =>
+        throw new Exception(s"Found dx:object of the wrong type ${other}")
+    }
+  }
+
+  def findExecutions(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemFindExecutions[JsonNode], fields)
+  }
+
+  def findProjects(fields: Map[String, JsValue]): JsObject = {
+    call(DXAPI.systemFindProjects[JsonNode], fields)
   }
 
   // copy asset to local project, if it isn't already here.
@@ -642,11 +788,39 @@ case class DxApi(logger: Logger = Logger.get,
     }
   }
 
+  private def silentFileDelete(p: Path): Unit = {
+    try {
+      Files.delete(p)
+    } catch {
+      case _: Throwable => ()
+    }
+  }
+
+  // Read the contents of a platform file into a string
+  def downloadString(dxFile: DxFile): String = {
+    // We don't want to use the dxjava implementation
+    //val bytes = dxFile.downloadBytes()
+    //new String(bytes, StandardCharsets.UTF_8)
+
+    // We don't want to use "dx cat" because it doesn't validate the checksum.
+    //val (outmsg, errmsg) = Utils.execCommand(s"dx cat ${dxFile.id}")
+    //outmsg
+
+    // create a temporary file, and write the contents into it.
+    val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
+    silentFileDelete(tempFi)
+    downloadFile(tempFi, dxFile)
+    val content = FileUtils.readFileContent(tempFi)
+    silentFileDelete(tempFi)
+    content
+  }
+
   // Upload a local file to the platform, and return a json link.
   // Use 'dx upload' as a separate process.
   def uploadFile(path: Path): DxFile = {
-    if (!Files.exists(path))
+    if (!Files.exists(path)) {
       throw new AppInternalException(s"Output file ${path.toString} is missing")
+    }
 
     def uploadOneFile(path: Path, counter: Int): Option[String] = {
       try {
@@ -677,191 +851,5 @@ case class DxApi(logger: Logger = Logger.get,
       counter = counter + 1
     }
     throw new Exception(s"Failure to upload file ${path}")
-  }
-
-  private def silentFileDelete(p: Path): Unit = {
-    try {
-      Files.delete(p)
-    } catch {
-      case _: Throwable => ()
-    }
-  }
-
-  // Read the contents of a platform file into a string
-  def downloadString(dxFile: DxFile): String = {
-    // We don't want to use the dxjava implementation
-    //val bytes = dxFile.downloadBytes()
-    //new String(bytes, StandardCharsets.UTF_8)
-
-    // We don't want to use "dx cat" because it doesn't validate the checksum.
-    //val (outmsg, errmsg) = Utils.execCommand(s"dx cat ${dxFile.id}")
-    //outmsg
-
-    // create a temporary file, and write the contents into it.
-    val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
-    silentFileDelete(tempFi)
-    downloadFile(tempFi, dxFile)
-    val content = FileUtils.readFileContent(tempFi)
-    silentFileDelete(tempFi)
-    content
-  }
-
-  private def triageOne(components: DxPathComponents): Either[DxDataObject, DxPathComponents] = {
-    if (isDataObjectId(components.name)) {
-      val dxDataObj = dataObject(components.name)
-      val dxDataObjWithProj = components.projName match {
-        case None => dxDataObj
-        case Some(pid) =>
-          val dxProj = resolveProject(pid)
-          dataObject(dxDataObj.getId, Some(dxProj))
-      }
-      Left(dxDataObjWithProj)
-    } else {
-      Right(components)
-    }
-  }
-
-  // split between files that have already been resolved (we have their file-id), and
-  // those that require lookup.
-  private def triage(
-      allDxPaths: Seq[String]
-  ): (Map[String, DxDataObject], Vector[DxPathComponents]) = {
-    allDxPaths.toSet.foldLeft((Map.empty[String, DxDataObject], Vector.empty[DxPathComponents])) {
-      case ((alreadyResolved, rest), p) =>
-        triageOne(DxPath.parse(p)) match {
-          case Left(dxObjWithProj) =>
-            (alreadyResolved + (p -> dxObjWithProj), rest)
-          case Right(components) =>
-            (alreadyResolved, rest :+ components)
-        }
-    }
-  }
-
-  // Create a request from a path like:
-  //   "dx://dxWDL_playground:/test_data/fileB",
-  private def makeResolutionReq(components: DxPathComponents): JsValue = {
-    val reqFields: Map[String, JsValue] = Map("name" -> JsString(components.name))
-    val folderField: Map[String, JsValue] = components.folder match {
-      case None    => Map.empty
-      case Some(x) => Map("folder" -> JsString(x))
-    }
-    val projectField: Map[String, JsValue] = components.projName match {
-      case None => Map.empty
-      case Some(x) =>
-        val dxProj = resolveProject(x)
-        Map("project" -> JsString(dxProj.getId))
-    }
-    JsObject(reqFields ++ folderField ++ projectField)
-  }
-
-  private def submitRequest(dxPaths: Vector[DxPathComponents],
-                            dxProject: DxProject): Map[String, DxDataObject] = {
-    val objectReqs: Vector[JsValue] = dxPaths.map(makeResolutionReq)
-    val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
-    val responseJs = resolveDataObjects(request)
-    val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
-      case Some(JsArray(x)) => x
-      case other            => throw new Exception(s"API call returned invalid data ${other}")
-    }
-    resultsPerObj.zipWithIndex.map {
-      case (descJs: JsValue, i) =>
-        val path = dxPaths(i).sourcePath
-        val o = descJs match {
-          case JsArray(x) if x.isEmpty =>
-            throw new Exception(
-                s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
-            )
-          case JsArray(x) if x.length == 1 => x(0)
-          case JsArray(_) =>
-            throw new Exception(s"Found more than one dx object in path ${path}")
-          case obj: JsObject => obj
-          case other         => throw new Exception(s"malformed json ${other}")
-        }
-        val fields = o.asJsObject.fields
-        val dxid = fields.get("id") match {
-          case Some(JsString(x)) => x
-          case _                 => throw new Exception("no id returned")
-        }
-
-        // could be a container, not a project
-        val dxContainer: Option[DxProject] = fields.get("project") match {
-          case Some(JsString(x)) => Some(project(x))
-          case _                 => None
-        }
-
-        // safe conversion to a dx-object
-        path -> dataObject(dxid, dxContainer)
-    }.toMap
-  }
-
-  // Describe the names of all the data objects in one batch. This is much more efficient
-  // than submitting object describes one-by-one.
-  def resolveBulk(dxPaths: Seq[String], dxProject: DxProject): Map[String, DxDataObject] = {
-    if (dxPaths.isEmpty) {
-      // avoid an unnessary API call; this is important for unit tests
-      // that do not have a network connection.
-      return Map.empty
-    }
-    // peel off objects that have already been resolved
-    val (alreadyResolved, dxPathsToResolve) = triage(dxPaths)
-    if (dxPathsToResolve.isEmpty) {
-      alreadyResolved
-    } else {
-      // Limit on number of objects in one API request
-      val slices = dxPathsToResolve.grouped(limit).toList
-      // iterate on the ranges
-      val resolved = slices.foldLeft(Map.empty[String, DxDataObject]) {
-        case (accu, pathsRange) =>
-          accu ++ submitRequest(pathsRange, dxProject)
-      }
-      alreadyResolved ++ resolved
-    }
-  }
-
-  def resolveOnePath(dxPath: String,
-                     dxProject: Option[DxProject] = None,
-                     dxPathComponents: Option[DxPathComponents] = None): DxDataObject = {
-    val components = dxPathComponents.getOrElse(DxPath.parse(dxPath))
-    val proj = dxProject.getOrElse(components.projName match {
-      case Some(projName) => resolveProject(projName)
-      case None           => currentProject
-    })
-    // peel off objects that have already been resolved
-    val found = triageOne(components) match {
-      case Left(alreadyResolved) =>
-        Vector(alreadyResolved)
-      case Right(dxPathsToResolve) =>
-        submitRequest(Vector(dxPathsToResolve), proj).values.toVector
-    }
-
-    found match {
-      case Vector(result) =>
-        result
-      case Vector() =>
-        throw new Exception(s"Could not find ${dxPath} in project ${proj.getId}")
-      case _ =>
-        throw new Exception(
-            s"Found more than one dx:object in path ${dxPath}, project=${proj.getId}"
-        )
-    }
-  }
-
-  // More accurate types
-  def resolveDxUriRecord(buf: String): DxRecord = {
-    resolveOnePath(buf) match {
-      case dxrec: DxRecord =>
-        dxrec
-      case other =>
-        throw new Exception(s"Found dx:object of the wrong type ${other}")
-    }
-  }
-
-  def resolveDxUriFile(uri: String): DxFile = {
-    resolveOnePath(uri) match {
-      case dxfile: DxFile =>
-        dxfile
-      case other =>
-        throw new Exception(s"Found dx:object of the wrong type ${other}")
-    }
   }
 }

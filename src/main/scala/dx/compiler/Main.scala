@@ -160,7 +160,7 @@ object Main {
         Left(f)
       case (None, Some(p)) =>
         // validate the file
-        val dataObj = DxApi.get.resolveOnePath(p, Some(dxProject))
+        val dataObj = DxApi.get.resolveDataObject(p, Some(dxProject))
         Right(dataObj)
       case (None, None) =>
         Left("/")

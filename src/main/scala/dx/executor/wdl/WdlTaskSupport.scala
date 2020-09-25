@@ -68,7 +68,6 @@ case class WdlTaskSupport(task: TAT.Task,
                           fileUploader: FileUploader)
     extends TaskSupport {
 
-  private val dxFileDescCache = jobMeta.dxFileDescCache
   private val fileResolver = jobMeta.fileResolver
   private val dxApi = jobMeta.dxApi
   private val logger = jobMeta.logger
@@ -240,8 +239,7 @@ case class WdlTaskSupport(task: TAT.Task,
       filesToDownload.map(fs => fs -> downloadLocalizer.getLocalPath(fs)).toMap
     val dxdaManifest: Option[DxdaManifest] =
       DxdaManifestBuilder(dxApi).apply(downloadFileSourceToPath.collect {
-        case (dxFs: DxFileSource, localPath) =>
-          dxFs.dxFile.id -> (dxFs.dxFile, localPath)
+        case (dxFs: DxFileSource, localPath) => dxFs.dxFile -> localPath
       })
 
     logger.traceLimited(s"streaming files = ${filesToStream}")
@@ -253,7 +251,7 @@ case class WdlTaskSupport(task: TAT.Task,
     val dxfuseManifest =
       DxfuseManifestBuilder(dxApi).apply(streamFileSourceToPath.collect {
         case (dxFs: DxFileSource, localPath) => dxFs.dxFile -> localPath
-      }, dxFileDescCache, workerPaths)
+      }, workerPaths)
 
     val fileSourceToPath = localFilesToPath ++ downloadFileSourceToPath ++ streamFileSourceToPath
 

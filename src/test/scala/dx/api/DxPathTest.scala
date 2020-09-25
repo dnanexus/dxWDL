@@ -39,20 +39,20 @@ class DxPathTest extends AnyFlatSpec with Matchers {
   it should "handle files in a root directory" taggedAs ApiTest in {
     val path = s"${testProject}:/Readme.md"
     val expectedId = describeDxFilePath(path)
-    val dxFile: DxFile = dxApi.resolveDxUriFile(s"dx://${path}")
+    val dxFile: DxFile = dxApi.resolveFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files in a subdirectory directory" taggedAs ApiTest in {
     val path = s"${testProject}:/test_data/fileA"
     val expectedId = describeDxFilePath(path)
-    val dxFile: DxFile = dxApi.resolveDxUriFile(s"dx://${path}")
+    val dxFile: DxFile = dxApi.resolveFile(s"dx://${path}")
     dxFile.getId shouldBe expectedId
   }
 
   it should "handle files with a colon" taggedAs ApiTest in {
     val expectedId = describeDxFilePath(s"${testProject}:/x*.txt")
-    val dxFile: DxFile = dxApi.resolveDxUriFile(s"dx://${testProject}:/x:x.txt")
+    val dxFile: DxFile = dxApi.resolveFile(s"dx://${testProject}:/x:x.txt")
     dxFile.getId shouldBe expectedId
   }
 }
