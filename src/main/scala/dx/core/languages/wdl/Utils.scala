@@ -13,7 +13,7 @@ import wdlTools.eval.Coercion
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
-import wdlTools.types.WdlTypes._
+import wdlTools.types.WdlTypes.{T_Float, _}
 import wdlTools.types.{
   TypeCheckingRegime,
   TypeException,
@@ -602,6 +602,7 @@ object Utils {
         case (T_Boolean, VBoolean(b))        => V_Boolean(value = b)
         case (T_Int, VInt(i))                => V_Int(i)
         case (T_Float, VFloat(f))            => V_Float(f)
+        case (T_Float, VInt(i))              => V_Float(i.toDouble)
         case (T_String, VString(s))          => V_String(s)
         case (T_File, VString(path))         => V_File(path)
         case (T_File, VFile(path))           => V_File(path)
