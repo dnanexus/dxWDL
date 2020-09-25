@@ -426,21 +426,20 @@ case class Native(dxWDLrtId: Option[String],
         |
         |       # run dxfuse so that it will not exit after the bash script exists.
         |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-        |       dxfuse_log=/root/.dxfuse/dxfuse.log
-        |
         |       dxfuse -readOnly ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString}
         |       dxfuse_err_code=$$?
+        |       
         |       if [[ $$dxfuse_err_code != 0 ]]; then
         |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
+        |           # wait for the log to sync
+        |           sleep 1
+        |           dxfuse_log=/root/.dxfuse/dxfuse.log
         |           if [[ -f $$dxfuse_log ]]; then
         |               cat $$dxfuse_log
         |           fi
         |           exit 1
         |       fi
         |
-        |       # do we really need this?
-        |       sleep 1
-        |       cat $$dxfuse_log
         |       echo ""
         |       ls -Rl ${dxPathConfig.dxfuseMountpoint.toString}
         |    fi
