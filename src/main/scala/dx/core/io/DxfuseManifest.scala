@@ -11,15 +11,15 @@ import spray.json._
 case class DxfuseManifest(value: JsValue)
 
 case class DxfuseManifestBuilder(dxApi: DxApi) {
-  def apply(file2LocalMapping: Map[DxFile, Path],
+  def apply(fileToLocalMapping: Map[DxFile, Path],
             dxFileDescCache: DxFileDescCache,
-            dxPathConfig: DxWorkerPaths): DxfuseManifest = {
-    if (file2LocalMapping.isEmpty) {
-      return DxfuseManifest(JsNull)
+            workerPaths: DxWorkerPaths): Option[DxfuseManifest] = {
+    if (fileToLocalMapping.isEmpty) {
+      return None
     }
 
     // Check that the files are not archived
-    val dxFiles = file2LocalMapping.keys.toVector
+    val dxFiles = fileToLocalMapping.keys.toVector
     val fileDescs = dxApi.fileBulkDescribe(dxFiles)
     fileDescs.map(_.describe()).foreach { desc =>
       if (desc.archivalState != DxArchivalState.Live)
@@ -28,13 +28,13 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
         )
     }
 
-    val files = file2LocalMapping.map {
+    val files = fileToLocalMapping.map {
       case (dxFile, path) =>
         val parentDir = path.getParent.toString
 
         // remove the mountpoint from the directory. We need
         // paths that are relative to the mount point.
-        val mountDir = dxPathConfig.dxfuseMountpoint.toString
+        val mountDir = workerPaths.getDxfuseMountDir().toString
         assert(parentDir.startsWith(mountDir))
         val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
@@ -50,8 +50,10 @@ case class DxfuseManifestBuilder(dxApi: DxApi) {
         )
     }.toVector
 
-    DxfuseManifest(
-        JsObject("files" -> JsArray(files), "directories" -> JsArray(Vector.empty))
+    Some(
+        DxfuseManifest(
+            JsObject("files" -> JsArray(files), "directories" -> JsArray(Vector.empty))
+        )
     )
   }
 }

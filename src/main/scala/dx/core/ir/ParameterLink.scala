@@ -98,7 +98,7 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
         case VFile(path) =>
           fileResolver.resolve(path) match {
             case dxFile: DxFileSource       => Some(dxFile.dxFile.asJson)
-            case localFile: LocalFileSource => Some(JsString(localFile.toString))
+            case localFile: LocalFileSource => Some(JsString(localFile.valuePath.toString))
             case other =>
               throw new RuntimeException(s"Unsupported file source ${other}")
           }

@@ -15,7 +15,7 @@ import dx.translator.wdl.WdlBundle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.eval.{Eval, EvalPaths, WdlValueBindings, WdlValues}
+import wdlTools.eval.{Eval, WdlValueBindings, WdlValues}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
@@ -124,8 +124,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
   private def createEvaluator(workerPaths: DxWorkerPaths,
                               wdlVersion: WdlVersion,
                               fileResolver: FileSourceResolver): Eval = {
-    val evalPaths = EvalPaths(workerPaths.homeDir, workerPaths.tmpDir)
-    Eval(evalPaths, Some(wdlVersion), fileResolver, logger)
+    Eval(workerPaths, Some(wdlVersion), fileResolver, logger)
   }
 
   // Note: if the file doesn't exist, this throws a null pointer exception

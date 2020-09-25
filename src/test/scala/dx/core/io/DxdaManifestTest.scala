@@ -47,7 +47,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
     }
 
     // create a manifest
-    val manifest: DxdaManifest = DxdaManifestBuilder(dxApi).apply(filesInManifest)
+    val manifest: Option[DxdaManifest] = DxdaManifestBuilder(dxApi).apply(filesInManifest)
 
     // compare to data obtained with dx-toolkit
     val expected: Vector[JsValue] = resolvedObjects
@@ -67,9 +67,10 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
       .toVector
       .reverse
 
-    val manifestValue = manifest.value.asJsObject.fields
-    manifestValue.size shouldBe 1
-    manifestValue.get(dxTestProject.getId) match {
+    manifest should matchPattern {
+      case Some(DxdaManifest(JsObject(fields))) if fields.size == 1 =>
+    }
+    manifest.get.value.fields.get(dxTestProject.getId) match {
       case Some(JsArray(array)) => array should contain theSameElementsAs expected
       case _                    => throw new Exception("expected array")
     }

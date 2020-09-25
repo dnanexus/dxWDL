@@ -143,19 +143,20 @@ case class TaskExecutor(jobMeta: JobMeta,
         "localizedInputs" -> JsObject(inputs),
         "dxUrl2path" -> JsObject(uriToPath)
     )
-    FileUtils.writeFileContent(workerPaths.runnerTaskEnv, json.prettyPrint)
+    FileUtils.writeFileContent(workerPaths.getTaskEnvFile(), json.prettyPrint)
   }
 
   private def readEnv(): (Map[String, JsValue], Map[FileSource, Path]) = {
-    val (inputJs, filesJs) = FileUtils.readFileContent(workerPaths.runnerTaskEnv).parseJson match {
-      case JsObject(env) =>
-        (env.get("localizedInputs"), env.get("dxUrl2path")) match {
-          case (Some(JsObject(inputs)), Some(JsObject(paths))) => (inputs, paths)
-          case _ =>
-            throw new Exception("Malformed environment serialized to disk")
-        }
-      case _ => throw new Exception("Malformed environment serialized to disk")
-    }
+    val (inputJs, filesJs) =
+      FileUtils.readFileContent(workerPaths.getTaskEnvFile()).parseJson match {
+        case JsObject(env) =>
+          (env.get("localizedInputs"), env.get("dxUrl2path")) match {
+            case (Some(JsObject(inputs)), Some(JsObject(paths))) => (inputs, paths)
+            case _ =>
+              throw new Exception("Malformed environment serialized to disk")
+          }
+        case _ => throw new Exception("Malformed environment serialized to disk")
+      }
     val fileSourceToPath = filesJs.map {
       case (uri, JsString(path)) => jobMeta.fileResolver.resolve(uri) -> Paths.get(path)
       case other                 => throw new Exception(s"unexpected path ${other}")
@@ -175,15 +176,16 @@ case class TaskExecutor(jobMeta: JobMeta,
     }
     val (localizedInputs, fileSourceToPath, dxdaManifest, dxfuseManifest) =
       taskSupport.localizeInputFiles(streamAllFiles)
+
     // build a manifest for dxda, if there are files to download
     dxdaManifest.foreach {
-      case DxdaManifest(manifestJs: JsObject) if manifestJs.fields.nonEmpty =>
-        FileUtils.writeFileContent(workerPaths.dxdaManifest, manifestJs.prettyPrint)
+      case DxdaManifest(manifestJs) =>
+        FileUtils.writeFileContent(workerPaths.getDxdaManifestFile(), manifestJs.prettyPrint)
     }
     // build a manifest for dxfuse, if there are files to stream
     dxfuseManifest.foreach {
-      case DxfuseManifest(manifestJs: JsObject) if manifestJs.fields.nonEmpty =>
-        FileUtils.writeFileContent(workerPaths.dxfuseManifest, manifestJs.prettyPrint)
+      case DxfuseManifest(manifestJs) =>
+        FileUtils.writeFileContent(workerPaths.getDxfuseManifestFile(), manifestJs.prettyPrint)
     }
     writeEnv(localizedInputs, fileSourceToPath)
   }

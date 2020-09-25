@@ -163,7 +163,6 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>
         name shouldBe "two_levels"
         kind shouldBe "workflow"
-        println(stages.mkString("\n\n"))
         stages.size shouldBe 4
     }
   }

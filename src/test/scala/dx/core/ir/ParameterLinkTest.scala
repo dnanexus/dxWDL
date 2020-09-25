@@ -1,5 +1,7 @@
 package dx.core.ir
 
+import java.nio.file.Paths
+
 import dx.Tags.EdgeTest
 import dx.api.DxApi
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
@@ -50,7 +52,8 @@ class ParameterLinkTest extends AnyFlatSpec with Matchers {
   it should "handle compound WDL types" in {
     val testCases = Vector(
         // optional
-        makeElement(Type.TOptional(Type.TFile), Value.VFile("ddd")),
+        makeElement(Type.TOptional(Type.TFile),
+                    Value.VFile(Paths.get("ddd").toAbsolutePath.toString)),
         // arrays
         makeElement(
             Type.TArray(Type.TBoolean),

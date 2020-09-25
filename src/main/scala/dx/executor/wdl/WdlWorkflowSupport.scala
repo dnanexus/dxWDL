@@ -12,7 +12,7 @@ import dx.core.ir.Value._
 import dx.core.languages.wdl.{WdlBlockInput, Runtime, WdlBlock, Utils => WdlUtils}
 import dx.executor.{BlockContext, JobMeta, WorkflowSupport, WorkflowSupportFactory}
 import spray.json._
-import wdlTools.eval.{Eval, EvalPaths, WdlValueBindings, Utils => VUtils}
+import wdlTools.eval.{Eval, WdlValueBindings, Utils => VUtils}
 import wdlTools.eval.WdlValues._
 import wdlTools.exec.{InputOutput, TaskInputOutput}
 import wdlTools.syntax.WdlVersion
@@ -74,7 +74,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     extends WorkflowSupport[WdlBlock](jobMeta) {
   private val logger = jobMeta.logger
   private lazy val evaluator = Eval(
-      EvalPaths(workerPaths.homeDir, workerPaths.tmpDir),
+      workerPaths,
       Some(wdlVersion),
       jobMeta.fileResolver,
       Logger.Quiet

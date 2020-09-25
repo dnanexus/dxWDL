@@ -7,8 +7,6 @@ import dx.Tags.EdgeTest
 import dx.api.{DiskType, DxAnalysis, DxApi, DxInstanceType, DxJob, DxProject, InstanceTypeDB}
 import dx.core.Native
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
-import dx.core.ir.Type._
-import dx.core.ir.Value._
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
 import dx.core.languages.wdl.{Utils => WdlUtils}
 import dx.core.util.CompressionUtils
@@ -18,7 +16,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
 import wdlTools.eval.WdlValues
-import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, SysUtils}
 
 private case class TaskTestJobMeta(override val homeDir: Path = DxWorkerPaths.HomeDir,
@@ -49,13 +47,15 @@ private case class TaskTestJobMeta(override val homeDir: Path = DxWorkerPaths.Ho
   private val executableDetails: Map[String, JsValue] = Map(
       Native.InstanceTypeDb -> JsString(
           CompressionUtils.gzipAndBase64Encode(
-              instanceTypeDb.toJson.prettyPrint
+              rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
       Native.SourceCode -> JsString(CompressionUtils.gzipAndBase64Encode(rawSourceCode))
   )
 
-  override def getExecutableDetail(name: String): Option[JsValue] = executableDetails.get(name)
+  override def getExecutableDetail(name: String): Option[JsValue] = {
+    executableDetails.get(name)
+  }
 
   override def error(e: Throwable): Unit = {}
 }
@@ -86,9 +86,11 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     InstanceTypeDB(Map(TaskTestJobMeta.InstanceType -> unicornInstance), pricingAvailable = true)
 
   // Note: if the file doesn't exist, this throws a null pointer exception
-  private def pathFromBasename(basename: String): Path = {
-    val p = getClass.getResource(s"/task_runner/${basename}").getPath
-    Paths.get(p)
+  private def pathFromBasename(basename: String): Option[Path] = {
+    getClass.getResource(s"/task_runner/${basename}") match {
+      case null => None
+      case res  => Some(Paths.get(res.getPath))
+    }
   }
 
   // Recursively go into a wdlValue, and add a base path to the file.
@@ -115,7 +117,13 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
         wdlValue
 
       // single file
-      case WdlValues.V_File(s) => WdlValues.V_File(pathFromBasename(s).toString)
+      case WdlValues.V_File(s) =>
+        pathFromBasename(s) match {
+          case Some(path) =>
+            WdlValues.V_File(path.toString)
+          case None =>
+            throw new Exception(s"File ${s} does not exist")
+        }
 
       // Maps
       case WdlValues.V_Map(m: Map[WdlValues.V, WdlValues.V]) =>
@@ -157,19 +165,20 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
   // Parse the WDL source code, and extract the single task that is supposed to be there.
   // Also return the source script itself, verbatim.
   private def runTask(wdlName: String): Unit = {
-    val wdlFile: Path = pathFromBasename(s"${wdlName}.wdl")
+    val wdlFile: Path = pathFromBasename(s"${wdlName}.wdl").get
     val inputs: Map[String, JsValue] = pathFromBasename(s"${wdlName}_input.json") match {
-      case path if Files.exists(path) => JsUtils.getFields(JsUtils.jsFromFile(path))
-      case _                          => Map.empty
+      case Some(path) if Files.exists(path) => JsUtils.getFields(JsUtils.jsFromFile(path))
+      case _                                => Map.empty
     }
     val outputsExpected: Option[Map[String, JsValue]] =
       pathFromBasename(s"${wdlName}_output.json") match {
-        case path if Files.exists(path) => Some(JsUtils.getFields(JsUtils.jsFromFile(path)))
-        case _                          => None
+        case Some(path) if Files.exists(path) => Some(JsUtils.getFields(JsUtils.jsFromFile(path)))
+        case _                                => None
       }
 
     // Create a clean temp directory for the task to use
     val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
+    jobHomeDir.toFile.deleteOnExit()
     val workerPaths = DxWorkerPaths(jobHomeDir)
     workerPaths.createCleanDirs()
 
@@ -228,11 +237,13 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     taskExectuor.apply(TaskAction.InstantiateCommand) shouldBe "success InstantiateCommand"
 
     // execute the shell script in a child job
-    val script: Path = workerPaths.script
+    val script: Path = workerPaths.getCommandFile()
+    //println(FileUtils.readFileContent(script))
     if (Files.exists(script)) {
       // this will throw an exception if the script exits with a non-zero return code
       logger.ignore(SysUtils.execCommand(script.toString))
     }
+    //println(FileUtils.readFileContent(workerPaths.stdout))
 
     // epilog
     taskExectuor.apply(TaskAction.Epilog) shouldBe "success Epilog"
@@ -323,9 +334,12 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
             )
         )
     )
-    WdlTaskSupport.deserializeValues(goodJson, Map.empty) shouldBe Map(
-        "a" -> (TInt, VInt(5)),
-        "b" -> (TArray(TFloat), VArray(Vector(VFloat(1.0), VFloat(2.5))))
+    val v = WdlTaskSupport.deserializeValues(goodJson, Map.empty)
+    v shouldBe Map(
+        "a" -> (WdlTypes.T_Int, WdlValues.V_Int(5)),
+        "b" -> (WdlTypes.T_Array(WdlTypes.T_Float), WdlValues.V_Array(
+            Vector(WdlValues.V_Float(1.0), WdlValues.V_Float(2.5))
+        ))
     )
   }
 

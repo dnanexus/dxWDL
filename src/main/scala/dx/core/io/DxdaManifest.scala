@@ -7,7 +7,7 @@ import java.nio.file.Path
 import dx.api._
 import spray.json._
 
-case class DxdaManifest(value: JsValue)
+case class DxdaManifest(value: JsObject)
 
 case class DxdaManifestBuilder(dxApi: DxApi) {
   /*
@@ -37,9 +37,13 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
   }
 
   // The project is just a hint. The files don't have to actually reside in it.
-  def apply(file2LocalMapping: Map[String, (DxFile, Path)]): DxdaManifest = {
+  def apply(fileToLocalMapping: Map[String, (DxFile, Path)]): Option[DxdaManifest] = {
+    if (fileToLocalMapping.isEmpty) {
+      return None
+    }
+
     // collect all the information per file
-    val files: Vector[DxFile] = file2LocalMapping.values.map(_._1).toVector
+    val files: Vector[DxFile] = fileToLocalMapping.values.map(_._1).toVector
 
     // Make sure they are all in the live state. Archived files cannot be accessed.
     files.map(_.describe()).foreach { desc =>
@@ -57,11 +61,11 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
       case (dxContainer, containerFiles) =>
         val projectFilesToLocalPath: Vector[JsValue] =
           containerFiles.map { dxFile =>
-            val (_, local: Path) = file2LocalMapping(dxFile.id)
+            val (_, local: Path) = fileToLocalMapping(dxFile.id)
             processFile(dxFile, local)
           }
         dxContainer.getId -> JsArray(projectFilesToLocalPath)
     }
-    DxdaManifest(JsObject(m))
+    Some(DxdaManifest(JsObject(m)))
   }
 }

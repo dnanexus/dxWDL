@@ -2,7 +2,8 @@ package dx.core.io
 
 import java.nio.file.{Path, Paths}
 
-import wdlTools.util.FileUtils
+import wdlTools.exec.ExecPaths
+import wdlTools.util.Logger
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -16,48 +17,91 @@ import wdlTools.util.FileUtils
 // will need access to temporary files created with stdlib calls like
 // "write_lines".
 //
-case class DxWorkerPaths(homeDir: Path,
-                         metaDir: Path,
-                         // Running applets download files from the platform to this location
-                         inputFilesDir: Path,
-                         // Running applets place output files in this location
-                         outputFilesDir: Path,
-                         // scratch space for WDL stdlib operations like "write_lines"
-                         tmpDir: Path,
-                         // Where a JSON representation of the instance data base is stored
-                         instanceTypeDB: Path,
-                         // Source WDL code. We could get it from the details field, but that
-                         // would require an additional API call. This is a private copy.
-                         wdlSourceCodeEncoded: Path,
-                         stdout: Path,
-                         stderr: Path,
-                         // bash script for running the docker image the user specified
-                         // is deposited here.
-                         dockerSubmitScript: Path,
-                         // bash script is written to this location
-                         script: Path,
-                         // Status code returned from the shell command is written
-                         // to this file
-                         rcPath: Path,
-                         // file where the docker container name is stored.
-                         dockerCid: Path,
-                         // bash commands for streaming files with 'dx cat' are located here
-                         setupStreams: Path,
-                         // Location of dx download agent (dxda) manifest. It will download all these
-                         // files, if the file is non empty.
-                         dxdaManifest: Path,
-                         // Location of dxfuse manifest. It will mount all these
-                         // files, if the file is non empty.
-                         dxfuseManifest: Path,
-                         dxfuseMountpoint: Path,
-                         // file for storing the state between prolog and epilog of the task runner
-                         runnerTaskEnv: Path) {
+case class DxWorkerPaths(homeDir: Path = DxWorkerPaths.HomeDir)
+    extends ExecPaths(homeDir, homeDir.resolve(DxWorkerPaths.TempDir)) {
+
+  /**
+    * Running applets download files from the platform to this location.
+    */
+  def getInputFilesDir(ensureExists: Boolean = false): Path = {
+    getOrCreateDir(DxWorkerPaths.InputFilesDir,
+                   getRootDir(ensureExists).resolve(DxWorkerPaths.InputFilesDir),
+                   ensureExists)
+  }
+
+  /**
+    * Running applets place output files in this location.
+    */
+  def getOutputFilesDir(ensureExists: Boolean = false): Path = {
+    getOrCreateDir(DxWorkerPaths.OutputFilesDir,
+                   getRootDir(ensureExists).resolve(DxWorkerPaths.OutputFilesDir),
+                   ensureExists)
+  }
+
+  def getDxfuseMountDir(ensureExists: Boolean = false): Path = {
+    getOrCreateDir(DxWorkerPaths.DxfuseMountDir,
+                   getRootDir(ensureExists).resolve(DxWorkerPaths.DxfuseMountDir),
+                   ensureExists)
+  }
+
+  /**
+    * Where a JSON representation of the instance data base is stored.
+    */
+  def getInstanceTypeDbFile(ensureParentExists: Boolean = false): Path = {
+    // TODO: any reason we can't put this in meta dir?
+    getRootDir(ensureParentExists).resolve(DxWorkerPaths.InstanceTypeDbFile)
+  }
+
+  /**
+    * Source WDL code. We could get it from the details field, but that
+    * would require an additional API call. This is a private copy.
+    */
+  def getSourceEncodedFile(ensureParentExists: Boolean = false): Path = {
+    // TODO: any reason we can't put this in meta dir?
+    getRootDir(ensureParentExists).resolve(DxWorkerPaths.SourceEncodedFile)
+  }
+
+  /**
+    * Bash commands for streaming files with 'dx cat' are located here.
+    */
+  def getSetupStreamsFile(ensureParentExists: Boolean = false): Path = {
+    getMetaDir(ensureParentExists).resolve(DxWorkerPaths.SetupStreamsFile)
+  }
+
+  /**
+    * Location of dx download agent (dxda) manifest. It will download all these
+    * files, if the file is non empty.
+    */
+  def getDxdaManifestFile(ensureParentExists: Boolean = false): Path = {
+    getMetaDir(ensureParentExists).resolve(DxWorkerPaths.DxdaManifestFile)
+  }
+
+  /**
+    * Location of dxfuse manifest. It will mount all these  files, if the file
+    * is non empty.
+    */
+  def getDxfuseManifestFile(ensureParentExists: Boolean = false): Path = {
+    getMetaDir(ensureParentExists).resolve(DxWorkerPaths.DxfuseManifestFile)
+  }
+
+  /**
+    * File for storing the state between prolog and epilog of the task runner.
+    */
+  def getTaskEnvFile(ensureParentExists: Boolean = false): Path = {
+    getMetaDir(ensureParentExists).resolve(DxWorkerPaths.SetupStreamsFile)
+  }
 
   // create all the directory paths, so we can start using them.
   // This is used when running tasks, but NOT when compiling.
   def createCleanDirs(): Unit = {
-    Vector(metaDir, inputFilesDir, outputFilesDir, tmpDir, dxfuseMountpoint).foreach(
-        FileUtils.createDirectories
+    Logger.get.ignore(
+        Vector(
+            getMetaDir(ensureExists = true),
+            getTempDir(ensureExists = true),
+            getInputFilesDir(ensureExists = true),
+            getOutputFilesDir(ensureExists = true),
+            getDxfuseMountDir(ensureExists = true)
+        )
     )
   }
 }
@@ -66,46 +110,16 @@ object DxWorkerPaths {
   // This directory exists only at runtime in the cloud. Beware of using
   // it in code paths that run at compile time.
   val HomeDir: Path = Paths.get("/home/dnanexus")
-
-  def apply(homeDir: Path = HomeDir): DxWorkerPaths = {
-    val metaDir: Path = homeDir.resolve("meta")
-    val inputFilesDir: Path = homeDir.resolve("inputs")
-    val outputFilesDir: Path = homeDir.resolve("outputs")
-    val tmpDir: Path = homeDir.resolve("job_scratch_space")
-    val instanceTypeDB = homeDir.resolve("instance_type_db.json")
-    val wdlSourceCodeEncoded = homeDir.resolve("source.wdl.uu64")
-    val stdout = metaDir.resolve("stdout")
-    val stderr = metaDir.resolve("stderr")
-    val script = metaDir.resolve("script")
-    val dockerSubmitScript = metaDir.resolve("docker.submit")
-    val setupStreams = metaDir.resolve("setup_streams")
-    val dxdaManifest = metaDir.resolve("dxdaManifest.json")
-    val dxfuseManifest = metaDir.resolve("dxfuseManifest.json")
-    val dxfuseMountpoint = homeDir.resolve("mnt")
-    val rcPath = metaDir.resolve("rc")
-    val dockerCid = metaDir.resolve("dockerCid")
-    val runnerTaskEnv = metaDir.resolve("taskEnv.json")
-    DxWorkerPaths(
-        homeDir,
-        metaDir,
-        inputFilesDir,
-        outputFilesDir,
-        tmpDir,
-        instanceTypeDB,
-        wdlSourceCodeEncoded,
-        stdout,
-        stderr,
-        dockerSubmitScript,
-        script,
-        rcPath,
-        dockerCid,
-        setupStreams,
-        dxdaManifest,
-        dxfuseManifest,
-        dxfuseMountpoint,
-        runnerTaskEnv
-    )
-  }
+  val InputFilesDir = "inputs"
+  val OutputFilesDir = "outputs"
+  val TempDir = "job_scratch_space"
+  val InstanceTypeDbFile = "instance_type_db.json"
+  val SourceEncodedFile = "source.wdl.uu64"
+  val SetupStreamsFile = "setup_streams"
+  val DxdaManifestFile = "dxdaManifest.json"
+  val DxfuseManifestFile = "dxdaManifest.json"
+  val DxfuseMountDir = "mnt"
+  val TaskEnvFile = "taskEnv.json"
 
   lazy val default: DxWorkerPaths = apply()
 }
