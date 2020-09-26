@@ -5,12 +5,13 @@ import java.nio.file.{Files, Path, Paths}
 import dx.Assumptions.isLoggedIn
 import dx.Tags.{EdgeTest, NativeTest}
 import dx.api._
-import dx.core.Native
+import dx.core.{Native, ir}
 import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
-import dx.core.ir.ParameterLinkSerializer
+import dx.core.ir.Type.TInt
+import dx.core.ir.{ParameterLinkSerializer, ParameterLinkValue, Type, TypeSerde}
 import dx.core.languages.wdl.{WdlBlock, Utils => WdlUtils}
 import dx.core.util.CompressionUtils
-import dx.executor.{JobMeta, WorkflowAction, WorkflowExecutor}
+import dx.executor.{JobMeta, WorkflowAction, WorkflowExecutor, WorkflowSupport}
 import dx.translator.wdl.WdlBundle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,10 +50,13 @@ private case class WorkflowTestJobMeta(override val homeDir: Path = DxWorkerPath
       Native.BlockPath -> JsArray(rawBlockPath.map(JsNumber(_))),
       Native.InstanceTypeDb -> JsString(
           CompressionUtils.gzipAndBase64Encode(
-              instanceTypeDb.toJson.prettyPrint
+              rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
-      Native.SourceCode -> JsString(CompressionUtils.gzipAndBase64Encode(rawSourceCode))
+      Native.SourceCode -> JsString(CompressionUtils.gzipAndBase64Encode(rawSourceCode)),
+      Native.WfFragmentInputTypes -> JsObject(rawEnv.view.mapValues {
+        case (t, _) => TypeSerde.serialize(WdlUtils.toIRType(t))
+      }.toMap)
   )
 
   override def getExecutableDetail(name: String): Option[JsValue] = executableDetails.get(name)
@@ -68,7 +72,7 @@ private object WorkflowTestJobMeta {
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-class WfFragRunnerTest extends AnyFlatSpec with Matchers {
+class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
   assume(isLoggedIn)
   private val logger = Logger.Quiet
   private val dxApi = DxApi(logger)
@@ -365,8 +369,10 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
       case _                        => throw new Exception("expected WdlWorkflowSupport")
     }
     val callInputs1: Map[String, (WdlTypes.T, WdlValues.V)] =
-      wfSupport.evaluateWorkflowElements(Vector(call1),
-                                         Map("i" -> (WdlTypes.T_Int, WdlValues.V_Int(1))))
+      wfSupport.WdlBlockContext.evaluateCallInputs(
+          call1,
+          Map("i" -> (WdlTypes.T_Int, WdlValues.V_Int(1)))
+      )
     // We need to coerce the inputs into what the callee is expecting
     callInputs1 should be(
         Map(
@@ -377,8 +383,8 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
 
     val call2 = findCallByName("ManyArgs", wf.body)
     val callInputs2: Map[String, (WdlTypes.T, WdlValues.V)] =
-      wfSupport.evaluateWorkflowElements(
-          Vector(call2),
+      wfSupport.WdlBlockContext.evaluateCallInputs(
+          call2,
           Map(
               "powers10" -> (WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false),
               WdlValues.V_Array(Vector(WdlValues.V_Int(1), WdlValues.V_Int(10))))
@@ -461,7 +467,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path, Vector(0), env)
     val (results, msg) = wfExecutor.apply(WorkflowAction.Run)
     msg shouldBe "success Run"
-    results shouldBe Map("retval" -> JsNumber(5))
+    results shouldBe Map("retval" -> ParameterLinkValue(JsNumber(5), TInt))
   }
 
   it should "evaluate expressions in correct order" taggedAs NativeTest in {
@@ -470,8 +476,15 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val (results, msg) = wfExecutor.apply(WorkflowAction.Run)
     msg shouldBe "success Run"
-    results.keys should contain("bam_lane1")
-    results("bam_lane1") shouldBe JsObject("___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull))
+    results should contain key "bam_lane1"
+    results("bam_lane1") shouldBe ParameterLinkValue(
+        JsArray(JsString("1_ACGT_1.bam"), JsNull),
+        Type.TArray(Type.TOptional(Type.TString))
+    )
+    wfExecutor.jobMeta.outputSerializer
+      .createFieldsFromLink(results("bam_lane1"), "bam_lane1") shouldBe
+      Vector("bam_lane1" -> JsObject("___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull)),
+             "bam_lane1___dxfiles" -> JsArray())
   }
 
   it should "handle pair field access (left/right)" taggedAs (NativeTest, EdgeTest) in {
@@ -480,25 +493,27 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val (results, msg) = wfExecutor.apply(WorkflowAction.Run)
     msg shouldBe "success Run"
-    results.keys should contain("info")
-    results("info") shouldBe JsArray(JsString("Michael_27"),
-                                     JsString("Lukas_9"),
-                                     JsString("Martin_13"),
-                                     JsString("Shelly_67"),
-                                     JsString("Amy_2"))
+    results should contain key "info"
+    results("info") shouldBe ir.ParameterLinkValue(
+        JsArray(JsString("Michael_27"),
+                JsString("Lukas_9"),
+                JsString("Martin_13"),
+                JsString("Shelly_67"),
+                JsString("Amy_2")),
+        Type.TArray(Type.TString)
+    )
+  }
+
+  def getComplexScatterName(items: Vector[Any],
+                            maxLength: Int = WorkflowSupport.JobNameLengthLimit): String = {
+    WdlWorkflowSupport.getComplexScatterName(items.map(i => Some(i.toString)).iterator, maxLength)
   }
 
   it should "Build limited sized names" in {
-    WdlWorkflowSupport.getComplexScatterName(Vector(1, 2, 3), 10) should be("[1, 2, 3]")
-    WdlWorkflowSupport.getComplexScatterName(Vector(100, 200, 300).map(_.toString), 10) should be(
-        "[100, 200]"
-    )
-    WdlWorkflowSupport.getComplexScatterName(Vector("A", "B", "hel", "nope"), 10) should be(
-        "[A, B, hel, ...]"
-    )
-    WdlWorkflowSupport.getComplexScatterName(Vector("A", "B", "C", "D", "neverland"), 13) should be(
-        "[A, B, C, D, ...]"
-    )
-    WdlWorkflowSupport.getComplexScatterName(Vector.empty, 4) should be("[]")
+    getComplexScatterName(Vector(1, 2, 3)) should be("1,2,3")
+    getComplexScatterName(Vector(100, 200, 300).map(_.toString), 10) shouldBe "100,200,..."
+    getComplexScatterName(Vector("A", "B", "hel", "nope"), 10) shouldBe "A,B,hel,..."
+    getComplexScatterName(Vector("A", "B", "C", "D", "neverland"), 17) shouldBe "A,B,C,D,neverland"
+    getComplexScatterName(Vector.empty, 4) shouldBe ""
   }
 }

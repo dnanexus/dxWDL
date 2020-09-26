@@ -4,7 +4,7 @@ object Native {
   // keys used in details of native applets
   val ExecLinkInfo: String = "execLinkInfo"
   val BlockPath: String = "blockPath"
-  val WfFragmentInputs: String = "fqnDictTypes"
+  val WfFragmentInputTypes: String = "fqnDictTypes"
   val InstanceTypeDb: String = "instanceTypeDB"
   val RuntimeAttributes: String = "runtimeAttrs"
   val CompilerTag = "dxCompiler"

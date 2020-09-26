@@ -246,20 +246,23 @@ case class WdlBlock(index: Int,
     }
   }
 
-  def prerequisites: Vector[TAT.WorkflowElement] = elements.dropRight(1)
-
-  def target: TAT.WorkflowElement = elements.last
+  lazy val (prerequisites, target): (Vector[TAT.WorkflowElement], Option[TAT.WorkflowElement]) = {
+    kind match {
+      case BlockKind.ExpressionsOnly => (elements, None)
+      case _                         => (elements.dropRight(1), Some(elements.last))
+    }
+  }
 
   def call: TAT.Call = {
     val calls = (kind, target) match {
       case (BlockKind.CallDirect | BlockKind.CallWithSubexpressions | BlockKind.CallFragment,
-            call: TAT.Call) =>
+            Some(call: TAT.Call)) =>
         Vector(call)
-      case (BlockKind.ConditionalOneCall, cond: TAT.Conditional) =>
+      case (BlockKind.ConditionalOneCall, Some(cond: TAT.Conditional)) =>
         cond.body.collect {
           case call: TAT.Call => call
         }
-      case (BlockKind.ScatterOneCall, scatter: TAT.Scatter) =>
+      case (BlockKind.ScatterOneCall, Some(scatter: TAT.Scatter)) =>
         scatter.body.collect {
           case call: TAT.Call => call
         }
@@ -272,7 +275,8 @@ case class WdlBlock(index: Int,
 
   def conditional: TAT.Conditional = {
     (kind, target) match {
-      case (BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex, cond: TAT.Conditional) =>
+      case (BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex,
+            Some(cond: TAT.Conditional)) =>
         cond
       case _ =>
         throw new Exception(s"block ${this} is not a conditional")
@@ -281,7 +285,7 @@ case class WdlBlock(index: Int,
 
   def scatter: TAT.Scatter = {
     (kind, target) match {
-      case (BlockKind.ScatterOneCall | BlockKind.ScatterComplex, scatter: TAT.Scatter) =>
+      case (BlockKind.ScatterOneCall | BlockKind.ScatterComplex, Some(scatter: TAT.Scatter)) =>
         scatter
       case _ =>
         throw new Exception(s"block ${this} is not a scatter")
@@ -292,7 +296,7 @@ case class WdlBlock(index: Int,
     (kind, target) match {
       case (BlockKind.ConditionalOneCall | BlockKind.ConditionalComplex | BlockKind.ScatterOneCall |
             BlockKind.ScatterComplex,
-            block: TAT.BlockElement) =>
+            Some(block: TAT.BlockElement)) =>
         block.body
       case _ =>
         throw new UnsupportedOperationException(

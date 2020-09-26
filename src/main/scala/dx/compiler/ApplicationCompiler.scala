@@ -331,14 +331,14 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
           Map(
               Native.ExecLinkInfo -> JsObject(linkInfo.toMap),
               Native.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
-              Native.WfFragmentInputs -> JsObject(inputs.map {
+              Native.WfFragmentInputTypes -> JsObject(inputs.map {
                 case (k, t) => k -> TypeSerde.serialize(t)
               }),
               Native.ScatterChunkSize -> JsNumber(scatterChunkSize)
           )
         case ExecutableKindWfInputs | ExecutableKindWfOutputs | ExecutableKindWfCustomReorgOutputs |
             ExecutableKindWorkflowOutputReorg =>
-          Map(Native.WfFragmentInputs -> JsObject(applet.inputVars.map { p =>
+          Map(Native.WfFragmentInputTypes -> JsObject(applet.inputVars.map { p =>
             p.name -> TypeSerde.serialize(p.dxType)
           }.toMap))
         case _ =>

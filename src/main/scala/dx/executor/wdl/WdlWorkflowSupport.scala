@@ -37,31 +37,28 @@ object WdlWorkflowSupport {
   }
 
   // this method is exposed for unit testing
-  def getComplexScatterName(items: Iterator[Option[String]], size: Int): String = {
+  def getComplexScatterName(items: Iterator[Option[String]],
+                            maxLength: Int = WorkflowSupport.JobNameLengthLimit): String = {
     // Create a name by concatenating the initial elements of the array.
     // Limit the total size of the name.
-    val (_, strings) =
-      items.foldLeftWhile((0, Vector.empty[String]))(_._1 < WorkflowSupport.JobNameLengthLimit) {
-        case ((size, strings), Some(s)) =>
-          val newSize = size + s.length
-          if (newSize > WorkflowSupport.JobNameLengthLimit) {
-            (newSize, strings)
+    val (_, strings, hasMore) =
+      items.foldLeftWhile((-1, Vector.empty[String], false))(_._1 < maxLength) {
+        case ((length, strings, _), Some(s)) =>
+          val newLength = length + s.length + 1
+          if (newLength > maxLength) {
+            (newLength, strings, true)
           } else {
-            (newSize, strings :+ s)
+            (newLength, strings :+ s, false)
           }
-        case ((size, strings), None) =>
-          (size, strings)
+        case ((length, strings, _), None) =>
+          (length, strings, false)
       }
-    val itemStr = strings.mkString(", ")
-    if (strings.size < size) {
-      s"${itemStr}, ..."
+    val itemStr = strings.mkString(",")
+    if (hasMore) {
+      s"${itemStr},..."
     } else {
       itemStr
     }
-  }
-
-  def getComplexScatterName(items: Vector[Any], size: Int): String = {
-    getComplexScatterName(items.map(i => Some(i.toString)).iterator, size)
   }
 }
 
@@ -386,7 +383,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
     private def launchConditional(): Map[String, ParameterLink] = {
       val cond = block.target match {
-        case TAT.Conditional(expr, _, _) =>
+        case Some(TAT.Conditional(expr, _, _)) =>
           evaluateExpression(expr, T_Boolean, env)
         case _ =>
           throw new Exception(s"invalid conditional block ${block}")
@@ -511,7 +508,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
           }
         case V_Array(array) =>
           val itemStr =
-            WdlWorkflowSupport.getComplexScatterName(array.iterator.map(getScatterName), array.size)
+            WdlWorkflowSupport.getComplexScatterName(array.iterator.map(getScatterName))
           Some(s"[${itemStr}]")
         case V_Map(members) =>
           val memberStr = WdlWorkflowSupport.getComplexScatterName(
@@ -521,8 +518,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
                     case (Some(keyStr), Some(valStr)) => Some(s"${keyStr}: ${valStr}")
                     case _                            => None
                   }
-              },
-              members.size
+              }
           )
           Some(s"{${memberStr}}")
         case V_Object(members) =>
@@ -533,8 +529,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
                     case Some(valStr) => Some(s"${k}: ${valStr}")
                     case _            => None
                   }
-              },
-              members.size
+              }
           )
           Some(s"{${memberStr}}")
         case V_Struct(name, members) =>
@@ -545,8 +540,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
                     case Some(valStr) => Some(s"${k}: ${valStr}")
                     case _            => None
                   }
-              },
-              members.size
+              }
           )
           Some(s"${name} ${memberStr}")
         case _ =>
@@ -679,7 +673,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
     private def launchScatter(): Map[String, ParameterLink] = {
       val (identifier, itemType, collection, next) = block.target match {
-        case TAT.Scatter(identifier, expr, _, _) =>
+        case Some(TAT.Scatter(identifier, expr, _, _)) =>
           val (collection, next) = evaluateScatterCollection(expr)
           val itemType = expr.wdlType match {
             case T_Array(t, _) => t

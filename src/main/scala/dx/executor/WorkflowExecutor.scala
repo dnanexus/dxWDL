@@ -77,13 +77,13 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
   }
 
   lazy val fqnDictTypes: Map[String, Type] =
-    jobMeta.getExecutableDetail(Native.WfFragmentInputs) match {
+    jobMeta.getExecutableDetail(Native.WfFragmentInputTypes) match {
       case Some(JsObject(fields)) =>
         fields.map {
-          case (key, value) =>
+          case (key, typeJs) =>
             // Transform back to a fully qualified name with dots
             val keyDecoded = Parameter.decodeDots(key)
-            val wdlType = TypeSerde.deserialize(value, typeAliases)
+            val wdlType = TypeSerde.deserialize(typeJs, typeAliases)
             keyDecoded -> wdlType
           case other => throw new Exception(s"Bad value ${other}")
         }

@@ -720,7 +720,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           case ((stages, beforeEnv), (block: WdlBlock, blockNum: Int)) =>
             if (block.kind == BlockKind.CallDirect) {
               block.target match {
-                case call: TAT.Call =>
+                case Some(call: TAT.Call) =>
                   // The block contains exactly one call, with no extra declarations.
                   // All the variables are already in the environment, so there is no
                   // need to do any extra work. Compile directly into a workflow stage.
