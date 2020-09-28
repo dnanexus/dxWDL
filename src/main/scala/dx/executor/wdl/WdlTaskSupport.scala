@@ -106,16 +106,16 @@ case class WdlTaskSupport(task: TAT.Task,
     }
   }
 
-  private def evaluateDeclarations(inputs: Map[String, V]): Map[String, V] = {
-    // evaluate the declarations using the inputs
+  private def evaluatePrivateVariables(inputs: Map[String, V]): Map[String, V] = {
+    // evaluate the private variables using the inputs
     val env: Map[String, V] =
-      task.declarations.foldLeft(inputs) {
-        case (env, TAT.Declaration(name, wdlType, Some(expr), _)) =>
+      task.privateVariables.foldLeft(inputs) {
+        case (env, TAT.PrivateVariable(name, wdlType, Some(expr), _)) =>
           val wdlValue =
             evaluator.applyExprAndCoerce(expr, wdlType, WdlValueBindings(env))
           env + (name -> wdlValue)
-        case (_, TAT.Declaration(name, _, None, _)) =>
-          throw new Exception(s"Declaration ${name} has no expression")
+        case (_, TAT.PrivateVariable(name, _, None, _)) =>
+          throw new Exception(s"Variable ${name} has no expression")
       }
     env
   }
@@ -134,7 +134,7 @@ case class WdlTaskSupport(task: TAT.Task,
   private def getRequiredInstanceType(inputs: Map[String, V]): String = {
     logger.traceLimited("calcInstanceType", minLevel = TraceLevel.VVerbose)
     printInputs(inputs)
-    val env = evaluateDeclarations(inputs)
+    val env = evaluatePrivateVariables(inputs)
     val runtime = createRuntime(env)
     val request = runtime.parseInstanceType
     logger.traceLimited(s"calcInstanceType $request")
@@ -300,14 +300,14 @@ case class WdlTaskSupport(task: TAT.Task,
       case (name, (_, v)) => name -> v
     }
     printInputs(inputValues)
-    val inputsWithDecls = evaluateDeclarations(inputValues)
-    val ctx = WdlValueBindings(inputsWithDecls)
+    val inputsWithPrivateVars = evaluatePrivateVariables(inputValues)
+    val ctx = WdlValueBindings(inputsWithPrivateVars)
     val command = evaluator.applyCommand(task.command, ctx) match {
       case s if s.trim.isEmpty => None
       case s                   => Some(s)
     }
     val generator = TaskCommandFileGenerator(logger)
-    val runtime = createRuntime(inputsWithDecls)
+    val runtime = createRuntime(inputsWithPrivateVars)
     val container = runtime.container match {
       case Vector()    => None
       case Vector(img) => Some(img, workerPaths)
@@ -326,9 +326,11 @@ case class WdlTaskSupport(task: TAT.Task,
     val scriptPath = generator.apply(command, workerPaths, container)
     println(scriptPath)
     println(FileUtils.readFileContent(scriptPath))
-    val inputsAndDeclTypes = inputTypes ++ task.declarations.map(d => d.name -> d.wdlType).toMap
+    val inputAndPrivateVarTypes = inputTypes ++ task.privateVariables
+      .map(d => d.name -> d.wdlType)
+      .toMap
     WdlTaskSupport.serializeValues(ctx.bindings.map {
-      case (name, value) => name -> (inputsAndDeclTypes(name), value)
+      case (name, value) => name -> (inputAndPrivateVarTypes(name), value)
     })
   }
 
@@ -336,7 +338,7 @@ case class WdlTaskSupport(task: TAT.Task,
     taskIO.evaluateOutputs(evaluator, WdlValueBindings(env))
   }
 
-  private lazy val outputDefs: Map[String, TAT.OutputDefinition] =
+  private lazy val outputDefs: Map[String, TAT.OutputParameter] =
     task.outputs.map(d => d.name -> d).toMap
 
   private def extractOutputFiles(name: String, v: V, t: T): Vector[Path] = {
@@ -416,7 +418,7 @@ case class WdlTaskSupport(task: TAT.Task,
       case (name, (_, v)) => name -> v
     }
 
-    // Evaluate the output declarations in dependency order
+    // Evaluate the output parameters in dependency order
     val outputsLocal: WdlValueBindings = getOutputs(inputValues)
 
     // We have task outputs, where files are stored locally. Upload the files to
@@ -483,7 +485,7 @@ case class WdlTaskSupport(task: TAT.Task,
   }
 
   override def linkOutputs(subjob: DxJob): Unit = {
-    val irOutputFields = task.outputs.map { outputDef: TAT.OutputDefinition =>
+    val irOutputFields = task.outputs.map { outputDef: TAT.OutputParameter =>
       outputDef.name -> WdlUtils.toIRType(outputDef.wdlType)
     }.toMap
     jobMeta.writeOutputLinks(subjob, irOutputFields)

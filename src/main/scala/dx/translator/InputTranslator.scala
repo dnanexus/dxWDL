@@ -260,9 +260,8 @@ abstract class InputTranslator(bundle: Bundle,
           case None =>
             Map.empty
           case Some(value) =>
-            // Do not assign the value to any later stages.
-            // We found the variable declaration, the others
-            // are variable uses.
+            // Do not assign the value to any later stages. We found the variable
+            // declaration, the others are variable uses.
             logger.trace(s"checkAndBind, found: ${fqn} -> dxName")
             val irValue =
               parameterLinkDeserializer.deserializeInputWithType(value,

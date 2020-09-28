@@ -196,29 +196,29 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
                         .stripMargin)*/
 
     // Sort the inputs by name, so the result will be deterministic.
-    val inputs: Vector[TAT.InputDefinition] =
+    val inputs: Vector[TAT.InputParameter] =
       callable.inputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
           val wdlType = WdlUtils.fromIRType(parameter.dxType, typeAliases)
           parameter.defaultValue match {
             case None =>
-              TAT.RequiredInputDefinition(parameter.name, wdlType, SourceLocation.empty)
+              TAT.RequiredInputParameter(parameter.name, wdlType, SourceLocation.empty)
             case Some(value) =>
-              TAT.OverridableInputDefinitionWithDefault(parameter.name,
-                                                        wdlType,
-                                                        WdlUtils.irValueToExpr(value),
-                                                        SourceLocation.empty)
+              TAT.OverridableInputParameterWithDefault(parameter.name,
+                                                       wdlType,
+                                                       WdlUtils.irValueToExpr(value),
+                                                       SourceLocation.empty)
           }
         }
 
-    val outputs: Vector[TAT.OutputDefinition] =
+    val outputs: Vector[TAT.OutputParameter] =
       callable.outputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
           val wdlType = WdlUtils.fromIRType(parameter.dxType)
           val defaultVal = genDefaultValueOfType(wdlType)
-          TAT.OutputDefinition(parameter.name, wdlType, defaultVal, SourceLocation.empty)
+          TAT.OutputParameter(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }
 
     TAT.Task(
@@ -226,9 +226,9 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
         WdlTypes.T_Task(
             callable.name,
             inputs.map {
-              case TAT.RequiredInputDefinition(name, wdlType, _) =>
+              case TAT.RequiredInputParameter(name, wdlType, _) =>
                 name -> (wdlType, false)
-              case other: TAT.InputDefinition =>
+              case other: TAT.InputParameter =>
                 other.name -> (other.wdlType, true)
             }.toMap,
             outputs.map(d => d.name -> d.wdlType).toMap
@@ -271,12 +271,12 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
           case (name, wdlType) => name -> (wdlType, false)
         }, outputSpec),
         inputSpec.map {
-          case (name, wdlType) => TAT.RequiredInputDefinition(name, wdlType, SourceLocation.empty)
+          case (name, wdlType) => TAT.RequiredInputParameter(name, wdlType, SourceLocation.empty)
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
             val expr = genDefaultValueOfType(wdlType)
-            TAT.OutputDefinition(name, wdlType, expr, SourceLocation.empty)
+            TAT.OutputParameter(name, wdlType, expr, SourceLocation.empty)
         }.toVector,
         TAT.CommandSection(Vector.empty, SourceLocation.empty),
         Vector.empty,

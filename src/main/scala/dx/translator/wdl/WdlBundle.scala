@@ -18,10 +18,10 @@ case class WdlBundle(version: WdlVersion,
 object WdlBundle {
 
   /**
-    * Check that a declaration name is not any dx-reserved names.
+    * Check that a variable name is not any dx-reserved names.
     */
-  private def checkVariableName(decls: Vector[TAT.Variable]): Unit = {
-    val invalidNames = decls.map(_.name).filter(_.contains(Parameter.ComplexValueKey))
+  private def checkVariableName(variables: Vector[TAT.Variable]): Unit = {
+    val invalidNames = variables.map(_.name).filter(_.contains(Parameter.ComplexValueKey))
     if (invalidNames.nonEmpty) {
       throw new Exception(
           s"""Variable(s) ${invalidNames.mkString(",")} is using the substring
@@ -40,10 +40,10 @@ object WdlBundle {
         }
         checkVariableName(wf.inputs)
         checkVariableName(wf.outputs)
-        val allDeclarations: Vector[TAT.Declaration] = wf.body.collect {
-          case d: TAT.Declaration => d
+        val allVars: Vector[TAT.PrivateVariable] = wf.body.collect {
+          case d: TAT.PrivateVariable => d
         }
-        checkVariableName(allDeclarations)
+        checkVariableName(allVars)
       case task: TAT.Task =>
         checkVariableName(task.inputs)
         checkVariableName(task.outputs)

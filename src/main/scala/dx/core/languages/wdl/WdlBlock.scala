@@ -80,7 +80,7 @@ import wdlTools.types.Utils.{prettyFormatExpr, prettyFormatType}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
 
 /**
-  * An input to a Block. These are simlar to the TAT.InputDefinitions, but there is
+  * An input to a Block. These are simlar to the TAT.InputParameters, but there is
   * an extra type to disinguish between inputs with constant and dynamic default
   * values, and there is no SourceLocation.
   */
@@ -120,11 +120,11 @@ case class OptionalBlockInput(name: String, wdlType: WdlTypes.T) extends WdlBloc
 object WdlBlockInput {
   private lazy val evaluator: Eval = Eval.empty
 
-  def translate(i: TAT.InputDefinition): WdlBlockInput = {
+  def translate(i: TAT.InputParameter): WdlBlockInput = {
     i match {
-      case TAT.RequiredInputDefinition(name, wdlType, _) =>
+      case TAT.RequiredInputParameter(name, wdlType, _) =>
         RequiredBlockInput(name, wdlType)
-      case TAT.OverridableInputDefinitionWithDefault(name, wdlType, defaultExpr, _) =>
+      case TAT.OverridableInputParameterWithDefault(name, wdlType, defaultExpr, _) =>
         // If the default value is an expression that requires evaluation (i.e. not a
         // constant), treat the input as optional and leave the default value to be
         // calculated at runtime
@@ -139,7 +139,7 @@ object WdlBlockInput {
                 defaultExpr
             )
         }
-      case TAT.OptionalInputDefinition(name, wdlType, _) =>
+      case TAT.OptionalInputParameter(name, wdlType, _) =>
         OptionalBlockInput(name, wdlType)
     }
   }
@@ -205,7 +205,7 @@ object WdlBlockInput {
   */
 case class WdlBlock(index: Int,
                     inputs: Vector[WdlBlockInput],
-                    outputs: Vector[TAT.OutputDefinition],
+                    outputs: Vector[TAT.OutputParameter],
                     elements: Vector[TAT.WorkflowElement])
     extends Block[WdlBlock] {
   assert(elements.nonEmpty)
@@ -377,8 +377,8 @@ object WdlBlock {
     // We start with a single empty part, which is an empty vector. This ensures that
     // down the line there is at least one part.
     val parts = elements.foldLeft(Vector(Vector.empty[TAT.WorkflowElement])) {
-      case (parts, decl: TAT.Declaration) =>
-        addToLastPart(parts, decl)
+      case (parts, v: TAT.PrivateVariable) =>
+        addToLastPart(parts, v)
       case (parts, call: TAT.Call) =>
         addToLastPart(parts, call, startNew = true)
       case (parts, cond: TAT.Conditional) if Utils.deepFindCalls(Vector(cond)).isEmpty =>

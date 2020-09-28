@@ -40,7 +40,7 @@ trait Block[Self <: Block[Self]] { this: Self =>
 
   /**
     * Create a human readable name for a block of statements
-    * 1. Ignore all declarations
+    * 1. Ignore all private variables
     * 2. If there is a scatter/if, use that
     * 3. if there is at least one call, use the first one.
     * 4. If the entire block is made up of expressions, return None

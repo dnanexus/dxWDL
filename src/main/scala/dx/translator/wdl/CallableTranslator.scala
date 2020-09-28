@@ -57,14 +57,14 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     private lazy val meta = ApplicationMetaTranslator(wdlBundle.version, task.meta, adjunctFiles)
     private lazy val parameterMeta = ParameterMetaTranslator(wdlBundle.version, task.parameterMeta)
 
-    private def translateInput(input: TAT.InputDefinition): Parameter = {
+    private def translateInput(input: TAT.InputParameter): Parameter = {
       val wdlType = input.wdlType
       val irType = WdlUtils.toIRType(wdlType)
       val attrs = parameterMeta.translate(input.name, wdlType)
 
       input match {
-        case TAT.RequiredInputDefinition(name, _, _) => {
-          // This is a task "input" parameter declaration of the form:
+        case TAT.RequiredInputParameter(name, _, _) => {
+          // This is a task "input" parameter of the form:
           //     Int y
 
           if (isOptional(irType)) {
@@ -72,7 +72,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           }
           Parameter(name, irType, attributes = attrs)
         }
-        case TAT.OverridableInputDefinitionWithDefault(name, _, defaultExpr, _) =>
+        case TAT.OverridableInputParameterWithDefault(name, _, defaultExpr, _) =>
           try {
             // This is a task "input" parameter definition of the form:
             //    Int y = 3
@@ -88,13 +88,13 @@ case class CallableTranslator(wdlBundle: WdlBundle,
               Parameter(name, optType, None, attrs)
 
           }
-        case TAT.OptionalInputDefinition(name, _, _) =>
+        case TAT.OptionalInputParameter(name, _, _) =>
           val optType = Type.ensureOptional(irType)
           Parameter(name, optType, None, attrs)
       }
     }
 
-    private def translateOutput(output: TAT.OutputDefinition): Parameter = {
+    private def translateOutput(output: TAT.OutputParameter): Parameter = {
       val wdlType = output.wdlType
       val irType = WdlUtils.toIRType(wdlType)
       val defaultValue = {
@@ -476,7 +476,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     // split a part of a workflow
     private def splitWorkflowElements(
         statements: Vector[TAT.WorkflowElement]
-    ): (Vector[WdlBlockInput], Vector[WdlBlock], Vector[TAT.OutputDefinition]) = {
+    ): (Vector[WdlBlockInput], Vector[WdlBlock], Vector[TAT.OutputParameter]) = {
       val (inputs, outputs) = WdlUtils.getInputOutputClosure(statements)
       val subBlocks = WdlBlock.createBlocks(statements)
       (WdlBlockInput.create(inputs), subBlocks, outputs.values.toVector)
@@ -517,7 +517,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         (main, aux)
       } else {
         // There are several subblocks, we need a subworkflow to string them together.
-        // The subworkflow may access declarations outside of its scope. For example,
+        // The subworkflow may access variables outside of its scope. For example,
         // stage-0.result, and stage-1.result are inputs to stage-2, that belongs to
         // a subworkflow. Because the subworkflow is locked, we need to make them
         // proper inputs.
@@ -612,7 +612,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
       // Figure out the block outputs
       val outputs: Map[String, WdlTypes.T] = block.outputs.map {
-        case TAT.OutputDefinition(name, wdlType, _, _) => name -> wdlType
+        case TAT.OutputParameter(name, wdlType, _, _) => name -> wdlType
       }.toMap
 
       // create a cVar definition from each block output. The dx:stage
@@ -721,7 +721,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
             if (block.kind == BlockKind.CallDirect) {
               block.target match {
                 case Some(call: TAT.Call) =>
-                  // The block contains exactly one call, with no extra declarations.
+                  // The block contains exactly one call, with no extra variables.
                   // All the variables are already in the environment, so there is no
                   // need to do any extra work. Compile directly into a workflow stage.
                   logger2.trace(s"Translating call ${call.actualName} as stage")
@@ -766,7 +766,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       (allStageInfo, stageEnv)
     }
 
-    private def buildSimpleWorkflowOutput(output: TAT.OutputDefinition, env: CallEnv): LinkedVar = {
+    private def buildSimpleWorkflowOutput(output: TAT.OutputParameter, env: CallEnv): LinkedVar = {
       val irType = WdlUtils.toIRType(output.wdlType)
       val param = Parameter(output.name, irType)
       val stageInput: StageInput = if (env.contains(output.name)) {
@@ -811,12 +811,12 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       * @return
       */
     private def createOutputStage(wfName: String,
-                                  outputs: Vector[TAT.OutputDefinition],
+                                  outputs: Vector[TAT.OutputParameter],
                                   env: CallEnv): (Stage, Application) = {
       // Figure out what variables from the environment we need to pass into the applet.
       // create inputs from outputs
       val outputInputVars: Map[String, LinkedVar] = outputs.collect {
-        case TAT.OutputDefinition(name, _, _, _) if env.contains(name) => name -> env(name)
+        case TAT.OutputParameter(name, _, _, _) if env.contains(name) => name -> env(name)
       }.toMap
       // create inputs from the closure of the output nodes, which includes (recursively)
       // all the variables in the output node expressions
@@ -826,7 +826,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       logger.trace(s"inputVars: ${inputVars.map(_._1)}")
       // build definitions of the output variables
       val outputVars: Vector[Parameter] = outputs.map {
-        case TAT.OutputDefinition(name, wdlType, expr, _) =>
+        case TAT.OutputParameter(name, wdlType, expr, _) =>
           val value =
             try {
               val v = evaluator.applyConstAndCoerce(expr, wdlType)
@@ -887,7 +887,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         wfName: String,
         inputs: Vector[WdlBlockInput],
         closureInputs: Map[String, (T, Boolean)],
-        outputs: Vector[TAT.OutputDefinition],
+        outputs: Vector[TAT.OutputParameter],
         blockPath: Vector[Int],
         subBlocks: Vector[WdlBlock],
         level: Level.Level
@@ -896,7 +896,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // expressions that need to be evaluated in the common stage
       val (wfInputParams, dynamicDefaults): (Vector[Parameter], Vector[Boolean]) =
         inputs.map(createWorkflowInput).unzip
-      // inputs that are a result of accessing declarations in an encompassing
+      // inputs that are a result of accessing variables in an encompassing
       // WDL workflow.
       val closureInputParams: Vector[Parameter] = closureInputs.map {
         case (name, (wdlType, false)) =>
@@ -956,16 +956,16 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       // check if all expressions can be resolved without evaluation (i.e. is a constant
       // or a reference to a defined variable)
       val allSimpleOutputs = outputs.forall {
-        case TAT.OutputDefinition(name, _, _, _) if env.contains(name) =>
+        case TAT.OutputParameter(name, _, _, _) if env.contains(name) =>
           // the environment has a stage with this output - we can get it by linking
           true
-        case TAT.OutputDefinition(_, _, expr, _) if WdlUtils.isTrivialExpression(expr) =>
+        case TAT.OutputParameter(_, _, expr, _) if WdlUtils.isTrivialExpression(expr) =>
           // A constant or a reference to a variable
           true
-        case TAT.OutputDefinition(_, _, TAT.ExprIdentifier(id, _, _), _) if env.contains(id) =>
+        case TAT.OutputParameter(_, _, TAT.ExprIdentifier(id, _, _), _) if env.contains(id) =>
           // An identifier that is in scope
           true
-        case TAT.OutputDefinition(
+        case TAT.OutputParameter(
             _,
             _,
             TAT.ExprGetName(TAT.ExprIdentifier(id2, _, _), id, _, _),
@@ -1034,7 +1034,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       */
     private def translateTopWorkflowLocked(
         inputs: Vector[WdlBlockInput],
-        outputs: Vector[TAT.OutputDefinition],
+        outputs: Vector[TAT.OutputParameter],
         subBlocks: Vector[WdlBlock]
     ): (Workflow, Vector[Callable], Vector[LinkedVar]) = {
       translateWorkflowLocked(wf.name,
@@ -1052,7 +1052,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       */
     private def translateTopWorkflowUnlocked(
         inputs: Vector[WdlBlockInput],
-        outputs: Vector[TAT.OutputDefinition],
+        outputs: Vector[TAT.OutputParameter],
         subBlocks: Vector[WdlBlock]
     ): (Workflow, Vector[Callable], Vector[LinkedVar]) = {
       // Create a special applet+stage for the inputs. This is a substitute for
@@ -1161,7 +1161,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
     def apply: Vector[Callable] = {
       logger.trace(s"Translating workflow ${wf.name}")
-      // Create a stage per workflow body element (declaration block, call,
+      // Create a stage per workflow body element (variable block, call,
       // scatter block, conditional block)
       val subBlocks = WdlBlock.createBlocks(wf.body)
       // translate workflow inputs/outputs to equivalent classes defined in Block

@@ -18,9 +18,9 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
     Paths.get(p)
   }
 
-  private def mapFromOutputs(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = {
+  private def mapFromOutputs(outputs: Vector[TAT.OutputParameter]): Map[String, WdlTypes.T] = {
     outputs.map {
-      case TAT.OutputDefinition(name, wdlType, _, _) => name -> wdlType
+      case TAT.OutputParameter(name, wdlType, _, _) => name -> wdlType
     }.toMap
   }
 

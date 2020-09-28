@@ -892,7 +892,7 @@ object Utils {
     */
   def getInputOutputClosure(
       elements: Vector[TAT.WorkflowElement]
-  ): (Map[String, (WdlTypes.T, Boolean)], Map[String, TAT.OutputDefinition]) = {
+  ): (Map[String, (WdlTypes.T, Boolean)], Map[String, TAT.OutputParameter]) = {
     // accumulate the inputs, outputs, and local definitions.
     //
     // start with:
@@ -900,12 +900,12 @@ object Utils {
     //  empty list of local definitions
     //  empty list of outputs
     elements.foldLeft(
-        (Map.empty[String, (WdlTypes.T, Boolean)], Map.empty[String, TAT.OutputDefinition])
+        (Map.empty[String, (WdlTypes.T, Boolean)], Map.empty[String, TAT.OutputParameter])
     ) {
       case ((inputs, outputs), elem) =>
         elem match {
-          case decl: TAT.Declaration =>
-            val newInputs = decl.expr match {
+          case v: TAT.PrivateVariable =>
+            val newInputs = v.expr match {
               case None => inputs
               case Some(expr) =>
                 inputs ++ getExpressionInputs(expr).collect {
@@ -915,13 +915,10 @@ object Utils {
                 }.toMap
             }
             val newOutputs =
-              decl.expr match {
+              v.expr match {
                 case None => outputs
                 case Some(expr) =>
-                  outputs + (decl.name -> TAT.OutputDefinition(decl.name,
-                                                               decl.wdlType,
-                                                               expr,
-                                                               decl.loc))
+                  outputs + (v.name -> TAT.OutputParameter(v.name, v.wdlType, expr, v.loc))
               }
             (newInputs, newOutputs)
           case call: TAT.Call =>
@@ -936,10 +933,10 @@ object Utils {
             val newOutputs = outputs ++ call.callee.output.map {
               case (name, wdlType) =>
                 val fqn = s"${call.actualName}.${name}"
-                fqn -> TAT.OutputDefinition(fqn,
-                                            wdlType,
-                                            TAT.ExprIdentifier(fqn, wdlType, call.loc),
-                                            call.loc)
+                fqn -> TAT.OutputParameter(fqn,
+                                           wdlType,
+                                           TAT.ExprIdentifier(fqn, wdlType, call.loc),
+                                           call.loc)
             }
             (newInputs, newOutputs)
           case cond: TAT.Conditional =>
@@ -954,8 +951,8 @@ object Utils {
             val newInputs = inputs ++ subBlockInputs ++ exprInputs
             // make outputs optional
             val newOutputs = outputs ++ subBlockOutputs.values.map {
-              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
-                name -> TAT.OutputDefinition(name, TUtils.ensureOptional(wdlType), expr, loc)
+              case TAT.OutputParameter(name, wdlType, expr, loc) =>
+                name -> TAT.OutputParameter(name, TUtils.ensureOptional(wdlType), expr, loc)
             }
             (newInputs, newOutputs)
           case scatter: TAT.Scatter =>
@@ -970,11 +967,11 @@ object Utils {
             val newInputs = inputs ++ subBlockInputs ++ exprInputs
             // make outputs arrays
             val newOutputs = outputs ++ subBlockOutputs.values.map {
-              case TAT.OutputDefinition(name, wdlType, expr, loc) =>
-                name -> TAT.OutputDefinition(name,
-                                             WdlTypes.T_Array(wdlType, nonEmpty = false),
-                                             expr,
-                                             loc)
+              case TAT.OutputParameter(name, wdlType, expr, loc) =>
+                name -> TAT.OutputParameter(name,
+                                            WdlTypes.T_Array(wdlType, nonEmpty = false),
+                                            expr,
+                                            loc)
             }
             // remove the collection iteration variable
             (newInputs - scatter.identifier, newOutputs - scatter.identifier)
@@ -989,11 +986,11 @@ object Utils {
     * @param outputs output definitions
     * @return
     */
-  def getOutputClosure(outputs: Vector[TAT.OutputDefinition]): Map[String, WdlTypes.T] = {
+  def getOutputClosure(outputs: Vector[TAT.OutputParameter]): Map[String, WdlTypes.T] = {
     // create inputs from all the expressions that go into outputs
     outputs
       .flatMap {
-        case TAT.OutputDefinition(_, _, expr, _) => Vector(expr)
+        case TAT.OutputParameter(_, _, expr, _) => Vector(expr)
       }
       .flatMap(e => getExpressionInputs(e, withMember = false))
       .foldLeft(Map.empty[String, WdlTypes.T]) {
@@ -1045,9 +1042,9 @@ object Utils {
             s"${indent}call ${call.fullyQualifiedName} as ${al} ${inputs}"
         }
 
-      case TAT.Declaration(_, wdlType, None, _) =>
+      case TAT.PrivateVariable(_, wdlType, None, _) =>
         s"${indent} ${TUtils.prettyFormatType(wdlType)}"
-      case TAT.Declaration(_, wdlType, Some(expr), _) =>
+      case TAT.PrivateVariable(_, wdlType, Some(expr), _) =>
         s"${indent} ${TUtils.prettyFormatType(wdlType)} = ${TUtils.prettyFormatExpr(expr)}"
     }
   }

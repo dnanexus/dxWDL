@@ -438,7 +438,7 @@ case class ParameterMetaTranslator(wdlVersion: WdlVersion, metaSection: Option[T
     ParameterMetaTranslator.translate(metaValue, parameterType)
   }
 
-  def translate(declarations: Vector[TAT.Variable]): Map[String, Vector[ParameterAttribute]] = {
-    declarations.map(decl => decl.name -> translate(decl.name, decl.wdlType)).toMap
+  def translate(variables: Vector[TAT.Variable]): Map[String, Vector[ParameterAttribute]] = {
+    variables.map(v => v.name -> translate(v.name, v.wdlType)).toMap
   }
 }

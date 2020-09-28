@@ -50,12 +50,12 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
         }, outputSpec),
         inputSpec.map {
           case (name, wdlType) =>
-            TAT.RequiredInputDefinition(name, wdlType, loc)
+            TAT.RequiredInputParameter(name, wdlType, loc)
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
             val expr = Utils.getDefaultValueOfType(wdlType)
-            TAT.OutputDefinition(name, wdlType, expr, loc)
+            TAT.OutputParameter(name, wdlType, expr, loc)
         }.toVector,
         TAT.CommandSection(Vector.empty, loc),
         Vector.empty,

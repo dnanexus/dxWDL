@@ -131,7 +131,7 @@ class ExecutableCompiler(extras: Option[Extras],
         Some(DxIOSpec.Type -> constraintToNative(constraint))
       case ParameterAttributes.DefaultAttribute(value) if !hasDefault =>
         // The default was specified in parameter_meta and was not specified in the
-        // parameter declaration
+        // parameter specification
         Some(DxIOSpec.Default -> defaultValueToNative(value))
       case _ => None
     }.toMap

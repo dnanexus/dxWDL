@@ -156,8 +156,8 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
         "y" -> WdlValues.V_Int(5),
         "add" -> WdlValues.V_Call("add", Map("result" -> WdlValues.V_Int(8)))
     )
-    val decls: Vector[TAT.Declaration] = block.elements.collect {
-      case eNode: TAT.Declaration => eNode
+    val decls: Vector[TAT.PrivateVariable] = block.elements.collect {
+      case eNode: TAT.PrivateVariable => eNode
     }
     val expr: TAT.Expr = decls.head.expr.get
     val fileResolver = createFileResolver(workerPaths)
@@ -340,7 +340,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
           Some(call)
         case (None, _: TAT.Call) =>
           None
-        case (None, _: TAT.Declaration) =>
+        case (None, _: TAT.PrivateVariable) =>
           None
         case (None, cond: TAT.Conditional) =>
           f(cond.body)

@@ -149,7 +149,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
   private def getBlockOutputs(elements: Vector[TAT.WorkflowElement]): Map[String, T] = {
     val (_, outputs) = WdlUtils.getInputOutputClosure(elements)
     outputs.values.map {
-      case TAT.OutputDefinition(name, wdlType, _, _) => name -> wdlType
+      case TAT.OutputParameter(name, wdlType, _, _) => name -> wdlType
     }.toMap
   }
 
@@ -159,7 +159,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       env: Map[String, (T, V)]
   ): Map[String, (T, V)] = {
     elements.foldLeft(Map.empty[String, (T, V)]) {
-      case (accu, TAT.Declaration(name, wdlType, exprOpt, _)) =>
+      case (accu, TAT.PrivateVariable(name, wdlType, exprOpt, _)) =>
         val value = exprOpt match {
           case Some(expr) =>
             evaluateExpression(expr, wdlType, accu ++ env)
@@ -616,7 +616,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 
     private def prepareScatterResults(dxSubJob: DxExecution): Map[String, ParameterLink] = {
       val resultTypes: Map[String, Type] = block.outputs.map {
-        case TAT.OutputDefinition(name, wdlType, _, _) =>
+        case TAT.OutputParameter(name, wdlType, _, _) =>
           name -> TArray(WdlUtils.toIRType(wdlType))
       }.toMap
       // Return JBORs for all the outputs. Since the signature of the sub-job
