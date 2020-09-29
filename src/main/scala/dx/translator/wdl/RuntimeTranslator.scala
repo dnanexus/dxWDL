@@ -3,7 +3,7 @@ package dx.translator.wdl
 import dx.api.{DxApi, DxPath, DxUtils, InstanceTypeRequest}
 import dx.translator.RunSpec._
 import dx.core.ir.{ExecutableKind, ExecutableKindNative, ExecutableType, RuntimeRequirement, Value}
-import dx.core.languages.wdl.{DxRuntimeHint, Runtime, Utils => WdlUtils}
+import dx.core.languages.wdl.{DxRuntimeHint, Runtime, WdlUtils}
 import wdlTools.eval.WdlValues._
 import wdlTools.eval.{Eval, EvalException, Meta, VBindings}
 import wdlTools.syntax.WdlVersion

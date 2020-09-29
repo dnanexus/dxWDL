@@ -75,9 +75,8 @@ package dx.core.languages.wdl
 
 import dx.core.ir.BlockKind.BlockKind
 import dx.core.ir.{Block, BlockKind}
-import wdlTools.eval.{Eval, EvalException, WdlValues, Utils => VUtils}
-import wdlTools.types.Utils.{prettyFormatExpr, prettyFormatType}
-import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, Utils => TUtils}
+import wdlTools.eval.{Eval, EvalException, WdlValues, EvalUtils}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT, TypeUtils}
 
 /**
   * An input to a Block. These are simlar to the TAT.InputParameters, but there is
@@ -135,7 +134,7 @@ object WdlBlockInput {
           case _: EvalException =>
             OverridableBlockInputWithDynamicDefault(
                 name,
-                TUtils.ensureOptional(wdlType),
+                TypeUtils.ensureOptional(wdlType),
                 defaultExpr
             )
         }
@@ -167,13 +166,13 @@ object WdlBlockInput {
   def prettyFormat(input: WdlBlockInput, indent: String = ""): String = {
     input match {
       case RequiredBlockInput(name, wdlType) =>
-        s"${indent}${prettyFormatType(wdlType)} ${name}"
+        s"${indent}${TypeUtils.prettyFormatType(wdlType)} ${name}"
       case OverridableBlockInputWithStaticDefault(name, wdlType, defaultValue) =>
-        s"${indent}${prettyFormatType(wdlType)} ${name} = ${VUtils.prettyFormat(defaultValue)}"
+        s"${indent}${TypeUtils.prettyFormatType(wdlType)} ${name} = ${EvalUtils.prettyFormat(defaultValue)}"
       case OverridableBlockInputWithDynamicDefault(name, wdlType, defaultExpr) =>
-        s"${indent}${prettyFormatType(wdlType)} ${name} = ${prettyFormatExpr(defaultExpr)}"
+        s"${indent}${TypeUtils.prettyFormatType(wdlType)} ${name} = ${TypeUtils.prettyFormatExpr(defaultExpr)}"
       case OptionalBlockInput(name, wdlType) =>
-        s"${indent}${prettyFormatType(wdlType)} ${name}"
+        s"${indent}${TypeUtils.prettyFormatType(wdlType)} ${name}"
     }
   }
 }
@@ -209,11 +208,11 @@ case class WdlBlock(index: Int,
                     elements: Vector[TAT.WorkflowElement])
     extends Block[WdlBlock] {
   assert(elements.nonEmpty)
-  assert(Utils.deepFindCalls(elements.dropRight(1)).isEmpty)
+  assert(WdlUtils.deepFindCalls(elements.dropRight(1)).isEmpty)
 
   override lazy val kind: BlockKind = {
     elements.last match {
-      case e if Utils.deepFindCalls(Vector(e)).isEmpty =>
+      case e if WdlUtils.deepFindCalls(Vector(e)).isEmpty =>
         // The block comprises expressions only
         BlockKind.ExpressionsOnly
       case _ if WdlBlock.isTrivialCall(elements) =>
@@ -236,10 +235,10 @@ case class WdlBlock(index: Int,
   override lazy val getName: Option[String] = {
     elements.collectFirst {
       case TAT.Scatter(id, expr, _, _) =>
-        val collection = TUtils.prettyFormatExpr(expr)
+        val collection = TypeUtils.prettyFormatExpr(expr)
         s"scatter (${id} in ${collection})"
       case TAT.Conditional(expr, _, _) =>
-        val cond = TUtils.prettyFormatExpr(expr)
+        val cond = TypeUtils.prettyFormatExpr(expr)
         s"if (${cond})"
       case call: TAT.Call =>
         s"frag ${call.actualName}"
@@ -314,8 +313,8 @@ case class WdlBlock(index: Int,
 
   override lazy val prettyFormat: String = {
     val inputStr = inputs.map(WdlBlockInput.prettyFormat(_))
-    val outputStr = outputs.map(TUtils.prettyFormatOutput(_))
-    val bodyStr = elements.map(Utils.prettyFormat(_)).mkString("\n")
+    val outputStr = outputs.map(TypeUtils.prettyFormatOutput(_))
+    val bodyStr = elements.map(WdlUtils.prettyFormat(_)).mkString("\n")
     s"""Block(${index}, ${kind})
        |Inputs: ${inputStr}
        |Outputs: ${outputStr}
@@ -348,7 +347,7 @@ object WdlBlock {
   private def isTrivialCall(elements: Vector[TAT.WorkflowElement]): Boolean = {
     elements match {
       case Vector(call: TAT.Call) =>
-        call.inputs.values.forall(expr => Utils.isTrivialExpression(expr))
+        call.inputs.values.forall(expr => WdlUtils.isTrivialExpression(expr))
       case _ => false
     }
   }
@@ -381,11 +380,11 @@ object WdlBlock {
         addToLastPart(parts, v)
       case (parts, call: TAT.Call) =>
         addToLastPart(parts, call, startNew = true)
-      case (parts, cond: TAT.Conditional) if Utils.deepFindCalls(Vector(cond)).isEmpty =>
+      case (parts, cond: TAT.Conditional) if WdlUtils.deepFindCalls(Vector(cond)).isEmpty =>
         addToLastPart(parts, cond)
       case (parts, cond: TAT.Conditional) =>
         addToLastPart(parts, cond, startNew = true)
-      case (parts, sct: TAT.Scatter) if Utils.deepFindCalls(Vector(sct)).isEmpty =>
+      case (parts, sct: TAT.Scatter) if WdlUtils.deepFindCalls(Vector(sct)).isEmpty =>
         addToLastPart(parts, sct)
       case (parts, sct: TAT.Scatter) =>
         addToLastPart(parts, sct, startNew = true)
@@ -394,7 +393,7 @@ object WdlBlock {
     // convert to blocks - keep only non-empty blocks
     parts.filter(_.nonEmpty).zipWithIndex.map {
       case (v, index) =>
-        val (inputs, outputs) = Utils.getInputOutputClosure(v)
+        val (inputs, outputs) = WdlUtils.getInputOutputClosure(v)
         WdlBlock(index, WdlBlockInput.create(inputs), outputs.values.toVector, v)
     }
   }

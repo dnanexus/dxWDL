@@ -5,12 +5,12 @@ import wdlTools.eval.WdlValues._
 import wdlTools.eval.{
   Eval,
   EvalException,
+  EvalUtils,
   Hints,
   VBindings,
   WdlValueBindings,
   Runtime => WdlRuntime,
-  RuntimeAttributes => WdlRuntimeAttributes,
-  Utils => EUtils
+  RuntimeAttributes => WdlRuntimeAttributes
 }
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
@@ -76,7 +76,7 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
   }
 
   def containerDefined: Boolean = {
-    runtimeAttrs.contains(WdlRuntime.Keys.Docker)
+    runtimeAttrs.contains(WdlRuntime.DockerKey)
   }
 
   def container: Vector[String] = {
@@ -91,12 +91,12 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
       case other => throw new Exception(s"Invalid dxInstanceType ${other}")
     }
 
-    val memory = runtimeAttrs.runtime.flatMap(_.memory)
-    val memoryMB = memory.map(mem => EUtils.floatToInt(mem.toDouble / Runtime.MiB))
+    val memory = runtimeAttrs.runtime.map(_.memory)
+    val memoryMB = memory.map(mem => EvalUtils.floatToInt(mem.toDouble / Runtime.MiB))
     // we don't provide multiple disk mounts - instead we just add up all the
     // requested disk space
     val diskGB: Option[Long] = runtimeAttrs.runtime.map(_.disks.map(_.size)) match {
-      case Some(v) if v.nonEmpty => Some(EUtils.floatToInt(v.sum / Runtime.GiB))
+      case Some(v) if v.nonEmpty => Some(EvalUtils.floatToInt(v.sum / Runtime.GiB))
       case _                     => None
     }
     val diskType =
@@ -105,12 +105,12 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
         case Some(v) if v.contains("SSD") => Some(DiskType.SSD)
         case _                            => None
       }
-    val cpu = runtimeAttrs.runtime.flatMap(_.cpu).map(EUtils.floatToInt)
-    val gpu = runtimeAttrs.get(WdlRuntime.Keys.Gpu, Vector(T_Boolean)) match {
+    val cpu = runtimeAttrs.runtime.map(_.cpu).map(EvalUtils.floatToInt)
+    val gpu = runtimeAttrs.get(WdlRuntime.GpuKey, Vector(T_Boolean)) match {
       case None               => None
       case Some(V_Boolean(b)) => Some(b)
       case other =>
-        throw new Exception(s"unexpected ${WdlRuntime.Keys.Gpu} value ${other}")
+        throw new Exception(s"unexpected ${WdlRuntime.GpuKey} value ${other}")
     }
     InstanceTypeRequest(None, memoryMB, diskGB, diskType, cpu, gpu)
   }

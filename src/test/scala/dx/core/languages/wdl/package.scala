@@ -1,6 +1,5 @@
 package dx.core.languages
 
-import dx.core.languages.wdl.{Utils => WdlUtils}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 
 package object wdl {

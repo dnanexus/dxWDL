@@ -1,7 +1,7 @@
 package dx.core.languages.wdl
 
 import dx.Tags.EdgeTest
-import dx.core.languages.wdl.{Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlUtils => WdlUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.types.{TypedAbstractSyntax => TAT}

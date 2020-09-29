@@ -7,7 +7,7 @@ import dx.core.ir.Type.TSchema
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.languages.wdl.{Utils => WdlUtils}
+import dx.core.languages.wdl.WdlUtils
 import dx.translator.{InputTranslator, ReorgSettings, Translator, TranslatorFactory}
 import spray.json.{JsArray, JsObject, JsString, JsValue}
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}

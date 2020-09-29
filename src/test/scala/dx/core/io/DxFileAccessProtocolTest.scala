@@ -2,7 +2,7 @@ package dx.core.io
 
 import dx.Assumptions.isLoggedIn
 import dx.Tags.ApiTest
-import dx.core.languages.wdl.Utils
+import dx.core.languages.wdl.WdlUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import wdlTools.eval.{Eval, EvalPaths}
@@ -25,7 +25,7 @@ class DxFileAccessProtocolTest extends AnyFlatSpec with Matchers {
          |}
          |""".stripMargin
 
-    val (doc, _) = Utils.parseSourceString(wdlCode)
+    val (doc, _) = WdlUtils.parseSourceString(wdlCode)
     val declarations: Vector[TAT.PrivateVariable] = doc.elements.collect {
       case decl: TAT.PrivateVariable => decl
     }

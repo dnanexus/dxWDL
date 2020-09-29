@@ -13,12 +13,12 @@ import dx.core.io.{
   DxfuseManifestBuilder
 }
 import dx.core.ir.ParameterLink
-import dx.core.languages.wdl.{DxMetaHints, Runtime, Utils => WdlUtils}
+import dx.core.languages.wdl.{DxMetaHints, Runtime, WdlUtils}
 import dx.executor.{FileUploader, JobMeta, TaskSupport, TaskSupportFactory}
 import dx.translator.wdl.IrToWdlValueBindings
 import spray.json._
 import wdlTools.eval.WdlValues._
-import wdlTools.eval.{Eval, Hints, Meta, WdlValueBindings, WdlValueSerde, Utils => WdlValueUtils}
+import wdlTools.eval.{Eval, EvalUtils, Hints, Meta, WdlValueBindings, WdlValueSerde}
 import wdlTools.exec.{SafeLocalizationDisambiguator, TaskCommandFileGenerator, TaskInputOutput}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
@@ -208,7 +208,7 @@ case class WdlTaskSupport(task: TAT.Task,
                   .filterKeys(
                       Set(DxMetaHints.ParameterMetaStream,
                           DxMetaHints.ParameterHintStream,
-                          Hints.Keys.LocalizationOptional)
+                          Hints.LocalizationOptionalKey)
                   )
                   .values
                   .exists {
@@ -282,7 +282,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     val localizedInputs: Map[String, V] =
-      inputs.view.mapValues(v => WdlValueUtils.transform(v, pathTranslator)).toMap
+      inputs.view.mapValues(v => EvalUtils.transform(v, pathTranslator)).toMap
 
     // serialize the updated inputs
     val localizedInputsJs = WdlTaskSupport.serializeValues(localizedInputs.map {
@@ -475,7 +475,7 @@ case class WdlTaskSupport(task: TAT.Task,
       case (name, value) =>
         val wdlType = outputDefs(name).wdlType
         val irType = WdlUtils.toIRType(wdlType)
-        val wdlValue = WdlValueUtils.transform(value, pathTranslator)
+        val wdlValue = EvalUtils.transform(value, pathTranslator)
         val irValue = WdlUtils.toIRValue(wdlValue, wdlType)
         name -> (irType, irValue)
     }
@@ -500,7 +500,8 @@ case class WdlTaskSupportFactory() extends TaskSupportFactory {
       try {
         WdlUtils.parseSingleTask(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
-        case _: Throwable =>
+        case ex: Throwable =>
+          Logger.error(s"error parsing ${jobMeta.sourceCode}", Some(ex))
           return None
       }
     Some(

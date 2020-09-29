@@ -3,7 +3,7 @@ package dx.dxni.wdl
 import dx.api._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.languages.wdl.{Utils, VersionSupport}
+import dx.core.languages.wdl.{WdlUtils, VersionSupport}
 import dx.dxni.{NativeInterfaceGenerator, NativeInterfaceGeneratorFactory}
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
@@ -32,7 +32,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
       appletName: String,
       inputSpec: Map[String, WdlTypes.T],
       outputSpec: Map[String, WdlTypes.T],
-      loc: SourceLocation = Utils.locPlaceholder
+      loc: SourceLocation = WdlUtils.locPlaceholder
   ): TAT.Task = {
     // DNAnexus allows '-' in app(let) names, WDL does not
     val normalizedName = appletName.replaceAll("[-.]", "_")
@@ -54,7 +54,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
-            val expr = Utils.getDefaultValueOfType(wdlType)
+            val expr = WdlUtils.getDefaultValueOfType(wdlType)
             TAT.OutputParameter(name, wdlType, expr, loc)
         }.toVector,
         TAT.CommandSection(Vector.empty, loc),
@@ -214,7 +214,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
         //  need to be implemented in wdlTools
         val taskDoc = createDocument(Vector(task))
         val sourceCode = wdl.codeGenerator.generateDocument(taskDoc).mkString("\n")
-        logger.ignore(Utils.parseSourceString(sourceCode, fileResolver, regime, logger))
+        logger.ignore(WdlUtils.parseSourceString(sourceCode, fileResolver, regime, logger))
         Some(task)
       } catch {
         case e: Throwable =>

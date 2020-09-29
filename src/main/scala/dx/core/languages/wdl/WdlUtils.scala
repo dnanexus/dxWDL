@@ -20,7 +20,7 @@ import wdlTools.types.{
   TypeInfer,
   WdlTypes,
   TypedAbstractSyntax => TAT,
-  Utils => TUtils
+  TypeUtils
 }
 import wdlTools.util.{
   DefaultBindings,
@@ -31,7 +31,7 @@ import wdlTools.util.{
   StringFileSource
 }
 
-object Utils {
+object WdlUtils {
   val locPlaceholder: SourceLocation = SourceLocation.empty
 
   // A self contained WDL workflow
@@ -141,7 +141,7 @@ object Utils {
 
   // create a wdl-value of a specific type.
   def getDefaultValueOfType(wdlType: WdlTypes.T,
-                            loc: SourceLocation = Utils.locPlaceholder): TAT.Expr = {
+                            loc: SourceLocation = WdlUtils.locPlaceholder): TAT.Expr = {
     wdlType match {
       case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, loc)
       case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, loc)
@@ -731,17 +731,17 @@ object Utils {
     */
   def isTrivialExpression(expr: TAT.Expr): Boolean = {
     expr match {
-      case expr if TUtils.isPrimitiveValue(expr) => true
-      case _: TAT.ExprIdentifier                 => true
+      case expr if TypeUtils.isPrimitiveValue(expr) => true
+      case _: TAT.ExprIdentifier                    => true
 
       // A collection of constants
-      case TAT.ExprPair(l, r, _, _)   => Vector(l, r).forall(TUtils.isPrimitiveValue)
-      case TAT.ExprArray(value, _, _) => value.forall(TUtils.isPrimitiveValue)
+      case TAT.ExprPair(l, r, _, _)   => Vector(l, r).forall(TypeUtils.isPrimitiveValue)
+      case TAT.ExprArray(value, _, _) => value.forall(TypeUtils.isPrimitiveValue)
       case TAT.ExprMap(value, _, _) =>
         value.forall {
-          case (k, v) => TUtils.isPrimitiveValue(k) && TUtils.isPrimitiveValue(v)
+          case (k, v) => TypeUtils.isPrimitiveValue(k) && TypeUtils.isPrimitiveValue(v)
         }
-      case TAT.ExprObject(value, _, _) => value.values.forall(TUtils.isPrimitiveValue)
+      case TAT.ExprObject(value, _, _) => value.values.forall(TypeUtils.isPrimitiveValue)
 
       // Access a field in a call or a struct
       //   Int z = eliminateDuplicate.fields
@@ -793,7 +793,7 @@ object Utils {
         case _: TAT.ValueFile      => Vector.empty
         case _: TAT.ValueDirectory => Vector.empty
         case TAT.ExprIdentifier(id, wdlType, _) =>
-          Vector((id, wdlType, TUtils.isOptional(wdlType)))
+          Vector((id, wdlType, TypeUtils.isOptional(wdlType)))
         case TAT.ExprCompoundString(valArr, _, _) =>
           valArr.flatMap(elem => inner(elem))
         case TAT.ExprPair(l, r, _, _) =>
@@ -838,7 +838,9 @@ object Utils {
         // It may also be the case that the bug is with construction of the environment rather
         // than here with the closure.
         case TAT.ExprGetName(expr, _, _, _)
-            if !withMember && TUtils.unwrapOptional(expr.wdlType).isInstanceOf[WdlTypes.T_Struct] =>
+            if !withMember && TypeUtils
+              .unwrapOptional(expr.wdlType)
+              .isInstanceOf[WdlTypes.T_Struct] =>
           inner(expr)
         // Access a field of an identifier
         //   Int z = eliminateDuplicate.fields
@@ -851,7 +853,7 @@ object Utils {
               Vector((s"${name}.${fieldName}", wdlType, false))
             case _ =>
               throw new Exception(
-                  s"Unhandled ExprGetName construction ${TUtils.prettyFormatExpr(expr)}"
+                  s"Unhandled ExprGetName construction ${TypeUtils.prettyFormatExpr(expr)}"
               )
           }
         case other =>
@@ -922,7 +924,7 @@ object Utils {
               }
             (newInputs, newOutputs)
           case call: TAT.Call =>
-            val newInputs = inputs ++ Utils
+            val newInputs = inputs ++ WdlUtils
               .getCallInputs(call)
               .collect {
                 case (name, wdlType, optional)
@@ -952,7 +954,7 @@ object Utils {
             // make outputs optional
             val newOutputs = outputs ++ subBlockOutputs.values.map {
               case TAT.OutputParameter(name, wdlType, expr, loc) =>
-                name -> TAT.OutputParameter(name, TUtils.ensureOptional(wdlType), expr, loc)
+                name -> TAT.OutputParameter(name, TypeUtils.ensureOptional(wdlType), expr, loc)
             }
             (newInputs, newOutputs)
           case scatter: TAT.Scatter =>
@@ -1002,7 +1004,7 @@ object Utils {
   def prettyFormat(element: TAT.WorkflowElement, indent: String = "    "): String = {
     element match {
       case TAT.Scatter(varName, expr, body, _) =>
-        val collection = TUtils.prettyFormatExpr(expr)
+        val collection = TypeUtils.prettyFormatExpr(expr)
         val innerBlock = body
           .map { innerElement =>
             prettyFormat(innerElement, indent + "  ")
@@ -1020,7 +1022,7 @@ object Utils {
               prettyFormat(innerElement, indent + "  ")
             }
             .mkString("\n")
-        s"""|${indent}if (${TUtils.prettyFormatExpr(expr)}) {
+        s"""|${indent}if (${TypeUtils.prettyFormatExpr(expr)}) {
             |${innerBlock}
             |${indent}}
             |""".stripMargin
@@ -1029,7 +1031,7 @@ object Utils {
         val inputNames = call.inputs
           .map {
             case (key, expr) =>
-              s"${key} = ${TUtils.prettyFormatExpr(expr)}"
+              s"${key} = ${TypeUtils.prettyFormatExpr(expr)}"
           }
           .mkString(",")
         val inputs =
@@ -1043,9 +1045,9 @@ object Utils {
         }
 
       case TAT.PrivateVariable(_, wdlType, None, _) =>
-        s"${indent} ${TUtils.prettyFormatType(wdlType)}"
+        s"${indent} ${TypeUtils.prettyFormatType(wdlType)}"
       case TAT.PrivateVariable(_, wdlType, Some(expr), _) =>
-        s"${indent} ${TUtils.prettyFormatType(wdlType)} = ${TUtils.prettyFormatExpr(expr)}"
+        s"${indent} ${TypeUtils.prettyFormatType(wdlType)} = ${TypeUtils.prettyFormatExpr(expr)}"
     }
   }
 }

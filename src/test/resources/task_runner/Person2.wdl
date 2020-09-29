@@ -8,14 +8,16 @@ struct Person {
 task printPerson {
     input {
     }
+
     Person a = object {
       name: "John",
       age: 30
     }
 
-    command {
-        echo "hello my name is ${a.name} and I am ${a.age} years old"
-    }
+    command <<<
+        echo "hello my name is ~{a.name} and I am ~{a.age} years old"
+    >>>
+
     output {
         String result = read_string(stdout())
     }

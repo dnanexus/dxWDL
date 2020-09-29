@@ -9,14 +9,14 @@ import dx.core.io.DxWorkerPaths
 import dx.core.ir.{Block, BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
 import dx.core.ir.Type._
 import dx.core.ir.Value._
-import dx.core.languages.wdl.{WdlBlockInput, Runtime, WdlBlock, Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlBlockInput, Runtime, WdlBlock, WdlUtils}
 import dx.executor.{BlockContext, JobMeta, WorkflowSupport, WorkflowSupportFactory}
 import spray.json._
-import wdlTools.eval.{Eval, WdlValueBindings, Utils => VUtils}
+import wdlTools.eval.{Eval, WdlValueBindings, EvalUtils}
 import wdlTools.eval.WdlValues._
 import wdlTools.exec.{InputOutput, TaskInputOutput}
 import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypedAbstractSyntax => TAT, Utils => TUtils}
+import wdlTools.types.{TypedAbstractSyntax => TAT, TypeUtils}
 import wdlTools.types.WdlTypes._
 import wdlTools.util.{JsUtils, Logger, TraceLevel}
 
@@ -84,7 +84,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       jobInputs: Map[String, (Type, Value)]
   ): Map[String, (Type, Value)] = {
     if (logger.isVerbose) {
-      logger.trace(workflow.inputs.map(TUtils.prettyFormatInput(_)).mkString("\n"))
+      logger.trace(workflow.inputs.map(TypeUtils.prettyFormatInput(_)).mkString("\n"))
     }
     val workflowInputs = workflow.inputs.map(inp => inp.name -> inp).toMap
     // convert IR to WDL values
@@ -111,7 +111,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       addReorgStatus: Boolean
   ): Map[String, (Type, Value)] = {
     if (logger.isVerbose) {
-      logger.trace(workflow.outputs.map(TUtils.prettyFormatOutput(_)).mkString("\n"))
+      logger.trace(workflow.outputs.map(TypeUtils.prettyFormatOutput(_)).mkString("\n"))
     }
     // convert IR to WDL
     // Some of the inputs could be optional. If they are missing, add in a None value.
@@ -495,10 +495,10 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     // create a short, easy to read, description for a scatter element.
     private def getScatterName(item: V): Option[String] = {
       item match {
-        case _ if VUtils.isPrimitive(item) => Some(VUtils.formatPrimitive(item))
-        case V_File(path)                  => Some(Paths.get(path).getFileName.toString)
-        case V_Directory(path)             => Some(Paths.get(path).getFileName.toString)
-        case V_Optional(x)                 => getScatterName(x)
+        case _ if EvalUtils.isPrimitive(item) => Some(EvalUtils.formatPrimitive(item))
+        case V_File(path)                     => Some(Paths.get(path).getFileName.toString)
+        case V_Directory(path)                => Some(Paths.get(path).getFileName.toString)
+        case V_Optional(x)                    => getScatterName(x)
         case V_Pair(l, r) =>
           val ls = getScatterName(l)
           val rs = getScatterName(r)

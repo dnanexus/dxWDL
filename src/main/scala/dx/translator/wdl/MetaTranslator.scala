@@ -63,7 +63,7 @@ abstract class MetaTranslator(wdlVersion: WdlVersion,
         Some(CallableAttributes.VersionAttribute(text))
       case (MetaTranslator.Details, V_Object(fields)) =>
         Some(CallableAttributes.DetailsAttribute(fields.map {
-          case (name, wdlValue) => name -> wdl.Utils.toIRValue(wdlValue)
+          case (name, wdlValue) => name -> wdl.WdlUtils.toIRValue(wdlValue)
         }))
       case (MetaTranslator.Categories, V_Array(array)) =>
         Some(CallableAttributes.CategoriesAttribute(array.map {
@@ -364,7 +364,7 @@ object ParameterMetaTranslator {
               + "types must match between parameter and default"
         )
       case _ =>
-        wdl.Utils.toIRValue(value, wdlType)
+        wdl.WdlUtils.toIRValue(value, wdlType)
     }
   }
 

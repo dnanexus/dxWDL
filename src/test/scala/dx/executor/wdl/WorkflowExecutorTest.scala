@@ -9,7 +9,7 @@ import dx.core.{Native, ir}
 import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Type.TInt
 import dx.core.ir.{ParameterLinkSerializer, ParameterLinkValue, Type, TypeSerde}
-import dx.core.languages.wdl.{WdlBlock, Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlBlock, WdlUtils => WdlUtils}
 import dx.core.util.CompressionUtils
 import dx.executor.{JobMeta, WorkflowAction, WorkflowExecutor, WorkflowSupport}
 import dx.translator.wdl.WdlBundle

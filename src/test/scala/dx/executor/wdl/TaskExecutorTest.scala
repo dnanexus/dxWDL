@@ -8,7 +8,7 @@ import dx.api.{DiskType, DxAnalysis, DxApi, DxInstanceType, DxJob, DxProject, In
 import dx.core.Native
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
-import dx.core.languages.wdl.{Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlUtils => WdlUtils}
 import dx.core.util.CompressionUtils
 import dx.executor.{JobMeta, TaskAction, TaskExecutor}
 import dx.translator.wdl.CodeGenerator
@@ -282,7 +282,9 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     runTask("cgrep")
   }
 
-  it should "handle type coercion" in {
+  // this test is invalid - automatic coercion to String is not allowed except
+  // in string interpolation
+  ignore should "handle type coercion" in {
     runTask("cast")
   }
 

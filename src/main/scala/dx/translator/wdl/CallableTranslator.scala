@@ -23,7 +23,7 @@ import dx.core.languages.wdl.{
   RequiredBlockInput,
   WdlBlock,
   WdlBlockInput,
-  Utils => WdlUtils
+  WdlUtils
 }
 import wdlTools.eval.{Eval, EvalException, EvalPaths}
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}

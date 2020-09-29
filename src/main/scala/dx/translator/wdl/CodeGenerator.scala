@@ -1,7 +1,7 @@
 package dx.translator.wdl
 
 import dx.core.ir.{Application, Callable, ExecutableKindApplet}
-import dx.core.languages.wdl.{Utils => WdlUtils}
+import dx.core.languages.wdl.{WdlUtils}
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}

@@ -170,10 +170,10 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     def makeString(s: String): TAT.Expr = TAT.ValueString(s, WdlTypes.T_String, null)
     val rt = Map(
         Runtime.DxInstanceTypeKey -> dxInstanceType.map(makeString),
-        WdlRuntime.Keys.Memory -> memory.map(makeString),
-        WdlRuntime.Keys.Disks -> disks.map(makeString),
-        WdlRuntime.Keys.Cpu -> cpu.map(makeString),
-        WdlRuntime.Keys.Gpu -> gpu.map(b => TAT.ValueBoolean(b, WdlTypes.T_Boolean, null))
+        WdlRuntime.MemoryKey -> memory.map(makeString),
+        WdlRuntime.DisksKey -> disks.map(makeString),
+        WdlRuntime.CpuKey -> cpu.map(makeString),
+        WdlRuntime.GpuKey -> gpu.map(b => TAT.ValueBoolean(b, WdlTypes.T_Boolean, null))
     ).collect {
       case (key, Some(value)) => key -> value
     }
@@ -273,18 +273,21 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
 //      ).parseInstanceType
 //    }
 
+    // note that wdlTools applies default values to memory, disk, and cpu
+
     // memory specification
     createRuntime(None, Some("230MB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(
           None,
           Some(Math.ceil((230d * 1000d * 1000d) / (1024d * 1024d)).toLong),
+          Some(1),
           None,
-          None,
+          Some(1),
           None
       )
 
     createRuntime(None, Some("230MiB"), None, None, None).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(230), None, None, None)
+      InstanceTypeRequest(None, Some(230), Some(1), None, Some(1), None)
 
     createRuntime(None, Some("230GB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(
@@ -292,25 +295,27 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
           Some(
               Math.ceil((230d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toLong
           ),
+          Some(1),
           None,
-          None,
+          Some(1),
           None
       )
 
     createRuntime(None, Some("230GiB"), None, None, None).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(230 * 1024), None, None, None)
+      InstanceTypeRequest(None, Some(230 * 1024), Some(1), None, Some(1), None)
 
     createRuntime(None, Some("1000 TB"), None, None, None).parseInstanceType shouldBe
       InstanceTypeRequest(
           None,
           Some(Math.ceil((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toLong),
+          Some(1),
           None,
-          None,
+          Some(1),
           None
       )
 
     createRuntime(None, Some("1000 TiB"), None, None, None).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), None, None, None)
+      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), Some(1), None, Some(1), None)
 
     assertThrows[Exception] {
       createRuntime(None, Some("230 44 34 GB"), None, None, None).parseInstanceType
@@ -346,16 +351,16 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
     }
     createRuntime(None, None, None, Some("1"), None).parseInstanceType shouldBe InstanceTypeRequest(
         None,
-        None,
-        None,
+        Some(2048),
+        Some(1),
         None,
         Some(1),
         None
     )
     createRuntime(None, None, None, Some("1.2"), None).parseInstanceType shouldBe InstanceTypeRequest(
         None,
-        None,
-        None,
+        Some(2048),
+        Some(1),
         None,
         Some(2),
         None
@@ -367,9 +372,9 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
 
     // gpu
     createRuntime(None, Some("1000 TiB"), None, None, Some(true)).parseInstanceType shouldBe
-      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), None, None, None, Some(true))
+      InstanceTypeRequest(None, Some(1000L * 1024L * 1024L), Some(1), None, Some(1), Some(true))
 
     createRuntime(None, None, None, None, Some(false)).parseInstanceType shouldBe
-      InstanceTypeRequest(None, None, None, None, None, Some(false))
+      InstanceTypeRequest(None, Some(2048), Some(1), None, Some(1), Some(false))
   }
 }
