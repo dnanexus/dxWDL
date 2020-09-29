@@ -19,14 +19,18 @@ import dx.translator.wdl.IrToWdlValueBindings
 import spray.json._
 import wdlTools.eval.WdlValues._
 import wdlTools.eval.{Eval, EvalUtils, Hints, Meta, WdlValueBindings, WdlValueSerde}
-import wdlTools.exec.{SafeLocalizationDisambiguator, TaskCommandFileGenerator, TaskInputOutput}
-import wdlTools.syntax.WdlVersion
+import wdlTools.exec.{
+  DockerUtils,
+  SafeLocalizationDisambiguator,
+  TaskCommandFileGenerator,
+  TaskInputOutput
+}
+import wdlTools.syntax.{SourceLocation, WdlVersion}
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{
   DefaultBindings,
   FileSource,
-  FileUtils,
   LocalFileSource,
   Logger,
   RealFileSource,
@@ -143,6 +147,12 @@ case class WdlTaskSupport(task: TAT.Task,
 
   override lazy val getRequiredInstanceType: String = getRequiredInstanceType(getInputs)
 
+  // TODO: it would be nice to extract dx:// links from VString values - this will
+  //  happen in the case where the container is a dx file and being passed in as
+  //  an input parameter - so that they could be downloaded using dxda. However,
+  //  this would also require some way for the downloaded image tarball to be
+  //  discovered and loaded. For now, we rely on DockerUtils to download the image
+  //  (via DxFileSource, which uses the API to download the file).
   private def extractFiles(v: V): Vector[FileSource] = {
     v match {
       case V_File(s) =>
@@ -308,24 +318,19 @@ case class WdlTaskSupport(task: TAT.Task,
     }
     val generator = TaskCommandFileGenerator(logger)
     val runtime = createRuntime(inputsWithPrivateVars)
+    val dockerUtils = DockerUtils(fileResolver, logger)
     val container = runtime.container match {
-      case Vector()    => None
-      case Vector(img) => Some(img, workerPaths)
-      case v           =>
-        // For now we prefer a dx:// url, otherwise just return the first image
-        // TODO: if the user provides multiple alternate images, do something
-        //  useful with them, e.g. try to resolve each one and pick the first
-        //  that is available.
-        val img = v
-          .collectFirst {
-            case img if img.startsWith(DxPath.DxUriPrefix) => img
-          }
-          .getOrElse(v.head)
-        Some(img, workerPaths)
+      case Vector() => None
+      case Vector(image) =>
+        val resolvedImage = dockerUtils.getImage(image, SourceLocation.empty)
+        Some(resolvedImage, workerPaths)
+      case v =>
+        // we prefer a dx:// url
+        val (dxUrls, imageNames) = v.partition(_.startsWith(DxPath.DxUriPrefix))
+        val resolvedImage = dockerUtils.getImage(dxUrls ++ imageNames, SourceLocation.empty)
+        Some(resolvedImage, workerPaths)
     }
-    val scriptPath = generator.apply(command, workerPaths, container)
-    println(scriptPath)
-    println(FileUtils.readFileContent(scriptPath))
+    generator.apply(command, workerPaths, container)
     val inputAndPrivateVarTypes = inputTypes ++ task.privateVariables
       .map(d => d.name -> d.wdlType)
       .toMap

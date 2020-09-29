@@ -86,7 +86,8 @@ docker_test_list = [
     "private_registry",
     "native_docker_file_image",
     "native_docker_file_image_gzip",
-    "samtools_count"
+    "samtools_count",
+    "dynamic_docker_image"
 ]
 
 # wdl draft-2

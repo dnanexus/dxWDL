@@ -211,7 +211,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
     if (!runtime.containerDefined) {
       return NoImage
     }
-    val img =
+    val image =
       try {
         // try to find a Docker image specified as a dx URL
         // there will be an exception if the value requires
@@ -224,7 +224,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
       } catch {
         case _: EvalException => None
       }
-    img.getOrElse(NetworkDockerImage)
+    image.getOrElse(NetworkDockerImage)
   }
 
   private def unwrapString(value: V): String = {

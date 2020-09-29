@@ -169,12 +169,12 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
       // Complex type requiring two fields: a JSON structure, and a flat array of files.
       val fileArrayName = s"${encodedName}${ParameterLink.FlatFilesSuffix}"
       val mapValue = link match {
-        case ParameterLinkValue(jsLinkvalue, _) =>
+        case ParameterLinkValue(jsLinkValue, _) =>
           // files that are embedded in the structure
-          val jsFiles = DxFile.findFiles(dxApi, jsLinkvalue).map(_.asJson)
+          val jsFiles = DxFile.findFiles(dxApi, jsLinkValue).map(_.asJson)
           // Dx allows hashes as an input/output type. If the JSON value is
           // not a hash (JsObject), we need to add an outer layer to it.
-          val jsLink = JsObject(Parameter.ComplexValueKey -> jsLinkvalue)
+          val jsLink = JsObject(Parameter.ComplexValueKey -> jsLinkValue)
           Map(encodedName -> jsLink, fileArrayName -> JsArray(jsFiles))
         case ParameterLinkStage(dxStage, ioRef, varName, _) =>
           val varFileArrayName = s"${varName}${ParameterLink.FlatFilesSuffix}"

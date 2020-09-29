@@ -246,7 +246,7 @@ abstract class InputTranslator(bundle: Bundle,
     val fieldsExactlyOnce = ExactlyOnce("input", fields, logger)
 
     // If variable fully qualified name [fqn] was provided in the
-    // input file, set [stage.cvar] to its JSON value
+    // input file, set [stage.parameter] to its JSON value
     def checkAndBindCallableInputs(
         callable: Callable,
         dxPrefix: Option[String] = None,

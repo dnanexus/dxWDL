@@ -54,6 +54,7 @@ object RunSpec {
     *   None:    no image
     *   Network: the image resides on a network site and requires download
     *   DxFile: the image is a platform file
+    * TODO: add a collection type that can contain multiple ContainerImage values
     */
   sealed trait ContainerImage
   case object NoImage extends ContainerImage
