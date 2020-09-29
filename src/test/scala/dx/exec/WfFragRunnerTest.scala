@@ -391,7 +391,6 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
     val (_, fragRunner) = setupFragRunner(dxPathConfig, fileResolver, wfSourceCode)
     val results: Map[String, JsValue] =
       fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
-
     results.keys should contain("info")
     results("info") shouldBe JsArray(JsString("Michael_27"),
                                      JsString("Lukas_9"),
