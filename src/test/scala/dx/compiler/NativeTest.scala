@@ -79,7 +79,7 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     nativeApplets.foreach { app =>
       try {
         val _ = SysUtils.execCommand(
-            s"dx build $topDir/test/applets/$app --destination ${testProject}:/${unitTestsPath}/applets/",
+            s"dx build $topDir/test/applets/$app -f --destination ${testProject}:/${unitTestsPath}/applets/",
             logger = Logger.Quiet
         )
       } catch {
