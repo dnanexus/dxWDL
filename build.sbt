@@ -70,13 +70,13 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val wdlToolsVersion = "0.7.0"
+val wdlToolsVersion = "0.7.1"
 val typesafeVersion = "1.3.3"
 val sprayVersion = "1.3.5"
 val jacksonVersion = "2.11.0"
 val guavaVersion = "18.0"
 val httpClientVersion = "4.5"
-//val scalacticVersion = "3.1.1"
+val logbackVersion = "1.2.3"
 val scalatestVersion = "3.1.1"
 
 libraryDependencies ++= Seq(
@@ -87,8 +87,9 @@ libraryDependencies ++= Seq(
     "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
     "com.google.guava" % "guava" % guavaVersion,
     "org.apache.httpcomponents" % "httpclient" % httpClientVersion,
+    // libraries needed for compatiblity
+    "ch.qos.logback" % "logback-classic" % logbackVersion % Runtime,
     //---------- Test libraries -------------------//
-    //"org.scalactic" % "scalactic_2.13" % scalacticVersion,
     "org.scalatest" % "scalatest_2.13" % scalatestVersion % "test"
 )
 
