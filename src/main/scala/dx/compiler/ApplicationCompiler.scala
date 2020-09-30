@@ -145,8 +145,8 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     // Start with the default dx-attribute section, and override
     // any field that is specified in the runtime hints or the individual task section.
     val extrasOverrides = extras.flatMap(_.defaultTaskDxAttributes) match {
-      case None      => Map.empty
       case Some(dta) => dta.getRunSpecJson
+      case None      => Map.empty
     }
     // runtime hints in the task override defaults from extras
     val taskOverrides: Map[String, JsValue] = applet.requirements
@@ -166,27 +166,27 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     val taskSpecificOverrides = applet.kind match {
       case ExecutableKindApplet =>
         extras.flatMap(_.perTaskDxAttributes.get(applet.name)) match {
-          case None      => Map.empty
           case Some(dta) => dta.getRunSpecJson
+          case None      => Map.empty
         }
       case _ => Map.empty
     }
     // If the docker image is a tarball, add a link in the details field.
     val dockerFile: Option[DxFile] = applet.container match {
+      case DxFileDockerImage(_, dxfile) => Some(dxfile)
       case NoImage                      => None
       case NetworkDockerImage           => None
-      case DxFileDockerImage(_, dxfile) => Some(dxfile)
     }
     val bundledDepends = runtimeAsset match {
-      case None      => Map.empty
       case Some(jsv) => Map("bundledDepends" -> JsArray(Vector(jsv)))
+      case None      => Map.empty
     }
     val runSpec = JsObject(
         runSpecRequired ++ defaultTimeout ++ extrasOverrides ++ taskOverrides ++ taskSpecificOverrides ++ bundledDepends
     )
     val details: Map[String, JsValue] = dockerFile match {
-      case None         => Map.empty
       case Some(dxFile) => Map("docker-image" -> dxFile.asJson)
+      case None         => Map.empty
     }
     (runSpec, details)
   }

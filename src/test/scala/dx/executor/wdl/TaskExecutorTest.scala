@@ -19,13 +19,13 @@ import wdlTools.eval.WdlValues
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, JsUtils, Logger, SysUtils}
 
-private case class TaskTestJobMeta(override val homeDir: Path = DxWorkerPaths.HomeDir,
+private case class TaskTestJobMeta(override val workerPaths: DxWorkerPaths,
                                    override val dxApi: DxApi = DxApi.get,
                                    override val logger: Logger = Logger.get,
                                    override val jsInputs: Map[String, JsValue],
                                    rawInstanceTypeDb: InstanceTypeDB,
                                    rawSourceCode: String)
-    extends JobMeta(homeDir, dxApi, logger) {
+    extends JobMeta(workerPaths, dxApi, logger) {
   var outputs: Option[Map[String, JsValue]] = None
 
   override val project: DxProject = null
@@ -177,9 +177,9 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
       }
 
     // Create a clean temp directory for the task to use
-    val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
-    jobHomeDir.toFile.deleteOnExit()
-    val workerPaths = DxWorkerPaths(jobHomeDir)
+    val jobRootDir: Path = Files.createTempDirectory("dxwdl_applet_test")
+    jobRootDir.toFile.deleteOnExit()
+    val workerPaths = DxWorkerPaths(jobRootDir)
     workerPaths.createCleanDirs()
 
     // create a stand-alone task
@@ -201,7 +201,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
       ParameterLinkDeserializer(dxFileDescCache, dxApi)
     val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
     val fileResolver = FileSourceResolver.create(
-        localDirectories = Vector(jobHomeDir),
+        localDirectories = Vector(jobRootDir),
         userProtocols = Vector(dxProtocol),
         logger = logger
     )
@@ -222,7 +222,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
 
     // create JobMeta
     val jobMeta =
-      TaskTestJobMeta(jobHomeDir,
+      TaskTestJobMeta(DxWorkerPaths(jobRootDir),
                       dxApi,
                       logger,
                       updatedInputs,
@@ -230,7 +230,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
                       standAloneTaskSource)
 
     // create TaskExecutor
-    val taskExectuor = TaskExecutor(jobMeta, streamAllFiles = false, Some(workerPaths))
+    val taskExectuor = TaskExecutor(jobMeta, streamAllFiles = false)
 
     // run the steps of task execution in order
     taskExectuor.apply(TaskAction.Prolog) shouldBe "success Prolog"

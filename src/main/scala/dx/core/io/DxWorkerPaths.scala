@@ -5,20 +5,18 @@ import java.nio.file.{Path, Paths}
 import wdlTools.exec.ExecPaths
 import wdlTools.util.Logger
 
-// configuration of paths. This is used in several distinct and seemingly disjoint
-// cases:
-//  - compile time
-//  - task runtime
-//  - workflow runtime
-//  - unit test runtime
-//
-// Note all of these directories and paths have to reside under the
-// user home directory. If a task runs under docker, the container
-// will need access to temporary files created with stdlib calls like
-// "write_lines".
-//
-case class DxWorkerPaths(homeDir: Path = DxWorkerPaths.HomeDir)
-    extends ExecPaths(homeDir, homeDir.resolve(DxWorkerPaths.TempDir)) {
+/**
+  * Important paths on a DNAnexus worker.
+  * This is used in several distinct and seemingly disjoint cases:
+  *  - generating applets (compile time)
+  *  - localizing/delocalizing files and evaluating expressions (task/workflow runtime)
+  *  - unit tests
+  * Note that if a task in a container, the container will need access to temporary
+  * files created with stdlib calls like "write_lines".
+  * @param rootDir the root directory - typically the user's home directory
+  */
+case class DxWorkerPaths(rootDir: Path)
+    extends ExecPaths(rootDir, rootDir.resolve(DxWorkerPaths.TempDir)) {
 
   /**
     * Running applets download files from the platform to this location.
@@ -107,9 +105,9 @@ case class DxWorkerPaths(homeDir: Path = DxWorkerPaths.HomeDir)
 }
 
 object DxWorkerPaths {
-  // This directory exists only at runtime in the cloud. Beware of using
-  // it in code paths that run at compile time.
-  val HomeDir: Path = Paths.get("/home/dnanexus")
+  // The home directory on a DNAnexus worker. This directory exists only at runtime in the cloud.
+  // Beware of using it in code paths that run at compile time.
+  val RootDir: Path = Paths.get("/home/dnanexus")
   val InputFilesDir = "inputs"
   val OutputFilesDir = "outputs"
   val TempDir = "job_scratch_space"
@@ -121,5 +119,5 @@ object DxWorkerPaths {
   val DxfuseMountDir = "mnt"
   val TaskEnvFile = "taskEnv.json"
 
-  lazy val default: DxWorkerPaths = apply()
+  lazy val default: DxWorkerPaths = DxWorkerPaths(RootDir)
 }

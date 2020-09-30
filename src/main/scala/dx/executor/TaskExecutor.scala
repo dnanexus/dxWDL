@@ -4,7 +4,7 @@ import java.nio.file.{Path, Paths}
 
 import dx.api.DxJob
 import dx.core.getVersion
-import dx.core.io.{DxWorkerPaths, DxdaManifest, DxfuseManifest}
+import dx.core.io.{DxdaManifest, DxfuseManifest}
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
 import wdlTools.util.{Enum, FileSource, FileUtils, RealFileSource, SysUtils, TraceLevel}
@@ -56,9 +56,7 @@ trait TaskSupport {
 }
 
 trait TaskSupportFactory {
-  def create(jobMeta: JobMeta,
-             workerPaths: DxWorkerPaths,
-             fileUploader: FileUploader): Option[TaskSupport]
+  def create(jobMeta: JobMeta, fileUploader: FileUploader): Option[TaskSupport]
 }
 
 object TaskExecutor {
@@ -66,12 +64,10 @@ object TaskExecutor {
       WdlTaskSupportFactory()
   )
 
-  def createTaskSupport(jobMeta: JobMeta,
-                        workerPaths: DxWorkerPaths,
-                        fileUploader: FileUploader): TaskSupport = {
+  def createTaskSupport(jobMeta: JobMeta, fileUploader: FileUploader): TaskSupport = {
     taskSupportFactories
       .collectFirst { factory =>
-        factory.create(jobMeta, workerPaths, fileUploader) match {
+        factory.create(jobMeta, fileUploader) match {
           case Some(executor) => executor
         }
       }
@@ -83,15 +79,10 @@ object TaskExecutor {
 
 case class TaskExecutor(jobMeta: JobMeta,
                         streamAllFiles: Boolean,
-                        dxWorkerPaths: Option[DxWorkerPaths] = None,
                         fileUploader: FileUploader = SerialFileUploader(),
                         traceLengthLimit: Int = 10000) {
-  // Setup the standard paths used for applets. These are used at runtime, not at compile time.
-  // On the cloud instance running the job, the user is "dnanexus", and the home directory is
-  // "/home/dnanexus".
-  private val workerPaths = dxWorkerPaths.getOrElse(DxWorkerPaths(jobMeta.homeDir))
   private[executor] val taskSupport: TaskSupport =
-    TaskExecutor.createTaskSupport(jobMeta, workerPaths, fileUploader)
+    TaskExecutor.createTaskSupport(jobMeta, fileUploader)
   private val logger = jobMeta.logger
 
   protected def trace(msg: String, minLevel: Int = TraceLevel.Verbose): Unit = {
@@ -143,12 +134,12 @@ case class TaskExecutor(jobMeta: JobMeta,
         "localizedInputs" -> JsObject(inputs),
         "dxUrl2path" -> JsObject(uriToPath)
     )
-    FileUtils.writeFileContent(workerPaths.getTaskEnvFile(), json.prettyPrint)
+    FileUtils.writeFileContent(jobMeta.workerPaths.getTaskEnvFile(), json.prettyPrint)
   }
 
   private def readEnv(): (Map[String, JsValue], Map[FileSource, Path]) = {
     val (inputJs, filesJs) =
-      FileUtils.readFileContent(workerPaths.getTaskEnvFile()).parseJson match {
+      FileUtils.readFileContent(jobMeta.workerPaths.getTaskEnvFile()).parseJson match {
         case JsObject(env) =>
           (env.get("localizedInputs"), env.get("dxUrl2path")) match {
             case (Some(JsObject(inputs)), Some(JsObject(paths))) => (inputs, paths)
@@ -180,12 +171,14 @@ case class TaskExecutor(jobMeta: JobMeta,
     // build a manifest for dxda, if there are files to download
     dxdaManifest.foreach {
       case DxdaManifest(manifestJs) =>
-        FileUtils.writeFileContent(workerPaths.getDxdaManifestFile(), manifestJs.prettyPrint)
+        FileUtils.writeFileContent(jobMeta.workerPaths.getDxdaManifestFile(),
+                                   manifestJs.prettyPrint)
     }
     // build a manifest for dxfuse, if there are files to stream
     dxfuseManifest.foreach {
       case DxfuseManifest(manifestJs) =>
-        FileUtils.writeFileContent(workerPaths.getDxfuseManifestFile(), manifestJs.prettyPrint)
+        FileUtils.writeFileContent(jobMeta.workerPaths.getDxfuseManifestFile(),
+                                   manifestJs.prettyPrint)
     }
     writeEnv(localizedInputs, fileSourceToPath)
   }
@@ -224,7 +217,7 @@ case class TaskExecutor(jobMeta: JobMeta,
   def apply(action: TaskAction.TaskAction): String = {
     try {
       // setup the utility directories that the task-runner employs
-      workerPaths.createCleanDirs()
+      jobMeta.workerPaths.createCleanDirs()
 
       if (action == TaskAction.CheckInstanceType) {
         // special operation to check if this task is on the right instance type

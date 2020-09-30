@@ -22,7 +22,7 @@ task stage_one {
     >>>
 
     output {
-        File output_file = "/home/dnanexus/output_file"
-        File output_config_file = "/home/dnanexus/output_config_file"
+        File output_file = "output_file"
+        File output_config_file = "output_config_file"
     }
 }

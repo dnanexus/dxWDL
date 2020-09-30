@@ -6,7 +6,6 @@ import dx.api.{DxJob, DxPath}
 import dx.core.io.{
   DxFileAccessProtocol,
   DxFileSource,
-  DxWorkerPaths,
   DxdaManifest,
   DxdaManifestBuilder,
   DxfuseManifest,
@@ -68,7 +67,6 @@ case class WdlTaskSupport(task: TAT.Task,
                           wdlVersion: WdlVersion,
                           typeAliases: DefaultBindings[T_Struct],
                           jobMeta: JobMeta,
-                          workerPaths: DxWorkerPaths,
                           fileUploader: FileUploader)
     extends TaskSupport {
 
@@ -77,7 +75,7 @@ case class WdlTaskSupport(task: TAT.Task,
   private val logger = jobMeta.logger
 
   private lazy val evaluator = Eval(
-      workerPaths,
+      jobMeta.workerPaths,
       Some(wdlVersion),
       jobMeta.fileResolver,
       Logger.Quiet
@@ -187,7 +185,7 @@ case class WdlTaskSupport(task: TAT.Task,
   override def localizeInputFiles(
       streamAllFiles: Boolean
   ): (Map[String, JsValue], Map[FileSource, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
-    assert(workerPaths.getInputFilesDir() != workerPaths.getDxfuseMountDir())
+    assert(jobMeta.workerPaths.getInputFilesDir() != jobMeta.workerPaths.getDxfuseMountDir())
 
     val inputs = getInputs
     printInputs(inputs)
@@ -243,7 +241,7 @@ case class WdlTaskSupport(task: TAT.Task,
 
     logger.traceLimited(s"downloading files = ${filesToDownload}")
     val downloadLocalizer =
-      SafeLocalizationDisambiguator(workerPaths.getInputFilesDir(),
+      SafeLocalizationDisambiguator(jobMeta.workerPaths.getInputFilesDir(),
                                     existingPaths = localFilesToPath.values.toSet)
     val downloadFileSourceToPath: Map[FileSource, Path] =
       filesToDownload.map(fs => fs -> downloadLocalizer.getLocalPath(fs)).toMap
@@ -254,14 +252,14 @@ case class WdlTaskSupport(task: TAT.Task,
 
     logger.traceLimited(s"streaming files = ${filesToStream}")
     val streamingLocalizer =
-      SafeLocalizationDisambiguator(workerPaths.getDxfuseMountDir(),
+      SafeLocalizationDisambiguator(jobMeta.workerPaths.getDxfuseMountDir(),
                                     existingPaths = localFilesToPath.values.toSet)
     val streamFileSourceToPath: Map[FileSource, Path] =
       filesToStream.map(fs => fs -> streamingLocalizer.getLocalPath(fs)).toMap
     val dxfuseManifest =
       DxfuseManifestBuilder(dxApi).apply(streamFileSourceToPath.collect {
         case (dxFs: DxFileSource, localPath) => dxFs.dxFile -> localPath
-      }, workerPaths)
+      }, jobMeta.workerPaths)
 
     val fileSourceToPath = localFilesToPath ++ downloadFileSourceToPath ++ streamFileSourceToPath
 
@@ -323,14 +321,14 @@ case class WdlTaskSupport(task: TAT.Task,
       case Vector() => None
       case Vector(image) =>
         val resolvedImage = dockerUtils.getImage(image, SourceLocation.empty)
-        Some(resolvedImage, workerPaths)
+        Some(resolvedImage, jobMeta.workerPaths)
       case v =>
         // we prefer a dx:// url
         val (dxUrls, imageNames) = v.partition(_.startsWith(DxPath.DxUriPrefix))
         val resolvedImage = dockerUtils.getImage(dxUrls ++ imageNames, SourceLocation.empty)
-        Some(resolvedImage, workerPaths)
+        Some(resolvedImage, jobMeta.workerPaths)
     }
-    generator.apply(command, workerPaths, container)
+    generator.apply(command, jobMeta.workerPaths, container)
     val inputAndPrivateVarTypes = inputTypes ++ task.privateVariables
       .map(d => d.name -> d.wdlType)
       .toMap
@@ -498,9 +496,7 @@ case class WdlTaskSupport(task: TAT.Task,
 }
 
 case class WdlTaskSupportFactory() extends TaskSupportFactory {
-  override def create(jobMeta: JobMeta,
-                      workerPaths: DxWorkerPaths,
-                      fileUploader: FileUploader): Option[WdlTaskSupport] = {
+  override def create(jobMeta: JobMeta, fileUploader: FileUploader): Option[WdlTaskSupport] = {
     val (task, typeAliases, doc) =
       try {
         WdlUtils.parseSingleTask(jobMeta.sourceCode, jobMeta.fileResolver)
@@ -510,7 +506,7 @@ case class WdlTaskSupportFactory() extends TaskSupportFactory {
           return None
       }
     Some(
-        WdlTaskSupport(task, doc.version.value, typeAliases, jobMeta, workerPaths, fileUploader)
+        WdlTaskSupport(task, doc.version.value, typeAliases, jobMeta, fileUploader)
     )
   }
 }

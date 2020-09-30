@@ -147,7 +147,7 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
 }
 
 trait WorkflowSupportFactory {
-  def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WorkflowSupport[_]]
+  def create(jobMeta: JobMeta): Option[WorkflowSupport[_]]
 }
 
 object WorkflowExecutor {
@@ -158,10 +158,10 @@ object WorkflowExecutor {
       WdlWorkflowSupportFactory()
   )
 
-  def createWorkflowSupport(jobMeta: JobMeta, workerPaths: DxWorkerPaths): WorkflowSupport[_] = {
+  def createWorkflowSupport(jobMeta: JobMeta): WorkflowSupport[_] = {
     workflowSupportFactories
       .collectFirst { factory =>
-        factory.create(jobMeta, workerPaths) match {
+        factory.create(jobMeta) match {
           case Some(executor) => executor
         }
       }
@@ -172,12 +172,8 @@ object WorkflowExecutor {
 }
 
 case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPaths] = None) {
-  // Setup the standard paths used for applets. These are used at runtime, not at compile time.
-  // On the cloud instance running the job, the user is "dnanexus", and the home directory is
-  // "/home/dnanexus".
-  private val workerPaths = dxWorkerPaths.getOrElse(DxWorkerPaths(jobMeta.homeDir))
   private[executor] val workflowSupport: WorkflowSupport[_] =
-    WorkflowExecutor.createWorkflowSupport(jobMeta, workerPaths)
+    WorkflowExecutor.createWorkflowSupport(jobMeta)
   private val dxApi = jobMeta.dxApi
   private val logger = jobMeta.logger
 

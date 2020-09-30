@@ -1,6 +1,6 @@
 package dx.core.io
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path}
 
 import dx.Assumptions.isLoggedIn
 import dx.Tags.ApiTest
@@ -12,8 +12,9 @@ import wdlTools.util.Logger
 class DxfuseManifestTest extends AnyFlatSpec with Matchers {
   assume(isLoggedIn)
   private val dxApi: DxApi = DxApi(Logger.Quiet)
-  private lazy val homeDir = Paths.get(System.getProperty("user.home"))
-  private lazy val dxPathConfig = DxWorkerPaths(homeDir)
+  private val rootDir = Files.createTempDirectory("root")
+  rootDir.toFile.deleteOnExit()
+  private val dxPathConfig = DxWorkerPaths(rootDir)
   private val ArchivedProj = "ArchivedStuff"
   private lazy val dxArchivedProj: DxProject = dxApi.resolveProject(ArchivedProj)
 

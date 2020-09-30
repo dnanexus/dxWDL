@@ -80,7 +80,7 @@ case class Compiler(extras: Option[Extras],
     private val executableDir =
       DxExecutableDirectory(bundle, project, folder, projectWideReuse, dxApi, logger)
 
-    private def getAssetRecord: Option[DxRecord] = {
+    private def getAssetLink: JsValue = {
       // get billTo and region from the project, then find the runtime asset
       // in the current region.
       val projectRegion = project.describe(Set(Field.Region)).region match {
@@ -100,8 +100,9 @@ case class Compiler(extras: Option[Extras],
       // The mapping from region to project name is list of (region, proj-name) pairs.
       // Get the project for this region.
       val destination = regionToProjectConf.get(projectRegion) match {
-        case None       => throw new Exception(s"Region ${projectRegion} is currently unsupported")
         case Some(dest) => dest
+        case None =>
+          throw new Exception(s"Region ${projectRegion} is currently unsupported")
       }
       val destRegexp = "(?:(.*):)?(.+)".r
       val (regionalProjectName, folder) = destination match {
@@ -121,12 +122,8 @@ case class Compiler(extras: Option[Extras],
       // We need the dxWDL runtime library cloned into this project, so it will
       // be available to all subjobs we run.
       dxApi.cloneAsset(dxAsset, project, RuntimeAsset, regionalProject)
-      Some(dxAsset)
-    }
-
-    private def getAssetLink(record: DxRecord): JsValue = {
       // Extract the archive from the details field
-      val desc = record.describe(Set(Field.Details))
+      val desc = dxAsset.describe(Set(Field.Details))
       val dxLink =
         try {
           JsUtils.get(desc.details.get, Some("archiveFileId"))
@@ -143,8 +140,8 @@ case class Compiler(extras: Option[Extras],
       )
     }
 
-    private val runtimeAsset: Option[JsValue] = if (includeAsset) {
-      getAssetRecord.map(getAssetLink)
+    private lazy val runtimeAsset: Option[JsValue] = if (includeAsset) {
+      Some(getAssetLink)
     } else {
       None
     }

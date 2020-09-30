@@ -1,11 +1,25 @@
-# Compiler internals
+# dxCompiler Architecture
 
-The compiler processes a WDL file in several phases:
+dxCompiler is a Scala application that performs two functions:
 
-- Parsing: use the wdlTools [wdlTools](https://github.com/dnanexus-rnd/wdlTools) library to read a WDL file, parse it, type check it, and create an abstract representation of the WDL document (a "Typed Abstract Syntax Tree", often abbreviated as `TAT` in the code).
-    - The 1.x versions of dxWDL used [WOM library](https://github.com/broadinstitute/cromwell/tree/develop/wom/src) for this step
-- IR: generate Intermediate Code (_IR_) from the TAT representation
-- Native: generate DNAnexus platform applets and workflows from the intermediate code
+1. Compiler: translates tasks/workflows written in a supported language (currently WDL and CWL) into native DNAnexus applets/workflows
+2. Executors Executes tasks and workflow constructs (such as scatter/gather) within the generated applets in a language-specific manner
+
+## Compiler
+
+The compiler has three phases:
+
+1. Parsing: The source code written in a workflow language (e.g. WDL or CWL) is parsed into an abstract syntax tree (AST). This depends on a language-specific library:
+    * [wdlTools]() for WDL, which is based on the [OpenWDL ANTLR4 grammar]()
+    * [cwlTools]() for CWL, which is based on [cwljava](https://github.com/common-workflow-lab/cwljava)
+2. Translation: The language-specific AST is translated into dxCompiler "Intermediate Representation" (IR), which mirrors the struture of DNAnexus applets/workflows, including DNAnexus-supported data types, metadata, and runtime specifications. The output of this step is an IR "Bundle".
+3. Compilation: Generates native applets and workflows from the IR. The output of this step is the applet ID (for a source file that contains a single tool/task), or workflow ID.
+
+### Translation
+
+
+
+### Compilation
 
 A WDL workflow is compiled into an equivalent DNAnexus workflow, enabling running it on the platform. The basic mapping is:
 

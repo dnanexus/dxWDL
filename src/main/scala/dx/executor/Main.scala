@@ -2,6 +2,7 @@ package dx.executor
 
 import java.nio.file.{InvalidPathException, Paths}
 
+import dx.core.io.DxWorkerPaths
 import dx.core.util.MainUtils._
 
 object Main {
@@ -15,12 +16,12 @@ object Main {
     }
     val kind = args(0)
     val action = args(1).replaceAll("_", "")
-    val homeDir =
+    val rootDir =
       try {
         Paths.get(args(2))
       } catch {
         case _: InvalidPathException =>
-          return BadUsageTermination(s"${args(1)} is not a valid home directory")
+          return BadUsageTermination(s"${args(1)} is not a valid root directory")
       }
     val options =
       try {
@@ -31,7 +32,7 @@ object Main {
       }
     initLogger(options)
     try {
-      val jobMeta = WorkerJobMeta(homeDir)
+      val jobMeta = WorkerJobMeta(DxWorkerPaths(rootDir))
       kind match {
         case "task" =>
           val taskAction =
@@ -66,7 +67,7 @@ object Main {
   }
 
   private val usageMessage =
-    s"""|java -jar dxWDL.jar <task|workflow> <action> <homedir> [options]
+    s"""|java -jar dxWDL.jar <task|workflow> <action> <rootdir> [options]
         |
         |Options:
         |    -traceLevel [0,1,2] How much debug information to write to the

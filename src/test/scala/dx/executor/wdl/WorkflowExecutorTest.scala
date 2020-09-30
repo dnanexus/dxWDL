@@ -21,14 +21,14 @@ import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
 
-private case class WorkflowTestJobMeta(override val homeDir: Path = DxWorkerPaths.HomeDir,
+private case class WorkflowTestJobMeta(override val workerPaths: DxWorkerPaths,
                                        override val dxApi: DxApi = DxApi.get,
                                        override val logger: Logger = Logger.get,
                                        rawEnv: Map[String, (WdlTypes.T, WdlValues.V)],
                                        rawBlockPath: Vector[Int],
                                        rawInstanceTypeDb: InstanceTypeDB,
                                        rawSourceCode: String)
-    extends JobMeta(homeDir, dxApi, logger) {
+    extends JobMeta(workerPaths, dxApi, logger) {
   override val project: DxProject = null
 
   override val jsInputs: Map[String, JsValue] =
@@ -92,8 +92,8 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
 
   private def setup(): DxWorkerPaths = {
     // Create a clean temp directory for the task to use
-    val jobHomeDir: Path = Files.createTempDirectory("dxwdl_applet_test")
-    val workerPaths = DxWorkerPaths(jobHomeDir)
+    val jobRootDir: Path = Files.createTempDirectory("dxwdl_applet_test")
+    val workerPaths = DxWorkerPaths(jobRootDir)
     workerPaths.createCleanDirs()
     workerPaths
   }
@@ -106,20 +106,14 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
   ): WorkflowExecutor = {
     val wfSourceCode = FileUtils.readFileContent(sourcePath)
     val jobMeta =
-      WorkflowTestJobMeta(workerPaths.homeDir,
-                          dxApi,
-                          logger,
-                          env,
-                          blockPath,
-                          instanceTypeDB,
-                          wfSourceCode)
+      WorkflowTestJobMeta(workerPaths, dxApi, logger, env, blockPath, instanceTypeDB, wfSourceCode)
     WorkflowExecutor(jobMeta, Some(workerPaths))
   }
 
   private def createFileResolver(workerPaths: DxWorkerPaths): FileSourceResolver = {
     val dxProtocol = DxFileAccessProtocol(dxApi)
     FileSourceResolver.create(
-        localDirectories = Vector(workerPaths.homeDir),
+        localDirectories = Vector(workerPaths.getWorkDir()),
         userProtocols = Vector(dxProtocol),
         logger = logger
     )

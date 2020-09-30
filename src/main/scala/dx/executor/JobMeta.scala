@@ -45,8 +45,8 @@ object JobMeta {
     * raise an exception. Instead, we write the error to a standard JSON file.
     * @param e the exception
     */
-  def writeError(homeDir: Path, e: Throwable): Unit = {
-    val jobErrorPath = homeDir.resolve(errorFile)
+  def writeError(rootDir: Path, e: Throwable): Unit = {
+    val jobErrorPath = rootDir.resolve(errorFile)
     val errType = e match {
       case _: AppException         => "AppError"
       case _: AppInternalException => "AppInternalError"
@@ -72,11 +72,11 @@ object JobMeta {
   * 1. metadata files on the worker
   * 2. job details
   * 3. application details
-  * @param homeDir home directory
+  * @param workerPaths DxWorkerPaths
   * @param dxApi DxApi
   * @param logger Logger
   */
-abstract class JobMeta(val homeDir: Path, val dxApi: DxApi, val logger: Logger) {
+abstract class JobMeta(val workerPaths: DxWorkerPaths, val dxApi: DxApi, val logger: Logger) {
   def project: DxProject
 
   lazy val projectDesc: DxProjectDescribe = project.describe()
@@ -98,7 +98,7 @@ abstract class JobMeta(val homeDir: Path, val dxApi: DxApi, val logger: Logger) 
   lazy val fileResolver: FileSourceResolver = {
     val dxProtocol = DxFileAccessProtocol(dxApi, dxFileDescCache)
     val fileResolver = FileSourceResolver.create(
-        localDirectories = Vector(homeDir),
+        localDirectories = Vector(workerPaths.getWorkDir()),
         userProtocols = Vector(dxProtocol),
         logger = logger
     )
@@ -260,15 +260,16 @@ abstract class JobMeta(val homeDir: Path, val dxApi: DxApi, val logger: Logger) 
   def error(e: Throwable): Unit
 }
 
-case class WorkerJobMeta(override val homeDir: Path = DxWorkerPaths.HomeDir,
+case class WorkerJobMeta(override val workerPaths: DxWorkerPaths = DxWorkerPaths.default,
                          override val dxApi: DxApi = DxApi.get,
                          override val logger: Logger = Logger.get)
-    extends JobMeta(homeDir, dxApi, logger) {
+    extends JobMeta(workerPaths, dxApi, logger) {
   lazy val project: DxProject = dxApi.currentProject
 
-  private val inputPath = homeDir.resolve(JobMeta.inputFile)
-  private val outputPath = homeDir.resolve(JobMeta.outputFile)
-  private val infoPath = homeDir.resolve(JobMeta.infoFile)
+  private val rootDir = workerPaths.getRootDir()
+  private val inputPath = rootDir.resolve(JobMeta.inputFile)
+  private val outputPath = rootDir.resolve(JobMeta.outputFile)
+  private val infoPath = rootDir.resolve(JobMeta.infoFile)
 
   lazy val jsInputs: Map[String, JsValue] = {
     if (Files.exists(inputPath)) {
@@ -330,6 +331,6 @@ case class WorkerJobMeta(override val homeDir: Path = DxWorkerPaths.HomeDir,
   def getExecutableDetail(name: String): Option[JsValue] = executableDetails.get(name)
 
   def error(e: Throwable): Unit = {
-    JobMeta.writeError(homeDir, e)
+    JobMeta.writeError(rootDir, e)
   }
 }

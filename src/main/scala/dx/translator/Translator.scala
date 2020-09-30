@@ -33,14 +33,14 @@ object TranslatorFactory {
       WdlTranslatorFactory()
   )
 
-  def create(source: Path,
-             language: Option[Language] = None,
-             extras: Option[Extras] = None,
-             locked: Boolean = false,
-             reorgEnabled: Option[Boolean] = None,
-             baseFileResolver: FileSourceResolver = FileSourceResolver.get,
-             dxApi: DxApi = DxApi.get,
-             logger: Logger = Logger.get): Translator = {
+  def createTranslator(source: Path,
+                       language: Option[Language] = None,
+                       extras: Option[Extras] = None,
+                       locked: Boolean = false,
+                       reorgEnabled: Option[Boolean] = None,
+                       baseFileResolver: FileSourceResolver = FileSourceResolver.get,
+                       dxApi: DxApi = DxApi.get,
+                       logger: Logger = Logger.get): Translator = {
     val sourceAbsPath = FileUtils.absolutePath(source)
     val fileResolver = baseFileResolver.addToLocalSearchPath(Vector(sourceAbsPath.getParent))
     // load defaults from extras

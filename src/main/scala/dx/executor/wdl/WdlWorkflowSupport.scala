@@ -5,7 +5,6 @@ import java.nio.file.Paths
 import dx.AppInternalException
 import dx.api.{DxExecution, DxObject, Field}
 import dx.core.Native
-import dx.core.io.DxWorkerPaths
 import dx.core.ir.{Block, BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
 import dx.core.ir.Type._
 import dx.core.ir.Value._
@@ -66,12 +65,11 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
                               wdlVersion: WdlVersion,
                               tasks: Map[String, TAT.Task],
                               wdlTypeAliases: Map[String, T_Struct],
-                              jobMeta: JobMeta,
-                              workerPaths: DxWorkerPaths)
+                              jobMeta: JobMeta)
     extends WorkflowSupport[WdlBlock](jobMeta) {
   private val logger = jobMeta.logger
   private lazy val evaluator = Eval(
-      workerPaths,
+      jobMeta.workerPaths,
       Some(wdlVersion),
       jobMeta.fileResolver,
       Logger.Quiet
@@ -913,7 +911,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
 }
 
 case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
-  override def create(jobMeta: JobMeta, workerPaths: DxWorkerPaths): Option[WdlWorkflowSupport] = {
+  override def create(jobMeta: JobMeta): Option[WdlWorkflowSupport] = {
     val (workflow, tasks, typeAliases, doc) =
       try {
         WdlUtils.parseWorkflow(jobMeta.sourceCode, jobMeta.fileResolver)
@@ -922,12 +920,7 @@ case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
           return None
       }
     Some(
-        WdlWorkflowSupport(workflow,
-                           doc.version.value,
-                           tasks,
-                           typeAliases.bindings,
-                           jobMeta,
-                           workerPaths)
+        WdlWorkflowSupport(workflow, doc.version.value, tasks, typeAliases.bindings, jobMeta)
     )
   }
 }

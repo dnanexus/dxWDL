@@ -2,6 +2,7 @@ package dx.api
 
 object DxPath {
   val DxUriPrefix = "dx://"
+  private val pathRegex = "(.*)/(.+)".r
 
   case class DxPathComponents(name: String,
                               folder: Option[String],
@@ -39,20 +40,13 @@ object DxPath {
                                  |""".stripMargin)
     }
 
-    // split the object path into folder/name
-    val index = dxObjectPath.lastIndexOf('/')
-    val (folderRaw, name) =
-      if (index == -1) {
-        ("/", dxObjectPath)
-      } else {
-        (dxObjectPath.substring(0, index), dxObjectPath.substring(index + 1))
-      }
-
-    // We don't want a folder if this is a dx-data-object (file-xxxx, record-yyyy)
-    val folder =
-      if (DxUtils.isDataObjectId(name)) None
-      else if (folderRaw == "") Some("/")
-      else Some(folderRaw)
+    val (folder, name) = dxObjectPath match {
+      case pathRegex(_, name) if DxUtils.isDataObjectId(name) => (None, name)
+      case pathRegex(folder, name) if folder == ""            => (Some("/"), name)
+      case pathRegex(folder, name)                            => (Some(folder), name)
+      case _ if DxUtils.isDataObjectId(dxObjectPath)          => (None, dxObjectPath)
+      case _                                                  => (Some("/"), dxObjectPath)
+    }
 
     DxPathComponents(name, folder, projName, dxObjectPath, dxPath)
   }

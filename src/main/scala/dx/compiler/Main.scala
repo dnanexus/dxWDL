@@ -252,7 +252,7 @@ object Main {
       try {
         val language = options.getValue[Language]("language")
         val Vector(locked, reorg) = Vector("locked", "reorg").map(options.getFlag(_))
-        TranslatorFactory.create(
+        TranslatorFactory.createTranslator(
             sourceFile,
             language,
             extras,
@@ -320,7 +320,7 @@ object Main {
     }
 
     try {
-      val dxPathConfig = DxWorkerPaths()
+      val dxPathConfig = DxWorkerPaths.default
       val scatterChunkSize: Int = options.getValue[Int]("scatterChunkSize") match {
         case None => Native.JobPerScatterDefault
         case Some(x) =>
@@ -338,7 +338,7 @@ object Main {
       }
       val runtimeTraceLevel: Int =
         options.getValueOrElse[Int]("runtimeDebugLevel", DefaultRuntimeTraceLevel)
-      val includeAsset = compileMode == CompilerMode.NativeWithoutRuntimeAsset
+      val includeAsset = compileMode == CompilerMode.All
       val Vector(
           archive,
           force,
@@ -460,6 +460,12 @@ object Main {
       val folderOpt = options.getValue[String]("folder")
       val pathOpt = options.getValue[String]("path")
       val (dxProject, folderOrFile) = resolveDestination(project, folderOpt, pathOpt)
+      val includeApps = apps match {
+        case AppsOption.Include => true
+        case AppsOption.Exclude => false
+        case _ =>
+          throw new RuntimeException(s"unexpected value for --apps ${apps}")
+      }
       try {
         folderOrFile match {
           case Left(folder) =>
@@ -468,14 +474,14 @@ object Main {
                        dxProject,
                        folder = Some(folder),
                        recursive = recursive,
-                       includeApps = apps == AppsOption.Include,
+                       includeApps = includeApps,
                        force = force)
           case Right(applet: DxApplet) =>
             dxni.apply(language,
                        outputFile,
                        dxProject,
                        applet = Some(applet),
-                       includeApps = apps == AppsOption.Include,
+                       includeApps = includeApps,
                        force = force)
           case _ =>
             throw OptionParseException(
