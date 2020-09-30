@@ -21,7 +21,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 #dxda_version = "v0.2.2"
 # If there isn't, lookup the latest version at docker hub
 #    https://hub.docker.com/r/dnanexus/dxda/tags?page=1&ordering=last_updated
-dxda_version = "sha-7aceaf3"
+dxda_version = "v0.5.3"
 dxfuse_version = "v0.22.4"
 max_num_retries = 5
 
