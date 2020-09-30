@@ -119,31 +119,30 @@ def _download_dxda_into_resources(top_dir, dxda_version):
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # download dxda release, and place it in the resources directory
-    trg_dxda_tar = "resources/dx-download-agent-linux.tar"
+    # download dxda release, and place it in the resources directory
     if dxda_version.startswith("v"):
         # A proper download-agent release, it starts with a "v"
         subprocess.check_call([
             "wget",
-            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
+            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux".format(dxda_version),
             "-O",
-            trg_dxda_tar])
+            "resources/usr/bin/dx-download-agent"])
     else:
+        trg_dxda_tar = "resources/dx-download-agent-linux.tar"
         # A snapshot of the download-agent development branch
         command = """sudo  docker run --rm --entrypoint=\'\' dnanexus/dxda:{} cat /builds/dx-download-agent-linux.tar > {}""".format(dxda_version, trg_dxda_tar)
         p = subprocess.Popen(command, universal_newlines=True, shell=True,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         text = p.stdout.read()
         retcode = p.wait()
-        print("downloading dxda{} {}".format(retcode, text))
-
-    subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
-    os.rename("resources/dx-download-agent-linux/dx-download-agent",
-              "resources/usr/bin/dx-download-agent")
+        print("downloading dxda{} {}", retcode, text)
+        subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
+        os.rename("resources/dx-download-agent-linux/dx-download-agent",
+                  "resources/usr/bin/dx-download-agent")
+        os.remove(trg_dxda_tar)
+        shutil.rmtree("resources/dx-download-agent-linux")
+    
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
-    os.remove(trg_dxda_tar)
-    shutil.rmtree("resources/dx-download-agent-linux")
-
-
 
 def _add_dxfuse_to_resources(top_dir, dxfuse_version):
     # TODO: if dxfuse is already downloaded, check that it's version matches
@@ -231,7 +230,7 @@ def _gen_config_file(version_id, top_dir, project_dict):
 
 def build(project, folder, version_id, top_dir, path_dict, dependencies = None):
     if dependencies is None:
-        with open("bundled_dependencies.json", "rt") as inp:
+        with open(os.path.join(top_dir, "scripts/bundled_dependencies.json"), "rt") as inp:
             dependencies = json.load(inp)
 
     # make sure the resources directory exists
