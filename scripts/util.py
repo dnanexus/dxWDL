@@ -138,13 +138,11 @@ def _download_dxda_into_resources(top_dir):
         subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
         os.rename("resources/dx-download-agent-linux/dx-download-agent",
                   "resources/usr/bin/dx-download-agent")
-    
+        os.remove(trg_dxda_tar)
+        shutil.rmtree("resources/dx-download-agent-linux")
+
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
-    os.remove(trg_dxda_tar)
-    shutil.rmtree("resources/dx-download-agent-linux")
-
-
-
+    
 def _add_dxfuse_to_resources(top_dir):
     p = os.path.join(top_dir, "applet_resources/resources/usr/bin/dxfuse")
     if not os.path.exists(p):
