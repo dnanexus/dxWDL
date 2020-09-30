@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.45.1 30-09-2020
+
+- Upgrade dxda to v0.5.3
+- Upgrade dxfuse to v0.22.4
+
 ## 1.45 3-Mar-2020
 - Upgrade packages to:
   - dxfuse v20
