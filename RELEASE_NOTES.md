@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.49.2 30-Sep-2020
+
+* Upgrade dxda to v0.5.3
+* Enable dxWDL in London
+
 ## 1.49.1 21-Sep-2020 (pre-release)
 
 * Upgrade dxfuse to v0.22.4
