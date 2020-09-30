@@ -232,7 +232,7 @@ def _gen_config_file(version_id, top_dir, project_dict):
 
 def build(project, folder, version_id, top_dir, path_dict, dependencies = None):
     if dependencies is None:
-        with open("bundled_dependencies.json", "rt") as inp:
+        with open(os.path.join(top_dir, "scripts/bundled_dependencies.json"), "rt") as inp:
             dependencies = json.load(inp)
 
     # make sure the resources directory exists
