@@ -416,7 +416,7 @@ case class Native(dxWDLrtId: Option[String],
         |
         |       # run dxfuse so that it will not exit after the bash script exists.
         |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-        |       dxfuse_log=/var/log/dxfuse.log
+        |       dxfuse_log=/root/.dxfuse/dxfuse.log
         |
         |       sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString}
         |       dxfuse_err_code=$$?
