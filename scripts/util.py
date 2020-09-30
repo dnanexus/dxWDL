@@ -21,8 +21,8 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 #dxda_version = "v0.2.2"
 # If there isn't, lookup the latest version at docker hub
 #    https://hub.docker.com/r/dnanexus/dxda/tags?page=1&ordering=last_updated
-dxda_version = "20200605195331_4eddbbd"
-dxfuse_version = "v0.22.2"
+dxda_version = "v0.5.3"
+dxfuse_version = "v0.22.4"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -119,15 +119,17 @@ def _download_dxda_into_resources(top_dir):
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # download dxda release, and place it in the resources directory
-    trg_dxda_tar = "resources/dx-download-agent-linux.tar"
+
     if dxda_version.startswith("v"):
         # A proper download-agent release, it starts with a "v"
+        dxda_download_path = "resources/usr/bin/dx-download-agent"
         subprocess.check_call([
             "wget",
-            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
+            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux".format(dxda_version),
             "-O",
-            trg_dxda_tar])
+            dxda_download_path])
     else:
+        trg_dxda_tar = "resources/dx-download-agent-linux.tar"
         # A snapshot of the download-agent development branch
         command = """sudo  docker run --rm --entrypoint=\'\' dnanexus/dxda:{} cat /builds/dx-download-agent-linux.tar > {}""".format(dxda_version, trg_dxda_tar)
         p = subprocess.Popen(command, universal_newlines=True, shell=True,
@@ -135,10 +137,10 @@ def _download_dxda_into_resources(top_dir):
         text = p.stdout.read()
         retcode = p.wait()
         print("downloading dxda{} {}".format(retcode, text))
+        subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
+        os.rename("resources/dx-download-agent-linux/dx-download-agent",
+                  "resources/usr/bin/dx-download-agent")
 
-    subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
-    os.rename("resources/dx-download-agent-linux/dx-download-agent",
-              "resources/usr/bin/dx-download-agent")
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
