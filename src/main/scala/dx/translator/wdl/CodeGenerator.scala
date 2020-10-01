@@ -1,12 +1,12 @@
 package dx.translator.wdl
 
 import dx.core.ir.{Application, Callable, ExecutableKindApplet}
-import dx.core.languages.wdl.{WdlUtils}
+import dx.core.languages.wdl.WdlUtils
 import wdlTools.eval.WdlValues
 import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.{GraphUtils, TypeGraph, WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{Logger, StringFileSource}
+import wdlTools.util.{Logger, StringFileNode}
 
 case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
                          wdlVersion: WdlVersion,
@@ -290,7 +290,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
 
   def standAloneTask(task: TAT.Task): TAT.Document = {
     TAT.Document(
-        StringFileSource.empty,
+        StringFileNode.empty,
         TAT.Version(outputWdlVersion, SourceLocation.empty),
         typeAliasDefinitions :+ task,
         None,
@@ -375,7 +375,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
     val wfWithoutImportCalls = wf.copy(body = cleanCalls(wf.body))
 
     TAT.Document(
-        StringFileSource.empty,
+        StringFileNode.empty,
         TAT.Version(outputWdlVersion, SourceLocation.empty),
         typeAliasDefinitions ++ tasks,
         Some(wfWithoutImportCalls),

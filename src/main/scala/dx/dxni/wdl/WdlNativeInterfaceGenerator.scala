@@ -9,7 +9,7 @@ import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.WdlTypes.T_Task
 import wdlTools.types.{TypeCheckingRegime, WdlTypes, TypedAbstractSyntax => TAT}
-import wdlTools.util.{FileSourceResolver, Logger, StringFileSource}
+import wdlTools.util.{FileSourceResolver, Logger, StringFileNode}
 
 case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
                                        fileResolver: FileSourceResolver = FileSourceResolver.get,
@@ -195,7 +195,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
   private def documentFromTasks(tasks: Vector[TAT.Task]): TAT.Document = {
     def createDocument(docTasks: Vector[TAT.Task]): TAT.Document = {
       TAT.Document(
-          StringFileSource.empty,
+          StringFileNode.empty,
           TAT.Version(wdl.version, SourceLocation.empty),
           docTasks,
           None,

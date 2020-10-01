@@ -7,7 +7,7 @@ import dx.core.getVersion
 import dx.core.io.{DxdaManifest, DxfuseManifest}
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
-import wdlTools.util.{Enum, FileSource, FileUtils, RealDataSource, SysUtils, TraceLevel}
+import wdlTools.util.{AddressableFileSource, Enum, FileNode, FileUtils, SysUtils, TraceLevel}
 
 object TaskAction extends Enum {
   type TaskAction = Value
@@ -25,7 +25,7 @@ trait TaskSupport {
     */
   def localizeInputFiles(streamAllFiles: Boolean): (
       Map[String, JsValue],
-      Map[FileSource, Path],
+      Map[FileNode, Path],
       Option[DxdaManifest],
       Option[DxfuseManifest]
   )
@@ -44,7 +44,7 @@ trait TaskSupport {
     * @param fileSourceToPath mapping of file sources to local paths
     */
   def evaluateOutputs(localizedInputs: Map[String, JsValue],
-                      fileSourceToPath: Map[FileSource, Path],
+                      fileSourceToPath: Map[FileNode, Path],
                       fileUploader: FileUploader): Unit
 
   /**
@@ -124,11 +124,12 @@ case class TaskExecutor(jobMeta: JobMeta,
 
   // marshal localized inputs into json, and then to a string
   private def writeEnv(inputs: Map[String, JsValue],
-                       fileSourceToPath: Map[FileSource, Path]): Unit = {
+                       fileSourceToPath: Map[FileNode, Path]): Unit = {
     val uriToPath: Map[String, JsValue] = fileSourceToPath.map {
-      case (fileSource: RealDataSource, path) => fileSource.value -> JsString(path.toString)
+      case (fileSource: AddressableFileSource, path) =>
+        fileSource.address -> JsString(path.toString)
       case (other, _) =>
-        throw new RuntimeException(s"Can only serialize a RealFileSource, not ${other}")
+        throw new RuntimeException(s"Can only serialize an AddressableFileSource, not ${other}")
     }
     val json = JsObject(
         "localizedInputs" -> JsObject(inputs),
@@ -137,7 +138,7 @@ case class TaskExecutor(jobMeta: JobMeta,
     FileUtils.writeFileContent(jobMeta.workerPaths.getTaskEnvFile(), json.prettyPrint)
   }
 
-  private def readEnv(): (Map[String, JsValue], Map[FileSource, Path]) = {
+  private def readEnv(): (Map[String, JsValue], Map[FileNode, Path]) = {
     val (inputJs, filesJs) =
       FileUtils.readFileContent(jobMeta.workerPaths.getTaskEnvFile()).parseJson match {
         case JsObject(env) =>

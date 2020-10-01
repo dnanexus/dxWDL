@@ -28,11 +28,11 @@ import wdlTools.syntax.{SourceLocation, WdlVersion}
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{
+  AddressableFileSource,
   DefaultBindings,
-  FileSource,
+  FileNode,
   LocalFileSource,
   Logger,
-  RealDataSource,
   TraceLevel
 }
 
@@ -151,7 +151,7 @@ case class WdlTaskSupport(task: TAT.Task,
   //  this would also require some way for the downloaded image tarball to be
   //  discovered and loaded. For now, we rely on DockerUtils to download the image
   //  (via DxFileSource, which uses the API to download the file).
-  private def extractFiles(v: V): Vector[FileSource] = {
+  private def extractFiles(v: V): Vector[FileNode] = {
     v match {
       case V_File(s) =>
         Vector(fileResolver.resolve(s))
@@ -184,14 +184,14 @@ case class WdlTaskSupport(task: TAT.Task,
     */
   override def localizeInputFiles(
       streamAllFiles: Boolean
-  ): (Map[String, JsValue], Map[FileSource, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
+  ): (Map[String, JsValue], Map[FileNode, Path], Option[DxdaManifest], Option[DxfuseManifest]) = {
     assert(jobMeta.workerPaths.getInputFilesDir() != jobMeta.workerPaths.getDxfuseMountDir())
 
     val inputs = getInputs
     printInputs(inputs)
 
     val (localFiles, filesToStream, filesToDownload) =
-      inputs.foldLeft((Set.empty[FileSource], Set.empty[FileSource], Set.empty[FileSource])) {
+      inputs.foldLeft((Set.empty[FileNode], Set.empty[FileNode], Set.empty[FileNode])) {
         case ((localFiles, filesToStream, filesToDownload), (name, value)) =>
           val (local, remote) = extractFiles(value).partition {
             case _: LocalFileSource =>
@@ -243,7 +243,7 @@ case class WdlTaskSupport(task: TAT.Task,
     val downloadLocalizer =
       SafeLocalizationDisambiguator(jobMeta.workerPaths.getInputFilesDir(),
                                     existingPaths = localFilesToPath.values.toSet)
-    val downloadFileSourceToPath: Map[FileSource, Path] =
+    val downloadFileSourceToPath: Map[FileNode, Path] =
       filesToDownload.map(fs => fs -> downloadLocalizer.getLocalPath(fs)).toMap
     val dxdaManifest: Option[DxdaManifest] =
       DxdaManifestBuilder(dxApi).apply(downloadFileSourceToPath.collect {
@@ -254,7 +254,7 @@ case class WdlTaskSupport(task: TAT.Task,
     val streamingLocalizer =
       SafeLocalizationDisambiguator(jobMeta.workerPaths.getDxfuseMountDir(),
                                     existingPaths = localFilesToPath.values.toSet)
-    val streamFileSourceToPath: Map[FileSource, Path] =
+    val streamFileSourceToPath: Map[FileNode, Path] =
       filesToStream.map(fs => fs -> streamingLocalizer.getLocalPath(fs)).toMap
     val dxfuseManifest =
       DxfuseManifestBuilder(dxApi).apply(streamFileSourceToPath.collect {
@@ -264,8 +264,8 @@ case class WdlTaskSupport(task: TAT.Task,
     val fileSourceToPath = localFilesToPath ++ downloadFileSourceToPath ++ streamFileSourceToPath
 
     val uriToPath: Map[String, String] = fileSourceToPath.map {
-      case (dxFs: DxFileSource, path)     => dxFs.value -> path.toString
-      case (localFs: LocalFileSource, p2) => localFs.valuePath.toString -> p2.toString
+      case (dxFs: DxFileSource, path)     => dxFs.address -> path.toString
+      case (localFs: LocalFileSource, p2) => localFs.originalPath.toString -> p2.toString
       case other                          => throw new RuntimeException(s"unsupported file source ${other}")
     }
 
@@ -345,17 +345,17 @@ case class WdlTaskSupport(task: TAT.Task,
     task.outputs.map(d => d.name -> d).toMap
 
   private def extractOutputFiles(name: String, v: V, t: T): Vector[Path] = {
-    def getPath(fs: FileSource, optional: Boolean): Vector[Path] = {
+    def getPath(fs: FileNode, optional: Boolean): Vector[Path] = {
       // use valuePath rather than localPath - the former will match the original path
       // while the latter will have been cannonicalized
       fs match {
-        case localFs: LocalFileSource if optional && !Files.exists(localFs.valuePath) =>
+        case localFs: LocalFileSource if optional && !Files.exists(localFs.originalPath) =>
           // ignore optional, non-existent files
           Vector.empty
-        case localFs: LocalFileSource if !Files.exists(localFs.valuePath) =>
+        case localFs: LocalFileSource if !Files.exists(localFs.originalPath) =>
           throw new Exception(s"required output file ${name} does not exist")
         case localFs: LocalFileSource =>
-          Vector(localFs.valuePath)
+          Vector(localFs.originalPath)
         case other =>
           throw new RuntimeException(s"Non-local file: ${other}")
       }
@@ -414,7 +414,7 @@ case class WdlTaskSupport(task: TAT.Task,
   }
 
   override def evaluateOutputs(localizedInputs: Map[String, JsValue],
-                               fileSourceToPath: Map[FileSource, Path],
+                               fileSourceToPath: Map[FileNode, Path],
                                fileUploader: FileUploader): Unit = {
     val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
     val inputValues = inputs.map {
@@ -449,8 +449,8 @@ case class WdlTaskSupport(task: TAT.Task,
     }
     val allRemotePathToFileSource = alreadyRemotePathToFileSource ++ uploadedPathToFileSource
     val pathToUri = allRemotePathToFileSource.map {
-      case (path, fs: RealDataSource) => path.toString -> fs.value
-      case (_, other)                 => throw new RuntimeException(s"Cannot translate ${other}")
+      case (path, fs: AddressableFileSource) => path.toString -> fs.address
+      case (_, other)                        => throw new RuntimeException(s"Cannot translate ${other}")
     }
 
     // Replace the URIs with local file paths

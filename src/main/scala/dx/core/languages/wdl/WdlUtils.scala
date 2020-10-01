@@ -18,17 +18,17 @@ import wdlTools.types.{
   TypeCheckingRegime,
   TypeException,
   TypeInfer,
+  TypeUtils,
   WdlTypes,
-  TypedAbstractSyntax => TAT,
-  TypeUtils
+  TypedAbstractSyntax => TAT
 }
 import wdlTools.util.{
   DefaultBindings,
-  FileSource,
+  FileNode,
   FileSourceResolver,
   JsUtils,
   Logger,
-  StringFileSource
+  StringFileNode
 }
 
 object WdlUtils {
@@ -74,7 +74,7 @@ object WdlUtils {
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       logger: Logger = Logger.get
   ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
-    val sourceCode = StringFileSource(sourceCodeStr)
+    val sourceCode = StringFileNode(sourceCodeStr)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
     parseSource(parser, sourceCode, fileResolver, regime, logger)
@@ -82,7 +82,7 @@ object WdlUtils {
 
   def parseSource(
       parser: WdlParser,
-      sourceCode: FileSource,
+      sourceCode: FileNode,
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       logger: Logger = Logger.get

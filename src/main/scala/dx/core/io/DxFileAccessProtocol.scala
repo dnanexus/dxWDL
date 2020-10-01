@@ -4,13 +4,13 @@ import java.nio.charset.Charset
 import java.nio.file.Path
 
 import dx.api.{DxApi, DxFile}
-import wdlTools.util.{AbstractRealFileSource, FileAccessProtocol, FileSource, FileUtils}
+import wdlTools.util.{AbstractAddressableFileNode, FileAccessProtocol, FileSource, FileUtils}
 
-case class DxFileSource(override val value: String,
+case class DxFileSource(override val address: String,
                         dxFile: DxFile,
                         dxApi: DxApi,
                         override val encoding: Charset)
-    extends AbstractRealFileSource(value, encoding) {
+    extends AbstractAddressableFileNode(address, encoding) {
   override lazy val localPath: Path = FileUtils.getPath(dxFile.describe().name)
 
   override lazy val size: Long = dxFile.describe().size
@@ -34,7 +34,7 @@ case class DxFileAccessProtocol(dxApi: DxApi = DxApi.get,
                                 dxFileCache: DxFileDescCache = DxFileDescCache.empty,
                                 encoding: Charset = FileUtils.DefaultEncoding)
     extends FileAccessProtocol {
-  val prefixes = Vector(DxFileAccessProtocol.DxUriScheme)
+  override val schemes = Vector(DxFileAccessProtocol.DxUriScheme)
   private var uriToFileSource: Map[String, DxFileSource] = Map.empty
 
   private def resolveFileUri(uri: String): DxFile = {
