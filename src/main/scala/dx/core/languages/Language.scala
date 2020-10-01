@@ -58,8 +58,8 @@ object Language extends Enum {
       case (Some("wdl"), None)                                      => WdlDefault
       case (Some("cwl"), None)                                      => CwlDefault
       case (None | Some("wdl"), Some("draft2"))                     => Language.WdlVDraft2
-      case (None | Some("wdl"), Some("draft3" | "10"))              => Language.WdlV1_0
-      case (None | Some("wdl"), Some("wdl development" | "wdl 20")) => Language.WdlV2_0
+      case (None | Some("wdl"), Some("draft3" | "10" | "v10"))      => Language.WdlV1_0
+      case (None | Some("wdl"), Some("development" | "20" | "v20")) => Language.WdlV2_0
       case (None | Some("cwl"), Some(v)) if v.startsWith("v120")    => Language.CwlV1_2
       case other =>
         throw new Exception(s"Unrecognized/unsupported language ${other}")
