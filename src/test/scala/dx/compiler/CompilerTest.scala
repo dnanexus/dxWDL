@@ -9,7 +9,7 @@ import dx.api._
 import dx.compiler.Main.SuccessIR
 import dx.core.Native
 import dx.core.ir.Callable
-import dx.core.util.MainUtils.{Success, Termination}
+import dx.core.CliUtils.{Success, Termination}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

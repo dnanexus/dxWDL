@@ -35,14 +35,14 @@ class DxApiTest extends AnyFlatSpec with Matchers {
     dxApi.logger.ignore(record.describe())
   }
 
-  it should "download files as strings" in {
+  it should "download files as bytes" in {
     val results =
       dxApi.resolveDataObjectBulk(Vector(s"dx://${testProject}:/test_data/fileA"), dxTestProject)
     results.size shouldBe 1
     val dxobj = results.values.head
     val dxFile: DxFile = dxobj.asInstanceOf[DxFile]
 
-    val value = dxApi.downloadString(dxFile)
+    val value = new String(dxApi.downloadBytes(dxFile))
     value shouldBe "The fibonacci series includes 0,1,1,2,3,5\n"
   }
 }

@@ -13,7 +13,7 @@ import dx.api.{
 import dx.core.Native
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import dx.translator.{DockerRegistry, DxAccess, DxExecPolicy, DxRunSpec, DxTimeout, Extras}
 import dx.translator.CallableAttributes._
 import dx.translator.RunSpec._
@@ -345,10 +345,10 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
           Map.empty
       }
     // compress and base64 encode the source code
-    val sourceEncoded = CompressionUtils.gzipAndBase64Encode(applet.document.toString)
+    val sourceEncoded = CodecUtils.gzipAndBase64Encode(applet.document.toString)
     // serialize the pricing model, and make the prices opaque.
     val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDb)
-    val dbOpaqueEncoded = CompressionUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+    val dbOpaqueEncoded = CodecUtils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
     // serilize default runtime attributes
     val defaultRuntimeAttributes =
       extras

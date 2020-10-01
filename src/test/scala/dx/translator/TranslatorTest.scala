@@ -12,7 +12,7 @@ import dx.core.ir._
 import dx.translator.CallableAttributes._
 import dx.translator.ParameterAttributes._
 import dx.translator.RunSpec._
-import dx.core.util.MainUtils.{Failure, UnsuccessfulTermination}
+import dx.core.CliUtils.{Failure, UnsuccessfulTermination}
 import dx.translator.wdl.WdlDocumentSource
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec

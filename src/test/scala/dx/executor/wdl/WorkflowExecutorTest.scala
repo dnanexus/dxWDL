@@ -10,7 +10,7 @@ import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Type.TInt
 import dx.core.ir.{ParameterLinkSerializer, ParameterLinkValue, Type, TypeSerde}
 import dx.core.languages.wdl.{WdlBlock, WdlUtils => WdlUtils}
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import dx.executor.{JobMeta, WorkflowAction, WorkflowExecutor, WorkflowSupport}
 import dx.translator.wdl.WdlBundle
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,11 +49,11 @@ private case class WorkflowTestJobMeta(override val workerPaths: DxWorkerPaths,
   private val executableDetails: Map[String, JsValue] = Map(
       Native.BlockPath -> JsArray(rawBlockPath.map(JsNumber(_))),
       Native.InstanceTypeDb -> JsString(
-          CompressionUtils.gzipAndBase64Encode(
+          CodecUtils.gzipAndBase64Encode(
               rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
-      Native.SourceCode -> JsString(CompressionUtils.gzipAndBase64Encode(rawSourceCode)),
+      Native.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode)),
       Native.WfFragmentInputTypes -> JsObject(rawEnv.view.mapValues {
         case (t, _) => TypeSerde.serialize(WdlUtils.toIRType(t))
       }.toMap)

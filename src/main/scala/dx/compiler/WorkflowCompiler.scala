@@ -17,7 +17,7 @@ import dx.core.ir.{
   Workflow,
   WorkflowInput
 }
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import dx.translator.CallableAttributes._
 import dx.translator.Extras
 import spray.json._
@@ -149,7 +149,7 @@ case class WorkflowCompiler(extras: Option[Extras],
     // compress and base64 encode the source code
     val sourceDetails = Map(
         Native.SourceCode -> JsString(
-            CompressionUtils.gzipAndBase64Encode(workflow.document.toString)
+            CodecUtils.gzipAndBase64Encode(workflow.document.toString)
         )
     )
     // links through applets that run workflow fragments
@@ -169,7 +169,7 @@ case class WorkflowCompiler(extras: Option[Extras],
     // generate the executable tree
     val execTree = ExecutableTree(executableDict).apply(workflow)
     val execTreeDetails = Map(
-        "execTree" -> JsString(CompressionUtils.gzipAndBase64Encode(execTree.toString))
+        "execTree" -> JsString(CodecUtils.gzipAndBase64Encode(execTree.toString))
     )
     val details = wfMetaDetails ++ sourceDetails ++ dxLinks ++ delayDetails ++ execTreeDetails
     // required arguments for API call

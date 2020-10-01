@@ -1,4 +1,4 @@
-package dx.core.util
+package dx.core
 
 import java.nio.file.{Files, Path, Paths}
 
@@ -6,7 +6,7 @@ import wdlTools.util.{Logger, TraceLevel}
 
 import scala.reflect.ClassTag
 
-object MainUtils {
+object CliUtils {
   case class OptionParseException(message: String) extends Exception(message)
 
   // simple command line parsing - only handles three types of options:

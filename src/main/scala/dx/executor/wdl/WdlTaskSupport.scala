@@ -32,7 +32,7 @@ import wdlTools.util.{
   FileSource,
   LocalFileSource,
   Logger,
-  RealFileSource,
+  RealDataSource,
   TraceLevel
 }
 
@@ -449,7 +449,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
     val allRemotePathToFileSource = alreadyRemotePathToFileSource ++ uploadedPathToFileSource
     val pathToUri = allRemotePathToFileSource.map {
-      case (path, fs: RealFileSource) => path.toString -> fs.value
+      case (path, fs: RealDataSource) => path.toString -> fs.value
       case (_, other)                 => throw new RuntimeException(s"Cannot translate ${other}")
     }
 

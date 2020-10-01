@@ -10,7 +10,8 @@ import spray.json._
 import wdlTools.util.{FileUtils, Logger, SysUtils}
 
 object DxApi {
-  val ResultsPerCallLimit = 1000
+  val ResultsPerCallLimit: Int = 1000
+  val MaxNumDownloadBytes: Long = 2 * 1024 * 1024 * 1024
 
   private var instance: Option[DxApi] = None
 
@@ -796,8 +797,8 @@ case class DxApi(logger: Logger = Logger.get,
     }
   }
 
-  // Read the contents of a platform file into a string
-  def downloadString(dxFile: DxFile): String = {
+  // Read the contents of a platform file into a byte array
+  def downloadBytes(dxFile: DxFile): Array[Byte] = {
     // We don't want to use the dxjava implementation
     //val bytes = dxFile.downloadBytes()
     //new String(bytes, StandardCharsets.UTF_8)
@@ -807,11 +808,15 @@ case class DxApi(logger: Logger = Logger.get,
     //outmsg
 
     // create a temporary file, and write the contents into it.
-    val tempFi: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
-    silentFileDelete(tempFi)
-    downloadFile(tempFi, dxFile)
-    val content = FileUtils.readFileContent(tempFi)
-    silentFileDelete(tempFi)
+    val tempFile: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
+    silentFileDelete(tempFile)
+    val content =
+      try {
+        downloadFile(tempFile, dxFile)
+        FileUtils.readFileBytes(tempFile)
+      } finally {
+        silentFileDelete(tempFile)
+      }
     content
   }
 

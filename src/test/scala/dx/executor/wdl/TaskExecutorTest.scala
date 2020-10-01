@@ -9,7 +9,7 @@ import dx.core.Native
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
 import dx.core.languages.wdl.{WdlUtils => WdlUtils}
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import dx.executor.{JobMeta, TaskAction, TaskExecutor}
 import dx.translator.wdl.CodeGenerator
 import org.scalatest.flatspec.AnyFlatSpec
@@ -46,11 +46,11 @@ private case class TaskTestJobMeta(override val workerPaths: DxWorkerPaths,
 
   private val executableDetails: Map[String, JsValue] = Map(
       Native.InstanceTypeDb -> JsString(
-          CompressionUtils.gzipAndBase64Encode(
+          CodecUtils.gzipAndBase64Encode(
               rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
-      Native.SourceCode -> JsString(CompressionUtils.gzipAndBase64Encode(rawSourceCode))
+      Native.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode))
   )
 
   override def getExecutableDetail(name: String): Option[JsValue] = {

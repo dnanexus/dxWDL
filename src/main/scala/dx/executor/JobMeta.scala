@@ -30,7 +30,7 @@ import dx.core.ir.{
 }
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 
@@ -206,12 +206,12 @@ abstract class JobMeta(val workerPaths: DxWorkerPaths, val dxApi: DxApi, val log
       case other =>
         throw new Exception(s"unexpected ${Native.SourceCode} value ${other}")
     }
-    CompressionUtils.base64DecodeAndGunzip(sourceCodeEncoded)
+    CodecUtils.base64DecodeAndGunzip(sourceCodeEncoded)
   }
 
   lazy val instanceTypeDb: InstanceTypeDB = getExecutableDetail(Native.InstanceTypeDb) match {
     case Some(JsString(s)) =>
-      val js = CompressionUtils.base64DecodeAndGunzip(s)
+      val js = CodecUtils.base64DecodeAndGunzip(s)
       js.parseJson.convertTo[InstanceTypeDB]
     case other =>
       throw new Exception(s"unexpected ${Native.InstanceTypeDb} value ${other}")

@@ -22,7 +22,7 @@ import dx.api.{
 import dx.core.{Native, getVersion}
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import dx.translator.Extras
 import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
@@ -158,7 +158,7 @@ case class Compiler(extras: Option[Extras],
       // We need to sort the hash-tables. They are natually unsorted,
       // causing the same object to have different checksums.
       val digest =
-        CompressionUtils.md5Checksum(JsUtils.makeDeterministic(JsObject(desc)).prettyPrint)
+        CodecUtils.md5Checksum(JsUtils.makeDeterministic(JsObject(desc)).prettyPrint)
       // Add the checksum to the properies
       val existingDetails: Map[String, JsValue] =
         desc.get("details") match {

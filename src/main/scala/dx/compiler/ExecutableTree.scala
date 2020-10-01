@@ -2,7 +2,7 @@ package dx.compiler
 
 import dx.api.{DxExecutable, DxWorkflow, Field}
 import dx.core.ir.{Application, Callable, ExecutableKind, ExecutableLink, Workflow}
-import dx.core.util.CompressionUtils
+import wdlTools.util.CodecUtils
 import spray.json._
 
 case class CompiledExecutable(callable: Callable,
@@ -190,7 +190,7 @@ object ExecutableTree {
         }
       case None => throw new Exception(s"${CannotFindExecTree} for ${workflow.id}")
     }
-    val TreeJS = CompressionUtils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
+    val TreeJS = CodecUtils.base64DecodeAndGunzip(execTree).parseJson.asJsObject
     JsObject(
         TreeJS.fields + ("id" -> JsString(workflow.id))
     )

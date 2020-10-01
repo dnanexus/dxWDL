@@ -7,7 +7,7 @@ import dx.Tags.NativeTest
 import dx.api.{DxApi, DxApplet, DxPath}
 import dx.compiler.Main
 import dx.core.languages.wdl.parseWdlTasks
-import dx.core.util.MainUtils.Success
+import dx.core.CliUtils.Success
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

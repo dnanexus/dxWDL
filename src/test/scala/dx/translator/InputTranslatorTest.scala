@@ -7,7 +7,7 @@ import dx.Tags.EdgeTest
 import dx.api._
 import dx.compiler.Main
 import dx.compiler.Main.SuccessIR
-import dx.core.util.MainUtils.Failure
+import dx.core.CliUtils.Failure
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

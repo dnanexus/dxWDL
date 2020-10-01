@@ -7,7 +7,7 @@ import dx.core.getVersion
 import dx.core.io.{DxdaManifest, DxfuseManifest}
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
-import wdlTools.util.{Enum, FileSource, FileUtils, RealFileSource, SysUtils, TraceLevel}
+import wdlTools.util.{Enum, FileSource, FileUtils, RealDataSource, SysUtils, TraceLevel}
 
 object TaskAction extends Enum {
   type TaskAction = Value
@@ -126,7 +126,7 @@ case class TaskExecutor(jobMeta: JobMeta,
   private def writeEnv(inputs: Map[String, JsValue],
                        fileSourceToPath: Map[FileSource, Path]): Unit = {
     val uriToPath: Map[String, JsValue] = fileSourceToPath.map {
-      case (fileSource: RealFileSource, path) => fileSource.value -> JsString(path.toString)
+      case (fileSource: RealDataSource, path) => fileSource.value -> JsString(path.toString)
       case (other, _) =>
         throw new RuntimeException(s"Can only serialize a RealFileSource, not ${other}")
     }

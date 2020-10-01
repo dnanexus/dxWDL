@@ -7,8 +7,8 @@ import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.{SuccessJsonTree, SuccessPrettyTree}
 import dx.core.Native
-import dx.core.util.MainUtils.{Failure, Success}
-import dx.core.util.CompressionUtils
+import dx.core.CliUtils.{Failure, Success}
+import wdlTools.util.CodecUtils
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -107,7 +107,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
         )
     }
 
-    val treeJs = CompressionUtils.base64DecodeAndGunzip(execString).parseJson
+    val treeJs = CodecUtils.base64DecodeAndGunzip(execString).parseJson
 
     treeJs.asJsObject.getFields("name", "kind", "stages") match {
       case Seq(JsString(name), JsString(kind), JsArray(stages)) =>

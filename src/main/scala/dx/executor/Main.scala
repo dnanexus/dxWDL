@@ -3,7 +3,7 @@ package dx.executor
 import java.nio.file.{InvalidPathException, Paths}
 
 import dx.core.io.DxWorkerPaths
-import dx.core.util.MainUtils._
+import dx.core.CliUtils._
 
 object Main {
   private val CommonOptions: InternalOptions = Map(

@@ -543,19 +543,20 @@ def native_call_dxni(project, applet_folder, version_id, verbose: bool):
     cmdline_common = [ "java", "-jar",
                        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                        "dxni",
-                       "--force",
-                       "--folder", applet_folder,
-                       "--project", project.get_id()]
+                       "-force",
+                       "-folder", applet_folder,
+                       "-project", project.get_id()]
     if verbose:
         cmdline_common.append("--verbose")
 
-    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
-                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
-    print(" ".join(cmdline_draft2))
-    subprocess.check_output(cmdline_draft2)
+# draft-2 is not currently supported
+#     cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
+#                                         "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
+#     print(" ".join(cmdline_draft2))
+#     subprocess.check_output(cmdline_draft2)
 
-    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
-                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
+    cmdline_v1 = cmdline_common + [ "-language", "wdl_v1.0",
+                                    "-output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
     print(" ".join(cmdline_v1))
     subprocess.check_output(cmdline_v1)
 
@@ -565,13 +566,13 @@ def dxni_call_with_path(project, path, version_id, verbose):
     cmdline_common = [ "java", "-jar",
                        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                        "dxni",
-                       "--force",
-                       "--path", path,
-                       "--project", project.get_id()]
+                       "-force",
+                       "-path", path,
+                       "-project", project.get_id()]
     if verbose:
-        cmdline_common.append("--verbose")
-    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
-                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")]
+        cmdline_common.append("-verbose")
+    cmdline_v1 = cmdline_common + [ "-language", "wdl_v1.0",
+                                    "-output", os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")]
     print(" ".join(cmdline_v1))
     subprocess.check_output(cmdline_v1)
 
@@ -592,7 +593,7 @@ def native_call_setup(project, applet_folder, version_id, verbose):
         if len(applet) == 0:
             cmdline = [ "dx", "build",
                         os.path.join(top_dir, "test/applets/{}".format(napl)),
-                        "--destination", (project.get_id() + ":" + applet_folder + "/") ]
+                        "-destination", (project.get_id() + ":" + applet_folder + "/") ]
             print(" ".join(cmdline))
             subprocess.check_output(cmdline)
 
@@ -627,10 +628,11 @@ def native_call_app_setup(project, version_id, verbose):
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "dxni",
-                "--apps",
-                "--force",
-                "--language", "wdl_v1.0",
-                "--output", header_file]
+                "-apps",
+                "only",
+                "-force",
+                "-language", "wdl_v1.0",
+                "-output", header_file]
     if verbose:
         cmdline_common.append("--verbose")
     print(" ".join(cmdline))

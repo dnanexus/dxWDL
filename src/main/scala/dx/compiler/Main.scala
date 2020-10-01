@@ -11,7 +11,7 @@ import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Bundle
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.util.MainUtils._
+import dx.core.CliUtils._
 import dx.dxni.DxNativeInterface
 import dx.translator.{Extras, ExtrasParser, TranslatorFactory}
 import spray.json._
@@ -137,13 +137,19 @@ object Main {
   )
 
   private def resolveDestination(
-      project: String,
+      dxApi: DxApi,
+      project: Option[String],
       folder: Option[String],
       path: Option[String] = None
   ): (DxProject, Either[String, DxDataObject]) = {
+    val projectId = project.getOrElse({
+      val projectId = dxApi.currentProjectId.get
+      Logger.get.warning(s"Project is unspecified...using currently select project ${projectId}")
+      projectId
+    })
     val dxProject =
       try {
-        DxApi.get.resolveProject(project)
+        dxApi.resolveProject(projectId)
       } catch {
         case t: Throwable =>
           throw new Exception(
@@ -160,7 +166,7 @@ object Main {
         Left(f)
       case (None, Some(p)) =>
         // validate the file
-        val dataObj = DxApi.get.resolveDataObject(p, Some(dxProject))
+        val dataObj = dxApi.resolveDataObject(p, Some(dxProject))
         Right(dataObj)
       case (None, None) =>
         Left("/")
@@ -172,8 +178,10 @@ object Main {
     (dxProject, folderOrPath)
   }
 
-  private def resolveDestination(project: String, folder: String): (DxProject, String) = {
-    resolveDestination(project, Some(folder)) match {
+  private def resolveDestination(dxApi: DxApi,
+                                 project: String,
+                                 folder: String): (DxProject, String) = {
+    resolveDestination(dxApi, Some(project), Some(folder)) match {
       case (dxProject, Left(folder)) => (dxProject, folder)
       case _                         => throw new Exception("expected folder")
     }
@@ -183,7 +191,7 @@ object Main {
   //    project-id:/folder
   //    project-id:
   //    /folder
-  private def getDestination(options: Options): (DxProject, String) = {
+  private def getDestination(dxApi: DxApi, options: Options): (DxProject, String) = {
     val destinationOpt: Option[String] = options.getValue[String]("destination")
     val folderOpt: Option[String] = options.getValue[String]("folder")
     val projectOpt: Option[String] = options.getValue[String]("project")
@@ -199,9 +207,8 @@ object Main {
         throw OptionParseException(s"Invalid folder <${folder}>")
       case (Some(folder), Some(project), _) if folder.startsWith("/") =>
         (project, folder)
-      case (Some(folder), None, _)
-          if folder.startsWith("/") && DxApi.get.currentProjectId.isDefined =>
-        val project = DxApi.get.currentProjectId.get
+      case (Some(folder), None, _) if folder.startsWith("/") && dxApi.currentProjectId.isDefined =>
+        val project = dxApi.currentProjectId.get
         Logger.get.warning(s"Project is unspecified...using currently select project ${project}")
         (project, folder)
       case (Some(other), _, _) =>
@@ -213,7 +220,7 @@ object Main {
       case _ =>
         throw OptionParseException("Project is unspecified")
     }
-    resolveDestination(project, folder)
+    resolveDestination(dxApi, project, folder)
   }
 
   def compile(args: Vector[String]): Termination = {
@@ -233,6 +240,7 @@ object Main {
       }
 
     val (baseFileResolver, logger) = initCommon(options)
+    val dxApi = DxApi(logger)
 
     val extras: Option[Extras] =
       options.getValue[Path]("extras").map(extrasPath => ExtrasParser().parse(extrasPath))
@@ -286,7 +294,7 @@ object Main {
     }
 
     // for everything past this point, the user needs to be logged in
-    if (!DxApi.get.isLoggedIn) {
+    if (!dxApi.isLoggedIn) {
       return Failure(s"You must be logged in to compile using mode ${compileMode}")
     }
 
@@ -294,7 +302,7 @@ object Main {
     // compiling native apps
     val (project, folder) =
       try {
-        getDestination(options)
+        getDestination(dxApi, options)
       } catch {
         case optEx: OptionParseException =>
           return BadUsageTermination(exception = Some(optEx))
@@ -418,16 +426,19 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    val (fileResolver, _) = initCommon(options)
+    val (fileResolver, logger) = initCommon(options)
+    val dxApi = DxApi(logger)
 
     // make sure the user is logged in
-    if (!DxApi.get.isLoggedIn) {
+    if (dxApi.isLoggedIn) {
       return Failure(s"You must be logged in to generate stubs for native app(let)s")
     }
 
-    val dxni = DxNativeInterface(fileResolver)
     val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
     val outputFile: Path = options.getRequiredValue[Path]("outputFile")
+    val projectOpt = options.getValue[String]("project")
+    val folderOpt = options.getValue[String]("folder")
+    val pathOpt = options.getValue[String]("path")
     // flags
     val Vector(
         appsOnly,
@@ -444,10 +455,14 @@ object Main {
       .getOrElse(
           if (appsOnly) {
             AppsOption.Only
+          } else if (Vector(projectOpt, folderOpt, pathOpt).exists(_.isDefined)) {
+            AppsOption.Exclude
           } else {
             AppsOption.Include
           }
       )
+
+    val dxni = DxNativeInterface(fileResolver)
     if (apps == AppsOption.Only) {
       try {
         dxni.apply(language, outputFile, force)
@@ -456,10 +471,7 @@ object Main {
         case e: Throwable => Failure(exception = Some(e))
       }
     } else {
-      val project: String = options.getRequiredValue[String]("project")
-      val folderOpt = options.getValue[String]("folder")
-      val pathOpt = options.getValue[String]("path")
-      val (dxProject, folderOrFile) = resolveDestination(project, folderOpt, pathOpt)
+      val (dxProject, folderOrFile) = resolveDestination(dxApi, projectOpt, folderOpt, pathOpt)
       val includeApps = apps match {
         case AppsOption.Include => true
         case AppsOption.Exclude => false
@@ -514,13 +526,14 @@ object Main {
         case e: OptionParseException =>
           return BadUsageTermination("Error parsing command line options", Some(e))
       }
-    initLogger(options)
+    val logger = initLogger(options)
+    val dxApi = DxApi(logger)
     // make sure the user is logged in
-    if (!DxApi.get.isLoggedIn) {
+    if (!dxApi.isLoggedIn) {
       return Failure(s"You must be logged in to generate stubs to describe a workflow")
     }
     try {
-      val wf = DxApi.get.workflow(workflowId)
+      val wf = dxApi.workflow(workflowId)
       val execTreeJS = ExecutableTree.fromDxWorkflow(wf)
       if (options.getFlag("pretty")) {
         val prettyTree = ExecutableTree.prettyPrint(execTreeJS.asJsObject)
