@@ -49,10 +49,10 @@ task slice_bam {
     Int num_chrom = 22
     command <<<
     set -ex
-    samtools index ${bam}
+    samtools index ~{bam}
     mkdir slices/
-    for i in `seq ${num_chrom}`; do
-        samtools view -b ${bam} -o slices/$i.bam $i
+    for i in `seq ~{num_chrom}`; do
+        samtools view -b ~{bam} -o slices/$i.bam $i
     done
     >>>
     runtime {
@@ -67,7 +67,7 @@ task slice_bam {
 task count_bam {
     File bam
     command <<<
-        samtools view -c ${bam}
+        samtools view -c ~{bam}
     >>>
     runtime {
         docker: "quay.io/ucsc_cgl/samtools"
@@ -99,7 +99,7 @@ At runtime this looks like this:
 
 ## Strict syntax
 
-One of the compiler phases takes a workflow apart, and extracts standalone tasks and sub-workflows. This requires a lexical analysis on the WDL program. It currently uses a simple regular expression to detect task/workflow start and end. This means that a task has to adhere to the following rules:
+In versions of dxWDL prior to 2.0, one of the compiler phases takes a workflow apart, and extracts standalone tasks and sub-workflows. This requires a lexical analysis on the WDL program. It uses a simple regular expression to detect task/workflow start and end. This means that a task has to adhere to the following rules:
 1. no extra text is allows after the final closing bracket
 2. within the task body, closing brackets may not start at the beginning of a line.
 
