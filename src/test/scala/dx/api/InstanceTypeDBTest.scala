@@ -2,6 +2,7 @@ package dx.api
 
 import dx.Tags.{ApiTest, EdgeTest}
 import dx.api.InstanceTypeDB.instanceTypeDBFormat
+import dx.core.Constants
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
@@ -103,6 +104,10 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
        |}
        |""".stripMargin.trim
 
+  private val ExecutionEnvironments = Vector(
+      ExecutionEnvironment(Constants.OsDistribution, Constants.OsRelease, Constants.OsVersion)
+  )
+
   // Create an availble instance list based on a hard coded list
   private def genTestDB(pricingInfo: Boolean): InstanceTypeDB = {
     def intOfJs(jsVal: JsValue): Int = {
@@ -187,7 +192,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 32,
                 597,
                 gpu = false,
-                Vector(("Ubuntu", "16.04")),
+                ExecutionEnvironments,
                 Some(DiskType.SSD),
                 Some(13.0.toFloat)
             ),
@@ -197,7 +202,7 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
                 128,
                 3573,
                 gpu = false,
-                Vector(("Ubuntu", "16.04")),
+                ExecutionEnvironments,
                 Some(DiskType.SSD),
                 Some(14.0.toFloat)
             )
@@ -220,22 +225,26 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
   it should "prefer v2 instances over v1's" in {
     val db = InstanceTypeDB(
         Map(
-            "mem1_ssd1_v2_x4" -> DxInstanceType("mem1_ssd1_v2_x4",
-                                                8000,
-                                                80,
-                                                4,
-                                                gpu = false,
-                                                Vector(("Ubuntu", "16.04")),
-                                                Some(DiskType.SSD),
-                                                Some(0.2.toFloat)),
-            "mem1_ssd1_x4" -> DxInstanceType("mem1_ssd1_x4",
-                                             8000,
-                                             80,
-                                             4,
-                                             gpu = false,
-                                             Vector(("Ubuntu", "16.04")),
-                                             Some(DiskType.SSD),
-                                             Some(0.2.toFloat))
+            "mem1_ssd1_v2_x4" -> DxInstanceType(
+                "mem1_ssd1_v2_x4",
+                8000,
+                80,
+                4,
+                gpu = false,
+                ExecutionEnvironments,
+                Some(DiskType.SSD),
+                Some(0.2.toFloat)
+            ),
+            "mem1_ssd1_x4" -> DxInstanceType(
+                "mem1_ssd1_x4",
+                8000,
+                80,
+                4,
+                gpu = false,
+                ExecutionEnvironments,
+                Some(DiskType.SSD),
+                Some(0.2.toFloat)
+            )
         ),
         pricingAvailable = true
     )
@@ -248,30 +257,36 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
   it should "respect requests for GPU instances" taggedAs EdgeTest in {
     val db = InstanceTypeDB(
         Map(
-            "mem1_ssd1_v2_x4" -> DxInstanceType("mem1_ssd1_v2_x4",
-                                                8000,
-                                                80,
-                                                4,
-                                                gpu = false,
-                                                Vector(("Ubuntu", "16.04")),
-                                                Some(DiskType.SSD),
-                                                Some(0.2.toFloat)),
-            "mem1_ssd1_x4" -> DxInstanceType("mem1_ssd1_x4",
-                                             8000,
-                                             80,
-                                             4,
-                                             gpu = false,
-                                             Vector(("Ubuntu", "16.04")),
-                                             Some(DiskType.SSD),
-                                             Some(0.2.toFloat)),
-            "mem3_ssd1_gpu_x8" -> DxInstanceType("mem3_ssd1_gpu_x8",
-                                                 30000,
-                                                 100,
-                                                 8,
-                                                 gpu = true,
-                                                 Vector(("Ubuntu", "16.04")),
-                                                 Some(DiskType.SSD),
-                                                 Some(1.0.toFloat))
+            "mem1_ssd1_v2_x4" -> DxInstanceType(
+                "mem1_ssd1_v2_x4",
+                8000,
+                80,
+                4,
+                gpu = false,
+                ExecutionEnvironments,
+                Some(DiskType.SSD),
+                Some(0.2.toFloat)
+            ),
+            "mem1_ssd1_x4" -> DxInstanceType(
+                "mem1_ssd1_x4",
+                8000,
+                80,
+                4,
+                gpu = false,
+                ExecutionEnvironments,
+                Some(DiskType.SSD),
+                Some(0.2.toFloat)
+            ),
+            "mem3_ssd1_gpu_x8" -> DxInstanceType(
+                "mem3_ssd1_gpu_x8",
+                30000,
+                100,
+                8,
+                gpu = true,
+                ExecutionEnvironments,
+                Some(DiskType.SSD),
+                Some(1.0.toFloat)
+            )
         ),
         pricingAvailable = true
     )
@@ -286,12 +301,22 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
 
   // FIXME: This test will not pass on CI/CD as we are using scoped-token.
   ignore should "Query returns correct pricing models for org and user" taggedAs ApiTest in {
+    // Instance type filter:
+    // - Instance must support Ubuntu.
+    // - Instance is not an FPGA instance.
+    // - Instance does not have local HDD storage (those are older instance types).
+    def instanceTypeFilter(instanceType: DxInstanceType): Boolean = {
+      instanceType.os.exists(_.release == Constants.OsRelease) &&
+      !instanceType.diskType.contains(DiskType.HDD) &&
+      !instanceType.name.contains("fpga")
+    }
+
     val userBilltoProject = dxApi.project("project-FqP0vf00bxKykykX5pVXB1YQ") // project name: dxWDL_public_test
-    val userResult = InstanceTypeDB.create(userBilltoProject)
+    val userResult = InstanceTypeDB.create(userBilltoProject, instanceTypeFilter)
     userResult.pricingAvailable shouldBe true
 
     val orgBilltoProject = dxApi.project("project-FQ7BqkQ0FyXgJxGP2Bpfv3vK") // project name: dxWDL_CI
-    val orgResult = InstanceTypeDB.create(orgBilltoProject)
+    val orgResult = InstanceTypeDB.create(orgBilltoProject, instanceTypeFilter)
     orgResult.pricingAvailable shouldBe true
   }
 }

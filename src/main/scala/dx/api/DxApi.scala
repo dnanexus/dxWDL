@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import dx.api.DxPath.DxPathComponents
 import dx.AppInternalException
 import spray.json._
-import wdlTools.util.{FileUtils, Logger, SysUtils}
+import wdlTools.util.{FileUtils, Logger, SysUtils, TraceLevel}
 
 object DxApi {
   val ResultsPerCallLimit: Int = 1000
@@ -504,7 +504,7 @@ case class DxApi(logger: Logger = Logger.get,
         case None => dxDataObj
         case Some(pid) =>
           val dxProj = resolveProject(pid)
-          dataObject(dxDataObj.getId, Some(dxProj))
+          dataObject(dxDataObj.id, Some(dxProj))
       }
       Left(dxDataObjWithProj)
     } else {
@@ -524,7 +524,7 @@ case class DxApi(logger: Logger = Logger.get,
       case None => Map.empty
       case Some(x) =>
         val dxProj = resolveProject(x)
-        Map("project" -> JsString(dxProj.getId))
+        Map("project" -> JsString(dxProj.id))
     }
     JsObject(reqFields ++ folderField ++ projectField)
   }
@@ -532,7 +532,7 @@ case class DxApi(logger: Logger = Logger.get,
   private def submitResolutionRequest(dxPaths: Vector[DxPathComponents],
                                       dxProject: DxProject): Map[String, DxDataObject] = {
     val objectReqs: Vector[JsValue] = dxPaths.map(createResolutionRequest)
-    val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.getId))
+    val request = Map("objects" -> JsArray(objectReqs), "project" -> JsString(dxProject.id))
     val responseJs = resolveDataObjects(request)
     val resultsPerObj: Vector[JsValue] = responseJs.fields.get("results") match {
       case Some(JsArray(x)) => x
@@ -544,7 +544,7 @@ case class DxApi(logger: Logger = Logger.get,
         val o = descJs match {
           case JsArray(x) if x.isEmpty =>
             throw new Exception(
-                s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.getId}"
+                s"Path ${path} not found req=${objectReqs(i)}, i=${i}, project=${dxProject.id}"
             )
           case JsArray(x) if x.length == 1 => x(0)
           case JsArray(_) =>
@@ -589,10 +589,10 @@ case class DxApi(logger: Logger = Logger.get,
       case Vector(result) =>
         result
       case Vector() =>
-        throw new Exception(s"Could not find ${dxPath} in project ${proj.getId}")
+        throw new Exception(s"Could not find ${dxPath} in project ${proj.id}")
       case _ =>
         throw new Exception(
-            s"Found more than one dx:object in path ${dxPath}, project=${proj.getId}"
+            s"Found more than one dx:object in path ${dxPath}, project=${proj.id}"
         )
     }
   }
@@ -659,7 +659,7 @@ case class DxApi(logger: Logger = Logger.get,
     def submitRequest(objs: Vector[DxFile],
                       extraFields: Set[Field.Value],
                       project: Option[DxProject]): Vector[DxFile] = {
-      val ids = objs.map(file => file.getId)
+      val ids = objs.map(file => file.id)
       dxFindDataObjects
         .apply(
             dxProject = project,
@@ -715,40 +715,50 @@ case class DxApi(logger: Logger = Logger.get,
   }
 
   // copy asset to local project, if it isn't already here.
-  def cloneAsset(assetRecord: DxRecord,
-                 dxProject: DxProject,
-                 pkgName: String,
-                 rmtProject: DxProject): Unit = {
-    if (dxProject == rmtProject) {
-      logger.trace(s"The asset ${pkgName} is from this project ${rmtProject.id}, no need to clone")
-      return
-    }
-    logger.trace(s"The asset ${pkgName} is from a different project ${rmtProject.id}")
-
-    // clone
-    val request = Map("objects" -> JsArray(JsString(assetRecord.id)),
-                      "project" -> JsString(dxProject.id),
-                      "destination" -> JsString("/"))
-    val responseJs = projectClone(rmtProject.id, request)
-
-    val exists = responseJs.fields.get("exists") match {
-      case None => throw new Exception("API call did not returnd an exists field")
-      case Some(JsArray(x)) =>
-        x.map {
-          case JsString(id) => id
-          case _            => throw new Exception("bad type, not a string")
-        }
-      case _ => throw new Exception(s"API call returned invalid exists field")
-    }
-    val existingRecords = exists.filter(_.startsWith("record-"))
-    existingRecords.size match {
-      case 0 =>
-        val localAssetRecord = record(assetRecord.id, None)
-        logger.trace(s"Created ${localAssetRecord.id} pointing to asset ${pkgName}")
-      case 1 =>
-        logger.trace(s"The project already has a record pointing to asset ${pkgName}")
-      case _ =>
-        throw new Exception(s"clone returned too many existing records ${exists}")
+  def cloneAsset(assetName: String,
+                 assetRecord: DxRecord,
+                 sourceProject: DxProject,
+                 destProject: DxProject,
+                 destFolder: String = "/"): Unit = {
+    if (sourceProject.id == destProject.id) {
+      logger.trace(
+          s"""The source and destination projects are the same (${sourceProject.id}), 
+             |no need to clone asset ${assetName}""".stripMargin.replaceAll("\n", " ")
+      )
+    } else {
+      logger.trace(s"Cloning asset ${assetName} from ${sourceProject.id} to ${destProject.id}")
+      val request = Map("objects" -> JsArray(JsString(assetRecord.id)),
+                        "project" -> JsString(destProject.id),
+                        "destination" -> JsString(destFolder))
+      val responseJs = projectClone(sourceProject.id, request)
+      val existingIds = responseJs.fields.get("exists") match {
+        case Some(JsArray(x)) =>
+          x.map {
+            case JsString(id) if DxUtils.isRecordId(id) => id
+            case JsString(id) =>
+              logger.trace(s"ignoring non-record id ${id}", minLevel = TraceLevel.VVerbose)
+            case other =>
+              throw new Exception(s"expected 'exists' field to be a string, not ${other}")
+          }
+        case None =>
+          throw new Exception("API call did not return an exists field")
+        case _ =>
+          throw new Exception(s"API call returned invalid exists field")
+      }
+      existingIds match {
+        case Vector() =>
+          logger.trace(
+              s"Created ${assetRecord.id} in ${destProject.id} pointing to asset ${assetName}"
+          )
+        case Vector(_) =>
+          logger.trace(
+              s"The destination project ${destProject.id} already has a record pointing to asset ${assetName}"
+          )
+        case _ =>
+          throw new Exception(
+              s"clone returned too many existing records ${existingIds} in destination project ${destProject.id}"
+          )
+      }
     }
   }
 

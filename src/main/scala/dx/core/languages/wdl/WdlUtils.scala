@@ -181,6 +181,9 @@ object WdlUtils {
         }
         TAT.ExprObject(members, wdlType, loc)
 
+      case WdlTypes.T_Object =>
+        TAT.ExprObject(Map.empty, wdlType, SourceLocation.empty)
+
       case _ => throw new Exception(s"Unhandled type ${wdlType}")
     }
   }

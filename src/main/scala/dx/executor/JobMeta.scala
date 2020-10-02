@@ -16,7 +16,7 @@ import dx.api.{
   Field,
   InstanceTypeDB
 }
-import dx.core.Native
+import dx.core.Constants
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.Value.VNull
 import dx.core.ir.{
@@ -181,18 +181,18 @@ abstract class JobMeta(val workerPaths: DxWorkerPaths, val dxApi: DxApi, val log
 
   def getExecutableDetail(name: String): Option[JsValue]
 
-  lazy val language: Option[Language] = getExecutableDetail(Native.Language) match {
+  lazy val language: Option[Language] = getExecutableDetail(Constants.Language) match {
     case Some(JsString(lang)) => Some(Language.withName(lang))
     case None =>
       logger.warning("This applet ws built with an old version of dxWDL - please rebuild")
       // we will attempt to detect the language/version later
       None
     case other =>
-      throw new Exception(s"unexpected ${Native.Language} value ${other}")
+      throw new Exception(s"unexpected ${Constants.Language} value ${other}")
   }
 
   lazy val sourceCode: String = {
-    val sourceCodeEncoded = getExecutableDetail(Native.SourceCode) match {
+    val sourceCodeEncoded = getExecutableDetail(Constants.SourceCode) match {
       case Some(JsString(s)) => s
       case None =>
         logger.warning("This applet ws built with an old version of dxWDL - please rebuild")
@@ -204,25 +204,25 @@ abstract class JobMeta(val workerPaths: DxWorkerPaths, val dxApi: DxApi, val log
             )
         s
       case other =>
-        throw new Exception(s"unexpected ${Native.SourceCode} value ${other}")
+        throw new Exception(s"unexpected ${Constants.SourceCode} value ${other}")
     }
     CodecUtils.base64DecodeAndGunzip(sourceCodeEncoded)
   }
 
-  lazy val instanceTypeDb: InstanceTypeDB = getExecutableDetail(Native.InstanceTypeDb) match {
+  lazy val instanceTypeDb: InstanceTypeDB = getExecutableDetail(Constants.InstanceTypeDb) match {
     case Some(JsString(s)) =>
       val js = CodecUtils.base64DecodeAndGunzip(s)
       js.parseJson.convertTo[InstanceTypeDB]
     case other =>
-      throw new Exception(s"unexpected ${Native.InstanceTypeDb} value ${other}")
+      throw new Exception(s"unexpected ${Constants.InstanceTypeDb} value ${other}")
   }
 
   lazy val defaultRuntimeAttrs: Map[String, Value] =
-    getExecutableDetail(Native.RuntimeAttributes) match {
+    getExecutableDetail(Constants.RuntimeAttributes) match {
       case Some(JsObject(fields)) => ValueSerde.deserializeMap(fields)
       case Some(JsNull) | None    => Map.empty
       case other =>
-        throw new Exception(s"unexpected ${Native.RuntimeAttributes} value ${other}")
+        throw new Exception(s"unexpected ${Constants.RuntimeAttributes} value ${other}")
     }
 
   lazy val delayWorkspaceDestruction: Option[Boolean] =
@@ -243,18 +243,18 @@ abstract class JobMeta(val workerPaths: DxWorkerPaths, val dxApi: DxApi, val log
       throw new Exception(s"Bad value ${other}")
   }
 
-  lazy val scatterStart: Int = getJobDetail(Native.ContinueStart) match {
+  lazy val scatterStart: Int = getJobDetail(Constants.ContinueStart) match {
     case Some(JsNumber(s)) => s.toIntExact
     case Some(other) =>
-      throw new Exception(s"Invalid value ${other} for  ${Native.ContinueStart}")
+      throw new Exception(s"Invalid value ${other} for  ${Constants.ContinueStart}")
     case _ => 0
   }
 
-  lazy val scatterSize: Int = getExecutableDetail(Native.ScatterChunkSize) match {
+  lazy val scatterSize: Int = getExecutableDetail(Constants.ScatterChunkSize) match {
     case Some(JsNumber(n)) => n.toIntExact
-    case None              => Native.JobPerScatterDefault
+    case None              => Constants.JobPerScatterDefault
     case other =>
-      throw new Exception(s"Invalid value ${other} for ${Native.ScatterChunkSize}")
+      throw new Exception(s"Invalid value ${other} for ${Constants.ScatterChunkSize}")
   }
 
   def error(e: Throwable): Unit

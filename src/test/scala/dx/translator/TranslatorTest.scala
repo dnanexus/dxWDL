@@ -34,10 +34,10 @@ class TranslatorTest extends AnyFlatSpec with Matchers {
 
   // task compilation
   private val cFlags =
-    List("--compileMode", "ir", "-quiet", "--locked", "--project", dxProject.getId)
+    List("--compileMode", "ir", "-quiet", "--locked", "--project", dxProject.id)
 
   private val cFlagsUnlocked =
-    List("--compileMode", "ir", "-quiet", "--project", dxProject.getId)
+    List("--compileMode", "ir", "-quiet", "--project", dxProject.id)
 
   val dbgFlags = List("--compileMode",
                       "ir",

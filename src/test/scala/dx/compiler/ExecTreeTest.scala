@@ -6,7 +6,7 @@ import dx.Assumptions.isLoggedIn
 import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.{SuccessJsonTree, SuccessPrettyTree}
-import dx.core.Native
+import dx.core.Constants
 import dx.core.CliUtils.{Failure, Success}
 import wdlTools.util.CodecUtils
 import org.scalatest.Inside._
@@ -46,7 +46,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
   private lazy val cFlagsUnlocked = Vector("-compileMode",
                                            "NativeWithoutRuntimeAsset",
                                            "-project",
-                                           dxTestProject.getId,
+                                           dxTestProject.id,
                                            "-folder",
                                            "/" + unitTestsPath,
                                            "-force",
@@ -96,7 +96,7 @@ class ExecTreeTest extends AnyFlatSpec with Matchers {
       case _                => throw new Exception("Expect details to be set for workflow")
     }
     // the compiled wf should at least have wdlSourceCode and execTree
-    details should contain key Native.SourceCode
+    details should contain key Constants.SourceCode
     details should contain key "execTree"
 
     val execString = details("execTree") match {

@@ -68,7 +68,7 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
           containerFiles.map { dxFile =>
             createFileEntry(dxFile, idToPath(dxFile.id))
           }
-        dxContainer.getId -> JsArray(projectFilesToLocalPath)
+        dxContainer.id -> JsArray(projectFilesToLocalPath)
     }
 
     Some(DxdaManifest(JsObject(manifest)))

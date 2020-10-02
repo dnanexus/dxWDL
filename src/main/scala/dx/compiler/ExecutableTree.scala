@@ -14,7 +14,7 @@ case class CompilerResults(primary: Option[CompiledExecutable],
                            executables: Map[String, CompiledExecutable]) {
   def executableIds: Vector[String] = {
     primary match {
-      case None      => executables.values.map(_.dxExec.getId).toVector
+      case None      => executables.values.map(_.dxExec.id).toVector
       case Some(obj) => Vector(obj.dxExec.id)
     }
   }

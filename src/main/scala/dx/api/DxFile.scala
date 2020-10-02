@@ -83,10 +83,10 @@ case class DxFile(dxApi: DxApi, id: String, project: Option[DxProject])
     val logicalName = s"${desc.folder}/${desc.name}"
     project match {
       case None =>
-        s"${DxPath.DxUriPrefix}${getId}::${logicalName}"
+        s"${DxPath.DxUriPrefix}${id}::${logicalName}"
       case Some(proj) =>
-        val projId = proj.getId
-        s"${DxPath.DxUriPrefix}${projId}:${getId}::${logicalName}"
+        val projId = proj.id
+        s"${DxPath.DxUriPrefix}${projId}:${id}::${logicalName}"
     }
   }
 }

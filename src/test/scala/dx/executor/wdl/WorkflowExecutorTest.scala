@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import dx.Assumptions.isLoggedIn
 import dx.Tags.{EdgeTest, NativeTest}
 import dx.api._
-import dx.core.{Native, ir}
+import dx.core.{Constants, ir}
 import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Type.TInt
 import dx.core.ir.{ParameterLinkSerializer, ParameterLinkValue, Type, TypeSerde}
@@ -47,14 +47,14 @@ private case class WorkflowTestJobMeta(override val workerPaths: DxWorkerPaths,
   override def getJobDetail(name: String): Option[JsValue] = None
 
   private val executableDetails: Map[String, JsValue] = Map(
-      Native.BlockPath -> JsArray(rawBlockPath.map(JsNumber(_))),
-      Native.InstanceTypeDb -> JsString(
+      Constants.BlockPath -> JsArray(rawBlockPath.map(JsNumber(_))),
+      Constants.InstanceTypeDb -> JsString(
           CodecUtils.gzipAndBase64Encode(
               rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
-      Native.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode)),
-      Native.WfFragmentInputTypes -> JsObject(rawEnv.view.mapValues {
+      Constants.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode)),
+      Constants.WfFragmentInputTypes -> JsObject(rawEnv.view.mapValues {
         case (t, _) => TypeSerde.serialize(WdlUtils.toIRType(t))
       }.toMap)
   )

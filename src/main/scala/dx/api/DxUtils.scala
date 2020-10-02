@@ -4,16 +4,20 @@ import spray.json._
 
 object DxUtils {
   val DxLinkKey = "$dnanexus_link"
+  val RecordClass = "record"
+  val RecordPrefix = s"${RecordClass}-"
   private val dataObjectClasses =
-    Set("applet", "database", "dbcluster", "file", "record", "workflow")
+    Set("applet", "database", "dbcluster", "file", RecordClass, "workflow")
   private val containerClasses = Set("container", "project")
   private val executableClasses = Set("applet", "app", "globalworkflow", "workflow")
   private val executionClasses = Set("analysis", "job")
   private val allClasses = dataObjectClasses | containerClasses | executableClasses | executionClasses
-  private val dataObjectIdRegexp =
-    s"^(${dataObjectClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
   private val objectIdRegexp =
     s"^(${allClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
+  private val dataObjectIdRegexp =
+    s"^(${dataObjectClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
+  private val executableIdRegexp =
+    s"^(${executableClasses.mkString("|")})-([A-Za-z0-9]{24})$$".r
   // Other entity ID regexps if/when needed:
   //  private val containerIdRegexp = s"^(${containerClasses.mkString("|")})-(\\w{24})$$".r
   //  private val executableIdRegexp = s"^(${executableClasses.mkString("|")})-(\\w{24})$$".r
@@ -28,6 +32,15 @@ object DxUtils {
     }
   }
 
+  def isObjectId(objName: String): Boolean = {
+    try {
+      parseObjectId(objName)
+      true
+    } catch {
+      case _: IllegalArgumentException => false
+    }
+  }
+
   def parseDataObjectId(dxId: String): (String, String) = {
     dxId match {
       case dataObjectIdRegexp(idType, idHash) =>
@@ -37,12 +50,25 @@ object DxUtils {
     }
   }
 
-  def isDataObjectId(objName: String): Boolean = {
+  def isDataObjectId(value: String): Boolean = {
     try {
-      parseDataObjectId(objName)
+      parseDataObjectId(value)
       true
     } catch {
       case _: IllegalArgumentException => false
+    }
+  }
+
+  def isRecordId(objId: String): Boolean = {
+    isDataObjectId(objId) && objId.startsWith(RecordPrefix)
+  }
+
+  def parseExecutableId(dxId: String): (String, String) = {
+    dxId match {
+      case executableIdRegexp(idType, idHash) =>
+        (idType, idHash)
+      case _ =>
+        throw new IllegalArgumentException(s"${dxId} is not a valid data object ID")
     }
   }
 

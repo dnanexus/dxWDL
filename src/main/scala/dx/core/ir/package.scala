@@ -2,7 +2,6 @@ package dx.core.ir
 
 import dx.api.DxWorkflowStage
 import dx.translator.RunSpec.{ContainerImage, InstanceType}
-import dx.core.ir.ExecutableType.ExecutableType
 import wdlTools.util.Enum
 
 trait ParameterAttribute
@@ -108,7 +107,7 @@ object ExecutableType extends Enum {
   *  WorkflowOutputReorg: move intermediate result files to a subdirectory.
   */
 sealed trait ExecutableKind
-case class ExecutableKindNative(executableType: ExecutableType,
+case class ExecutableKindNative(executableType: ExecutableType.ExecutableType,
                                 id: Option[String] = None,
                                 name: Option[String] = None,
                                 project: Option[String] = None,
@@ -208,7 +207,7 @@ case class WorkflowInput(param: Parameter) extends StageInput
 // symbols. It is shown to the user on the UI. The [id] is unique
 // across the workflow.
 case class Stage(description: String,
-                 id: DxWorkflowStage,
+                 dxStage: DxWorkflowStage,
                  calleeName: String,
                  inputs: Vector[StageInput],
                  outputs: Vector[Parameter])

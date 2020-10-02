@@ -71,38 +71,28 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
                                  argName: String,
                                  ioClass: DxIOClass.Value,
                                  isOptional: Boolean): WdlTypes.T = {
-    if (isOptional) {
-      ioClass match {
-        case DxIOClass.Boolean      => WdlTypes.T_Optional(WdlTypes.T_Boolean)
-        case DxIOClass.Int          => WdlTypes.T_Optional(WdlTypes.T_Int)
-        case DxIOClass.Float        => WdlTypes.T_Optional(WdlTypes.T_Float)
-        case DxIOClass.String       => WdlTypes.T_Optional(WdlTypes.T_String)
-        case DxIOClass.File         => WdlTypes.T_Optional(WdlTypes.T_File)
-        case DxIOClass.BooleanArray => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false)
-        case DxIOClass.IntArray     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = false)
-        case DxIOClass.FloatArray   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = false)
-        case DxIOClass.StringArray  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = false)
-        case DxIOClass.FileArray    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = false)
-        case _ =>
-          throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
-                                  |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
-      }
+    val (t, isArray) = ioClass match {
+      case DxIOClass.Boolean      => (WdlTypes.T_Boolean, false)
+      case DxIOClass.Int          => (WdlTypes.T_Int, false)
+      case DxIOClass.Float        => (WdlTypes.T_Float, false)
+      case DxIOClass.String       => (WdlTypes.T_String, false)
+      case DxIOClass.File         => (WdlTypes.T_File, false)
+      case DxIOClass.Hash         => (WdlTypes.T_Object, false)
+      case DxIOClass.BooleanArray => (WdlTypes.T_Boolean, true)
+      case DxIOClass.IntArray     => (WdlTypes.T_Int, true)
+      case DxIOClass.FloatArray   => (WdlTypes.T_Float, true)
+      case DxIOClass.StringArray  => (WdlTypes.T_String, true)
+      case DxIOClass.FileArray    => (WdlTypes.T_File, true)
+      case _ =>
+        throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
+                                |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
+    }
+    if (isArray) {
+      WdlTypes.T_Array(t, !isOptional)
+    } else if (isOptional) {
+      WdlTypes.T_Optional(t)
     } else {
-      ioClass match {
-        case DxIOClass.Boolean      => WdlTypes.T_Boolean
-        case DxIOClass.Int          => WdlTypes.T_Int
-        case DxIOClass.Float        => WdlTypes.T_Float
-        case DxIOClass.String       => WdlTypes.T_String
-        case DxIOClass.File         => WdlTypes.T_File
-        case DxIOClass.BooleanArray => WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = true)
-        case DxIOClass.IntArray     => WdlTypes.T_Array(WdlTypes.T_Int, nonEmpty = true)
-        case DxIOClass.FloatArray   => WdlTypes.T_Array(WdlTypes.T_Float, nonEmpty = true)
-        case DxIOClass.StringArray  => WdlTypes.T_Array(WdlTypes.T_String, nonEmpty = true)
-        case DxIOClass.FileArray    => WdlTypes.T_Array(WdlTypes.T_File, nonEmpty = true)
-        case _ =>
-          throw new Exception(s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
-                                  |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
-      }
+      t
     }
   }
 

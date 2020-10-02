@@ -3,7 +3,7 @@ package dx.executor
 import dx.AppInternalException
 import dx.api.{DxAnalysis, DxApp, DxApplet, DxExecution, DxFile, DxWorkflow, Field, FolderContents}
 import dx.core.io.DxWorkerPaths
-import dx.core.{Native, getVersion}
+import dx.core.{Constants, getVersion}
 import dx.core.ir.{Block, ExecutableLink, Parameter, ParameterLink, Type, TypeSerde, Value}
 import dx.executor.wdl.WdlWorkflowSupportFactory
 import spray.json._
@@ -77,7 +77,7 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
   }
 
   lazy val fqnDictTypes: Map[String, Type] =
-    jobMeta.getExecutableDetail(Native.WfFragmentInputTypes) match {
+    jobMeta.getExecutableDetail(Constants.WfFragmentInputTypes) match {
       case Some(JsObject(fields)) =>
         fields.map {
           case (key, typeJs) =>

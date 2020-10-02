@@ -3,7 +3,7 @@
 dxCompiler is a Scala application that performs two functions:
 
 1. Compiler: translates tasks/workflows written in a supported language (currently WDL and CWL) into native DNAnexus applets/workflows
-2. Executors Executes tasks and workflow constructs (such as scatter/gather) within the generated applets in a language-specific manner
+2. Executor: Executes tasks and workflow constructs (such as scatter/gather) within the generated applets in a language-specific manner
 
 ## Compiler
 

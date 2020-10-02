@@ -31,7 +31,7 @@ object ExecutableLink {
         "name" -> JsString(link.name),
         "inputs" -> JsObject(inputs.to(TreeMap)),
         "outputs" -> JsObject(outputs.to(TreeMap)),
-        "id" -> JsString(link.dxExec.getId)
+        "id" -> JsString(link.dxExec.id)
     )
   }
 

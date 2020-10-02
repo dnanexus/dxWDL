@@ -25,9 +25,7 @@ trait DxObjectDescribe {
 }
 
 trait DxObject {
-  val id: String
-
-  def getId: String = id
+  def id: String
 
   def describe(fields: Set[Field.Value] = Set.empty): DxObjectDescribe
 }

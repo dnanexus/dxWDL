@@ -3,10 +3,10 @@ package dx.compiler
 import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.ConfigFactory
-import dx.api.{DxApi, DxApplet, DxDataObject, DxProject}
+import dx.api.{DxApi, DxApplet, DxDataObject, DxProject, DxUtils}
 import dx.compiler.Main.CompilerMode.CompilerMode
 import dx.compiler.Main.ExecTreeFormat.ExecTreeFormat
-import dx.core.{Native, getVersion}
+import dx.core.{Constants, getVersion}
 import dx.core.io.{DxFileAccessProtocol, DxWorkerPaths}
 import dx.core.ir.Bundle
 import dx.core.languages.Language
@@ -23,6 +23,9 @@ import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
 object Main {
   private val DefaultRuntimeTraceLevel: Int = TraceLevel.Verbose
 
+  /**
+    * OptionSpec that parses the string argument(s) to -language.
+    */
   private case class LanguageOptionSpec() extends OptionSpec {
 
     /**
@@ -49,15 +52,23 @@ object Main {
   }
 
   private val CommonOptions: InternalOptions = Map(
-      "destination" -> StringOptionSpec.One,
-      "force" -> FlagOptionSpec.Default,
-      "f" -> FlagOptionSpec.Default.copy(alias = Some("force")),
-      "overwrite" -> FlagOptionSpec.Default.copy(alias = Some("force")),
-      "folder" -> StringOptionSpec.One,
-      "project" -> StringOptionSpec.One,
+      "destination" -> StringOptionSpec.one,
+      "force" -> FlagOptionSpec.default,
+      "f" -> FlagOptionSpec.default.copy(alias = Some("force")),
+      "overwrite" -> FlagOptionSpec.default.copy(alias = Some("force")),
+      "folder" -> StringOptionSpec.one,
+      "project" -> StringOptionSpec.one,
       "language" -> LanguageOptionSpec()
   )
 
+  /**
+    * Initialize objects used commonly by multiple commands.
+    * - creates a FileSourceResolver that looks for local files in any configured -imports
+    *   directories and has a DxFileAccessProtocol
+    * - initializes a Logger
+    * @param options parsed options
+    * @return (FileSourceResolver, Logger)
+    */
   private def initCommon(options: Options): (FileSourceResolver, Logger) = {
     val logger = initLogger(options)
     val imports: Vector[Path] = options.getList[Path]("imports")
@@ -114,22 +125,22 @@ object Main {
   }
 
   private def CompileOptions: InternalOptions = Map(
-      "archive" -> FlagOptionSpec.Default,
+      "archive" -> FlagOptionSpec.default,
       "compileMode" -> CompilerModeOptionSpec(),
-      "defaults" -> PathOptionSpec.MustExist,
+      "defaults" -> PathOptionSpec.mustExist,
       "execTree" -> ExecTreeFormatOptionSpec(),
-      "extras" -> PathOptionSpec.MustExist,
-      "inputs" -> PathOptionSpec.ListMustExist,
-      "input" -> PathOptionSpec.ListMustExist.copy(alias = Some("inputs")),
-      "locked" -> FlagOptionSpec.Default,
-      "leaveWorkflowsOpen" -> FlagOptionSpec.Default,
-      "imports" -> PathOptionSpec.ListMustExist,
-      "p" -> PathOptionSpec.ListMustExist.copy(alias = Some("imports")),
-      "projectWideReuse" -> FlagOptionSpec.Default,
-      "reorg" -> FlagOptionSpec.Default,
-      "runtimeDebugLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2)),
-      "streamAllFiles" -> FlagOptionSpec.Default,
-      "scatterChunkSize" -> IntOptionSpec.One
+      "extras" -> PathOptionSpec.mustExist,
+      "inputs" -> PathOptionSpec.listMustExist,
+      "input" -> PathOptionSpec.listMustExist.copy(alias = Some("inputs")),
+      "locked" -> FlagOptionSpec.default,
+      "leaveWorkflowsOpen" -> FlagOptionSpec.default,
+      "imports" -> PathOptionSpec.listMustExist,
+      "p" -> PathOptionSpec.listMustExist.copy(alias = Some("imports")),
+      "projectWideReuse" -> FlagOptionSpec.default,
+      "reorg" -> FlagOptionSpec.default,
+      "runtimeDebugLevel" -> IntOptionSpec.one.copy(choices = Vector(0, 1, 2)),
+      "streamAllFiles" -> FlagOptionSpec.default,
+      "scatterChunkSize" -> IntOptionSpec.one
   )
 
   private val DeprecatedCompileOptions = Set(
@@ -330,16 +341,16 @@ object Main {
     try {
       val dxPathConfig = DxWorkerPaths.default
       val scatterChunkSize: Int = options.getValue[Int]("scatterChunkSize") match {
-        case None => Native.JobPerScatterDefault
+        case None => Constants.JobPerScatterDefault
         case Some(x) =>
           val size = x.toInt
           if (size < 1) {
-            Native.JobPerScatterDefault
-          } else if (size > Native.JobsPerScatterLimit) {
+            Constants.JobPerScatterDefault
+          } else if (size > Constants.JobsPerScatterLimit) {
             logger.warning(
-                s"The number of jobs per scatter must be between 1-${Native.JobsPerScatterLimit}"
+                s"The number of jobs per scatter must be between 1-${Constants.JobsPerScatterLimit}"
             )
-            Native.JobsPerScatterLimit
+            Constants.JobsPerScatterLimit
           } else {
             size
           }
@@ -408,14 +419,14 @@ object Main {
   }
 
   private def DxNIOptions: InternalOptions = Map(
-      "appsOnly" -> FlagOptionSpec.Default,
+      "appsOnly" -> FlagOptionSpec.default,
       "apps" -> StringOptionSpec(choices = AppsOption.names.map(_.toLowerCase).toVector),
-      "path" -> StringOptionSpec.One,
-      "outputFile" -> PathOptionSpec.Default,
-      "output" -> PathOptionSpec.Default.copy(alias = Some("outputFile")),
-      "o" -> PathOptionSpec.Default.copy(alias = Some("outputFile")),
-      "recursive" -> FlagOptionSpec.Default,
-      "r" -> FlagOptionSpec.Default.copy(alias = Some("recursive"))
+      "path" -> StringOptionSpec.one,
+      "outputFile" -> PathOptionSpec.default,
+      "output" -> PathOptionSpec.default.copy(alias = Some("outputFile")),
+      "o" -> PathOptionSpec.default.copy(alias = Some("outputFile")),
+      "recursive" -> FlagOptionSpec.default,
+      "r" -> FlagOptionSpec.default.copy(alias = Some("recursive"))
   )
 
   def dxni(args: Vector[String]): Termination = {
@@ -430,7 +441,7 @@ object Main {
     val dxApi = DxApi(logger)
 
     // make sure the user is logged in
-    if (dxApi.isLoggedIn) {
+    if (!dxApi.isLoggedIn) {
       return Failure(s"You must be logged in to generate stubs for native app(let)s")
     }
 
@@ -439,6 +450,14 @@ object Main {
     val projectOpt = options.getValue[String]("project")
     val folderOpt = options.getValue[String]("folder")
     val pathOpt = options.getValue[String]("path")
+    val pathIsAppId = pathOpt.exists { path =>
+      try {
+        val (objClass, _) = DxUtils.parseObjectId(path)
+        objClass == "app"
+      } catch {
+        case _: Throwable => false
+      }
+    }
     // flags
     val Vector(
         appsOnly,
@@ -453,7 +472,7 @@ object Main {
       .getValue[String]("apps")
       .map(AppsOption.withNameIgnoreCase)
       .getOrElse(
-          if (appsOnly) {
+          if (appsOnly || pathIsAppId) {
             AppsOption.Only
           } else if (Vector(projectOpt, folderOpt, pathOpt).exists(_.isDefined)) {
             AppsOption.Exclude
@@ -465,7 +484,7 @@ object Main {
     val dxni = DxNativeInterface(fileResolver)
     if (apps == AppsOption.Only) {
       try {
-        dxni.apply(language, outputFile, force)
+        dxni.apply(language, outputFile, force, pathOpt)
         Success()
       } catch {
         case e: Throwable => Failure(exception = Some(e))
@@ -510,7 +529,7 @@ object Main {
   // describe
 
   private def DescribeOptions: InternalOptions = Map(
-      "pretty" -> FlagOptionSpec.Default
+      "pretty" -> FlagOptionSpec.default
   )
 
   def describe(args: Vector[String]): Termination = {

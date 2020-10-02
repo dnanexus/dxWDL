@@ -14,7 +14,7 @@ import dx.api.{
   DxWorkflow,
   Field
 }
-import dx.core.Native
+import dx.core.Constants
 import dx.core.ir.Bundle
 import spray.json.JsString
 import wdlTools.util.{JsUtils, Logger}
@@ -85,7 +85,7 @@ case class DxExecutableDirectory(bundle: Bundle,
               folder,
               recurse = false,
               Some(dxClass),
-              Vector(Native.CompilerTag),
+              Vector(Constants.CompilerTag),
               allExecutableNames.toVector,
               withInputOutputSpec = false,
               Vector.empty,
@@ -94,7 +94,7 @@ case class DxExecutableDirectory(bundle: Bundle,
         val t1 = System.nanoTime()
         val diffMSec = (t1 - t0) / (1000 * 1000)
         dxApi.logger.trace(
-            s"Found ${dxObjectsInFolder.size} ${dxClass} in ${project.getId} folder=${folder} (${diffMSec} millisec)"
+            s"Found ${dxObjectsInFolder.size} ${dxClass} in ${project.id} folder=${folder} (${diffMSec} millisec)"
         )
         dxObjectsInFolder.toVector
       }
@@ -102,9 +102,9 @@ case class DxExecutableDirectory(bundle: Bundle,
 
   private def getChecksum(desc: DxObjectDescribe): Option[String] = {
     desc.details
-      .flatMap(_.asJsObject.fields.get(Native.Checksum))
+      .flatMap(_.asJsObject.fields.get(Constants.Checksum))
       .map(JsUtils.getString(_))
-      .orElse(desc.properties.flatMap(_.get(Native.ChecksumPropertyDeprecated)))
+      .orElse(desc.properties.flatMap(_.get(Constants.ChecksumPropertyDeprecated)))
   }
 
   /**
@@ -257,7 +257,7 @@ case class DxExecutableDirectory(bundle: Bundle,
     * @param execInfo the object to archive
     */
   def archive(execInfo: DxExecutableInfo): Unit = {
-    dxApi.logger.trace(s"Archiving ${execInfo.name} ${execInfo.dataObj.getId}")
+    dxApi.logger.trace(s"Archiving ${execInfo.name} ${execInfo.dataObj.id}")
     val dxClass: String = execInfo.dxClass
     // move the object to the new location
     val destFolder = s"${folder}/${dxClass}_archive"
@@ -268,12 +268,12 @@ case class DxExecutableDirectory(bundle: Bundle,
       case None     => execInfo.name
       case Some(dt) => s"${execInfo.name} ${dt.format(dateFormatter)}"
     }
-    val request = Map("project" -> JsString(project.getId), "name" -> JsString(name))
+    val request = Map("project" -> JsString(project.id), "name" -> JsString(name))
     logger.ignore(dxClass match {
       case "Workflow" =>
-        dxApi.workflowRename(execInfo.dataObj.getId, request)
+        dxApi.workflowRename(execInfo.dataObj.id, request)
       case "Applet" =>
-        dxApi.appletRename(execInfo.dataObj.getId, request)
+        dxApi.appletRename(execInfo.dataObj.id, request)
       case other =>
         throw new Exception(s"Cannot archive object ${execInfo} with class ${other}")
     })

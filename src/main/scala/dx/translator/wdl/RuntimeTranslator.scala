@@ -138,7 +138,7 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
 
   def translateExecutableKind: Option[ExecutableKind] = {
     def kindFromId(id: String): Option[ExecutableKind] = {
-      val (executableType, _) = DxUtils.parseDataObjectId(id)
+      val (executableType, _) = DxUtils.parseExecutableId(id)
       Some(ExecutableKindNative(ExecutableType.withNameIgnoreCase(executableType), Some(id)))
     }
     if (wdlVersion >= WdlVersion.V2) {

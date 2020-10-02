@@ -82,7 +82,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
 
           // add the target folder and name
           val fields = Map(
-              "id" -> JsString(dxFile.getId),
+              "id" -> JsString(dxFile.id),
               "name" -> JsString(local.toFile.getName),
               "folder" -> JsString(local.toFile.getParent)
           )
@@ -94,7 +94,7 @@ class DxdaManifestTest extends AnyFlatSpec with Matchers {
     manifest should matchPattern {
       case Some(DxdaManifest(JsObject(fields))) if fields.size == 1 =>
     }
-    manifest.get.value.fields.get(dxTestProject.getId) match {
+    manifest.get.value.fields.get(dxTestProject.id) match {
       case Some(JsArray(array)) => array should contain theSameElementsAs expected
       case _                    => throw new Exception("expected array")
     }

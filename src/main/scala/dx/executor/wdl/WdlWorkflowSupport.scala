@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import dx.AppInternalException
 import dx.api.{DxExecution, DxObject, Field}
-import dx.core.Native
+import dx.core.Constants
 import dx.core.ir.{Block, BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
 import dx.core.ir.Type._
 import dx.core.ir.Value._
@@ -134,7 +134,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         name -> (irType, irValue)
     }
     if (addReorgStatus) {
-      irOutputs + (Native.ReorgStatus -> (TString, VString(Native.ReorgStatusCompleted)))
+      irOutputs + (Constants.ReorgStatus -> (TString, VString(Constants.ReorgStatusCompleted)))
     } else {
       irOutputs
     }
@@ -606,7 +606,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       val allParents = parents :+ jobMeta.jobId
       val details = Map(WorkflowSupport.ParentsKey -> JsArray(allParents.map(JsString(_))))
       val continueDetails = nextStart match {
-        case Some(i) => Map(Native.ContinueStart -> JsNumber(i))
+        case Some(i) => Map(Constants.ContinueStart -> JsNumber(i))
         case None    => Map.empty
       }
       JsObject(details ++ continueDetails)

@@ -197,8 +197,8 @@ abstract class InputTranslator(bundle: Bundle,
             // Instead, set the defaults in the COMMON stage.
             val stagesWithDefaults = workflow.stages.map { stage =>
               val callee: Callable = bundle.allCallables(stage.calleeName)
-              logger.trace(s"addDefaultToStage ${stage.id.getId}, ${stage.description}")
-              val prefix = if (stage.id.getId == s"stage-${CommonStage}") {
+              logger.trace(s"addDefaultToStage ${stage.dxStage.id}, ${stage.description}")
+              val prefix = if (stage.dxStage.id == s"stage-${CommonStage}") {
                 workflow.name
               } else {
                 s"${workflow.name}.${stage.description}"
@@ -223,8 +223,8 @@ abstract class InputTranslator(bundle: Bundle,
             workflow.copy(stages = stagesWithDefaults)
           }
         // check that the stage order hasn't changed
-        val allStageNames = workflow.stages.map(_.id)
-        val embedAllStageNames = workflowWithDefaults.stages.map(_.id)
+        val allStageNames = workflow.stages.map(_.dxStage)
+        val embedAllStageNames = workflowWithDefaults.stages.map(_.dxStage)
         assert(allStageNames == embedAllStageNames)
         name -> workflowWithDefaults
       case other =>
@@ -292,7 +292,7 @@ abstract class InputTranslator(bundle: Bundle,
       case Some(wf: Workflow) =>
         // unlocked workflow with at least one stage.
         // Workflow inputs go into the common stage
-        val commonStage = wf.stages.head.id.getId
+        val commonStage = wf.stages.head.dxStage.id
         val commonInputs = checkAndBindCallableInputs(wf, Some(commonStage))
         // filter out auxiliary stages
         val auxStages =
@@ -300,7 +300,7 @@ abstract class InputTranslator(bundle: Bundle,
               s"stage-${EvalStage}",
               s"stage-${OutputStage}",
               s"stage-${ReorgStage}")
-        val middleStages = wf.stages.filterNot(stg => auxStages.contains(stg.id.getId))
+        val middleStages = wf.stages.filterNot(stg => auxStages.contains(stg.dxStage.id))
         // Inputs for top level calls
         val middleInputs = middleStages.flatMap { stage =>
           // Find the input definitions for the stage, by locating the callee
@@ -347,7 +347,7 @@ abstract class InputTranslator(bundle: Bundle,
 
   def writeTranslatedInputs(): Unit = {
     translatedInputFields.foreach {
-      case (path, inputs) if inputs.nonEmpty =>
+      case (path, inputs) =>
         val fileName = FileUtils.replaceFileSuffix(path, ".dx.json")
         val dxInputFile = path.getParent match {
           case null   => Paths.get(fileName)

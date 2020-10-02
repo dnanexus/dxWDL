@@ -1,6 +1,6 @@
 package dx.core
 
-object Native {
+object Constants {
   // keys used in details of native applets
   val ExecLinkInfo: String = "execLinkInfo"
   val BlockPath: String = "blockPath"
@@ -35,4 +35,10 @@ object Native {
     * a max limit of 32k characters
     */
   val StringLengthLimit: Int = 32 * 1024
+
+  // other constants
+  val OsDistribution = "Ubuntu"
+  val OsRelease = "20.04"
+  val OsVersion = "0"
+  val RuntimeAsset = "dxWDLrt"
 }

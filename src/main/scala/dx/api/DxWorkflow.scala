@@ -6,8 +6,6 @@ case class DxWorkflowStageDesc(id: String, executable: String, name: String, inp
 
 // A stand in for the DxWorkflow.Stage inner class (we don't have a constructor for it)
 case class DxWorkflowStage(id: String) {
-  def getId: String = id
-
   def getInputReference(inputName: String): JsValue = {
     JsObject(
         DxUtils.DxLinkKey -> JsObject("stage" -> JsString(id), "inputField" -> JsString(inputName))

@@ -7,7 +7,7 @@ import dx.core.CliUtils._
 
 object Main {
   private val CommonOptions: InternalOptions = Map(
-      "streamAllFiles" -> FlagOptionSpec.Default
+      "streamAllFiles" -> FlagOptionSpec.default
   )
 
   private[executor] def dispatchCommand(args: Vector[String]): Termination = {

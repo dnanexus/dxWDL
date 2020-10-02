@@ -35,6 +35,14 @@ object DiskType extends Enum {
   val HDD, SSD = Value
 }
 
+case class ExecutionEnvironment(distribution: String,
+                                release: String,
+                                version: String = ExecutionEnvironment.DefaultVersion)
+
+object ExecutionEnvironment {
+  val DefaultVersion = "0"
+}
+
 /**
   * Parameters for an instance type query. Any parameters that are None
   * will not be considered in the query.
@@ -61,11 +69,11 @@ object InstanceTypeRequest {
 // price:  0.5 dollar per hour
 // os:     [(Ubuntu, 12.04), (Ubuntu, 14.04)}
 case class DxInstanceType(name: String,
-                          memoryMB: Int,
-                          diskGB: Int,
+                          memoryMB: Long,
+                          diskGB: Long,
                           cpu: Int,
                           gpu: Boolean,
-                          os: Vector[(String, String)],
+                          os: Vector[ExecutionEnvironment],
                           diskType: Option[DiskType.DiskType] = None,
                           price: Option[Float] = None)
     extends Ordered[DxInstanceType] {
@@ -109,8 +117,8 @@ case class DxInstanceType(name: String,
     */
   def compareByResources(that: DxInstanceType, fuzzy: Boolean = true): Int = {
     val (memDelta, diskDelta) = if (fuzzy) {
-      ((this.memoryMB.toDouble / 1024.0) - (that.memoryMB.toDouble / 1024.0),
-       (this.diskGB.toDouble / 16.0) - (that.diskGB.toDouble / 16.0))
+      ((this.memoryMB.toDouble / DxInstanceType.MemoryNormFactor) - (that.memoryMB.toDouble / DxInstanceType.MemoryNormFactor),
+       (this.diskGB.toDouble / DxInstanceType.DiskNormFactor) - (that.diskGB.toDouble / DxInstanceType.DiskNormFactor))
     } else {
       ((this.memoryMB - that.memoryMB).toDouble, (this.diskGB - that.diskGB).toDouble)
     }
@@ -127,15 +135,8 @@ case class DxInstanceType(name: String,
 
   // v2 instances are always better than v1 instances
   def compareByType(that: DxInstanceType): Int = {
-    def typeVersion(name: String) =
-      if (name contains "_v2") "v2"
-      else "v1"
-
-    (typeVersion(this.name), typeVersion(that.name)) match {
-      case ("v1", "v2") => -1
-      case ("v2", "v1") => 1
-      case (_, _)       => 0
-    }
+    def typeVersion(name: String): Int = if (name contains DxInstanceType.Version2Suffix) 2 else 1
+    typeVersion(this.name).compareTo(typeVersion(that.name))
   }
 
   def compare(that: DxInstanceType): Int = {
@@ -156,15 +157,18 @@ case class DxInstanceType(name: String,
 object DxInstanceType extends DefaultJsonProtocol {
   // support automatic conversion to/from JsValue
   implicit val diskTypeFormat: RootJsonFormat[DiskType.DiskType] = enumFormat(DiskType)
+  implicit val execEnvFormat: RootJsonFormat[ExecutionEnvironment] = jsonFormat3(
+      ExecutionEnvironment.apply
+  )
   implicit val dxInstanceTypeFormat: RootJsonFormat[DxInstanceType] = jsonFormat8(
       DxInstanceType.apply
   )
+  val Version2Suffix = "_v2"
+  val MemoryNormFactor = 1024.0
+  val DiskNormFactor = 16.0
 }
 
 case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAvailable: Boolean) {
-  private val MinMemory = 3 * 1024
-  private val MinCpu = 2
-
   // The cheapest available instance, this is normally also the smallest.
   private def selectMinimalInstanceType(
       instanceTypes: Iterable[DxInstanceType]
@@ -181,11 +185,12 @@ case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAva
     // exclude nano instances, they aren't strong enough.
     selectMinimalInstanceType(instanceTypes.values.filter { instanceType =>
       !instanceType.name.contains("test") &&
-      instanceType.memoryMB >= MinMemory &&
-      instanceType.cpu >= MinCpu
+      instanceType.memoryMB >= InstanceTypeDB.MinMemory &&
+      instanceType.cpu >= InstanceTypeDB.MinCpu
     }).getOrElse(
         throw new Exception(
-            s"no instance types meet the minimal requirements memory >= ${MinMemory} AND cpu >= ${MinCpu}"
+            s"""no instance types meet the minimal requirements memory >= ${InstanceTypeDB.MinMemory} 
+               |AND cpu >= ${InstanceTypeDB.MinCpu}""".stripMargin.replaceAll("\n", " ")
         )
     )
   }
@@ -280,6 +285,19 @@ case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAva
 }
 
 object InstanceTypeDB extends DefaultJsonProtocol {
+  val MinMemory: Long = 3 * 1024
+  val MinCpu: Int = 2
+  val CpuKey = "numCores"
+  val MemoryKey = "totalMemoryMB"
+  val DiskKey = "ephemeralStorageGB"
+  val OsKey = "os"
+  val DistributionKey = "distribution"
+  val ReleaseKey = "release"
+  val VersionKey = "version"
+  val GpuSuffix = "_gpu"
+  val SsdSuffix = "_ssd"
+  val HddSuffix = "_hdd"
+
   // support automatic conversion to/from JsValue
   implicit val instanceTypeDBFormat: RootJsonFormat[InstanceTypeDB] =
     new RootJsonFormat[InstanceTypeDB] {
@@ -332,22 +350,31 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // convert to a list of DxInstanceTypes, with prices set to zero
     jsv.asJsObject.fields.map {
       case (name, jsValue) =>
-        val numCores = JsUtils.getInt(jsValue, Some("numCores"))
-        val memoryMB = JsUtils.getInt(jsValue, Some("totalMemoryMB"))
-        val diskSpaceGB = JsUtils.getInt(jsValue, Some("ephemeralStorageGB"))
-        val os = JsUtils.getValues(jsValue, Some("os")).map { os =>
-          val distribution = JsUtils.getString(os, Some("distribution"))
-          val release = JsUtils.getString(os, Some("release"))
-          distribution -> release
+        val numCores = JsUtils.getInt(jsValue, Some(CpuKey))
+        val memoryMB = JsUtils.getInt(jsValue, Some(MemoryKey))
+        val diskSpaceGB = JsUtils.getInt(jsValue, Some(DiskKey))
+        val os = JsUtils.getValues(jsValue, Some(OsKey)).map {
+          case obj: JsObject =>
+            val distribution = JsUtils.getString(obj, Some(DistributionKey))
+            val release = JsUtils.getString(obj, Some(ReleaseKey))
+            val version = obj.fields.get(VersionKey) match {
+              case Some(JsString(ver)) => ver
+              case None                => ExecutionEnvironment.DefaultVersion
+              case other =>
+                throw new Exception(s"expected 'version' to be a string, not ${other}")
+            }
+            ExecutionEnvironment(distribution, release, version)
+          case other =>
+            throw new Exception(s"invalid os specification ${other}")
         }
         // disk type and gpu details aren't reported by the API, so we
         // have to determine them from the instance type name
         val diskType = name.toLowerCase match {
-          case s if s.contains("_ssd") => Some(DiskType.SSD)
-          case s if s.contains("_hdd") => Some(DiskType.HDD)
-          case _                       => None
+          case s if s.contains(SsdSuffix) => Some(DiskType.SSD)
+          case s if s.contains(HddSuffix) => Some(DiskType.HDD)
+          case _                          => None
         }
-        val gpu = name.toLowerCase.contains("_gpu")
+        val gpu = name.toLowerCase.contains(GpuSuffix)
         name -> DxInstanceType(name, memoryMB, diskSpaceGB, numCores, gpu, os, diskType)
     }
   }
@@ -382,24 +409,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     }
   }
 
-  // Default instance type filter:
-  // - Instance must support Ubuntu 16.04.
-  // - Instance is not an FPGA instance.
-  // - Instance does not have local HDD storage (this
-  //   means it is really old hardware)
-  def defaultInstanceTypeFilter(instanceType: DxInstanceType): Boolean = {
-    instanceType.os.exists(_._2 == "16.04") &&
-    !instanceType.diskType.contains(DiskType.HDD) &&
-    !instanceType.name.contains("fpga")
-  }
-
   /**
     * Query the platform for the available instance types in this project.
     * @param dxApi DxApi
     * @param instanceTypeFilter function used to filter instance types
     */
   def create(dxProject: DxProject,
-             instanceTypeFilter: DxInstanceType => Boolean = defaultInstanceTypeFilter,
+             instanceTypeFilter: DxInstanceType => Boolean,
              dxApi: Option[DxApi] = None,
              logger: Logger = Logger.get): InstanceTypeDB = {
     val api = dxApi.getOrElse(dxProject.dxApi)

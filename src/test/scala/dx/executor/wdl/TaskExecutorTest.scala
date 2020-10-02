@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import dx.Assumptions.isLoggedIn
 import dx.Tags.EdgeTest
 import dx.api.{DiskType, DxAnalysis, DxApi, DxInstanceType, DxJob, DxProject, InstanceTypeDB}
-import dx.core.Native
+import dx.core.Constants
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
 import dx.core.languages.wdl.{WdlUtils => WdlUtils}
@@ -45,12 +45,12 @@ private case class TaskTestJobMeta(override val workerPaths: DxWorkerPaths,
   override def getJobDetail(name: String): Option[JsValue] = None
 
   private val executableDetails: Map[String, JsValue] = Map(
-      Native.InstanceTypeDb -> JsString(
+      Constants.InstanceTypeDb -> JsString(
           CodecUtils.gzipAndBase64Encode(
               rawInstanceTypeDb.toJson.prettyPrint
           )
       ),
-      Native.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode))
+      Constants.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode))
   )
 
   override def getExecutableDetail(name: String): Option[JsValue] = {

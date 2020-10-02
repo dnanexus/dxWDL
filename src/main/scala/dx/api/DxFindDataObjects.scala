@@ -132,7 +132,7 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
                           folder: Option[String],
                           recurse: Boolean): JsValue = {
     val requiredFields =
-      Map("project" -> JsString(dxProject.getId), "recurse" -> JsBoolean(recurse))
+      Map("project" -> JsString(dxProject.id), "recurse" -> JsBoolean(recurse))
     val folderFields = folder.map(path => Map("folder" -> JsString(path))).getOrElse(Map.empty)
     JsObject(requiredFields ++ folderFields)
   }
@@ -162,7 +162,7 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
     val requiredFields =
       Map("visibility" -> JsString("either"),
           "describe" -> DxObject.requestFields(requiredDescFields ++ ioDescFields))
-    val projectField = dxProject.map(p => Map("project" -> JsString(p.getId))).getOrElse(Map.empty)
+    val projectField = dxProject.map(p => Map("project" -> JsString(p.id))).getOrElse(Map.empty)
     val scopeField = scope.map(s => Map("scope" -> s)).getOrElse(Map.empty)
     val limitField = limit.map(l => Map("limit" -> JsNumber(l))).getOrElse(Map.empty)
     val cursorField = cursor match {

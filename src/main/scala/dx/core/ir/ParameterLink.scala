@@ -2,7 +2,7 @@ package dx.core.ir
 
 import dx.AppInternalException
 import dx.api.{DxApi, DxExecution, DxFile, DxUtils, DxWorkflowStage}
-import dx.core.Native
+import dx.core.Constants
 import dx.core.io.{DxFileDescCache, DxFileSource}
 import dx.core.ir.Type.TFile
 import dx.core.ir.Value._
@@ -91,9 +91,9 @@ case class ParameterLinkSerializer(fileResolver: FileSourceResolver = FileSource
     }
     def handler(value: Value): Option[JsValue] = {
       value match {
-        case VString(s) if s.length > Native.StringLengthLimit =>
+        case VString(s) if s.length > Constants.StringLengthLimit =>
           throw new AppInternalException(
-              s"string is longer than ${Native.StringLengthLimit}"
+              s"string is longer than ${Constants.StringLengthLimit}"
           )
         case VFile(path) =>
           fileResolver.resolve(path) match {

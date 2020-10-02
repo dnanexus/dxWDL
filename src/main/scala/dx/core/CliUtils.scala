@@ -117,7 +117,7 @@ object CliUtils {
   }
 
   object FlagOptionSpec {
-    val Default: FlagOptionSpec = FlagOptionSpec()
+    val default: FlagOptionSpec = FlagOptionSpec()
   }
 
   abstract class SingleValueOptionSpec[T](override val alias: Option[String] = None,
@@ -166,8 +166,8 @@ object CliUtils {
   }
 
   object StringOptionSpec {
-    lazy val One: StringOptionSpec = StringOptionSpec()
-    lazy val List: StringOptionSpec = StringOptionSpec(multiple = true)
+    lazy val one: StringOptionSpec = StringOptionSpec()
+    lazy val list: StringOptionSpec = StringOptionSpec(multiple = true)
   }
 
   case class IntOptionSpec(override val alias: Option[String] = None,
@@ -178,8 +178,8 @@ object CliUtils {
   }
 
   object IntOptionSpec {
-    lazy val One: IntOptionSpec = IntOptionSpec()
-    lazy val List: IntOptionSpec = IntOptionSpec(multiple = true)
+    lazy val one: IntOptionSpec = IntOptionSpec()
+    lazy val list: IntOptionSpec = IntOptionSpec(multiple = true)
   }
 
   case class PathOptionSpec(mustExist: Boolean = false,
@@ -199,19 +199,25 @@ object CliUtils {
   }
 
   object PathOptionSpec {
-    lazy val Default: PathOptionSpec = PathOptionSpec()
-    lazy val MustExist: PathOptionSpec = PathOptionSpec(mustExist = true)
-    lazy val ListMustExist: PathOptionSpec = PathOptionSpec(mustExist = true, multiple = true)
+    lazy val default: PathOptionSpec = PathOptionSpec()
+    lazy val mustExist: PathOptionSpec = PathOptionSpec(mustExist = true)
+    lazy val listMustExist: PathOptionSpec = PathOptionSpec(mustExist = true, multiple = true)
   }
 
   type InternalOptions = Map[String, OptionSpec]
 
+  val QuietOpt = "quiet"
+  val VerboseOpt = "verbose"
+  val VerboseKeyOpt = "verboseKey"
+  val TraceLevelOpt = "traceLevel"
+  val LogFileOpt = "logFile"
+
   private val SimpleOptions: InternalOptions = Map(
-      "quiet" -> FlagOptionSpec.Default,
-      "verbose" -> FlagOptionSpec.Default,
-      "verboseKey" -> StringOptionSpec.List,
-      "traceLevel" -> IntOptionSpec.One.copy(choices = Vector(0, 1, 2)),
-      "logFile" -> PathOptionSpec.Default
+      QuietOpt -> FlagOptionSpec.default,
+      VerboseOpt -> FlagOptionSpec.default,
+      VerboseKeyOpt -> StringOptionSpec.list,
+      TraceLevelOpt -> IntOptionSpec.one.copy(choices = Vector(0, 1, 2)),
+      LogFileOpt -> PathOptionSpec.default
   )
 
   // Split arguments into sub-lists, one per each option.
@@ -280,18 +286,18 @@ object CliUtils {
   // logging
 
   def initLogger(options: Options): Logger = {
-    val verboseKeys: Set[String] = options.getList[String]("verboseKey").toSet
+    val verboseKeys: Set[String] = options.getList[String](VerboseKeyOpt).toSet
     val traceLevel = options
-      .getValue[Int]("traceLevel")
+      .getValue[Int](TraceLevelOpt)
       .getOrElse(
-          if (options.getFlag("verbose")) {
+          if (options.getFlag(VerboseOpt)) {
             TraceLevel.Verbose
           } else {
             TraceLevel.None
           }
       )
     val logFile = options.getValue[Path]("logFile")
-    val logger = Logger(quiet = options.getFlag("quiet"),
+    val logger = Logger(quiet = options.getFlag(QuietOpt),
                         traceLevel = traceLevel,
                         keywords = verboseKeys,
                         logFile = logFile)

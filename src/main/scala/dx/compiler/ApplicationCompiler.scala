@@ -10,7 +10,7 @@ import dx.api.{
   InstanceTypeDB,
   InstanceTypeRequest
 }
-import dx.core.Native
+import dx.core.Constants
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
 import wdlTools.util.CodecUtils
@@ -20,6 +20,19 @@ import dx.translator.RunSpec._
 import spray.json._
 import wdlTools.generators.Renderer
 import wdlTools.util.Logger
+
+object ApplicationCompiler {
+  val DefaultAppletTimeoutInDays = 2
+  // templates
+  private val DockerPreambleTemplate = "templates/docker_preamble.ssp"
+  private val DynamicAppletJobTemplate = "templates/dynamic_applet_script.ssp"
+  private val StaticAppletJobTemplate = "templates/static_applet_script.ssp"
+  private val WorkflowFragmentTempalate = "templates/workflow_fragment_script.ssp"
+  private val CommandTempalate = "templates/workflow_command_script.ssp"
+  // keys used in templates
+  private val RegistryKey = "registry"
+  private val UsernameKey = "username"
+}
 
 case class ApplicationCompiler(typeAliases: Map[String, Type],
                                instanceTypeDb: InstanceTypeDB,
@@ -36,11 +49,6 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
 
   // renderer for job script templates
   private lazy val renderer = Renderer()
-  private val DockerPreambleTemplate = "templates/docker_preamble.ssp"
-  private val DynamicAppletJobTemplate = "templates/dynamic_applet_script.ssp"
-  private val StaticAppletJobTemplate = "templates/static_applet_script.ssp"
-  private val WorkflowFragmentTempalate = "templates/workflow_fragment_script.ssp"
-  private val CommandTempalate = "templates/workflow_command_script.ssp"
 
   // Preamble required for accessing a private docker registry (if required)
   private lazy val dockerRegistry: Option[DockerRegistry] = extras.flatMap(_.dockerRegistry)
@@ -62,10 +70,10 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         }
         // render the preamble
         renderer.render(
-            DockerPreambleTemplate,
+            ApplicationCompiler.DockerPreambleTemplate,
             Map(
-                "registry" -> registry,
-                "username" -> username,
+                ApplicationCompiler.RegistryKey -> registry,
+                ApplicationCompiler.UsernameKey -> username,
                 // strip the URL from the dx:// prefix, so we can use dx-download directly
                 "credentials" -> credentials.substring(DxPath.DxUriPrefix.length)
             )
@@ -81,8 +89,8 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
     applet.kind match {
       case ExecutableKindApplet =>
         val template = applet.instanceType match {
-          case DynamicInstanceType => DynamicAppletJobTemplate
-          case _                   => StaticAppletJobTemplate
+          case DynamicInstanceType => ApplicationCompiler.DynamicAppletJobTemplate
+          case _                   => ApplicationCompiler.StaticAppletJobTemplate
         }
         renderer.render(
             template,
@@ -93,14 +101,14 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         )
       case _: ExecutableKindWfFragment =>
         renderer.render(
-            WorkflowFragmentTempalate,
+            ApplicationCompiler.WorkflowFragmentTempalate,
             templateAttrs
         )
       case other =>
         ExecutableKind.getCommand(other) match {
           case Some(command) =>
             renderer.render(
-                CommandTempalate,
+                ApplicationCompiler.CommandTempalate,
                 templateAttrs + ("command" -> command)
             )
           case _ =>
@@ -131,8 +139,9 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
               "main" ->
                 JsObject("instanceType" -> JsString(instanceType.name))
           ),
-        "distribution" -> JsString("Ubuntu"),
-        "release" -> JsString(DefaultUbuntuVersion)
+        "distribution" -> JsString(Constants.OsDistribution),
+        "release" -> JsString(Constants.OsRelease),
+        "version" -> JsString(Constants.OsVersion)
     )
     // Add default timeout
     val defaultTimeout =
@@ -140,7 +149,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
           None,
           None,
           None,
-          Some(DxTimeout(Some(DefaultAppletTimeoutInDays), Some(0), Some(0)))
+          Some(DxTimeout(Some(ApplicationCompiler.DefaultAppletTimeoutInDays), Some(0), Some(0)))
       ).toRunSpecJson
     // Start with the default dx-attribute section, and override
     // any field that is specified in the runtime hints or the individual task section.
@@ -316,12 +325,12 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       case (name, link) =>
         val linkName = s"link_${name}"
         (
-            linkName -> JsObject(DxUtils.DxLinkKey -> JsString(link.dxExec.getId)),
+            linkName -> JsObject(DxUtils.DxLinkKey -> JsString(link.dxExec.id)),
             name -> ExecutableLink.serialize(link)
         )
     }.unzip
     // build the details JSON
-    val defaultTags = Set(Native.CompilerTag)
+    val defaultTags = Set(Constants.CompilerTag)
     val (taskMeta, taskDetails) = applicationAttributesToNative(applet, defaultTags)
     val delayDetails = delayWorkspaceDestructionToNative
     // meta information used for running workflow fragments
@@ -329,16 +338,16 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       applet.kind match {
         case ExecutableKindWfFragment(_, blockPath, inputs) =>
           Map(
-              Native.ExecLinkInfo -> JsObject(linkInfo.toMap),
-              Native.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
-              Native.WfFragmentInputTypes -> JsObject(inputs.map {
+              Constants.ExecLinkInfo -> JsObject(linkInfo.toMap),
+              Constants.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
+              Constants.WfFragmentInputTypes -> JsObject(inputs.map {
                 case (k, t) => k -> TypeSerde.serialize(t)
               }),
-              Native.ScatterChunkSize -> JsNumber(scatterChunkSize)
+              Constants.ScatterChunkSize -> JsNumber(scatterChunkSize)
           )
         case ExecutableKindWfInputs | ExecutableKindWfOutputs | ExecutableKindWfCustomReorgOutputs |
             ExecutableKindWorkflowOutputReorg =>
-          Map(Native.WfFragmentInputTypes -> JsObject(applet.inputVars.map { p =>
+          Map(Constants.WfFragmentInputTypes -> JsObject(applet.inputVars.map { p =>
             p.name -> TypeSerde.serialize(p.dxType)
           }.toMap))
         case _ =>
@@ -355,9 +364,9 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         .map(ex => JsObject(ValueSerde.serializeMap(ex.defaultRuntimeAttributes)))
         .getOrElse(JsNull)
     val auxDetails = Map(
-        Native.SourceCode -> JsString(sourceEncoded),
-        Native.InstanceTypeDb -> JsString(dbOpaqueEncoded),
-        Native.RuntimeAttributes -> defaultRuntimeAttributes
+        Constants.SourceCode -> JsString(sourceEncoded),
+        Constants.InstanceTypeDb -> JsString(dbOpaqueEncoded),
+        Constants.RuntimeAttributes -> defaultRuntimeAttributes
     )
     // combine all details into a single Map
     val details: Map[String, JsValue] =

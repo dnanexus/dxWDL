@@ -45,54 +45,6 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
     }.toVector
   }
 
-  // create a wdl-value of a specific type.
-  private[wdl] def genDefaultValueOfType(wdlType: WdlTypes.T): TAT.Expr = {
-    wdlType match {
-      case WdlTypes.T_Boolean => TAT.ValueBoolean(value = true, wdlType, SourceLocation.empty)
-      case WdlTypes.T_Int     => TAT.ValueInt(0, wdlType, SourceLocation.empty)
-      case WdlTypes.T_Float   => TAT.ValueFloat(0.0, wdlType, SourceLocation.empty)
-      case WdlTypes.T_String  => TAT.ValueString("", wdlType, SourceLocation.empty)
-      case WdlTypes.T_File    => TAT.ValueString("placeholder.txt", wdlType, SourceLocation.empty)
-
-      // We could convert an optional to a null value, but that causes
-      // problems for the pretty printer.
-      // WdlValues.V_OptionalValue(wdlType, None)
-      case WdlTypes.T_Optional(t) => genDefaultValueOfType(t)
-
-      // The WdlValues.V_Map type HAS to appear before the array types, because
-      // otherwise it is coerced into an array. The map has to
-      // contain at least one key-value pair, otherwise you get a type error.
-      case WdlTypes.T_Map(keyType, valueType) =>
-        val k = genDefaultValueOfType(keyType)
-        val v = genDefaultValueOfType(valueType)
-        TAT.ExprMap(Map(k -> v), wdlType, SourceLocation.empty)
-
-      // an empty array
-      case WdlTypes.T_Array(_, false) =>
-        TAT.ExprArray(Vector.empty, wdlType, SourceLocation.empty)
-
-      // Non empty array
-      case WdlTypes.T_Array(t, true) =>
-        TAT.ExprArray(Vector(genDefaultValueOfType(t)), wdlType, SourceLocation.empty)
-
-      case WdlTypes.T_Pair(lType, rType) =>
-        TAT.ExprPair(genDefaultValueOfType(lType),
-                     genDefaultValueOfType(rType),
-                     wdlType,
-                     SourceLocation.empty)
-
-      case WdlTypes.T_Struct(_, typeMap) =>
-        val members = typeMap.map {
-          case (fieldName, t) =>
-            val key: TAT.Expr = TAT.ValueString(fieldName, WdlTypes.T_String, SourceLocation.empty)
-            key -> genDefaultValueOfType(t)
-        }
-        TAT.ExprObject(members, wdlType, SourceLocation.empty)
-
-      case _ => throw new Exception(s"Unhandled type ${wdlType}")
-    }
-  }
-
   private[wdl] def wdlValueToExpr(value: WdlValues.V): TAT.Expr = {
     def seqToType(vec: Iterable[TAT.Expr]): WdlTypes.T = {
       vec.headOption.map(_.wdlType).getOrElse(WdlTypes.T_Any)
@@ -217,7 +169,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
         .sortWith(_.name < _.name)
         .map { parameter =>
           val wdlType = WdlUtils.fromIRType(parameter.dxType)
-          val defaultVal = genDefaultValueOfType(wdlType)
+          val defaultVal = WdlUtils.getDefaultValueOfType(wdlType)
           TAT.OutputParameter(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }
 
@@ -275,7 +227,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
         }.toVector,
         outputSpec.map {
           case (name, wdlType) =>
-            val expr = genDefaultValueOfType(wdlType)
+            val expr = WdlUtils.getDefaultValueOfType(wdlType)
             TAT.OutputParameter(name, wdlType, expr, SourceLocation.empty)
         }.toVector,
         TAT.CommandSection(Vector.empty, SourceLocation.empty),

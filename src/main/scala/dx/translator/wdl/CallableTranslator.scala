@@ -1,7 +1,7 @@
 package dx.translator.wdl
 
 import dx.api.{DxApi, DxUtils, DxWorkflowStage}
-import dx.core.Native
+import dx.core.Constants
 import dx.translator.RunSpec.{DefaultInstanceType, DxFileDockerImage, NoImage}
 import dx.translator.{
   CommonStage,
@@ -15,7 +15,7 @@ import dx.translator.{
 import dx.core.ir._
 import dx.core.ir.Type._
 import dx.core.ir.Value._
-import dx.core.Native.{ReorgStatus, ReorgStatusCompleted}
+import dx.core.Constants.{ReorgStatus, ReorgStatusCompleted}
 import dx.core.languages.wdl.{
   OptionalBlockInput,
   OverridableBlockInputWithDynamicDefault,
@@ -732,7 +732,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                     case (env, param: Parameter) =>
                       val fqn = s"${call.actualName}.${param.name}"
                       val paramFqn = param.copy(name = fqn)
-                      env.add(fqn, (paramFqn, LinkInput(stage.id, param.dxName)))
+                      env.add(fqn, (paramFqn, LinkInput(stage.dxStage, param.dxName)))
                   }
                   (stages :+ (stage, Vector.empty[Callable]), afterEnv)
                 case _ =>
@@ -745,7 +745,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                 translateWfFragment(wfName, block, blockPath :+ blockNum, beforeEnv)
               val afterEnv = stage.outputs.foldLeft(beforeEnv) {
                 case (env, param) =>
-                  env.add(param.name, (param, LinkInput(stage.id, param.dxName)))
+                  env.add(param.name, (param, LinkInput(stage.dxStage, param.dxName)))
               }
               (stages :+ (stage, auxCallables), afterEnv)
             }
@@ -757,7 +757,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         allStageInfo.foreach {
           case (stage, _) =>
             logger3.trace(
-                s"${stage.description}, ${stage.id.getId} -> callee=${stage.calleeName}"
+                s"${stage.description}, ${stage.dxStage.id} -> callee=${stage.calleeName}"
             )
         }
         logger2.trace("]")
@@ -935,7 +935,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                              commonStageInputs,
                              inputOutputs ++ closureOutputs)
         val fauxWfInputs: Vector[LinkedVar] = commonStage.outputs.map { param =>
-          val link = LinkInput(commonStage.id, param.dxName)
+          val link = LinkInput(commonStage.dxStage, param.dxName)
           (param, link)
         }
         (fauxWfInputs, Vector((commonStage, Vector(commonApplet))))
@@ -1015,7 +1015,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
         // to evaluate them.
         val (outputStage, outputApplet) = createOutputStage(wfName, outputs, env)
         val wfOutputs = outputStage.outputs.map { param =>
-          (param, LinkInput(outputStage.id, param.dxName))
+          (param, LinkInput(outputStage.dxStage, param.dxName))
         }
         val irwf = Workflow(wfName,
                             wfInputLinks,
@@ -1064,7 +1064,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val (commonStg, commonApplet) =
         createCommonApplet(wf.name, commonAppletInputs, commonStageInputs, commonAppletInputs)
       val fauxWfInputs: Vector[LinkedVar] = commonStg.outputs.map { param =>
-        val stageInput = LinkInput(commonStg.id, param.dxName)
+        val stageInput = LinkInput(commonStg.dxStage, param.dxName)
         (param, stageInput)
       }
 
@@ -1077,7 +1077,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
       val wfInputs = commonAppletInputs.map(param => (param, EmptyInput))
       val wfOutputs =
-        outputStage.outputs.map(param => (param, LinkInput(outputStage.id, param.dxName)))
+        outputStage.outputs.map(param => (param, LinkInput(outputStage.dxStage, param.dxName)))
       val wfAttr = meta.translate
       val wfSource = WdlWorkflowSource(wf)
       val irwf = Workflow(
@@ -1137,7 +1137,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val configFile: Option[VFile] = reorgConfigFile.map(VFile)
       val appInputs = Vector(
           statusParam,
-          Parameter(Native.ReorgConfig, TFile, configFile)
+          Parameter(Constants.ReorgConfig, TFile, configFile)
       )
       val appletKind = ExecutableKindWorkflowCustomReorg(appletId)
       val applet = Application(

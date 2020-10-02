@@ -563,18 +563,25 @@ def native_call_dxni(project, applet_folder, version_id, verbose: bool):
 
 def dxni_call_with_path(project, path, version_id, verbose):
     # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline_common = [ "java", "-jar",
-                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                       "dxni",
-                       "-force",
-                       "-path", path,
-                       "-project", project.get_id()]
+    cmdline = [
+        "java",
+        "-jar",
+        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+        "dxni",
+        "-force",
+        "-path",
+        path,
+        "-language",
+        "wdl_v1.0",
+        "-output",
+        os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")
+    ]
+    if project is not None:
+        cmdline.extend(["-project", project.get_id()])
     if verbose:
-        cmdline_common.append("-verbose")
-    cmdline_v1 = cmdline_common + [ "-language", "wdl_v1.0",
-                                    "-output", os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")]
-    print(" ".join(cmdline_v1))
-    subprocess.check_output(cmdline_v1)
+        cmdline.append("-verbose")
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
 
 # Set up the native calling tests
 def native_call_setup(project, applet_folder, version_id, verbose):
@@ -593,7 +600,7 @@ def native_call_setup(project, applet_folder, version_id, verbose):
         if len(applet) == 0:
             cmdline = [ "dx", "build",
                         os.path.join(top_dir, "test/applets/{}".format(napl)),
-                        "-destination", (project.get_id() + ":" + applet_folder + "/") ]
+                        "--destination", (project.get_id() + ":" + applet_folder + "/") ]
             print(" ".join(cmdline))
             subprocess.check_output(cmdline)
 
@@ -638,12 +645,11 @@ def native_call_app_setup(project, version_id, verbose):
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 
-
-    # check if providing an applet-id in the path argument works
+    # check if providing an app-id in the path argument works
     results = dxpy.bindings.search.find_one_app(name=app_name, zero_ok=True, more_ok=False)
     if results is None:
         raise RuntimeError("Could not find app {}".format(app_name))
-    dxni_call_with_path(project, results["id"], version_id, verbose)
+    dxni_call_with_path(None, results["id"], version_id, verbose)
 
 ######################################################################
 # Compile the WDL files to dx:workflows and dx:applets

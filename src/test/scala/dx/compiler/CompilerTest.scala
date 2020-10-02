@@ -7,7 +7,7 @@ import dx.Assumptions.{isLoggedIn, toolkitCallable}
 import dx.Tags.NativeTest
 import dx.api._
 import dx.compiler.Main.SuccessIR
-import dx.core.Native
+import dx.core.Constants
 import dx.core.ir.Callable
 import dx.core.CliUtils.{Success, Termination}
 import org.scalatest.BeforeAndAfterAll
@@ -49,7 +49,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
   private lazy val unitTestsPath = s"unit_tests/${username}"
   private lazy val cFlagsBase: List[String] = List(
       "-project",
-      dxTestProject.getId,
+      dxTestProject.id,
       "-quiet",
       "-force"
   )
@@ -531,13 +531,13 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           case ("upstreamLicenses", JsArray(array)) => array shouldBe Vector(JsString("MIT"))
           case ("upstreamProjects", array: JsArray) =>
             array shouldBe expectedUpstreamProjects
-          case ("whatsNew", JsString(value))           => value shouldBe expectedWhatsNew
-          case (Native.InstanceTypeDb, JsString(_))    => () // ignore
-          case (Native.Language, JsString(_))          => () // ignore
-          case (Native.RuntimeAttributes, JsObject(_)) => () // ignore
-          case (Native.Version, JsString(_))           => () // ignore
-          case (Native.Checksum, JsString(_))          => () // ignore
-          case (Native.SourceCode, JsString(_))        => () // ignore
+          case ("whatsNew", JsString(value))              => value shouldBe expectedWhatsNew
+          case (Constants.InstanceTypeDb, JsString(_))    => () // ignore
+          case (Constants.Language, JsString(_))          => () // ignore
+          case (Constants.RuntimeAttributes, JsObject(_)) => () // ignore
+          case (Constants.Version, JsString(_))           => () // ignore
+          case (Constants.Checksum, JsString(_))          => () // ignore
+          case (Constants.SourceCode, JsString(_))        => () // ignore
           // old values for sourceCode - can probalby delete these
           case ("womSourceCode", JsString(_)) => () // ignore
           case ("wdlSourceCode", JsString(_)) => () // ignore
@@ -551,7 +551,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _       => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("Adds two int together")
-    desc.tags shouldBe Some(Set("add", "ints", Native.CompilerTag))
+    desc.tags shouldBe Some(Set("add", "ints", Constants.CompilerTag))
     desc.title shouldBe Some("Add Ints")
     desc.types shouldBe Some(Vector("Adder"))
   }
@@ -727,9 +727,9 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
           case ("link_inc", JsObject(_))                   => ()
           case ("link_mul", JsObject(_))                   => ()
           case ("execTree", JsString(_))                   => ()
-          case (Native.Version, JsString(_))               => () // ignore
-          case (Native.Checksum, JsString(_))              => () // ignore
-          case (Native.SourceCode, JsString(_))            => () // ignore
+          case (Constants.Version, JsString(_))            => () // ignore
+          case (Constants.Checksum, JsString(_))           => () // ignore
+          case (Constants.SourceCode, JsString(_))         => () // ignore
           // old values for sourceCode - can probalby delete these
           case ("womSourceCode", JsString(_)) => ()
           case ("wdlSourceCode", JsString(_)) => ()
@@ -742,7 +742,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
       case _       => throw new Exception("No properties")
     }
     desc.summary shouldBe Some("A workflow that defines some metadata")
-    desc.tags shouldBe Some(Vector("foo", "bar", Native.CompilerTag))
+    desc.tags shouldBe Some(Vector("foo", "bar", Constants.CompilerTag))
     desc.title shouldBe Some("Workflow with metadata")
     desc.types shouldBe Some(Vector("calculator"))
   }
@@ -785,7 +785,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -810,7 +810,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${appId} --json")
 
     val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
       case Some(JsObject(x)) =>
@@ -832,7 +832,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
 
     // make sure the timeout is what it should be
-    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+    val (_, stdout, _) = SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${appId} --json")
     val obj = stdout.parseJson.asJsObject
     val obj2 = obj.fields("runSpec").asJsObject
     val obj3 = obj2.fields("systemRequirements").asJsObject
@@ -885,7 +885,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 1
-    reorgInput.fields.keys shouldBe Set(Native.ReorgStatus)
+    reorgInput.fields.keys shouldBe Set(Constants.ReorgStatus)
   }
 
   // ignore for now as the test will fail in staging
@@ -927,7 +927,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     }
     // no reorg conf input. only status.
     reorgInput.fields.size shouldBe 2
-    reorgInput.fields.keys shouldBe Set(Native.ReorgStatus, ReorgConfig)
+    reorgInput.fields.keys shouldBe Set(Constants.ReorgStatus, Constants.ReorgConfig)
   }
 
   it should "ensure subworkflow with custom reorg app does not contain reorg attribute" in {
@@ -977,7 +977,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the job reuse flag is set
     val (_, stdout, _) =
-      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${appletId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsBoolean(true))
   }
@@ -1002,7 +1002,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the job reuse flag is set
     val (_, stdout, _) =
-      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${wfId} --json")
     val ignoreReuseFlag = stdout.parseJson.asJsObject.fields.get("ignoreReuse")
     ignoreReuseFlag shouldBe Some(JsArray(JsString("*")))
   }
@@ -1027,7 +1027,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the delayWorkspaceDestruction flag is set
     val (_, stdout, _) =
-      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${appletId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${appletId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)
@@ -1053,7 +1053,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
 
     // make sure the flag is set on the resulting workflow
     val (_, stdout, _) =
-      SysUtils.execCommand(s"dx describe ${dxTestProject.getId}:${wfId} --json")
+      SysUtils.execCommand(s"dx describe ${dxTestProject.id}:${wfId} --json")
     val details = stdout.parseJson.asJsObject.fields("details")
     val delayWD = details.asJsObject.fields.get("delayWorkspaceDestruction")
     delayWD shouldBe Some(JsTrue)

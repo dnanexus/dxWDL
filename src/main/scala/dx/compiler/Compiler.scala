@@ -4,12 +4,14 @@ import java.nio.file.{Files, Path}
 
 import com.typesafe.config.{Config, ConfigFactory}
 import dx.api.{
+  DiskType,
   DxApi,
   DxApplet,
   DxAppletDescribe,
   DxDataObject,
   DxExecutable,
   DxFile,
+  DxInstanceType,
   DxPath,
   DxProject,
   DxRecord,
@@ -19,7 +21,7 @@ import dx.api.{
   Field,
   InstanceTypeDB
 }
-import dx.core.{Native, getVersion}
+import dx.core.{Constants, getVersion}
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
 import wdlTools.util.CodecUtils
@@ -28,6 +30,11 @@ import spray.json._
 import wdlTools.util.{FileSourceResolver, FileUtils, JsUtils, Logger, TraceLevel}
 
 import scala.jdk.CollectionConverters._
+
+object Compiler {
+  val RuntimeConfigFile = "dxWDL_runtime.conf"
+  val RegionToProjectFile = "dxWDL.region2project"
+}
 
 /**
   * Compile IR to native applets and workflows.
@@ -73,8 +80,17 @@ case class Compiler(extras: Option[Extras],
   private case class BundleCompiler(bundle: Bundle, project: DxProject, folder: String) {
     private val parameterLinkSerializer = ParameterLinkSerializer(fileResolver)
     // database of available instance types for the user/org that owns the project
+    // Instance type filter:
+    // - Instance must support Ubuntu.
+    // - Instance is not an FPGA instance.
+    // - Instance does not have local HDD storage (those are older instance types).
+    private def instanceTypeFilter(instanceType: DxInstanceType): Boolean = {
+      instanceType.os.exists(_.release == Constants.OsRelease) &&
+      !instanceType.diskType.contains(DiskType.HDD) &&
+      !instanceType.name.contains("fpga")
+    }
     private val instanceTypeDb =
-      InstanceTypeDB.create(project, dxApi = Some(dxApi), logger = logger)
+      InstanceTypeDB.create(project, instanceTypeFilter, Some(dxApi), logger)
     // directory of the currently existing applets - we don't want to build them
     // if we don't have to.
     private val executableDir =
@@ -87,11 +103,11 @@ case class Compiler(extras: Option[Extras],
         case Some(s) => s
         case None    => throw new Exception(s"Cannot get region for project ${project}")
       }
-      // Find the runtime dxWDL asset with the correct version. Look inside the
+      // Find the runtime asset with the correct version. Look inside the
       // project configured for this region. The regions live in dxWDL.conf
-      val config = ConfigFactory.load(RuntimeConfigFile)
+      val config = ConfigFactory.load(Compiler.RuntimeConfigFile)
       val regionToProjectOption: Vector[Config] =
-        config.getConfigList("dxWDL.region2project").asScala.toVector
+        config.getConfigList(Compiler.RegionToProjectFile).asScala.toVector
       val regionToProjectConf: Map[String, String] = regionToProjectOption.map { pair =>
         val region = pair.getString("region")
         val project = pair.getString("path")
@@ -99,29 +115,31 @@ case class Compiler(extras: Option[Extras],
       }.toMap
       // The mapping from region to project name is list of (region, proj-name) pairs.
       // Get the project for this region.
-      val destination = regionToProjectConf.get(projectRegion) match {
+      val assetSourcePath = regionToProjectConf.get(projectRegion) match {
         case Some(dest) => dest
         case None =>
           throw new Exception(s"Region ${projectRegion} is currently unsupported")
       }
-      val destRegexp = "(?:(.*):)?(.+)".r
-      val (regionalProjectName, folder) = destination match {
-        case destRegexp(null, project)   => (project, "/")
-        case destRegexp(project, folder) => (project, folder)
+      val sourcePathRegexp = "(?:(.*):)?(.+)".r
+      val (regionalProjectName, assetFolder) = assetSourcePath match {
+        case sourcePathRegexp(null, project)   => (project, "/")
+        case sourcePathRegexp(project, folder) => (project, folder)
         case _ =>
-          throw new Exception(s"Bad syntax for destination ${destination}")
+          throw new Exception(s"Bad syntax for destination ${assetSourcePath}")
       }
       val regionalProject = dxApi.resolveProject(regionalProjectName)
-      val assetUri = s"${DxPath.DxUriPrefix}${regionalProject.getId}:${folder}/${RuntimeAsset}"
+      val assetUri =
+        s"${DxPath.DxUriPrefix}${regionalProject.id}:${assetFolder}/${Constants.RuntimeAsset}"
       logger.trace(s"Looking for asset id at ${assetUri}")
       val dxAsset = dxApi.resolveDataObject(assetUri, Some(regionalProject)) match {
-        case dxFile: DxRecord => dxFile
+        case dxRecord: DxRecord => dxRecord
         case other =>
           throw new Exception(s"Found dx object of wrong type ${other} at ${assetUri}")
       }
       // We need the dxWDL runtime library cloned into this project, so it will
-      // be available to all subjobs we run.
-      dxApi.cloneAsset(dxAsset, project, RuntimeAsset, regionalProject)
+      // be available to all subjobs we run. If for some reason we're running in
+      // the same project where the asset lives, no clone operation will be performed.
+      dxApi.cloneAsset(Constants.RuntimeAsset, dxAsset, regionalProject, project)
       // Extract the archive from the details field
       val desc = dxAsset.describe(Set(Field.Details))
       val dxLink =
@@ -130,7 +148,7 @@ case class Compiler(extras: Option[Extras],
         } catch {
           case _: Throwable =>
             throw new Exception(
-                s"record does not have an archive field ${desc.details}"
+                s"record does not have an archive field in details ${desc.details}"
             )
         }
       val dxFile = DxFile.fromJson(dxApi, dxLink)
@@ -169,8 +187,8 @@ case class Compiler(extras: Option[Extras],
         }
       val updatedDetails = existingDetails ++
         Map(
-            Native.Version -> JsString(getVersion),
-            Native.Checksum -> JsString(digest)
+            Constants.Version -> JsString(getVersion),
+            Constants.Checksum -> JsString(digest)
         )
       // Add properties and attributes we don't want to fall under the checksum
       // This allows, for example, moving the dx:executable, while

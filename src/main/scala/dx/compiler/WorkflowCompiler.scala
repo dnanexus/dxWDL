@@ -1,7 +1,7 @@
 package dx.compiler
 
 import dx.api.{DxApi, DxUtils}
-import dx.core.Native
+import dx.core.Constants
 import dx.core.ir.{
   EmptyInput,
   ExecutableLink,
@@ -136,19 +136,19 @@ case class WorkflowCompiler(extras: Option[Extras],
           val inputs = stageInputToNative(linkedInputs)
           // convert the per-stage metadata into JSON
           val stageReqDesc = JsObject(
-              Map("id" -> JsString(stg.id.getId),
-                  "executable" -> JsString(dxExec.getId),
+              Map("id" -> JsString(stg.dxStage.id),
+                  "executable" -> JsString(dxExec.id),
                   "name" -> JsString(stg.description),
                   "input" -> inputs)
           )
           stagesReq :+ stageReqDesc
       }
     // build the details JSON
-    val defaultTags = Set(Native.CompilerTag)
+    val defaultTags = Set(Constants.CompilerTag)
     val (wfMeta, wfMetaDetails) = workflowAttributesToNative(workflow, defaultTags)
     // compress and base64 encode the source code
     val sourceDetails = Map(
-        Native.SourceCode -> JsString(
+        Constants.SourceCode -> JsString(
             CodecUtils.gzipAndBase64Encode(workflow.document.toString)
         )
     )
@@ -163,7 +163,7 @@ case class WorkflowCompiler(extras: Option[Extras],
     // need to be cloned when copying workflows.
     val dxLinks = transitiveDependencies.map {
       case ExecutableLink(name, _, _, dxExec) =>
-        s"link_${name}" -> JsObject(DxUtils.DxLinkKey -> JsString(dxExec.getId))
+        s"link_${name}" -> JsObject(DxUtils.DxLinkKey -> JsString(dxExec.id))
     }.toMap
     val delayDetails = delayWorkspaceDestructionToNative
     // generate the executable tree
