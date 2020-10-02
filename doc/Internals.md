@@ -82,7 +82,7 @@ task count_bam {
     File bam
   }
   command <<<
-    samtools view -c ${bam}
+    samtools view -c ~{bam}
   >>>
   runtime {
     docker: "quay.io/ucsc_cgl/samtools"
@@ -121,7 +121,7 @@ is compiled into an applet with the following `dxapp.json`:
 }
 ```
 
-The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`, under which it runs the shell command `samtools view -c ${bam}`.
+The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`, under which it runs the shell command `samtools view -c ~{bam}`.
 
 ## A Linear Workflow
 
