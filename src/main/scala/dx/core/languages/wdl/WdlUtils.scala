@@ -910,21 +910,16 @@ object WdlUtils {
       case ((inputs, outputs), elem) =>
         elem match {
           case v: TAT.PrivateVariable =>
-            val newInputs = v.expr match {
-              case None => inputs
-              case Some(expr) =>
-                inputs ++ getExpressionInputs(expr).collect {
-                  case (name, wdlType, optional)
-                      if !(inputs.contains(name) || outputs.contains(name)) =>
-                    name -> (wdlType, optional)
-                }.toMap
-            }
-            val newOutputs =
-              v.expr match {
-                case None => outputs
-                case Some(expr) =>
-                  outputs + (v.name -> TAT.OutputParameter(v.name, v.wdlType, expr, v.loc))
-              }
+            val newInputs =
+              inputs ++ getExpressionInputs(v.expr).collect {
+                case (name, wdlType, optional)
+                    if !(inputs.contains(name) || outputs.contains(name)) =>
+                  name -> (wdlType, optional)
+              }.toMap
+            val newOutputs = outputs + (v.name -> TAT.OutputParameter(v.name,
+                                                                      v.wdlType,
+                                                                      v.expr,
+                                                                      v.loc))
             (newInputs, newOutputs)
           case call: TAT.Call =>
             val newInputs = inputs ++ WdlUtils
@@ -1047,9 +1042,7 @@ object WdlUtils {
             s"${indent}call ${call.fullyQualifiedName} as ${al} ${inputs}"
         }
 
-      case TAT.PrivateVariable(_, wdlType, None, _) =>
-        s"${indent} ${TypeUtils.prettyFormatType(wdlType)}"
-      case TAT.PrivateVariable(_, wdlType, Some(expr), _) =>
+      case TAT.PrivateVariable(_, wdlType, expr, _) =>
         s"${indent} ${TypeUtils.prettyFormatType(wdlType)} = ${TypeUtils.prettyFormatExpr(expr)}"
     }
   }

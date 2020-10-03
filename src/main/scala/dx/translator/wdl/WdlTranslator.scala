@@ -134,7 +134,7 @@ case class WdlTranslator(doc: TAT.Document,
   }
 
   override lazy val apply: Bundle = {
-    val wdlBundle: WdlBundle = WdlBundle.flattenDepthFirst(doc)
+    val wdlBundle: WdlBundle = WdlBundle.create(doc)
     // sort callables by dependencies
     val logger2 = logger.withIncTraceIndent()
     val depOrder: Vector[TAT.Callable] = sortByDependencies(wdlBundle, logger2)

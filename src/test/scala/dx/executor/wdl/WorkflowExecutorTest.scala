@@ -77,14 +77,20 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
   private val logger = Logger.Quiet
   private val dxApi = DxApi(logger)
   private val unicornInstance =
-    DxInstanceType(WorkflowTestJobMeta.InstanceType,
-                   100,
-                   100,
-                   4,
-                   gpu = false,
-                   Vector(("Ubuntu", "16.04")),
-                   Some(DiskType.SSD),
-                   Some(1.00f))
+    DxInstanceType(
+        WorkflowTestJobMeta.InstanceType,
+        100,
+        100,
+        4,
+        gpu = false,
+        Vector(
+            ExecutionEnvironment(Constants.OsDistribution,
+                                 Constants.OsRelease,
+                                 Vector(Constants.OsVersion))
+        ),
+        Some(DiskType.SSD),
+        Some(1.00f)
+    )
   private val instanceTypeDB = InstanceTypeDB(
       Map(WorkflowTestJobMeta.InstanceType -> unicornInstance),
       pricingAvailable = true
@@ -132,7 +138,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
 
   private def parse(path: Path): WdlBundle = {
     val (doc, _) = WdlUtils.parseSourceFile(path)
-    WdlBundle.flattenDepthFirst(doc)
+    WdlBundle.create(doc)
   }
 
   it should "second block in a linear workflow" in {
@@ -153,7 +159,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     val decls: Vector[TAT.PrivateVariable] = block.elements.collect {
       case eNode: TAT.PrivateVariable => eNode
     }
-    val expr: TAT.Expr = decls.head.expr.get
+    val expr: TAT.Expr = decls.head.expr
     val fileResolver = createFileResolver(workerPaths)
     val eval: Eval = createEvaluator(workerPaths, wdlBundle.version, fileResolver)
     val value: WdlValues.V = eval.applyExpr(expr, WdlValueBindings(env))

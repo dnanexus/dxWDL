@@ -4,17 +4,23 @@ import java.nio.file.{InvalidPathException, Paths}
 
 import dx.core.io.DxWorkerPaths
 import dx.core.CliUtils._
+import wdlTools.util.Enum
 
 object Main {
   private val CommonOptions: InternalOptions = Map(
       "streamAllFiles" -> FlagOptionSpec.default
   )
 
+  object ExecutorKind extends Enum {
+    type ExecutorKind = Value
+    val Task, Workflow = Value
+  }
+
   private[executor] def dispatchCommand(args: Vector[String]): Termination = {
     if (args.size < 3) {
       return BadUsageTermination()
     }
-    val kind = args(0)
+    val kind = ExecutorKind.withNameIgnoreCase(args(0))
     val action = args(1).replaceAll("_", "")
     val rootDir =
       try {
@@ -34,7 +40,7 @@ object Main {
     try {
       val jobMeta = WorkerJobMeta(DxWorkerPaths(rootDir))
       kind match {
-        case "task" =>
+        case ExecutorKind.Task =>
           val taskAction =
             try {
               TaskAction.withNameIgnoreCase(action)
@@ -46,7 +52,7 @@ object Main {
           val taskExecutor = TaskExecutor(jobMeta, streamAllFiles)
           val successMessage = taskExecutor.apply(taskAction)
           Success(successMessage)
-        case "workflow" =>
+        case ExecutorKind.Workflow =>
           val workflowAction =
             try {
               WorkflowAction.withNameIgnoreCase(action)

@@ -809,14 +809,6 @@ case class DxApi(logger: Logger = Logger.get,
 
   // Read the contents of a platform file into a byte array
   def downloadBytes(dxFile: DxFile): Array[Byte] = {
-    // We don't want to use the dxjava implementation
-    //val bytes = dxFile.downloadBytes()
-    //new String(bytes, StandardCharsets.UTF_8)
-
-    // We don't want to use "dx cat" because it doesn't validate the checksum.
-    //val (outmsg, errmsg) = Utils.execCommand(s"dx cat ${dxFile.id}")
-    //outmsg
-
     // create a temporary file, and write the contents into it.
     val tempFile: Path = Files.createTempFile(s"${dxFile.id}", ".tmp")
     silentFileDelete(tempFile)

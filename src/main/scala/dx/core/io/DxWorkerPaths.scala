@@ -94,6 +94,7 @@ case class DxWorkerPaths(rootDir: Path)
   def createCleanDirs(): Unit = {
     Logger.get.ignore(
         Vector(
+            getWorkDir(ensureExists = true),
             getMetaDir(ensureExists = true),
             getTempDir(ensureExists = true),
             getInputFilesDir(ensureExists = true),

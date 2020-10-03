@@ -90,6 +90,7 @@ object WdlBundle {
     if (version != from.version) {
       throw new RuntimeException(s"Different WDL versions: ${version} != ${from.version}")
     }
+    // find any callables with the same name but different definitions
     val intersection = (accu.callableNames & from.callableNames)
       .map { name =>
         val aCallable = accu.tasks.getOrElse(name, accu.workflows(name))
@@ -99,7 +100,7 @@ object WdlBundle {
       .filter {
         // The comparision is done with "toString", because otherwise two identical
         // definitions are somehow, through the magic of Scala, unequal.
-        case (_, (ac, bc)) => ac == bc
+        case (_, (ac, bc)) => ac != bc
       }
       .toMap
     if (intersection.nonEmpty) {
@@ -130,14 +131,14 @@ object WdlBundle {
   // recurse into the imported packages
   // Check the uniqueness of tasks, Workflows, and Types
   // merge everything into one bundle.
-  def flattenDepthFirst(doc: TAT.Document): WdlBundle = {
+  def create(doc: TAT.Document): WdlBundle = {
     val topLevelInfo = bundleInfoFromDoc(doc)
     val imports: Vector[TAT.ImportDoc] = doc.elements.collect {
       case x: TAT.ImportDoc => x
     }
     imports.foldLeft(topLevelInfo) {
       case (accu: WdlBundle, imp) =>
-        val flatImportInfo = flattenDepthFirst(imp.doc)
+        val flatImportInfo = create(imp.doc)
         mergeBundleInfo(accu, flatImportInfo)
     }
   }

@@ -103,9 +103,8 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
     // Last check that we have all the compulsory arguments.
     // Note that we don't have the information here to tell difference between optional and non
     // optionals. Right now, we are emitting warnings for optionals or arguments that have defaults.
-    executableLink.inputs.keys.foreach {
-      case argName if !callInputsJs.fields.contains(argName) =>
-        logger.warning(s"Missing argument ${argName} to call ${executableLink.name}", force = true)
+    executableLink.inputs.keys.filterNot(callInputsJs.fields.contains).foreach { argName =>
+      logger.warning(s"Missing argument ${argName} to call ${executableLink.name}", force = true)
     }
 
     // We may need to run a collect subjob. Add the the sequence

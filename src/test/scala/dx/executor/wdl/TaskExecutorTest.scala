@@ -4,11 +4,20 @@ import java.nio.file.{Files, Path, Paths}
 
 import dx.Assumptions.isLoggedIn
 import dx.Tags.EdgeTest
-import dx.api.{DiskType, DxAnalysis, DxApi, DxInstanceType, DxJob, DxProject, InstanceTypeDB}
+import dx.api.{
+  DiskType,
+  DxAnalysis,
+  DxApi,
+  DxInstanceType,
+  DxJob,
+  DxProject,
+  ExecutionEnvironment,
+  InstanceTypeDB
+}
 import dx.core.Constants
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
-import dx.core.languages.wdl.{WdlUtils => WdlUtils}
+import dx.core.languages.wdl.WdlUtils
 import wdlTools.util.CodecUtils
 import dx.executor.{JobMeta, TaskAction, TaskExecutor}
 import dx.translator.wdl.CodeGenerator
@@ -78,7 +87,11 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
       100,
       4,
       gpu = false,
-      Vector(("Ubuntu", "16.04")),
+      Vector(
+          ExecutionEnvironment(Constants.OsDistribution,
+                               Constants.OsRelease,
+                               Vector(Constants.OsVersion))
+      ),
       Some(DiskType.SSD),
       Some(1.00f)
   )

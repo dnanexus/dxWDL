@@ -37,7 +37,9 @@ object DiskType extends Enum {
 
 case class ExecutionEnvironment(distribution: String,
                                 release: String,
-                                version: String = ExecutionEnvironment.DefaultVersion)
+                                versions: Vector[String] = Vector(
+                                    ExecutionEnvironment.DefaultVersion
+                                ))
 
 object ExecutionEnvironment {
   val DefaultVersion = "0"
@@ -357,13 +359,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
           case obj: JsObject =>
             val distribution = JsUtils.getString(obj, Some(DistributionKey))
             val release = JsUtils.getString(obj, Some(ReleaseKey))
-            val version = obj.fields.get(VersionKey) match {
-              case Some(JsString(ver)) => ver
-              case None                => ExecutionEnvironment.DefaultVersion
+            val versions = obj.fields.get(VersionKey) match {
+              case Some(JsArray(array)) => array.map(JsUtils.getString(_))
+              case None                 => Vector(ExecutionEnvironment.DefaultVersion)
               case other =>
                 throw new Exception(s"expected 'version' to be a string, not ${other}")
             }
-            ExecutionEnvironment(distribution, release, version)
+            ExecutionEnvironment(distribution, release, versions)
           case other =>
             throw new Exception(s"invalid os specification ${other}")
         }

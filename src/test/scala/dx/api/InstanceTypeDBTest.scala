@@ -105,7 +105,9 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
        |""".stripMargin.trim
 
   private val ExecutionEnvironments = Vector(
-      ExecutionEnvironment(Constants.OsDistribution, Constants.OsRelease, Constants.OsVersion)
+      ExecutionEnvironment(Constants.OsDistribution,
+                           Constants.OsRelease,
+                           Vector(Constants.OsVersion))
   )
 
   // Create an availble instance list based on a hard coded list

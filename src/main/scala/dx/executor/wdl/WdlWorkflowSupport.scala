@@ -157,12 +157,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       env: Map[String, (T, V)]
   ): Map[String, (T, V)] = {
     elements.foldLeft(Map.empty[String, (T, V)]) {
-      case (accu, TAT.PrivateVariable(name, wdlType, exprOpt, _)) =>
-        val value = exprOpt match {
-          case Some(expr) =>
-            evaluateExpression(expr, wdlType, accu ++ env)
-          case None => V_Null
-        }
+      case (accu, TAT.PrivateVariable(name, wdlType, expr, _)) =>
+        val value = evaluateExpression(expr, wdlType, accu ++ env)
         accu + (name -> (wdlType, value))
       case (accu, TAT.Conditional(expr, body, _)) =>
         // evaluate the condition
