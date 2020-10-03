@@ -314,11 +314,11 @@ case class WdlBlock(index: Int,
   override lazy val prettyFormat: String = {
     val inputStr = inputs.map(WdlBlockInput.prettyFormat(_))
     val outputStr = outputs.map(TypeUtils.prettyFormatOutput(_))
-    val bodyStr = elements.map(WdlUtils.prettyFormat(_)).mkString("\n")
+    val bodyStr = elements.map(WdlUtils.prettyFormatElement(_)).mkString("\n")
     s"""Block(${index}, ${kind})
-       |Inputs: ${inputStr}
-       |Outputs: ${outputStr}
-       |Body:
+       |  Inputs: ${inputStr}
+       |  Outputs: ${outputStr}
+       |  Body:
        |${bodyStr}""".stripMargin
   }
 }

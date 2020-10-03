@@ -151,8 +151,14 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     }.toMap
   }
 
-  // This method is exposed so that we can unit-test it.
-  private[wdl] def evaluateWorkflowElements(
+  /**
+    * Recursively evaluate PrivateVariables in WorkflowElements.
+    * This method is exposed so that we can unit-test it.
+    * @param elements WorkflowElements
+    * @param env initial environment
+    * @return values from all nested variables
+    */
+  private[wdl] def evaluateWorkflowElementVariables(
       elements: Seq[TAT.WorkflowElement],
       env: Map[String, (T, V)]
   ): Map[String, (T, V)] = {
@@ -165,7 +171,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         val results = evaluateExpression(expr, expr.wdlType, accu ++ env) match {
           case V_Boolean(true) =>
             // condition is true, evaluate the internal block.
-            evaluateWorkflowElements(body, accu ++ env).map {
+            evaluateWorkflowElementVariables(body, accu ++ env).map {
               case (key, (t, value)) => key -> (T_Optional(t), V_Optional(value))
             }
           case V_Boolean(false) =>
@@ -191,7 +197,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         val outputValues: Vector[Vector[V]] =
           collection.map { v =>
             val envInner = accu ++ env + (id -> (expr.wdlType, v))
-            val bodyValues = evaluateWorkflowElements(body, envInner)
+            val bodyValues = evaluateWorkflowElementVariables(body, envInner)
             outputNames.map(bodyValues(_)._2)
           }.transpose
         // Add the WDL array type to each vector
@@ -887,6 +893,17 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       }
       prepareBlockOutputs(outputs)
     }
+
+    override lazy val prettyFormat: String = {
+      val envStr = if (env.isEmpty) {
+        " <empty>"
+      } else {
+        s"\n${WdlUtils.prettyFormatEnv(env)}"
+      }
+      s"""${block.prettyFormat}
+         |Env:${envStr}
+         |""".stripMargin
+    }
   }
 
   override def evaluateBlockInputs(
@@ -901,8 +918,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         blockInput.name -> jobInputs(blockInput.name)
     }.toMap
     val inputEnv = WdlUtils.fromIR(irInputEnv, wdlTypeAliases)
-    val envWithPrereqs = evaluateWorkflowElements(block.prerequisites, inputEnv)
-    WdlBlockContext(block, envWithPrereqs)
+    val prereqEnv = evaluateWorkflowElementVariables(block.prerequisites, inputEnv)
+    WdlBlockContext(block, inputEnv ++ prereqEnv)
   }
 }
 

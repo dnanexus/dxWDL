@@ -180,7 +180,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val env = Map.empty[String, (WdlTypes.T, WdlValues.V)]
     val results: Map[String, (WdlTypes.T, WdlValues.V)] = wfExecutor.workflowSupport match {
-      case supp: WdlWorkflowSupport => supp.evaluateWorkflowElements(block.elements, env)
+      case supp: WdlWorkflowSupport => supp.evaluateWorkflowElementVariables(block.elements, env)
       case _                        => throw new Exception("expected WdlWorkflowSupport")
     }
     results.keys should be(Set("names", "full_name"))
@@ -222,7 +222,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val env = Map.empty[String, (WdlTypes.T, WdlValues.V)]
     val results: Map[String, (WdlTypes.T, WdlValues.V)] = wfExecutor.workflowSupport match {
-      case supp: WdlWorkflowSupport => supp.evaluateWorkflowElements(block.elements, env)
+      case supp: WdlWorkflowSupport => supp.evaluateWorkflowElementVariables(block.elements, env)
       case _                        => throw new Exception("expected WdlWorkflowSupport")
     }
     results should be(
@@ -248,7 +248,8 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val results: Map[String, (WdlTypes.T, WdlValues.V)] = wfExecutor.workflowSupport match {
       case supp: WdlWorkflowSupport =>
-        supp.evaluateWorkflowElements(block.elements, Map.empty[String, (WdlTypes.T, WdlValues.V)])
+        supp.evaluateWorkflowElementVariables(block.elements,
+                                              Map.empty[String, (WdlTypes.T, WdlValues.V)])
       case _ => throw new Exception("expected WdlWorkflowSupport")
     }
     results should be(
@@ -291,8 +292,10 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     // Make sure an exception is thrown if eval-expressions is called with
     // a wdl-call.
     assertThrows[Exception] {
-      wdlWorkflowSupport.evaluateWorkflowElements(subBlocks(1).elements,
-                                                  Map.empty[String, (WdlTypes.T, WdlValues.V)])
+      wdlWorkflowSupport.evaluateWorkflowElementVariables(
+          subBlocks(1).elements,
+          Map.empty[String, (WdlTypes.T, WdlValues.V)]
+      )
     }
   }
 
@@ -308,8 +311,8 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
     val wfExecutor = createWorkflowExecutor(workerPaths, path)
     val results: Map[String, (WdlTypes.T, WdlValues.V)] = wfExecutor.workflowSupport match {
       case supp: WdlWorkflowSupport =>
-        supp.evaluateWorkflowElements(subBlocks(0).elements,
-                                      Map.empty[String, (WdlTypes.T, WdlValues.V)])
+        supp.evaluateWorkflowElementVariables(subBlocks(0).elements,
+                                              Map.empty[String, (WdlTypes.T, WdlValues.V)])
       case _ => throw new Exception("expected WdlWorkflowSupport")
     }
     results.keys should be(Set("powers10", "i1", "i2", "i3"))
@@ -434,8 +437,8 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
       case _                        => throw new Exception("expected WdlWorkflowSupport")
     }
     val results =
-      wfSupport.evaluateWorkflowElements(subBlocks(0).elements,
-                                         Map.empty[String, (WdlTypes.T, WdlValues.V)])
+      wfSupport.evaluateWorkflowElementVariables(subBlocks(0).elements,
+                                                 Map.empty[String, (WdlTypes.T, WdlValues.V)])
     results.keys should be(
         Set("a", "b", "tot_height", "tot_num_floors", "streets", "cities", "tot")
     )

@@ -9,7 +9,7 @@ import dx.core.ir.Value._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
 import spray.json.{JsBoolean, JsObject, JsString, JsValue}
-import wdlTools.eval.Coercion
+import wdlTools.eval.{Coercion, EvalUtils}
 import wdlTools.eval.WdlValues._
 import wdlTools.syntax.{Parsers, SourceLocation, SyntaxException, WdlParser, WdlVersion}
 import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
@@ -999,13 +999,13 @@ object WdlUtils {
       }
   }
 
-  def prettyFormat(element: TAT.WorkflowElement, indent: String = "    "): String = {
+  def prettyFormatElement(element: TAT.WorkflowElement, indent: String = "    "): String = {
     element match {
       case TAT.Scatter(varName, expr, body, _) =>
         val collection = TypeUtils.prettyFormatExpr(expr)
         val innerBlock = body
           .map { innerElement =>
-            prettyFormat(innerElement, indent + "  ")
+            prettyFormatElement(innerElement, indent + "  ")
           }
           .mkString("\n")
         s"""|${indent}scatter (${varName} in ${collection}) {
@@ -1017,7 +1017,7 @@ object WdlUtils {
         val innerBlock =
           body
             .map { innerElement =>
-              prettyFormat(innerElement, indent + "  ")
+              prettyFormatElement(innerElement, indent + "  ")
             }
             .mkString("\n")
         s"""|${indent}if (${TypeUtils.prettyFormatExpr(expr)}) {
@@ -1045,6 +1045,15 @@ object WdlUtils {
       case TAT.PrivateVariable(_, wdlType, expr, _) =>
         s"${indent} ${TypeUtils.prettyFormatType(wdlType)} = ${TypeUtils.prettyFormatExpr(expr)}"
     }
+  }
+
+  def prettyFormatEnv(env: Map[String, (T, V)], indent: String = "  "): String = {
+    env
+      .map {
+        case (name, (t, v)) =>
+          s"${indent}${name}: ${TypeUtils.prettyFormatType(t)} ${EvalUtils.prettyFormat(v)}"
+      }
+      .mkString("\n")
   }
 }
 

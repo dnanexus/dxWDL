@@ -22,6 +22,8 @@ trait BlockContext[B <: Block[B]] {
   def continue(): Map[String, ParameterLink]
 
   def collect(): Map[String, ParameterLink]
+
+  def prettyFormat(): String
 }
 
 object WorkflowSupport {
@@ -216,7 +218,7 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
     val blockCtx = workflowSupport.evaluateBlockInputs(jobInputs)
     logger.traceLimited(
         s"""|Block ${jobMeta.blockPath} to execute:
-            |${blockCtx.block.prettyFormat}
+            |${blockCtx.prettyFormat()}
             |""".stripMargin
     )
     blockCtx
