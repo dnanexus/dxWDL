@@ -47,11 +47,43 @@ object Parameter {
     * @return
     */
   def encodeDots(name: String): String = {
-    name.replaceAll("\\.", ComplexValueKey)
+    if (name.endsWith(".")) {
+      throw new Exception(s"${name} ends with a '.'")
+    }
+    val parts = name.split("\\.")
+    if (parts.size == 1) {
+      return name
+    }
+    // check that none of the individual words start/end with '_',
+    // which will cause problems when decoding
+    if (parts.drop(1).exists(_.endsWith("_")) || parts.tail.exists(_.startsWith("_"))) {
+      throw new Exception(s"Cannot encode value ${name} - cannot have '_' next to '.'")
+    }
+    parts.mkString(ComplexValueKey)
   }
 
-  def decodeDots(varName: String): String = {
-    varName.replaceAll(ComplexValueKey, "\\.")
+  def decodeDots(name: String): String = {
+    if (name.contains(".")) {
+      throw new Exception(s"Encoded value ${name} contains '.'")
+    }
+    val parts = name.split(ComplexValueKey)
+    if (parts.size == 1) {
+      return name
+    }
+    // check that none of the individual words start/end with '_'
+    if (parts.drop(1).exists(_.endsWith("_")) || parts.tail.exists(_.startsWith("_"))) {
+      throw new Exception(
+          s"Cannot decode value ${name} - more than three consecutive underscores"
+      )
+    }
+    val decoded = parts.mkString(".")
+    if (name.endsWith(ComplexValueKey)) {
+      // some special parameter names end with '___' - add this back on
+      // after decoding
+      s"${decoded}${ComplexValueKey}"
+    } else {
+      decoded
+    }
   }
 }
 

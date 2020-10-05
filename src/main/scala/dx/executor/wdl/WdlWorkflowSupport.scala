@@ -156,7 +156,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     * This method is exposed so that we can unit-test it.
     * @param elements WorkflowElements
     * @param env initial environment
-    * @return values from all nested variables
+    * @return values from all nested variables (not including the initial env)
     */
   private[wdl] def evaluateWorkflowElementVariables(
       elements: Seq[TAT.WorkflowElement],
@@ -617,7 +617,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     private def prepareScatterResults(dxSubJob: DxExecution): Map[String, ParameterLink] = {
       val resultTypes: Map[String, Type] = block.outputs.map {
         case TAT.OutputParameter(name, wdlType, _, _) =>
-          name -> TArray(WdlUtils.toIRType(wdlType))
+          name -> WdlUtils.toIRType(wdlType)
       }.toMap
       // Return JBORs for all the outputs. Since the signature of the sub-job
       // is exactly the same as the parent, we can immediately exit the parent job.
@@ -660,7 +660,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       // Run a sub-job with the "continue" entry point.
       // We need to provide the exact same inputs.
       val dxSubJob: DxExecution = dxApi.runSubJob(
-          "continue",
+          "collect",
           Some(jobMeta.instanceTypeDb.defaultInstanceType.name),
           JsObject(jobMeta.jsInputs),
           childJobs,
