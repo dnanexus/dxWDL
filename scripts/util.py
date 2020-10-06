@@ -18,7 +18,7 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
-dxda_version = "v0.5.3"
+dxda_version = "v0.5.4"
 dxfuse_version = "v0.22.4"
 max_num_retries = 5
 
