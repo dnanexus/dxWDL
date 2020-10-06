@@ -103,7 +103,7 @@ public class DXHTTPRequest {
 
     private final boolean disableRetry;
 
-    private static final int NUM_RETRIES = 6;
+    private static final int NUM_RETRIES = 10;
 
     private static final DXEnvironment defaultEnv = DXEnvironment.create();
 
