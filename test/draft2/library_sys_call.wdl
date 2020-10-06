@@ -86,7 +86,7 @@ task Colocation {
     File B
 
     command <<<
-python <<CODE
+python3 <<CODE
 import os
 dir_path_A = os.path.dirname("${A}")
 dir_path_B = os.path.dirname("${B}")

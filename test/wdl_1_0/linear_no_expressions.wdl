@@ -35,7 +35,7 @@ task op {
         Int b
     }
     command {
-        python -c "print(~{a} + ~{b} + 1)"
+        python3 -c "print(~{a} + ~{b} + 1)"
     }
     output {
         Int result = read_int(stdout())

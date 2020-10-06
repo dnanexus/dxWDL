@@ -30,7 +30,7 @@ task SumArray {
         Array[Int] numbers
     }
     command <<<
-        python -c "print(~{sep=" + " numbers})"
+        python3 -c "print(~{sep=" + " numbers})"
     >>>
     output {
         Int result = read_int(stdout())

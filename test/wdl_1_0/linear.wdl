@@ -56,7 +56,7 @@ task inc {
     }
 
     command {
-        python -c "print(~{i} + 1)"
+        python3 -c "print(~{i} + 1)"
     }
     output {
         Int result = read_int(stdout())

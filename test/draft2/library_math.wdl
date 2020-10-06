@@ -5,7 +5,7 @@ task z_add {
     Int b
 
     command <<<
-        python -c "print((${a} + ${b}) % ${n})"
+        python3 -c "print((${a} + ${b}) % ${n})"
     >>>
     output {
         Int result = read_int(stdout())
@@ -18,7 +18,7 @@ task z_sub {
     Int b
 
     command <<<
-        python -c "print((${a} - ${b}) % ${n})"
+        python3 -c "print((${a} - ${b}) % ${n})"
     >>>
     output {
         Int result = read_int(stdout())
@@ -31,7 +31,7 @@ task z_mul {
     Int b
 
     command <<<
-        python -c "print((${a} * ${b}) % ${n})"
+        python3 -c "print((${a} * ${b}) % ${n})"
     >>>
     output {
         Int result = read_int(stdout())

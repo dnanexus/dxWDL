@@ -7,7 +7,7 @@ version 1.0
 task createTsv {
     # Use python to create a string parsed into a wdl Array[Array[String]]
     command<<<
-    python <<CODE
+    python3 <<CODE
     tsv_list = []
     ll = [["1"], ["2"], ["3", "4"], ["5"], ["6", "7", "8"]]
     for l in ll:
