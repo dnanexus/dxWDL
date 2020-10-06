@@ -39,9 +39,11 @@ trait TaskSupport {
   def writeCommandScript(localizedInputs: Map[String, JsValue]): Map[String, JsValue]
 
   /**
-    * Evaluates the outputs of the task and write them to the meta file.
-    * @param localizedInputs the execution context
-    * @param fileSourceToPath mapping of file sources to local paths
+    * Evaluates the outputs of the task, uploads and de-localizes output files,
+    * and write outputs to the meta file.
+    * @param localizedInputs the job inputs, with files localized to the worker
+    * @param fileSourceToPath mapping of original file sources to localized paths
+    * @param fileUploader FileUploader
     */
   def evaluateOutputs(localizedInputs: Map[String, JsValue],
                       fileSourceToPath: Map[FileNode, Path],

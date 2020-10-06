@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import dx.api.{DxJob, DxPath}
 import dx.core.io.{
-  DxFileAccessProtocol,
   DxFileSource,
   DxdaManifest,
   DxdaManifestBuilder,
@@ -342,24 +341,26 @@ case class WdlTaskSupport(task: TAT.Task,
   private lazy val outputDefs: Map[String, TAT.OutputParameter] =
     task.outputs.map(d => d.name -> d).toMap
 
-  private def extractOutputFiles(name: String, v: V, t: T): Vector[Path] = {
-    def getPath(fs: FileNode, optional: Boolean): Vector[Path] = {
-      // use valuePath rather than localPath - the former will match the original path
-      // while the latter will have been cannonicalized
+  private def extractOutputFiles(name: String, v: V, t: T): Vector[FileNode] = {
+    def getFileNode(varName: String, fs: FileNode, optional: Boolean): Vector[FileNode] = {
       fs match {
-        case localFs: LocalFileSource if optional && !Files.exists(localFs.originalPath) =>
+        case localFs: LocalFileSource if optional && !Files.exists(localFs.localPath) =>
           // ignore optional, non-existent files
           Vector.empty
-        case localFs: LocalFileSource if !Files.exists(localFs.originalPath) =>
-          throw new Exception(s"required output file ${name} does not exist")
+        case localFs: LocalFileSource if !Files.exists(localFs.localPath) =>
+          throw new Exception(
+              s"required output file ${varName} does not exist at ${localFs.localPath}"
+          )
         case localFs: LocalFileSource =>
-          Vector(localFs.originalPath)
+          Vector(localFs)
         case other =>
-          throw new RuntimeException(s"Non-local file: ${other}")
+          throw new RuntimeException(s"${varName} specifies non-local file ${other}")
       }
     }
 
-    def extractStructFiles(values: Map[String, V], types: Map[String, T]): Vector[Path] = {
+    def extractStructFiles(structName: String,
+                           values: Map[String, V],
+                           types: Map[String, T]): Vector[FileNode] = {
       types.flatMap {
         case (key, t) =>
           (t, values.get(key)) match {
@@ -368,111 +369,144 @@ case class WdlTaskSupport(task: TAT.Task,
             case (_, None) =>
               throw new Exception(s"missing non-optional member ${key} of struct ${name}")
             case (_, Some(v)) =>
-              inner(v, t, optional = false)
+              inner(s"${structName}.${key}", v, t, optional = false)
           }
       }.toVector
     }
 
-    def inner(innerValue: V, innerType: T, optional: Boolean): Vector[Path] = {
+    def inner(innerName: String,
+              innerValue: V,
+              innerType: T,
+              optional: Boolean): Vector[FileNode] = {
       (innerType, innerValue) match {
         case (T_Optional(_), V_Null) =>
           Vector.empty
         case (T_Optional(optType), V_Optional(optValue)) =>
-          inner(optValue, optType, optional = true)
+          inner(innerName, optValue, optType, optional = true)
         case (T_Optional(optType), _) =>
-          inner(innerValue, optType, optional = true)
+          inner(innerName, innerValue, optType, optional = true)
         case (T_File, V_File(path)) =>
-          getPath(fileResolver.resolve(path), optional)
+          getFileNode(innerName, fileResolver.resolve(path), optional)
         case (T_File, V_String(path)) =>
-          getPath(fileResolver.resolve(path), optional)
+          getFileNode(innerName, fileResolver.resolve(path), optional)
         case (T_Array(_, nonEmpty), V_Array(array)) if nonEmpty && array.isEmpty =>
           throw new Exception(s"Non-empty array ${name} has empty value")
         case (T_Array(elementType, _), V_Array(array)) =>
-          array.flatMap(inner(_, elementType, optional = false))
+          array.zipWithIndex.flatMap {
+            case (element, index) =>
+              inner(s"${innerName}[${index}]", element, elementType, optional = false)
+          }
         case (T_Map(keyType, valueType), V_Map(map)) =>
           map.flatMap {
             case (key, value) =>
-              inner(key, keyType, optional = false) ++ inner(value, valueType, optional = false)
+              val keyFiles = inner(s"${innerName}.${key}", key, keyType, optional = false)
+              val valueFiles = inner(s"${innerName}.${value}", value, valueType, optional = false)
+              keyFiles ++ valueFiles
           }.toVector
         case (T_Pair(leftType, rightType), V_Pair(left, right)) =>
-          inner(left, leftType, optional = false) ++ inner(right, rightType, optional = false)
+          val leftFiles = inner(s"${innerName}.left", left, leftType, optional = false)
+          val rightFiles = inner(s"${innerName}.right", right, rightType, optional = false)
+          leftFiles ++ rightFiles
         case (T_Struct(typeName, _), V_Struct(valueName, _)) if typeName != valueName =>
           throw new Exception(s"struct ${name} type ${typeName} does not match value ${valueName}")
-        case (T_Struct(_, memberTypes), V_Struct(_, members)) =>
-          extractStructFiles(members, memberTypes)
-        case (T_Struct(_, memberTypes), V_Object(members)) =>
-          extractStructFiles(members, memberTypes)
+        case (T_Struct(name, memberTypes), V_Struct(_, members)) =>
+          extractStructFiles(name, members, memberTypes)
+        case (T_Struct(name, memberTypes), V_Object(members)) =>
+          extractStructFiles(name, members, memberTypes)
         case (T_Object, V_Object(members)) =>
-          members.values.flatMap(extractFiles).flatMap(getPath(_, optional = true)).toVector
+          members.flatMap {
+            case (key, value) =>
+              val files = extractFiles(value)
+              files.flatMap(fs => getFileNode(s"${innerName}.${key}", fs, optional = true))
+          }.toVector
         case _ =>
           Vector.empty
       }
     }
-    inner(v, t, optional = false)
+    inner(name, v, t, optional = false)
   }
 
   override def evaluateOutputs(localizedInputs: Map[String, JsValue],
                                fileSourceToPath: Map[FileNode, Path],
                                fileUploader: FileUploader): Unit = {
-    val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
-    val inputValues = inputs.map {
+    val localizedWdlInputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
+
+    // Evaluate the output parameters in dependency order.
+    // These will include output files without canonicalized paths, which is why we need
+    // the following complex logic to match up local outputs to remote URIs.
+    val localizedOutputs: WdlValueBindings = getOutputs(localizedWdlInputs.map {
       case (name, (_, v)) => name -> v
-    }
+    })
 
-    // Evaluate the output parameters in dependency order
-    val outputsLocal: WdlValueBindings = getOutputs(inputValues)
-
-    // We have task outputs, where files are stored locally. Upload the files to
-    // the cloud, and replace the WdlValues.Vs with dxURLs.
-    // Special cases:
-    // 1) If a file is already on the cloud, do not re-upload it. The content has not
-    // changed because files are immutable.
-    // 2) A file that was initially local, does not need to be uploaded.
-    val localOutputFiles: Set[Path] = outputsLocal.toMap.flatMap {
+    // extract files from the outputs
+    val localOutputFileSources: Vector[FileNode] = localizedOutputs.toMap.flatMap {
       case (name, value) =>
         val outputDef = outputDefs(name)
         extractOutputFiles(name, value, outputDef.wdlType)
+    }.toVector
+
+    // Build a map of all the string values in the output values that might
+    // map to the same (absolute) local path. Some of the outputs may be files
+    // that were inputs (in `fileSourceToPath`) - these do not need to be
+    // re-uploaded. The `localPath`s will be the same but the `originalPath`s
+    // may be different.
+    val inputPaths: Set[Path] = fileSourceToPath.flatMap {
+      case (fs, path) => Set(fs.localPath, path)
     }.toSet
-    val localInputFiles: Set[Path] = fileSourceToPath.collect {
-      case (_: LocalFileSource, path) => path
-    }.toSet
-    val remoteFiles = fileSourceToPath.values.toSet
-    val toUpload = localOutputFiles.diff(localInputFiles | remoteFiles)
-    val uploadedPathToFileSource = fileUploader.upload(toUpload).map {
-      case (path, dxFile) =>
-        path -> DxFileAccessProtocol.fromDxFile(dxFile, fileResolver.protocols)
-    }
-    val alreadyRemotePathToFileSource = fileSourceToPath.map {
-      case (path, fileSource) => fileSource -> path
-    }
-    val allRemotePathToFileSource = alreadyRemotePathToFileSource ++ uploadedPathToFileSource
-    val pathToUri = allRemotePathToFileSource.map {
-      case (path, fs: AddressableFileSource) => path.toString -> fs.address
-      case (_, other)                        => throw new RuntimeException(s"Cannot translate ${other}")
+    val delocalizingValueToPath: Map[String, Path] = localOutputFileSources
+      .collect {
+        case fs: AddressableFileSource if !inputPaths.contains(fs.localPath) =>
+          Map(fs.address -> fs.localPath, fs.localPath.toString -> fs.localPath)
+      }
+      .flatten
+      .toMap
+
+    // upload the files, and map their local paths to their remote URIs
+    val delocalizedPathToUri: Map[Path, String] =
+      fileUploader.upload(delocalizingValueToPath.values.toSet).map {
+        case (path, dxFile) => path -> dxFile.asUri
+      }
+
+    // Replace the local paths in the output values with URIs. For files that
+    // were inputs, we can resolve them using a mapping of input values to URIs;
+    // for files that were generated on the worker, this requires two look-ups:
+    // first to get the absoulte Path associated with the file value (which may
+    // be relative or absolute), and second to get the URI associated with the
+    // Path. Returns an Optional[String] because optional outputs may be null.
+    val inputValueToUri = fileSourceToPath
+      .collect {
+        case (fs: AddressableFileSource, path) =>
+          Map(fs.address -> fs.address, path.toString -> fs.address)
+      }
+      .flatten
+      .toMap
+    def resolveFileValue(value: String): Option[String] = {
+      inputValueToUri
+        .get(value)
+        .orElse(delocalizingValueToPath.get(value) match {
+          case Some(path) => delocalizedPathToUri.get(path)
+          case _          => None
+        })
     }
 
-    // Replace the URIs with local file paths
     def pathTranslator(v: V): Option[V] = {
       v match {
-        case V_File(localPath) =>
-          pathToUri.get(localPath) match {
+        case V_File(value) =>
+          resolveFileValue(value) match {
             case Some(uri) => Some(V_File(uri))
             case None =>
-              throw new Exception(s"Did not localize file ${localPath}")
+              throw new Exception(s"Did not delocalize file ${value}")
           }
-        case V_Optional(V_File(localPath)) =>
-          pathToUri.get(localPath) match {
-            case Some(uri) =>
-              Some(V_Optional(V_File(uri)))
-            case None =>
-              Some(V_Null)
+        case V_Optional(V_File(value)) =>
+          resolveFileValue(value) match {
+            case Some(uri) => Some(V_Optional(V_File(uri)))
+            case None      => Some(V_Null)
           }
         case _ => None
       }
     }
 
-    // replace local paths with URIs in outputs, and convert the outputs to IR
-    val remoteOutputs = outputsLocal.bindings.map {
+    val delocalizedOutputs = localizedOutputs.bindings.map {
       case (name, value) =>
         val wdlType = outputDefs(name).wdlType
         val irType = WdlUtils.toIRType(wdlType)
@@ -482,7 +516,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
 
     // serialize the outputs to the job output file
-    jobMeta.writeOutputs(remoteOutputs)
+    jobMeta.writeOutputs(delocalizedOutputs)
   }
 
   override def linkOutputs(subjob: DxJob): Unit = {
