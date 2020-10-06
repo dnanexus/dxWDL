@@ -34,7 +34,7 @@ case class WdlNativeInterfaceGenerator(wdlVersion: WdlVersion,
       outputSpec: Map[String, WdlTypes.T],
       loc: SourceLocation = WdlUtils.locPlaceholder
   ): TAT.Task = {
-    // DNAnexus allows '-' in app(let) names, WDL does not
+    // DNAnexus allows '-' and '.' in app(let) names, WDL does not
     val normalizedName = appletName.replaceAll("[-.]", "_")
     val meta = TAT.MetaSection(
         Map(

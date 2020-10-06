@@ -4,16 +4,17 @@ import spray.json.{JsArray, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsV
 
 case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
   private def parseDescribe(id: String, jsv: JsValue): DxAppDescribe = {
-    val name: String = jsv.asJsObject.fields.get("name") match {
+    val fields = jsv.asJsObject.fields
+    val name: String = fields.get("name") match {
       case None                 => throw new Exception("name field missing")
       case Some(JsString(name)) => name
       case other                => throw new Exception(s"malformed name field ${other}")
     }
-    val properties: Map[String, String] = jsv.asJsObject.fields.get("properties") match {
+    val properties: Map[String, String] = fields.get("properties") match {
       case None        => Map.empty
       case Some(props) => DxObject.parseJsonProperties(props)
     }
-    val inputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
+    val inputSpec: Option[Vector[IOParameter]] = fields.get("inputSpec") match {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(iSpecVec)) =>
@@ -21,7 +22,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
       case Some(other) =>
         throw new Exception(s"malformed inputSpec field ${other}")
     }
-    val outputSpec: Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("outputSpec") match {
+    val outputSpec: Option[Vector[IOParameter]] = fields.get("outputSpec") match {
       case None         => None
       case Some(JsNull) => None
       case Some(JsArray(oSpecVec)) =>
@@ -29,20 +30,19 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
       case Some(other) =>
         throw new Exception(s"malformed output field ${other}")
     }
-    val created: Long = jsv.asJsObject.fields.get("created") match {
+    val created: Long = fields.get("created") match {
       case None                 => throw new Exception("'created' field is missing")
       case Some(JsNumber(date)) => date.toLong
       case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
-    val modified: Long = jsv.asJsObject.fields.get("modified") match {
+    val modified: Long = fields.get("modified") match {
       case None                 => throw new Exception("'modified' field is missing")
       case Some(JsNumber(date)) => date.toLong
       case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
-    val details: Option[JsValue] = jsv.asJsObject.fields.get("details")
+    val details: Option[JsValue] = fields.get("details")
 
     DxAppDescribe(id, name, created, modified, Some(properties), details, inputSpec, outputSpec)
-
   }
 
   private def parseOneResult(jsv: JsValue): DxApp = {
@@ -69,16 +69,16 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Vector[DxApp], Option[JsValue]) = {
-    val fields = Set(Field.Name, Field.Properties) ++ extraFields ++ (
+    val descFields = Set(Field.Name, Field.Properties) ++ extraFields ++ (
         if (withInputOutputSpec) {
           Set(Field.InputSpec, Field.OutputSpec)
         } else {
           Set.empty
         }
     )
-    val requestFields = Map(
+    val requiredFields = Map(
         "visibility" -> JsString("either"),
-        "describe" -> DxObject.requestFields(fields),
+        "describe" -> DxObject.requestFields(descFields),
         "limit" -> JsNumber(limit.getOrElse(dxApi.limit))
     )
     val cursorField = cursor match {
@@ -118,7 +118,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
         }))
       }
     val response = dxApi.findApps(
-        requestFields ++ cursorField ++ publishedField ++ propertiesField ++ nameField ++ idField
+        requiredFields ++ cursorField ++ publishedField ++ propertiesField ++ nameField ++ idField
     )
     val next: Option[JsValue] = response.fields.get("next") match {
       case None                  => None
@@ -127,8 +127,8 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
       case Some(other)           => throw new Exception(s"malformed ${other.prettyPrint}")
     }
     val results = response.fields.get("results") match {
-      case None                   => throw new Exception(s"missing results field ${response}")
       case Some(JsArray(results)) => results.map(parseOneResult)
+      case None                   => throw new Exception(s"missing results field ${response}")
       case Some(other)            => throw new Exception(s"malformed results field ${other.prettyPrint}")
     }
     (results, next)
@@ -141,7 +141,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
     * @param nameConstraints object name has to be one of these strings
     * @param withInputOutputSpec should the IO spec be described?
     * @param idConstraints object must have one of these IDs
-    * @param extrafields describe these extra fields
+    * @param extraFields describe these extra fields
     * @return
     */
   def apply(published: Option[Boolean] = None,
@@ -149,7 +149,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
             nameConstraints: Vector[String] = Vector.empty,
             withInputOutputSpec: Boolean,
             idConstraints: Vector[String] = Vector.empty,
-            extrafields: Set[Field.Value] = Set.empty): Vector[DxApp] = {
+            extraFields: Set[Field.Value] = Set.empty): Vector[DxApp] = {
     var allResults = Set.empty[DxApp]
     var cursor: Option[JsValue] = None
     do {
@@ -159,7 +159,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
                                           nameConstraints,
                                           withInputOutputSpec,
                                           idConstraints,
-                                          extrafields)
+                                          extraFields)
       allResults = allResults ++ results
       cursor = next
     } while (cursor.isDefined)

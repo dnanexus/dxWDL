@@ -63,9 +63,9 @@ case class DxNativeInterface(fileResolver: FileSourceResolver = FileSourceResolv
                extraFields = Set(Field.Tags))
         .collect {
           // ignore any applets with the compiler tag set - it indicates an applet
-          // that was compiled with dxCompiler (and thus not "native"
+          // that was compiled with dxCompiler (and thus not "native")
           case (applet: DxApplet, desc: DxAppletDescribe)
-              if !desc.tags.exists(_.contains(Constants.CompilerTag)) =>
+              if !desc.tags.get.contains(Constants.CompilerTag) =>
             applet
         }
         .toVector

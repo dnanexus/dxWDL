@@ -76,10 +76,14 @@ object Main {
     s"""|java -jar dxWDL.jar <task|workflow> <action> <rootdir> [options]
         |
         |Options:
-        |    -traceLevel [0,1,2] How much debug information to write to the
-        |                        job log at runtime. Zero means write the minimum,
-        |                        one is the default, and two is for internal debugging.
-        |    -streamAllFiles     Mount all files with dxfuse, do not use the download agent
+        |    -streamAllFiles        Mount all files with dxfuse, do not use the download agent
+        |    -traceLevel [0,1,2]    How much debug information to write to the
+        |                           job log at runtime. Zero means write the minimum,
+        |                           one is the default, and two is for internal debugging.
+        |    -quiet                 Do not print warnings or informational outputs
+        |    -verbose               Print detailed progress reports
+        |    -verboseKey <module>   Detailed information for a specific module
+        |    -logFile <path>        File to use for logging output; defaults to stderr
         |""".stripMargin
 
   def main(args: Vector[String]): Unit = {

@@ -283,7 +283,7 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
         logger.traceLimited(
             s"proj=${jobMeta.projectDesc.name} outFolder=${outputFolder}"
         )
-        val intermediateFolder = s"outputFolder/${WorkflowExecutor.IntermediateResultsFolder}"
+        val intermediateFolder = s"${outputFolder}/${WorkflowExecutor.IntermediateResultsFolder}"
         val project = jobMeta.project
         val folderContents: FolderContents = project.listFolder(outputFolder)
         if (!folderContents.subFolders.contains(intermediateFolder)) {

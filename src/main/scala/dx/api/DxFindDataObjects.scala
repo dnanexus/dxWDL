@@ -35,6 +35,14 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
     }
     val properties: Map[String, String] =
       fields.get("properties").map(DxObject.parseJsonProperties).getOrElse(Map.empty)
+    val tags = fields.get("tags").flatMap {
+      case JsArray(array) =>
+        Some(array.map {
+          case JsString(s) => s
+          case other       => throw new Exception(s"invalid tag ${other}")
+        }.toSet)
+      case _ => None
+    }
     val inputSpec: Option[Vector[IOParameter]] = fields.get("inputSpec") match {
       case Some(JsArray(iSpecVec)) =>
         Some(iSpecVec.map(iSpec => IOParameter.parseIoParam(dxApi, iSpec)))
@@ -71,7 +79,8 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
                          Some(properties),
                          details,
                          inputSpec,
-                         outputSpec)
+                         outputSpec,
+                         tags = tags)
       case _: DxWorkflow =>
         DxAppletDescribe(dxProject.id,
                          dxobj.id,
@@ -82,7 +91,8 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
                          Some(properties),
                          details,
                          inputSpec,
-                         outputSpec)
+                         outputSpec,
+                         tags = tags)
       case _: DxFile =>
         val archivalState = fields.get("archivalState") match {
           case Some(JsString(x)) => DxArchivalState.withNameIgnoreCase(x)
