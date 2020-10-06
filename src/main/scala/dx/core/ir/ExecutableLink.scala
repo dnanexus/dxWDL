@@ -1,9 +1,8 @@
 package dx.core.ir
 
 import dx.api.{DxApi, DxExecutable}
+import dx.core.ir.Type.TSchema
 import spray.json.{JsObject, JsString, JsValue}
-
-import scala.collection.immutable.TreeMap
 
 /**
   * Information used to link applets that call other applets. For example, a scatter
@@ -20,38 +19,29 @@ case class ExecutableLink(name: String,
 
 object ExecutableLink {
   def serialize(link: ExecutableLink): JsObject = {
-    val inputs: Map[String, JsValue] = link.inputs.map {
-      case (name, wdlType) =>
-        name -> TypeSerde.serialize(wdlType)
-    }
-    val outputs: Map[String, JsValue] = link.outputs.map {
-      case (name, wdlType) => name -> TypeSerde.serialize(wdlType)
-    }
+    val (inputTypes, inputSchemas) = TypeSerde.serializeMap(link.inputs)
+    val (outputTypes, inputAndOutputSchemas) = TypeSerde.serializeMap(link.outputs, inputSchemas)
     JsObject(
         "name" -> JsString(link.name),
-        "inputs" -> JsObject(inputs.to(TreeMap)),
-        "outputs" -> JsObject(outputs.to(TreeMap)),
-        "id" -> JsString(link.dxExec.id)
+        "id" -> JsString(link.dxExec.id),
+        "inputs" -> JsObject(inputTypes),
+        "outputs" -> JsObject(outputTypes),
+        "schemas" -> JsObject(inputAndOutputSchemas)
     )
   }
 
   def deserialize(jsValue: JsValue,
-                  typeAliases: Map[String, Type],
+                  typeAliases: Map[String, TSchema],
                   dxApi: DxApi = DxApi.get): ExecutableLink = {
     jsValue match {
       case JsObject(fields) =>
         val JsString(name) = fields("name")
-        val JsObject(inputs) = fields("inputs")
-        val inputTypes = inputs.map {
-          case (name, jsValue) =>
-            name -> TypeSerde.deserialize(jsValue, typeAliases)
-        }
-        val JsObject(outputs) = fields("outputs")
-        val outputTypes = outputs.map {
-          case (name, jsValue) =>
-            name -> TypeSerde.deserialize(jsValue, typeAliases)
-        }
         val JsString(id) = fields("id")
+        val JsObject(jsSchemas) = fields("schemas")
+        val JsObject(jsInputs) = fields("inputs")
+        val JsObject(jsOutputs) = fields("outputs")
+        val (inputTypes, inputSchemas) = TypeSerde.deserializeMap(jsInputs, jsSchemas, typeAliases)
+        val (outputTypes, _) = TypeSerde.deserializeMap(jsOutputs, jsSchemas, inputSchemas)
         ExecutableLink(name, inputTypes, outputTypes, dxApi.executable(id))
       case _ =>
         throw new Exception(s"Invalid ExecutableLink ${jsValue}")

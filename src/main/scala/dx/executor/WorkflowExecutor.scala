@@ -3,6 +3,7 @@ package dx.executor
 import dx.AppInternalException
 import dx.api.{DxAnalysis, DxApp, DxApplet, DxExecution, DxFile, DxWorkflow, Field, FolderContents}
 import dx.core.io.DxWorkerPaths
+import dx.core.ir.Type.TSchema
 import dx.core.{Constants, getVersion}
 import dx.core.ir.{Block, ExecutableLink, Parameter, ParameterLink, Type, TypeSerde, Value}
 import dx.executor.wdl.WdlWorkflowSupportFactory
@@ -42,7 +43,7 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
     *
     * @return
     */
-  def typeAliases: Map[String, Type]
+  def typeAliases: Map[String, TSchema]
 
   /**
     * Evaluates any expressions in workflow inputs.
@@ -80,14 +81,9 @@ abstract class WorkflowSupport[B <: Block[B]](jobMeta: JobMeta) {
 
   lazy val fqnDictTypes: Map[String, Type] =
     jobMeta.getExecutableDetail(Constants.WfFragmentInputTypes) match {
-      case Some(JsObject(fields)) =>
-        fields.map {
-          case (key, typeJs) =>
-            // Transform back to a fully qualified name with dots
-            val keyDecoded = Parameter.decodeDots(key)
-            val wdlType = TypeSerde.deserialize(typeJs, typeAliases)
-            keyDecoded -> wdlType
-          case other => throw new Exception(s"Bad value ${other}")
+      case Some(jsv) =>
+        TypeSerde.deserialize(jsv, typeAliases).map {
+          case (key, value) => Parameter.decodeDots(key) -> value
         }
       case other =>
         throw new Exception(s"Bad value ${other}")

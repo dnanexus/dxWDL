@@ -340,16 +340,13 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
           Map(
               Constants.ExecLinkInfo -> JsObject(linkInfo.toMap),
               Constants.BlockPath -> JsArray(blockPath.map(JsNumber(_))),
-              Constants.WfFragmentInputTypes -> JsObject(inputs.map {
-                case (k, t) => k -> TypeSerde.serialize(t)
-              }),
+              Constants.WfFragmentInputTypes -> TypeSerde.serialize(inputs),
               Constants.ScatterChunkSize -> JsNumber(scatterChunkSize)
           )
         case ExecutableKindWfInputs | ExecutableKindWfOutputs | ExecutableKindWfCustomReorgOutputs |
             ExecutableKindWorkflowOutputReorg =>
-          Map(Constants.WfFragmentInputTypes -> JsObject(applet.inputVars.map { p =>
-            p.name -> TypeSerde.serialize(p.dxType)
-          }.toMap))
+          val types = applet.inputVars.map(p => p.name -> p.dxType).toMap
+          Map(Constants.WfFragmentInputTypes -> TypeSerde.serialize(types))
         case _ =>
           Map.empty
       }

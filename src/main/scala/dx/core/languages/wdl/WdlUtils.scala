@@ -371,6 +371,11 @@ object WdlUtils {
     fields.size == 2 && fields.keySet == Set(MapKeysKey, MapValuesKey)
   }
 
+  def toIRSchema(wdlStruct: T_Struct): TSchema = {
+    TSchema(wdlStruct.name, wdlStruct.members.map {
+      case (key, value) => key -> toIRType(value)
+    })
+  }
   def toIRType(wdlType: T): Type = {
     wdlType match {
       case T_Boolean     => TBoolean
@@ -383,10 +388,8 @@ object WdlUtils {
       case T_Optional(t) => TOptional(toIRType(t))
       case T_Array(t, nonEmpty) =>
         TArray(toIRType(t), nonEmpty)
-      case T_Struct(name, members) =>
-        TSchema(name, members.map {
-          case (key, value) => key -> toIRType(value)
-        })
+      case struct: T_Struct =>
+        toIRSchema(struct)
       case T_Pair(leftType, rightType) =>
         createPairSchema(toIRType(leftType), toIRType(rightType))
       case T_Map(keyType, valueType) =>
@@ -399,6 +402,12 @@ object WdlUtils {
   def toIRTypeMap(wdlTypes: Map[String, T]): Map[String, Type] = {
     wdlTypes.map {
       case (name, t) => name -> toIRType(t)
+    }
+  }
+
+  def toIRSchemaMap(wdlTypes: Map[String, T_Struct]): Map[String, TSchema] = {
+    wdlTypes.map {
+      case (name, t) => name -> toIRSchema(t)
     }
   }
 

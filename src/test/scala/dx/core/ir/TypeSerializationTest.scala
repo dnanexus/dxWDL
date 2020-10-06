@@ -22,8 +22,9 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
 
   it should "work for various WDL types" in {
     testCases.foreach { t =>
-      val jsv = TypeSerde.serialize(t)
-      TypeSerde.deserialize(jsv, Map.empty) shouldBe t
+      val typeMap = Map("key" -> t)
+      val jsv = TypeSerde.serialize(typeMap)
+      TypeSerde.deserialize(jsv, Map.empty) shouldBe typeMap
     }
   }
 
@@ -39,10 +40,11 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
   )
 
   it should "work for structs" in {
-    val typeAliases: Map[String, Type] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, Type.TSchema] = Map("Person" -> personType, "House" -> houseType)
     structTestCases.foreach { t =>
-      val jsv = TypeSerde.serialize(t)
-      TypeSerde.deserialize(jsv, typeAliases) shouldBe t
+      val typeMap = Map("key" -> t)
+      val jsv = TypeSerde.serialize(typeMap)
+      TypeSerde.deserialize(jsv, typeAliases) shouldBe typeMap
     }
   }
 
@@ -55,10 +57,11 @@ class TypeSerializationTest extends AnyFlatSpec with Matchers {
   )
 
   it should "detect bad type descriptions" in {
-    val typeAliases: Map[String, Type] = Map("Person" -> personType, "House" -> houseType)
+    val typeAliases: Map[String, Type.TSchema] = Map("Person" -> personType, "House" -> houseType)
     badTypes.foreach { jsv =>
       assertThrows[Exception] {
-        TypeSerde.deserialize(jsv, typeAliases)
+        val typeMap = JsObject("key" -> jsv)
+        TypeSerde.deserialize(typeMap, typeAliases)
       }
     }
   }

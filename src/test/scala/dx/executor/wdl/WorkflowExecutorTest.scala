@@ -54,9 +54,9 @@ private case class WorkflowTestJobMeta(override val workerPaths: DxWorkerPaths,
           )
       ),
       Constants.SourceCode -> JsString(CodecUtils.gzipAndBase64Encode(rawSourceCode)),
-      Constants.WfFragmentInputTypes -> JsObject(rawEnv.view.mapValues {
-        case (t, _) => TypeSerde.serialize(WdlUtils.toIRType(t))
-      }.toMap)
+      Constants.WfFragmentInputTypes -> TypeSerde.serialize(WdlUtils.toIRTypeMap(rawEnv.map {
+        case (k, (t, _)) => k -> t
+      }))
   )
 
   override def getExecutableDetail(name: String): Option[JsValue] = executableDetails.get(name)

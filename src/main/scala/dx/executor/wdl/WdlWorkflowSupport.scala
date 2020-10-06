@@ -76,7 +76,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
   )
   private lazy val workflowIO = WorkflowIO(workflow, jobMeta.logger)
 
-  override def typeAliases: Map[String, Type] = WdlUtils.toIRTypeMap(wdlTypeAliases)
+  override def typeAliases: Map[String, TSchema] = WdlUtils.toIRSchemaMap(wdlTypeAliases)
 
   override def evaluateInputs(
       jobInputs: Map[String, (Type, Value)]
