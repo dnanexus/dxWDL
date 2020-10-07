@@ -383,7 +383,9 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
   def searchApps: Option[TAT.Document] = {
     val req = Map(
         "published" -> JsBoolean(true),
-        "describe" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true)),
+        "describe" -> JsObject(
+            "fields" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true))
+        ),
         "limit" -> JsNumber(1000)
     )
     val repJs = dxApi.findApps(req)
