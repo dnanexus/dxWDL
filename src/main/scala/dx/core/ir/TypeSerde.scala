@@ -64,17 +64,23 @@ object TypeSerde {
     */
   def serializeMap(
       types: Map[String, Type],
-      jsSchema: Map[String, JsValue] = Map.empty
+      jsSchema: Map[String, JsValue] = Map.empty,
+      encodeDots: Boolean = true
   ): (Map[String, JsValue], Map[String, JsValue]) = {
     types.foldLeft((Map.empty[String, JsValue], jsSchema)) {
       case ((typeAccu, schemaAccu), (name, t)) =>
+        val nameEncoded = if (encodeDots) {
+          Parameter.encodeDots(name)
+        } else {
+          name
+        }
         val (typeJs, newSchemas) = serializeType(t, schemaAccu)
-        (typeAccu + (name -> typeJs), newSchemas)
+        (typeAccu + (nameEncoded -> typeJs), newSchemas)
     }
   }
 
-  def serialize(inputs: Map[String, Type]): JsValue = {
-    val (typesJs, schemasJs) = serializeMap(inputs)
+  def serialize(inputs: Map[String, Type], encodeDots: Boolean = true): JsValue = {
+    val (typesJs, schemasJs) = serializeMap(inputs, encodeDots = encodeDots)
     JsObject(
         Map(
             "types" -> JsObject(typesJs),
@@ -140,12 +146,18 @@ object TypeSerde {
   def deserializeMap(
       jsTypes: Map[String, JsValue],
       jsSchemas: Map[String, JsValue],
-      schemas: Map[String, TSchema] = Map.empty
+      schemas: Map[String, TSchema] = Map.empty,
+      decodeDots: Boolean = true
   ): (Map[String, Type], Map[String, TSchema]) = {
     jsTypes.foldLeft((Map.empty[String, Type], schemas)) {
       case ((typeAccu, schemaAccu), (name, jsType)) =>
+        val nameDecoded = if (decodeDots) {
+          Parameter.decodeDots(name)
+        } else {
+          name
+        }
         val (t, newSchemas) = deserializeType(jsType, schemaAccu, jsSchemas)
-        (typeAccu + (name -> t), newSchemas)
+        (typeAccu + (nameDecoded -> t), newSchemas)
     }
   }
 
@@ -156,7 +168,8 @@ object TypeSerde {
     * @return mapping of variable names to deserialized Types
     */
   def deserialize(jsValue: JsValue,
-                  schemas: Map[String, TSchema] = Map.empty): Map[String, Type] = {
+                  schemas: Map[String, TSchema] = Map.empty,
+                  decodeDots: Boolean = true): Map[String, Type] = {
     val (jsTypes, jsSchemas) = jsValue match {
       case obj: JsObject if obj.fields.contains("types") =>
         obj.getFields("types", "schemas") match {
@@ -172,7 +185,7 @@ object TypeSerde {
       case _ =>
         throw new Exception(s"invalid serialized types value ${jsValue}")
     }
-    val (types, _) = deserializeMap(jsTypes, jsSchemas, schemas)
+    val (types, _) = deserializeMap(jsTypes, jsSchemas, schemas, decodeDots)
     types
   }
 

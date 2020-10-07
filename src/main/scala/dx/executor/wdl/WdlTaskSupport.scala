@@ -306,6 +306,10 @@ case class WdlTaskSupport(task: TAT.Task,
     }
     printInputs(inputValues)
     val inputsWithPrivateVars = evaluatePrivateVariables(inputValues)
+    // TODO: there may be private variables that reference files created by the
+    //  command, or functions that depend on the execution of the command
+    //  (e.g. stdout()). Split the private vars into those that need to be
+    //  evaluated before vs after the command, and only evaluate the former here.
     val ctx = WdlValueBindings(inputsWithPrivateVars)
     val command = evaluator.applyCommand(task.command, ctx) match {
       case s if s.trim.isEmpty => None
@@ -430,6 +434,8 @@ case class WdlTaskSupport(task: TAT.Task,
                                fileSourceToPath: Map[FileNode, Path],
                                fileUploader: FileUploader): Unit = {
     val localizedWdlInputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
+
+    // TODO: evaluate any private variables that depend on the command
 
     // Evaluate the output parameters in dependency order.
     // These will include output files without canonicalized paths, which is why we need

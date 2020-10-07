@@ -6,8 +6,8 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
   private def parseDescribe(id: String, jsv: JsValue): DxAppDescribe = {
     val fields = jsv.asJsObject.fields
     val name: String = fields.get("name") match {
-      case None                 => throw new Exception("name field missing")
       case Some(JsString(name)) => name
+      case None                 => throw new Exception("name field missing")
       case other                => throw new Exception(s"malformed name field ${other}")
     }
     val properties: Map[String, String] = fields.get("properties") match {
@@ -31,13 +31,13 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
         throw new Exception(s"malformed output field ${other}")
     }
     val created: Long = fields.get("created") match {
-      case None                 => throw new Exception("'created' field is missing")
       case Some(JsNumber(date)) => date.toLong
+      case None                 => throw new Exception("'created' field is missing")
       case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
     val modified: Long = fields.get("modified") match {
-      case None                 => throw new Exception("'modified' field is missing")
       case Some(JsNumber(date)) => date.toLong
+      case None                 => throw new Exception("'modified' field is missing")
       case Some(other)          => throw new Exception(s"malformed created field ${other}")
     }
     val details: Option[JsValue] = fields.get("details")
@@ -69,7 +69,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
       idConstraints: Vector[String],
       extraFields: Set[Field.Value]
   ): (Vector[DxApp], Option[JsValue]) = {
-    val descFields = Set(Field.Name, Field.Properties) ++ extraFields ++ (
+    val descFields = Set(Field.Name, Field.Properties, Field.Created, Field.Modified) ++ extraFields ++ (
         if (withInputOutputSpec) {
           Set(Field.InputSpec, Field.OutputSpec)
         } else {
