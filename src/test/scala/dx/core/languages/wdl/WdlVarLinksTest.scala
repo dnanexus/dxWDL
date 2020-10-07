@@ -1,5 +1,7 @@
 package dx.core.languages.wdl
 
+import java.nio.file.Paths
+
 import dx.api.DxApi
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -65,8 +67,10 @@ class WdlVarLinksTest extends AnyFlatSpec with Matchers {
             WdlTypes.T_Array(WdlTypes.T_Boolean, nonEmpty = false),
             WdlValues.V_Array(Vector(WdlValues.V_Boolean(true), WdlValues.V_Boolean(false)))
         ),
-        makeElement(WdlTypes.T_Optional(WdlTypes.T_File),
-                    WdlValues.V_Optional(WdlValues.V_File("ddd"))),
+        makeElement(
+            WdlTypes.T_Optional(WdlTypes.T_File),
+            WdlValues.V_Optional(WdlValues.V_File(Paths.get("ddd").toAbsolutePath.toString))
+        ),
         // maps
         makeElement(
             WdlTypes.T_Map(WdlTypes.T_String, WdlTypes.T_Boolean),
