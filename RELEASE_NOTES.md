@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.49.3 07-Oct-2020
+
+* Upgrade dxda to v0.5.4
+* Increase number of API retries to 10
+* Add 'fields' key when calling system/findXXX with describe
+
 ## 1.49.2 30-Sep-2020
 
 * Upgrade dxda to v0.5.3
