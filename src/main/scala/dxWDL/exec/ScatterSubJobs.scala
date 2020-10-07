@@ -227,8 +227,10 @@ case class CollectSubJobs(jobInputOutput: JobInputOutput,
       case Some(i) => Map("limit" -> JsNumber(i))
     }
     val describeField: Map[String, JsValue] = Map(
-        "describe" -> DxObject
-          .requestFields(Set(Field.Output, Field.ExecutableName, Field.Properties))
+        "describe" -> JsObject(
+            "fields" -> DxObject
+              .requestFields(Set(Field.Output, Field.ExecutableName, Field.Properties))
+        )
     )
     val request = JsObject(parentField ++ cursorField ++ limitField ++ describeField)
     val response = DXAPI.systemFindExecutions(DxUtils.jsonNodeOfJsValue(request),
