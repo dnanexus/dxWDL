@@ -163,7 +163,9 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
                                  Field.Folder,
                                  Field.Size,
                                  Field.ArchivalState,
-                                 Field.Properties) ++ extraFields
+                                 Field.Properties,
+                                 Field.Created,
+                                 Field.Modified) ++ extraFields
     val ioDescFields = if (withInputOutputSpec) {
       Set(Field.InputSpec, Field.OutputSpec)
     } else {
