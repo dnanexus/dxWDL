@@ -346,7 +346,7 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
     val req = JsObject(
         "published" -> JsBoolean(true),
         "describe" -> JsObject(
-            "fields" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true))
+            "fields" -> JsObject("name" -> JsTrue, "inputSpec" -> JsTrue, "outputSpec" -> JsTrue)
         ),
         "limit" -> JsNumber(1000)
     )
