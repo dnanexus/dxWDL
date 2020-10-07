@@ -154,7 +154,9 @@ case class DxFindDataObjects(dxApi: DxApi, limit: Option[Int]) {
                                  Field.Folder,
                                  Field.Size,
                                  Field.ArchivalState,
-                                 Field.Properties) ++ extraFields
+                                 Field.Properties,
+                                 Field.Created,
+                                 Field.Modified) ++ extraFields
     val ioSpecDescFields = if (withInputOutputSpec) {
       Set(Field.InputSpec, Field.OutputSpec)
     } else {

@@ -104,6 +104,8 @@ class NativeTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     )
     results.size shouldBe 1
     val desc = results.values.head
+    // assert that fields not specified by the query are unset
+    desc.details shouldBe None
     desc.id
   }
 
