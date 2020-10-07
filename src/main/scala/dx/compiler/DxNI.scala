@@ -384,7 +384,7 @@ case class DxNI(dxApi: DxApi, language: Language.Value) {
     val req = Map(
         "published" -> JsBoolean(true),
         "describe" -> JsObject(
-            "fields" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true))
+            "fields" -> JsObject("name" -> JsTrue, "inputSpec" -> JsTrue, "outputSpec" -> JsTrue)
         ),
         "limit" -> JsNumber(1000)
     )
