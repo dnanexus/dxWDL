@@ -155,7 +155,7 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
     }
     val reqFields = Map("visibility" -> JsString("either"),
                         "project" -> JsString(dxProject.getId),
-                        "describe" -> DxObject.requestFields(fields),
+                        "describe" -> JsObject("fields" -> DxObject.requestFields(fields)),
                         "scope" -> scope)
     val limitField = limit match {
       case None      => Map.empty
