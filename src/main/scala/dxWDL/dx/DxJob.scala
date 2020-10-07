@@ -14,8 +14,7 @@ case class DxJobDescribe(project: String,
                          applet: DxApplet,
                          executableName: String,
                          parentJob: Option[DxJob],
-                         analysis: Option[DxAnalysis],
-                         output: Option[JsValue])
+                         analysis: Option[DxAnalysis])
     extends DxObjectDescribe
 
 case class DxJob(id: String, project: Option[DxProject] = None) extends DxObject with DxExecution {
@@ -61,7 +60,6 @@ object DxJob {
                         DxApplet.getInstance(applet),
                         executableName,
                         None,
-                        None,
                         None)
         case _ =>
           throw new Exception(s"Malformed JSON ${descJs}")
@@ -81,12 +79,7 @@ object DxJob {
       case Some(JsString(x)) => Some(DxAnalysis.getInstance(x))
       case Some(other)       => throw new Exception(s"should be an analysis ${other}")
     }
-    val output = descJs.fields.get("output")
-    desc.copy(details = details,
-              properties = props,
-              parentJob = parentJob,
-              analysis = analysis,
-              output = output)
+    desc.copy(details = details, properties = props, parentJob = parentJob, analysis = analysis)
   }
 
   def getInstance(id: String): DxJob = {

@@ -337,7 +337,9 @@ case class DxNI(verbose: Verbose, language: Language.Value) {
   def searchApps: Vector[String] = {
     val req = JsObject(
         "published" -> JsBoolean(true),
-        "describe" -> JsObject("inputSpec" -> JsBoolean(true), "outputSpec" -> JsBoolean(true)),
+        "describe" -> JsObject(
+            "fields" -> JsObject("name" -> JsTrue, "inputSpec" -> JsTrue, "outputSpec" -> JsTrue)
+        ),
         "limit" -> JsNumber(1000)
     )
     val rep = DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])

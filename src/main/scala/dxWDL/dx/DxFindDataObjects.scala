@@ -149,13 +149,19 @@ case class DxFindDataObjects(limit: Option[Int], verbose: Verbose) {
       nameConstraints: Vector[String],
       withInputOutputSpec: Boolean
   ): (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
-    var fields = Set(Field.Name, Field.Folder, Field.Size, Field.ArchivalState, Field.Properties)
+    var fields = Set(Field.Name,
+                     Field.Folder,
+                     Field.Size,
+                     Field.ArchivalState,
+                     Field.Properties,
+                     Field.Created,
+                     Field.Modified)
     if (withInputOutputSpec) {
       fields ++= Set(Field.InputSpec, Field.OutputSpec)
     }
     val reqFields = Map("visibility" -> JsString("either"),
                         "project" -> JsString(dxProject.getId),
-                        "describe" -> DxObject.requestFields(fields),
+                        "describe" -> JsObject("fields" -> DxObject.requestFields(fields)),
                         "scope" -> scope)
     val limitField = limit match {
       case None      => Map.empty
