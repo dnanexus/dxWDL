@@ -254,7 +254,15 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       "delayWorkspaceDestruction"
   )
   private val RuntimeAttrs =
-    Set("dx_instance_type", "memory", "disks", "cpu", "docker", "docker_registry", "custom_reorg")
+    Set("dx_instance_type",
+        "memory",
+        "disks",
+        "cpu",
+        "docker",
+        "container",
+        "docker_registry",
+        "container_registry",
+        "custom_reorg")
   private val RunSpecAttrs =
     Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
   private val RunSpecAccessAttrs =
@@ -366,7 +374,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
                   |""".stripMargin.replaceAll("\n", "")
           )
         }
-        supported.view.mapValues(ValueSerde.deserialize(_)).toMap
+        ValueSerde.deserializeMap(supported)
       case _ =>
         throw new Exception(s"unexpected runtimeAttrs value ${jsv}")
     }
@@ -523,9 +531,7 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
       return None
     }
     val fields = jsv.asJsObject.fields
-    val invalid = fields.keys.collect {
-      case k if !TaskDxAttrs.contains(k) => k
-    }
+    val invalid = fields.keys.filterNot(TaskDxAttrs.contains)
     if (invalid.nonEmpty) {
       throw new Exception(s"""|Unsupported runtime attribute(s) ${invalid},
                               |we currently support ${TaskDxAttrs}
@@ -670,13 +676,11 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
           Map.empty
         case jsObj =>
           val fields = jsObj.asJsObject.fields
-          fields.foldLeft(Map.empty[String, DxAppJson]) {
-            case (accu, (name, jsValue)) =>
+          fields.flatMap {
+            case (name, jsValue) =>
               parseTaskDxAttrs(jsValue) match {
-                case None =>
-                  accu
-                case Some(attrs) =>
-                  accu + (name -> attrs)
+                case Some(attrs) => Some(name -> attrs)
+                case None        => None
               }
           }
       }

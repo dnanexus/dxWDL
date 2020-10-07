@@ -10,6 +10,6 @@ package object wdl {
     val tasks = tDoc.elements.collect {
       case task: TAT.Task => task.name -> task
     }.toMap
-    (tasks, typeAliases.bindings, tDoc)
+    (tasks, typeAliases.toMap, tDoc)
   }
 }

@@ -75,7 +75,7 @@ case class IrToWdlValueBindings(
     values: Map[String, Value],
     allowNonstandardCoercions: Boolean = false,
     private var cache: Map[String, V] = Map.empty
-) extends VBindings[IrToWdlValueBindings] {
+) extends VBindings {
   override protected val elementType: String = "value"
 
   override def contains(name: String): Boolean = values.contains(name)
@@ -116,7 +116,11 @@ case class RuntimeTranslator(wdlVersion: WdlVersion,
                              evaluator: Eval,
                              dxApi: DxApi = DxApi.get) {
   private lazy val runtime =
-    Runtime(wdlVersion, runtimeSection, hintsSection, evaluator, IrToWdlValueBindings(defaultAttrs))
+    Runtime(wdlVersion,
+            runtimeSection,
+            hintsSection,
+            evaluator,
+            Some(IrToWdlValueBindings(defaultAttrs)))
   private lazy val meta: Meta = Meta.create(wdlVersion, metaSection)
 
   def translate(id: String, wdlType: Option[T] = None): Option[Value] = {

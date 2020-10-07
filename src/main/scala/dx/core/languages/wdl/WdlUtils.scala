@@ -22,14 +22,7 @@ import wdlTools.types.{
   WdlTypes,
   TypedAbstractSyntax => TAT
 }
-import wdlTools.util.{
-  DefaultBindings,
-  FileNode,
-  FileSourceResolver,
-  JsUtils,
-  Logger,
-  StringFileNode
-}
+import wdlTools.util.{Bindings, FileNode, FileSourceResolver, JsUtils, Logger, StringFileNode}
 
 object WdlUtils {
   val locPlaceholder: SourceLocation = SourceLocation.empty
@@ -61,7 +54,7 @@ object WdlUtils {
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       logger: Logger = Logger.get
-  ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
+  ): (TAT.Document, Bindings[String, WdlTypes.T_Struct]) = {
     val sourceCode = fileResolver.fromPath(path)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
@@ -73,7 +66,7 @@ object WdlUtils {
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       logger: Logger = Logger.get
-  ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
+  ): (TAT.Document, Bindings[String, WdlTypes.T_Struct]) = {
     val sourceCode = StringFileNode(sourceCodeStr)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
@@ -86,7 +79,7 @@ object WdlUtils {
       fileResolver: FileSourceResolver = FileSourceResolver.get,
       regime: TypeCheckingRegime = TypeCheckingRegime.Moderate,
       logger: Logger = Logger.get
-  ): (TAT.Document, DefaultBindings[WdlTypes.T_Struct]) = {
+  ): (TAT.Document, Bindings[String, WdlTypes.T_Struct]) = {
     try {
       val doc = parser.parseDocument(sourceCode)
       val (tDoc, ctx) =
@@ -108,7 +101,7 @@ object WdlUtils {
   def parseSingleTask(
       sourceCode: String,
       fileResolver: FileSourceResolver = FileSourceResolver.get
-  ): (TAT.Task, DefaultBindings[WdlTypes.T_Struct], TAT.Document) = {
+  ): (TAT.Task, Bindings[String, WdlTypes.T_Struct], TAT.Document) = {
     val (doc, typeAliases) = parseSourceString(sourceCode, fileResolver)
     if (doc.workflow.isDefined) {
       throw new Exception("a workflow shouldn't be a member of this document")
@@ -128,7 +121,7 @@ object WdlUtils {
   def parseWorkflow(
       sourceCode: String,
       fileResolver: FileSourceResolver = FileSourceResolver.get
-  ): (TAT.Workflow, Map[String, TAT.Task], DefaultBindings[WdlTypes.T_Struct], TAT.Document) = {
+  ): (TAT.Workflow, Map[String, TAT.Task], Bindings[String, WdlTypes.T_Struct], TAT.Document) = {
     val (doc, typeAliases) = parseSourceString(sourceCode, fileResolver)
     val workflow = doc.workflow.getOrElse(
         throw new RuntimeException("This document should have a workflow")

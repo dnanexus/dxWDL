@@ -95,7 +95,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
     val evalauatedInputValues =
       workflowIO.inputsFromValues(inputWdlValues, evaluator, strict = true)
     // convert back to IR
-    evalauatedInputValues.bindings.map {
+    evalauatedInputValues.toMap.map {
       case (name, value) =>
         val wdlType = workflowInputs(name).wdlType
         val irType = WdlUtils.toIRType(wdlType)
@@ -126,7 +126,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
       workflowIO.evaluateOutputs(evaluator, WdlValueBindings(outputWdlValues))
     // convert back to IR
     val workflowOutputs = workflow.outputs.map(inp => inp.name -> inp).toMap
-    val irOutputs = evaluatedOutputValues.bindings.map {
+    val irOutputs = evaluatedOutputValues.toMap.map {
       case (name, value) =>
         val wdlType = workflowOutputs(name).wdlType
         val irType = WdlUtils.toIRType(wdlType)
@@ -264,12 +264,8 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         }
         // add default values for any missing inputs
         val callInputs = callIO.inputsFromValues(inputWdlValues, evaluator, strict = true)
-        val runtime = Runtime(wdlVersion,
-                              task.runtime,
-                              task.hints,
-                              evaluator,
-                              WdlValueBindings.empty,
-                              ctx = Some(callInputs))
+        val runtime =
+          Runtime(wdlVersion, task.runtime, task.hints, evaluator, None, ctx = Some(callInputs))
         try {
           val request = runtime.parseInstanceType
           val instanceType = jobMeta.instanceTypeDb.apply(request)
@@ -935,7 +931,7 @@ case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
           return None
       }
     Some(
-        WdlWorkflowSupport(workflow, doc.version.value, tasks, typeAliases.bindings, jobMeta)
+        WdlWorkflowSupport(workflow, doc.version.value, tasks, typeAliases.toMap, jobMeta)
     )
   }
 }

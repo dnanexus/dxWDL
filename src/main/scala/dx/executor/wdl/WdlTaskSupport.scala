@@ -28,7 +28,7 @@ import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 import wdlTools.util.{
   AddressableFileSource,
-  DefaultBindings,
+  Bindings,
   FileNode,
   LocalFileSource,
   Logger,
@@ -64,7 +64,7 @@ object WdlTaskSupport {
 
 case class WdlTaskSupport(task: TAT.Task,
                           wdlVersion: WdlVersion,
-                          typeAliases: DefaultBindings[T_Struct],
+                          typeAliases: Bindings[String, T_Struct],
                           jobMeta: JobMeta,
                           fileUploader: FileUploader)
     extends TaskSupport {
@@ -90,7 +90,7 @@ case class WdlTaskSupport(task: TAT.Task,
         name -> WdlUtils.fromIRValue(value, wdlType, name)
     }
     // add default values for any missing inputs
-    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).bindings
+    taskIO.inputsFromValues(inputWdlValues, evaluator, strict = true).toMap
   }
 
   private lazy val inputTypes: Map[String, T] =
@@ -119,13 +119,13 @@ case class WdlTaskSupport(task: TAT.Task,
     env
   }
 
-  private def createRuntime(env: Map[String, V]): Runtime[IrToWdlValueBindings] = {
+  private def createRuntime(env: Map[String, V]): Runtime = {
     Runtime(
         wdlVersion,
         task.runtime,
         task.hints,
         evaluator,
-        IrToWdlValueBindings(jobMeta.defaultRuntimeAttrs),
+        Some(IrToWdlValueBindings(jobMeta.defaultRuntimeAttrs)),
         Some(WdlValueBindings(env))
     )
   }
@@ -300,7 +300,7 @@ case class WdlTaskSupport(task: TAT.Task,
   override def writeCommandScript(
       localizedInputs: Map[String, JsValue]
   ): Map[String, JsValue] = {
-    val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
+    val inputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.toMap)
     val inputValues = inputs.map {
       case (name, (_, v)) => name -> v
     }
@@ -338,7 +338,7 @@ case class WdlTaskSupport(task: TAT.Task,
     })
   }
 
-  private def getOutputs(env: Map[String, V]): WdlValueBindings = {
+  private def getOutputs(env: Map[String, V]): Bindings[String, V] = {
     taskIO.evaluateOutputs(evaluator, WdlValueBindings(env))
   }
 
@@ -433,14 +433,14 @@ case class WdlTaskSupport(task: TAT.Task,
   override def evaluateOutputs(localizedInputs: Map[String, JsValue],
                                fileSourceToPath: Map[FileNode, Path],
                                fileUploader: FileUploader): Unit = {
-    val localizedWdlInputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.bindings)
+    val localizedWdlInputs = WdlTaskSupport.deserializeValues(localizedInputs, typeAliases.toMap)
 
     // TODO: evaluate any private variables that depend on the command
 
     // Evaluate the output parameters in dependency order.
     // These will include output files without canonicalized paths, which is why we need
     // the following complex logic to match up local outputs to remote URIs.
-    val localizedOutputs: WdlValueBindings = getOutputs(localizedWdlInputs.map {
+    val localizedOutputs = getOutputs(localizedWdlInputs.map {
       case (name, (_, v)) => name -> v
     })
 
@@ -512,7 +512,7 @@ case class WdlTaskSupport(task: TAT.Task,
       }
     }
 
-    val delocalizedOutputs = localizedOutputs.bindings.map {
+    val delocalizedOutputs = localizedOutputs.toMap.map {
       case (name, value) =>
         val wdlType = outputDefs(name).wdlType
         val irType = WdlUtils.toIRType(wdlType)

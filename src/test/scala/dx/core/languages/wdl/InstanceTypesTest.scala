@@ -5,7 +5,7 @@ import dx.api.{DiskType, DxInstanceType, InstanceTypeDB, InstanceTypeRequest}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import spray.json._
-import wdlTools.eval.{Eval, EvalPaths, WdlValueBindings, Runtime => WdlRuntime}
+import wdlTools.eval.{Eval, EvalPaths, Runtime => WdlRuntime}
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{FileSourceResolver, Logger}
@@ -166,7 +166,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
                             memory: Option[String],
                             disks: Option[String],
                             cpu: Option[String],
-                            gpu: Option[Boolean]): Runtime[WdlValueBindings] = {
+                            gpu: Option[Boolean]): Runtime = {
     def makeString(s: String): TAT.Expr = TAT.ValueString(s, WdlTypes.T_String, null)
     val rt = Map(
         Runtime.DxInstanceTypeKey -> dxInstanceType.map(makeString),
@@ -181,8 +181,7 @@ class InstanceTypesTest extends AnyFlatSpec with Matchers {
         WdlVersion.V1,
         Some(TAT.RuntimeSection(rt, null)),
         None,
-        evaluator,
-        WdlValueBindings.empty
+        evaluator
     )
   }
 

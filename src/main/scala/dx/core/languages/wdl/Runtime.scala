@@ -8,13 +8,13 @@ import wdlTools.eval.{
   EvalUtils,
   Hints,
   VBindings,
-  WdlValueBindings,
   Runtime => WdlRuntime,
   RuntimeAttributes => WdlRuntimeAttributes
 }
 import wdlTools.syntax.WdlVersion
 import wdlTools.types.WdlTypes._
 import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.util.Bindings
 
 object DxMetaHints {
   val ParameterMetaStream: String = "stream"
@@ -34,16 +34,16 @@ object Runtime {
       extends DxRuntimeHint(Some(DxInstanceTypeKey), "instance_type", Vector(T_String))
 }
 
-case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
-                                      runtimeSection: Option[TAT.RuntimeSection],
-                                      hintsSection: Option[TAT.MetaSection],
-                                      evaluator: Eval,
-                                      defaultAttrs: VBindings[B],
-                                      ctx: Option[WdlValueBindings] = None) {
-  private lazy val runtimeAttrs: WdlRuntimeAttributes[B] = {
-    val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator, ctx))
-    val hints = hintsSection.map(h => Hints.create(Some(h)))
-    WdlRuntimeAttributes[B](runtime, hints, defaultAttrs)
+case class Runtime(wdlVersion: WdlVersion,
+                   runtimeSection: Option[TAT.RuntimeSection],
+                   hintsSection: Option[TAT.MetaSection],
+                   evaluator: Eval,
+                   defaultAttrs: Option[VBindings] = None,
+                   ctx: Option[Bindings[String, V]] = None) {
+  private lazy val runtimeAttrs: WdlRuntimeAttributes = {
+    val runtime = runtimeSection.map(r => WdlRuntime.create(Some(r), evaluator, ctx, defaultAttrs))
+    val hints = hintsSection.map(h => Hints.create(Some(h), defaultAttrs))
+    WdlRuntimeAttributes(runtime, hints)
   }
 
   def get(id: String): Option[V] = runtimeAttrs.get(id)
@@ -76,7 +76,7 @@ case class Runtime[B <: VBindings[B]](wdlVersion: WdlVersion,
   }
 
   def containerDefined: Boolean = {
-    runtimeAttrs.contains(WdlRuntime.DockerKey)
+    Set(WdlRuntime.DockerKey, WdlRuntime.ContainerKey).exists(runtimeAttrs.containsRuntime)
   }
 
   def container: Vector[String] = {

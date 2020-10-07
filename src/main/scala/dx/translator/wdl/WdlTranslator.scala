@@ -213,7 +213,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
     }
     Some(
         WdlTranslator(doc,
-                      typeAliases.bindings,
+                      typeAliases.toMap,
                       locked,
                       defaultRuntimeAttrs,
                       reorgAttrs,
