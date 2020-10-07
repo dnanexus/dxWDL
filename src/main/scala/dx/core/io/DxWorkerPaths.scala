@@ -116,7 +116,7 @@ object DxWorkerPaths {
   val SourceEncodedFile = "source.wdl.uu64"
   val SetupStreamsFile = "setup_streams"
   val DxdaManifestFile = "dxdaManifest.json"
-  val DxfuseManifestFile = "dxdaManifest.json"
+  val DxfuseManifestFile = "dxfuseManifest.json"
   val DxfuseMountDir = "mnt"
   val TaskEnvFile = "taskEnv.json"
 

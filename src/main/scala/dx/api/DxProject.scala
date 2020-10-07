@@ -1,6 +1,7 @@
 package dx.api
 
 import spray.json._
+import wdlTools.util.Enum
 
 case class DxProjectDescribe(id: String,
                              name: String,
@@ -15,16 +16,30 @@ case class DxProjectDescribe(id: String,
 
 case class FolderContents(dataObjects: Vector[DxDataObject], subFolders: Vector[String])
 
+object ProjectType extends Enum {
+  type ProjectType = Value
+  val Project, Container = Value
+}
+
 // A project is a subtype of a container
 case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
+  val projectType: ProjectType.ProjectType = id match {
+    case _ if id.startsWith("project-") =>
+      ProjectType.Project
+    case _ if id.startsWith("container-") =>
+      ProjectType.Container
+    case _ =>
+      throw new Exception(s"invalid project id ${id}")
+  }
+
   def describe(fields: Set[Field.Value] = Set.empty): DxProjectDescribe = {
     val defaultFields =
       Set(Field.Project, Field.Id, Field.Name, Field.Folder, Field.Created, Field.Modified)
     val request = Map("fields" -> DxObject.requestFields(fields ++ defaultFields))
-    val descJs = id match {
-      case _ if id.startsWith("project-") =>
+    val descJs = projectType match {
+      case ProjectType.Project =>
         dxApi.projectDescribe(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerDescribe(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -55,10 +70,10 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
 
   def listFolder(path: String): FolderContents = {
     val request = Map("folder" -> JsString(path))
-    val repJs = id match {
-      case _ if id.startsWith("project-") =>
+    val repJs = projectType match {
+      case ProjectType.Project =>
         dxApi.projectListFolder(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerListFolder(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -99,10 +114,10 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
     val request = Map("project" -> JsString(id),
                       "folder" -> JsString(folderPath),
                       "parents" -> JsBoolean(parents))
-    id match {
-      case _ if id.startsWith("project-") =>
+    projectType match {
+      case ProjectType.Project =>
         dxApi.projectNewFolder(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerNewFolder(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -118,10 +133,10 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
                       "recurse" -> JsBoolean(recurse),
                       "partial" -> JsBoolean(partial),
                       "force" -> JsBoolean(force))
-    id match {
-      case _ if id.startsWith("project-") =>
+    projectType match {
+      case ProjectType.Project =>
         dxApi.projectRemoveFolder(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerRemoveFolder(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -134,10 +149,10 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
         "folders" -> JsArray(Vector.empty[JsString]),
         "destination" -> JsString(destinationFolder)
     )
-    id match {
-      case _ if id.startsWith("project-") =>
+    projectType match {
+      case ProjectType.Project =>
         dxApi.projectMove(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerMove(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
@@ -149,10 +164,10 @@ case class DxProject(dxApi: DxApi, id: String) extends DxDataObject {
         "objects" -> JsArray(objs.map(x => JsString(x.id))),
         "force" -> JsFalse
     )
-    id match {
-      case _ if id.startsWith("project-") =>
+    projectType match {
+      case ProjectType.Project =>
         dxApi.projectRemoveObjects(id, request)
-      case _ if id.startsWith("container-") =>
+      case ProjectType.Container =>
         dxApi.containerRemoveObjects(id, request)
       case _ =>
         throw new Exception(s"invalid project id ${id}")
