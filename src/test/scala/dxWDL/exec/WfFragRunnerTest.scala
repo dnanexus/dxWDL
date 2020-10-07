@@ -14,7 +14,6 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 import dxWDL.base.{RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
-import dxWDL.dx
 import dxWDL.dx.{DxJobDescribe, ExecLinkInfo}
 import dxWDL.util.{
   Block,
@@ -64,7 +63,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         dxIoFunctions,
         JsNull,
         fragInputOutput,
-        DxJobDescribe(null, null, null, null, null, None, None, None, null, None, None),
+        DxJobDescribe(null, null, null, 0, 0, None, None, null, None, None, None),
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),
         runtimeDebugLevel
