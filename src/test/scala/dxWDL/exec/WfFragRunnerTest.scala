@@ -1,28 +1,45 @@
 package dxWDL.exec
 
-import cats.data.Validated.{Invalid, Valid}
-import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Path, Paths}
+
+import cats.data.Validated.Valid
+import common.validation.ErrorOr.ErrorOr
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wom.callable.{WorkflowDefinition}
-import wom.executable.WomBundle
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
-import wom.values._
-import wom.types._
-
 import dxWDL.base.{RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
-import dxWDL.dx.ExecLinkInfo
+import dxWDL.dx.{DxJobDescribe, ExecLinkInfo}
 import dxWDL.util.{
   Block,
-  DxIoFunctions,
   DxInstanceType,
+  DxIoFunctions,
   DxPathConfig,
   InstanceTypeDB,
   ParseWomSourceFile
 }
+import wom.callable.WorkflowDefinition
+import wom.executable.WomBundle
+import wom.expression.WomExpression
+import wom.graph.ScatterVariableNode
+import wom.graph.expression.ExposedExpressionNode
+import wom.types.{
+  WomArrayType,
+  WomCompositeType,
+  WomIntegerType,
+  WomMaybeEmptyArrayType,
+  WomOptionalType,
+  WomStringType
+}
+import wom.values.{
+  WomArray,
+  WomBoolean,
+  WomInteger,
+  WomObject,
+  WomOptionalValue,
+  WomString,
+  WomValue
+}
+
+import scala.tools.nsc.backend.jvm.BackendReporting.Invalid
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -52,19 +69,32 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
       ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
     val fragInputOutput =
       new WfFragInputOutput(dxIoFunctions, null /*dxProject*/, runtimeDebugLevel, typeAliases)
-    val fragRunner = new WfFragRunner(wf,
-                                      taskDir,
-                                      typeAliases,
-                                      wfSourceCode,
-                                      instanceTypeDB,
-                                      Map.empty[String, ExecLinkInfo],
-                                      dxPathConfig,
-                                      dxIoFunctions,
-                                      JsNull,
-                                      fragInputOutput,
-                                      Some(WdlRuntimeAttrs(Map.empty)),
-                                      Some(false),
-                                      runtimeDebugLevel)
+    val fragRunner = new WfFragRunner(
+        wf,
+        taskDir,
+        typeAliases,
+        wfSourceCode,
+        instanceTypeDB,
+        Map.empty[String, ExecLinkInfo],
+        dxPathConfig,
+        dxIoFunctions,
+        JsNull,
+        fragInputOutput,
+        DxJobDescribe(project = null,
+                      id = null,
+                      name = null,
+                      created = 0,
+                      modified = 0,
+                      properties = None,
+                      details = None,
+                      applet = null,
+                      parentJob = None,
+                      originJob = None,
+                      analysis = None),
+        Some(WdlRuntimeAttrs(Map.empty)),
+        Some(false),
+        runtimeDebugLevel
+    )
     (wf, fragRunner)
   }
 
