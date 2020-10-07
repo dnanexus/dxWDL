@@ -58,7 +58,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       case Some(DockerRegistry(registry, username, credentials)) =>
         // check that the credentials file is a valid platform path
         try {
-          dxApi.logger.ignore(dxApi.resolveFile(credentials))
+          logger.ignore(dxApi.resolveFile(credentials))
         } catch {
           case e: Throwable =>
             throw new Exception(s"""|credentials has to point to a platform file.

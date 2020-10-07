@@ -66,7 +66,7 @@ case class Compiler(extras: Option[Extras],
                     dxApi: DxApi = DxApi.get,
                     logger: Logger = Logger.get) {
   // logger for extra trace info
-  private val logger2: Logger = dxApi.logger.withTraceIfContainsKey("Native")
+  private val logger2: Logger = logger.withTraceIfContainsKey("Native")
 
   // temp dir where applications will be compiled - it is deleted on shutdown
   private lazy val appCompileDirPath: Path = {
@@ -225,13 +225,13 @@ case class Compiler(extras: Option[Extras],
         case Some(executable) =>
           (executable.dxClass, executable.desc) match {
             case ("App", _) =>
-              dxApi.logger.trace(s"Found existing version of app ${name}")
+              logger.trace(s"Found existing version of app ${name}")
             case ("Applet", Some(desc: DxAppletDescribe)) =>
-              dxApi.logger.trace(
+              logger.trace(
                   s"Found existing version of applet ${name} in folder ${desc.folder}"
               )
             case ("Workflow", Some(desc: DxWorkflowDescribe)) =>
-              dxApi.logger.trace(
+              logger.trace(
                   s"Found existing version of workflow ${name} in folder ${desc.folder}"
               )
             case other =>
@@ -252,15 +252,15 @@ case class Compiler(extras: Option[Extras],
             case None =>
               throw new Exception(s"There is an existing non-dxWDL applet ${name}")
             case Some(existingDigest) if digest != existingDigest =>
-              dxApi.logger.trace(
+              logger.trace(
                   s"${existingInfo.dxClass} ${name} has changed, rebuild required"
               )
             case _ =>
-              dxApi.logger.trace(s"${existingInfo.dxClass} ${name} has not changed")
+              logger.trace(s"${existingInfo.dxClass} ${name} has not changed")
               return Some(existingInfo.dataObj)
           }
         case v =>
-          dxApi.logger.warning(
+          logger.warning(
               s"More than one ${v.head.dxClass} ${name} found in path ${project.id}:${folder}"
           )
       }
@@ -397,7 +397,7 @@ case class Compiler(extras: Option[Extras],
     }
 
     def apply: CompilerResults = {
-      dxApi.logger.trace(
+      logger.trace(
           s"Generate dx:applets and dx:workflows for ${bundle} in ${project.id}${folder}"
       )
       val executables = bundle.dependencies.foldLeft(Map.empty[String, CompiledExecutable]) {

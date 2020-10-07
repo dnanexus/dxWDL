@@ -93,7 +93,7 @@ case class DxExecutableDirectory(bundle: Bundle,
           )
         val t1 = System.nanoTime()
         val diffMSec = (t1 - t0) / (1000 * 1000)
-        dxApi.logger.trace(
+        logger.trace(
             s"Found ${dxObjectsInFolder.size} ${dxClass} in ${project.id} folder=${folder} (${diffMSec} millisec)"
         )
         dxObjectsInFolder.toVector
@@ -257,7 +257,7 @@ case class DxExecutableDirectory(bundle: Bundle,
     * @param execInfo the object to archive
     */
   def archive(execInfo: DxExecutableInfo): Unit = {
-    dxApi.logger.trace(s"Archiving ${execInfo.name} ${execInfo.dataObj.id}")
+    logger.trace(s"Archiving ${execInfo.name} ${execInfo.dataObj.id}")
     val dxClass: String = execInfo.dxClass
     // move the object to the new location
     val destFolder = s"${folder}/${dxClass}_archive"
@@ -294,7 +294,7 @@ case class DxExecutableDirectory(bundle: Bundle,
     */
   def remove(execInfos: Vector[DxExecutableInfo]): Unit = {
     val objs = execInfos.map(_.dataObj)
-    dxApi.logger.trace(s"Removing old ${execInfos.head.name} ${objs.map(_.id)}")
+    logger.trace(s"Removing old ${execInfos.head.name} ${objs.map(_.id)}")
     project.removeObjects(objs)
   }
 }

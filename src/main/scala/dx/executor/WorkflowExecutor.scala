@@ -232,7 +232,7 @@ case class WorkflowExecutor(jobMeta: JobMeta, dxWorkerPaths: Option[DxWorkerPath
     }
     val filteredAnalysisFiles: Map[String, DxFile] =
       if (analysisFiles.size > WorkflowExecutor.MaxNumFilesMoveLimit) {
-        dxApi.logger.traceLimited(
+        logger.traceLimited(
             s"WARNING: Large number of outputs (${analysisFiles.size}), not moving objects"
         )
         Map.empty
