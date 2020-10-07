@@ -288,10 +288,6 @@ case class DxApi(logger: Logger = Logger.get,
     logger.ignore(result)
   }
 
-  def executionsDescribe(fields: Map[String, JsValue]): JsObject = {
-    call(DXAPI.systemDescribeExecutions[JsonNode], fields)
-  }
-
   def fileDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }

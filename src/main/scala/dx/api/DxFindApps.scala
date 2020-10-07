@@ -78,7 +78,7 @@ case class DxFindApps(dxApi: DxApi, limit: Option[Int] = None) {
     )
     val requiredFields = Map(
         "visibility" -> JsString("either"),
-        "describe" -> DxObject.requestFields(descFields),
+        "describe" -> JsObject("fields" -> DxObject.requestFields(descFields)),
         "limit" -> JsNumber(limit.getOrElse(dxApi.limit))
     )
     val cursorField = cursor match {

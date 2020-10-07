@@ -171,7 +171,9 @@ case class DxFindDataObjects(dxApi: DxApi = DxApi.get, limit: Option[Int] = None
     }
     val requiredFields =
       Map("visibility" -> JsString("either"),
-          "describe" -> DxObject.requestFields(requiredDescFields ++ ioDescFields))
+          "describe" -> JsObject(
+              "fields" -> DxObject.requestFields(requiredDescFields ++ ioDescFields)
+          ))
     val projectField = dxProject.map(p => Map("project" -> JsString(p.id))).getOrElse(Map.empty)
     val scopeField = scope.map(s => Map("scope" -> s)).getOrElse(Map.empty)
     val limitField = limit.map(l => Map("limit" -> JsNumber(l))).getOrElse(Map.empty)

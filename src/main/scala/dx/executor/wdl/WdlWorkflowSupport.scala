@@ -758,8 +758,10 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         case Some(i) => Map("limit" -> JsNumber(i))
       }
       val describeField: Map[String, JsValue] = Map(
-          "describe" -> DxObject
-            .requestFields(Set(Field.Output, Field.ExecutableName, Field.Details))
+          "describe" -> JsObject(
+              "fields" -> DxObject
+                .requestFields(Set(Field.Output, Field.ExecutableName, Field.Details))
+          )
       )
       val response = dxApi.findExecutions(parentField ++ cursorField ++ limitField ++ describeField)
       val results: Vector[ChildExecution] =
