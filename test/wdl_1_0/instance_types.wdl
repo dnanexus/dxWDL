@@ -99,7 +99,7 @@ task RuntimeDockerChoice {
     String imageName
   }
   command {
-    python <<CODE
+    python3 <<CODE
     import os
     import sys
     print("We are inside a python docker image")
@@ -120,7 +120,7 @@ task RuntimeDockerChoice2 {
   }
 
   command {
-    python <<CODE
+    python3 <<CODE
     import os
     import sys
     print("We are inside a python docker image")
