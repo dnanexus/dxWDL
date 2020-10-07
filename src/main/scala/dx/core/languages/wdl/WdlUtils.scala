@@ -636,8 +636,10 @@ object WdlUtils {
               inner(fields(PairRightKey), rightType, s"${name}.${PairRightKey}")
           )
         case (T_Map(keyType, valueType), VHash(fields)) if isMapValue(fields) =>
-          val keys = inner(fields(MapKeysKey), keyType, s"${name}[${MapKeysKey}]")
-          val values = inner(fields(MapValuesKey), valueType, s"${name}[${MapValuesKey}]")
+          // keyType and valueType will be the map element types, but the keys
+          // and values are encoded as arrays so we need to wrap the types in T_Array
+          val keys = inner(fields(MapKeysKey), T_Array(keyType), s"${name}[${MapKeysKey}]")
+          val values = inner(fields(MapValuesKey), T_Array(valueType), s"${name}[${MapValuesKey}]")
           (keys, values) match {
             case (V_Array(keyArray), V_Array(valueArray)) =>
               V_Map(keyArray.zip(valueArray).toMap)
