@@ -545,7 +545,7 @@ task bwa_mem {
     File genome_index_tgz
     Int min_seed_length = 19
     String? read_group
-    String docker_image = "broadinstitute/baseimg"
+    String docker_image = "broadinstitute/baseimage"
     Int cpu = 4
     Int memory_gb = 8
     Int? disk_gb
