@@ -6,9 +6,10 @@ import spray.json._
 object Field extends Enumeration {
   type Field = Value
   val Access, Analysis, App, Applet, ArchivalState, AvailableInstanceTypes, BillTo, Categories,
-      Created, Description, Details, DeveloperNotes, Executable, Folder, Id, IgnoreReuse, Inputs,
-      InputSpec, Modified, Name, Outputs, OutputSpec, ParentJob, Parts, Project, Properties, Region,
-      RunSpec, Size, Stages, Summary, Tags, Title, Types, Version = Value
+      Created, Description, Details, DeveloperNotes, Executable, ExecutableName, Folder, Id,
+      IgnoreReuse, Inputs, InputSpec, Modified, Name, Output, Outputs, OutputSpec, ParentJob, Parts,
+      Project, Properties, Region, RunSpec, Size, Stages, Summary, Tags, Title, Types, Version =
+    Value
 }
 
 trait DxObjectDescribe {
@@ -65,6 +66,7 @@ object DxObject {
       case Field.DeveloperNotes         => "developerNotes"
       case Field.Details                => "details"
       case Field.Executable             => "executable"
+      case Field.ExecutableName         => "executableName"
       case Field.Folder                 => "folder"
       case Field.Id                     => "id"
       case Field.IgnoreReuse            => "ignoreReuse"
@@ -72,6 +74,7 @@ object DxObject {
       case Field.InputSpec              => "inputSpec"
       case Field.Modified               => "modified"
       case Field.Name                   => "name"
+      case Field.Output                 => "output"
       case Field.Outputs                => "outputs"
       case Field.OutputSpec             => "outputSpec"
       case Field.ParentJob              => "parentJob"

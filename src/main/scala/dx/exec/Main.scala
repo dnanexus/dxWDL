@@ -3,7 +3,7 @@ package dx.exec
 import java.nio.file.{Path, Paths}
 
 import dx.{AppException, AppInternalException}
-import dx.api.{DxApi, DxExecutable, Field, InstanceTypeDB}
+import dx.api.{DxApi, DxExecutable, DxJobDescribe, Field, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig}
 import dx.core.languages.wdl.{Evaluator, ParseSource, WdlVarLinksConverter}
@@ -136,6 +136,7 @@ object Main {
                                  dxFileDescCache: DxFileDescCache,
                                  defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                                  delayWorkspaceDestruction: Option[Boolean],
+                                 jobDesc: DxJobDescribe,
                                  dxApi: DxApi): Termination = {
     // Parse the inputs, convert to WDL values. Delay downloading files
     // from the platform, we may not need to access them.
@@ -176,6 +177,7 @@ object Main {
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
+              jobDesc,
               dxApi,
               evaluator
           )
@@ -196,6 +198,7 @@ object Main {
               fragInputOutput,
               defaultRuntimeAttributes,
               delayWorkspaceDestruction,
+              jobDesc,
               dxApi,
               evaluator
           )
@@ -258,7 +261,8 @@ object Main {
   // details field stored on the platform
   private def retrieveFromDetails(
       dxApi: DxApi,
-      jobInfoPath: Path
+      jobInfoPath: Path,
+      defaultExecutable: DxExecutable
   ): (String, InstanceTypeDB, JsValue, Option[WdlRuntimeAttrs], Option[Boolean]) = {
     val jobInfo = FileUtils.readFileContent(jobInfoPath).parseJson
     val executable: DxExecutable = jobInfo.asJsObject.fields.get("executable") match {
@@ -269,8 +273,7 @@ object Main {
                 |""".stripMargin,
             minLevel = TraceLevel.None
         )
-        val dxJob = dxApi.currentJob
-        dxJob.describe().executable
+        defaultExecutable
       case Some(JsString(x)) if x.startsWith("app-") =>
         dxApi.app(x)
       case Some(JsString(x)) if x.startsWith("applet-") =>
@@ -337,6 +340,7 @@ object Main {
         val homeDir = Paths.get(args(1))
         val logger = Logger(quiet = false, traceLevel = getTraceLevel(Some(args(2))))
         val dxApi = DxApi(logger)
+        val jobDesc: DxJobDescribe = dxApi.currentJob.describe(Set(Field.Details, Field.Executable))
         val streamAllFiles = parseStreamAllFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, logger)
@@ -359,7 +363,7 @@ object Main {
              metaInfo,
              defaultRuntimeAttrs,
              delayWorkspaceDestruction) =
-          retrieveFromDetails(dxApi, jobInfoPath)
+          retrieveFromDetails(dxApi, jobInfoPath, jobDesc.executable)
 
         try {
           op match {
@@ -378,6 +382,7 @@ object Main {
                   dxFileDescCache,
                   defaultRuntimeAttrs,
                   delayWorkspaceDestruction,
+                  jobDesc,
                   dxApi
               )
             case ExecAction.TaskCheckInstanceType | ExecAction.TaskProlog |

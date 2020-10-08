@@ -62,6 +62,7 @@ case class WfFragRunner(wf: TAT.Workflow,
                         fragInputOutput: WfFragInputOutput,
                         defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                         delayWorkspaceDestruction: Option[Boolean],
+                        jobDesc: DxJobDescribe,
                         dxApi: DxApi,
                         evaluator: Eval) {
   private val MAX_JOB_NAME = 50
@@ -70,9 +71,10 @@ case class WfFragRunner(wf: TAT.Workflow,
       inputsRaw,
       instanceTypeDB,
       delayWorkspaceDestruction,
-      dxApi,
       // TODO: to we really need to provide an empty cache?
-      wdlVarLinksConverter.copy(dxFileDescCache = DxFileDescCache.empty)
+      wdlVarLinksConverter.copy(dxFileDescCache = DxFileDescCache.empty),
+      jobDesc,
+      dxApi
   )
 
   var gSeqNum = 0
@@ -822,7 +824,7 @@ case class WfFragRunner(wf: TAT.Workflow,
 
       // A subjob that collects results from scatters
       case RunnerWfFragmentMode.Collect =>
-        val childJobsComplete = collectSubJobs.executableFromSeqNum()
+        val childJobsComplete = collectSubJobs.getScatterJobs
         catg match {
           case Block.ScatterOneCall(_, _, call) =>
             // scatter with a single call

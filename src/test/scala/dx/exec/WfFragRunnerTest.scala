@@ -2,7 +2,7 @@ package dx.exec
 
 import java.nio.file.{Files, Path, Paths}
 
-import dx.api.{DxApi, DxInstanceType, InstanceTypeDB}
+import dx.api.{DxApi, DxInstanceType, DxJobDescribe, InstanceTypeDB}
 import dx.compiler.WdlRuntimeAttrs
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxPathConfig, ExecLinkInfo}
 import dx.core.languages.Language
@@ -69,6 +69,7 @@ class WfFragRunnerTest extends AnyFlatSpec with Matchers {
         fragInputOutput,
         Some(WdlRuntimeAttrs(Map.empty)),
         Some(false),
+        DxJobDescribe(null, null, null, 0, 0, None, None, null, None, None, None),
         dxApi,
         evaluator
     )
