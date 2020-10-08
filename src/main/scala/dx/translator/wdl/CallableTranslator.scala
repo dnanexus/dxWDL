@@ -145,7 +145,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           task.copy(runtime = task.runtime.map(rt => replaceContainer(rt, dxURL)))
         case _ => task
       }
-      val selfContainedTask = codegen.standAloneTask(cleanedTask)
+      val selfContainedTask = codegen.createStandAloneTask(cleanedTask)
       val document = WdlDocumentSource(selfContainedTask)
       Application(
           task.name,
@@ -949,7 +949,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
       // additional values needed to create the Workflow
       val wfInputLinks: Vector[LinkedVar] = allWfInputParameters.map(p => (p, WorkflowInput(p)))
-      val wfSource = WdlWorkflowSource(wf)
+      val wfSource = WdlWorkflowSource(wf, wdlBundle.version)
       // translate workflow-level metadata to IR
       val attributes = meta.translate
 
@@ -1079,7 +1079,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val wfOutputs =
         outputStage.outputs.map(param => (param, LinkInput(outputStage.dxStage, param.dxName)))
       val wfAttr = meta.translate
-      val wfSource = WdlWorkflowSource(wf)
+      val wfSource = WdlWorkflowSource(wf, wdlBundle.version)
       val irwf = Workflow(
           wf.name,
           wfInputs,

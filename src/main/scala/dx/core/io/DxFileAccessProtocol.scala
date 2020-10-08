@@ -11,7 +11,10 @@ case class DxFileSource(override val address: String,
                         dxApi: DxApi,
                         override val encoding: Charset)
     extends AbstractAddressableFileNode(address, encoding) {
-  override lazy val localPath: Path = FileUtils.getPath(dxFile.describe().name)
+
+  override def name: String = dxFile.describe().name
+
+  override def folder: String = dxFile.describe().folder
 
   override lazy val size: Long = dxFile.describe().size
 

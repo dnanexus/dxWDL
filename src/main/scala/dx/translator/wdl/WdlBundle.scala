@@ -54,7 +54,7 @@ object WdlBundle {
     // Add source and adjuncts for main file
     val (sources, adjunctFiles) = doc.source match {
       case localFs: LocalFileSource =>
-        val absPath: Path = localFs.localPath
+        val absPath: Path = localFs.canonicalPath
         val sources = Map(absPath.toString -> doc)
         val adjunctFiles = Adjuncts.findAdjunctFiles(absPath)
         (sources, adjunctFiles)

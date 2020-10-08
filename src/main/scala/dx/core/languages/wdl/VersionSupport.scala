@@ -32,7 +32,7 @@ case class VersionSupport(version: WdlVersion,
   }
 
   def parse(sourceCode: FileNode): (TAT.Document, Bindings[String, WdlTypes.T_Struct]) = {
-    WdlUtils.parseSource(parser, sourceCode, fileResolver, regime, logger)
+    WdlUtils.parseAndCheckSource(sourceCode, parser, fileResolver, regime, logger)
   }
 
   def parse(src: String): (TAT.Document, Bindings[String, WdlTypes.T_Struct]) = {
@@ -65,7 +65,8 @@ object VersionSupport {
     val sourceCode = fileResolver.fromPath(source)
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
-    val (doc, typeAliases) = WdlUtils.parseSource(parser, sourceCode, fileResolver, regime, logger)
+    val (doc, typeAliases) =
+      WdlUtils.parseAndCheckSource(sourceCode, parser, fileResolver, regime, logger)
     val versionSupport =
       VersionSupport(doc.version.value, fileResolver, regime, dxApi, logger, Some(parser))
     (doc, typeAliases, versionSupport)

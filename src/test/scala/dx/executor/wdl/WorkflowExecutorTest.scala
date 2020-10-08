@@ -137,7 +137,7 @@ class WorkflowExecutorTest extends AnyFlatSpec with Matchers {
   }
 
   private def parse(path: Path): WdlBundle = {
-    val (doc, _) = WdlUtils.parseSourceFile(path)
+    val (doc, _) = WdlUtils.parseAndCheckSourceFile(path)
     WdlBundle.create(doc)
   }
 

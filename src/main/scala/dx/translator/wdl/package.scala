@@ -1,29 +1,23 @@
+/**
+  * Wrappers around WDL-specific document elements, used by the Compiler
+  * when generating apps/workflows.
+  */
 package dx.translator.wdl
 
 import dx.core.ir.{ApplicationSource, DocumentSource, WorkflowSource}
-import wdlTools.generators.code.WdlV1Generator
+import dx.core.languages.wdl.WdlUtils
+import wdlTools.syntax.WdlVersion
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-// wrappers around WDL-specific document elements, used by Native
-// when generating apps/workflows
 case class WdlDocumentSource(doc: TAT.Document) extends DocumentSource {
-  override def toString: String = {
-    val generator = WdlV1Generator()
-    val sourceLines = generator.generateDocument(doc)
-    sourceLines.mkString("\n")
-  }
+  override def toString: String = WdlUtils.generateDocument(doc)
 }
-case class WdlApplicationSource(task: TAT.Task) extends ApplicationSource {
-  override def toString: String = {
-    val generator = WdlV1Generator()
-    val sourceLines = generator.generateElement(task)
-    sourceLines.mkString("\n")
-  }
+
+case class WdlApplicationSource(task: TAT.Task, wdlVersion: WdlVersion) extends ApplicationSource {
+  override def toString: String = WdlUtils.generateElement(task, wdlVersion)
 }
-case class WdlWorkflowSource(workflow: TAT.Workflow) extends WorkflowSource {
-  override def toString: String = {
-    val generator = WdlV1Generator()
-    val sourceLines = generator.generateElement(workflow)
-    sourceLines.mkString("\n")
-  }
+
+case class WdlWorkflowSource(workflow: TAT.Workflow, wdlVersion: WdlVersion)
+    extends WorkflowSource {
+  override def toString: String = WdlUtils.generateElement(workflow, wdlVersion)
 }

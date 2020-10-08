@@ -3,7 +3,6 @@ package dx.translator.wdl
 import dx.core.ir.{Application, Callable, ExecutableKindApplet}
 import dx.core.languages.wdl.WdlUtils
 import wdlTools.eval.WdlValues
-import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{CommentMap, SourceLocation, WdlVersion}
 import wdlTools.types.{GraphUtils, TypeGraph, WdlTypes, TypedAbstractSyntax => TAT}
 import wdlTools.util.{Logger, StringFileNode}
@@ -21,7 +20,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
     }
   }
 
-  private lazy val typeAliasDefinitions: Vector[TAT.StructDefinition] = {
+  private lazy val structDefs: Vector[TAT.StructDefinition] = {
     val ordered: Map[String, WdlTypes.T_Struct] = if (typeAliases.size <= 1) {
       typeAliases
     } else {
@@ -140,7 +139,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
      }
     }
    */
-  private def genTaskHeader(callable: Callable): TAT.Task = {
+  private def createTaskStub(callable: Callable): TAT.Task = {
     /*Utils.trace(verbose.on,
                     s"""|taskHeader  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -205,10 +204,10 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
     * @param outputSpec the applet outputs
     * @return an AST.Task
     */
-  def genDnanexusAppletStub(id: String,
-                            appletName: String,
-                            inputSpec: Map[String, WdlTypes.T],
-                            outputSpec: Map[String, WdlTypes.T]): TAT.Task = {
+  def createAppletStub(id: String,
+                       appletName: String,
+                       inputSpec: Map[String, WdlTypes.T],
+                       outputSpec: Map[String, WdlTypes.T]): TAT.Task = {
 
     val meta = TAT.MetaSection(
         Map(
@@ -240,11 +239,11 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
     )
   }
 
-  def standAloneTask(task: TAT.Task): TAT.Document = {
+  def createStandAloneTask(task: TAT.Task): TAT.Document = {
     TAT.Document(
         StringFileNode.empty,
         TAT.Version(outputWdlVersion, SourceLocation.empty),
-        typeAliasDefinitions :+ task,
+        structDefs :+ task,
         None,
         SourceLocation.empty,
         CommentMap.empty
@@ -269,27 +268,31 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
   //   call Nice as nice { ... }
   //   call Hello
   // }
-  private def cleanCalls(body: Vector[TAT.WorkflowElement]): Vector[TAT.WorkflowElement] = {
+  private def unqualifyCallNames(body: Vector[TAT.WorkflowElement]): Vector[TAT.WorkflowElement] = {
     body.map {
       case call: TAT.Call =>
         call.copy(fullyQualifiedName = call.unqualifiedName)
       case scat: TAT.Scatter =>
-        scat.copy(body = cleanCalls(scat.body))
+        scat.copy(body = unqualifyCallNames(scat.body))
       case cond: TAT.Conditional =>
-        cond.copy(body = cleanCalls(cond.body))
+        cond.copy(body = unqualifyCallNames(cond.body))
       case other => other
     }
   }
 
-  // A workflow must have definitions for all the tasks it
-  // calls. However, a scatter calls tasks that are missing from
-  // the WDL file we generate. To ameliorate this, we add stubs for
-  // called tasks. The generated tasks are named by their
-  // unqualified names, not their fully-qualified names. This works
-  // because the WDL workflow must be "flattenable".
-  def standAloneWorkflow(wf: TAT.Workflow, allCalls: Vector[Callable]): TAT.Document = {
+  /**
+    * A workflow must have definitions for all the tasks it calls. However, a scatter
+    * calls tasks that are missing from the WDL file we generate. To ameliorate this,
+    * we add stubs for called tasks. The generated tasks are named by their unqualified
+    * names, not their fully-qualified names. This works because the WDL workflow must
+    * be "flattenable".
+    * @param wf the workflow
+    * @param callables the callables to add to the workflow
+    * @return
+    */
+  def standAloneWorkflow(wf: TAT.Workflow, callables: Vector[Callable]): TAT.Document = {
     val tasks: Vector[TAT.Task] =
-      allCalls
+      callables
         .foldLeft(Map.empty[String, TAT.Task]) {
           case (accu, callable) =>
             if (accu contains callable.name) {
@@ -314,7 +317,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
                   tasks.head
                 case _ =>
                   // no existing stub, create it
-                  genTaskHeader(callable)
+                  createTaskStub(callable)
               }
               accu + (callable.name -> stub)
             }
@@ -324,20 +327,15 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
         .sortWith(_._1 < _._1)
         .map { case (_, task) => task }
 
-    val wfWithoutImportCalls = wf.copy(body = cleanCalls(wf.body))
+    val wfWithoutImportCalls = wf.copy(body = unqualifyCallNames(wf.body))
 
     TAT.Document(
         StringFileNode.empty,
         TAT.Version(outputWdlVersion, SourceLocation.empty),
-        typeAliasDefinitions ++ tasks,
+        structDefs ++ tasks,
         Some(wfWithoutImportCalls),
         SourceLocation.empty,
         CommentMap.empty
     )
-  }
-
-  def generateDocument(doc: TAT.Document): String = {
-    val generator = WdlV1Generator()
-    generator.generateDocument(doc).mkString("\n")
   }
 }

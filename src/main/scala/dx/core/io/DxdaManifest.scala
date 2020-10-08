@@ -30,7 +30,7 @@ case class DxdaManifestBuilder(dxApi: DxApi) {
 
   // create a manifest entry for a single file
   private def createFileEntry(dxFile: DxFile, destination: Path): JsValue = {
-    val destinationFile: java.io.File = destination.toFile
+    val destinationFile = destination.toFile
     val name = destinationFile.getName
     val folder = destinationFile.getParent
     JsObject("id" -> JsString(dxFile.id), "name" -> JsString(name), "folder" -> JsString(folder))

@@ -26,7 +26,7 @@ class WdlBlockTest extends AnyFlatSpec with Matchers {
 
   private def getDocument(dir: String, basename: String): TAT.Document = {
     val path = pathFromBasename(dir, basename)
-    val (doc, _) = WdlUtils.parseSourceFile(path)
+    val (doc, _) = WdlUtils.parseAndCheckSourceFile(path)
     doc
   }
   private def getWorkflowBlocks(dir: String, basename: String): Vector[WdlBlock] = {

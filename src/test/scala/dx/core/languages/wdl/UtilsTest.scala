@@ -37,7 +37,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
+    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -62,7 +62,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
+    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -87,7 +87,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseSingleTask(srcCode)
+    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 }

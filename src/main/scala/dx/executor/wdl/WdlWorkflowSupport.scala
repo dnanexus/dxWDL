@@ -925,7 +925,7 @@ case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
   override def create(jobMeta: JobMeta): Option[WdlWorkflowSupport] = {
     val (workflow, tasks, typeAliases, doc) =
       try {
-        WdlUtils.parseWorkflow(jobMeta.sourceCode, jobMeta.fileResolver)
+        WdlUtils.parseAndCheckWorkflow(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None

@@ -196,15 +196,15 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     workerPaths.createCleanDirs()
 
     // create a stand-alone task
-    val (doc, typeAliases) = WdlUtils.parseSourceFile(wdlFile)
+    val (doc, typeAliases) = WdlUtils.parseAndCheckSourceFile(wdlFile)
     val codegen = CodeGenerator(typeAliases.toMap, doc.version.value, logger)
     val tasks: Vector[TAT.Task] = doc.elements.collect {
       case task: TAT.Task => task
     }
     tasks.size shouldBe 1
     val task = tasks.head
-    val standAloneTask = codegen.standAloneTask(task)
-    val standAloneTaskSource = codegen.generateDocument(standAloneTask)
+    val standAloneTask = codegen.createStandAloneTask(task)
+    val standAloneTaskSource = WdlUtils.generateDocument(standAloneTask)
 
     // update paths of input files - this requires a round-trip de/ser
     // JSON -> IR -> WDL -> update paths -> IR -> JSON

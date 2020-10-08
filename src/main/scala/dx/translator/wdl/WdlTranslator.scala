@@ -198,7 +198,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
                       logger: Logger = Logger.get): Option[WdlTranslator] = {
     val (doc, typeAliases) =
       try {
-        WdlUtils.parseSourceFile(sourceFile, fileResolver, regime, logger)
+        WdlUtils.parseAndCheckSourceFile(sourceFile, fileResolver, regime, logger)
       } catch {
         case ex: TypeException =>
           // the file could be parsed, so it is WDL, but it failed type checking

@@ -7,7 +7,14 @@ import dx.core.getVersion
 import dx.core.io.{DxdaManifest, DxfuseManifest}
 import dx.executor.wdl.WdlTaskSupportFactory
 import spray.json._
-import wdlTools.util.{AddressableFileSource, Enum, FileNode, FileUtils, SysUtils, TraceLevel}
+import wdlTools.util.{
+  AddressableFileNode,
+  AddressableFileSource,
+  Enum,
+  FileUtils,
+  SysUtils,
+  TraceLevel
+}
 
 object TaskAction extends Enum {
   type TaskAction = Value
@@ -25,7 +32,7 @@ trait TaskSupport {
     */
   def localizeInputFiles(streamAllFiles: Boolean): (
       Map[String, JsValue],
-      Map[FileNode, Path],
+      Map[AddressableFileNode, Path],
       Option[DxdaManifest],
       Option[DxfuseManifest]
   )
@@ -46,7 +53,7 @@ trait TaskSupport {
     * @param fileUploader FileUploader
     */
   def evaluateOutputs(localizedInputs: Map[String, JsValue],
-                      fileSourceToPath: Map[FileNode, Path],
+                      fileSourceToPath: Map[AddressableFileNode, Path],
                       fileUploader: FileUploader): Unit
 
   /**
@@ -126,7 +133,7 @@ case class TaskExecutor(jobMeta: JobMeta,
 
   // marshal localized inputs into json, and then to a string
   private def writeEnv(inputs: Map[String, JsValue],
-                       fileSourceToPath: Map[FileNode, Path]): Unit = {
+                       fileSourceToPath: Map[AddressableFileNode, Path]): Unit = {
     val uriToPath: Map[String, JsValue] = fileSourceToPath.map {
       case (fileSource: AddressableFileSource, path) =>
         fileSource.address -> JsString(path.toString)
@@ -140,7 +147,7 @@ case class TaskExecutor(jobMeta: JobMeta,
     FileUtils.writeFileContent(jobMeta.workerPaths.getTaskEnvFile(), json.prettyPrint)
   }
 
-  private def readEnv(): (Map[String, JsValue], Map[FileNode, Path]) = {
+  private def readEnv(): (Map[String, JsValue], Map[AddressableFileNode, Path]) = {
     val (inputJs, filesJs) =
       FileUtils.readFileContent(jobMeta.workerPaths.getTaskEnvFile()).parseJson match {
         case JsObject(env) =>

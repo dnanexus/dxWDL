@@ -1,6 +1,6 @@
 package dx.core.ir
 
-import dx.core.ir.Type.{TDirectory, _}
+import dx.core.ir.Type._
 import dx.core.ir.Value._
 import spray.json._
 import wdlTools.util.JsUtils

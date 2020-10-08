@@ -1,7 +1,7 @@
 package dx.core.ir
 
-import dx.core.ir.Type.{TBoolean, _}
-import spray.json.{JsBoolean, JsObject, JsString, JsValue}
+import dx.core.ir.Type._
+import spray.json._
 import wdlTools.util.JsUtils
 
 object TypeSerde {
