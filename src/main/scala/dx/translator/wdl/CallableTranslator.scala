@@ -145,8 +145,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           task.copy(runtime = task.runtime.map(rt => replaceContainer(rt, dxURL)))
         case _ => task
       }
-      val selfContainedTask = codegen.createStandAloneTask(cleanedTask)
-      val document = WdlDocumentSource(selfContainedTask)
+      val standAloneTask = WdlDocumentSource(codegen.createStandAloneTask(cleanedTask))
       Application(
           task.name,
           inputs,
@@ -154,7 +153,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           instanceType,
           container,
           kind,
-          document,
+          standAloneTask,
           attributes,
           requirements
       )
