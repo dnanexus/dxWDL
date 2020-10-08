@@ -1,5 +1,15 @@
 # Release Notes
 
+## 2.0.0-rc4 08-10-2020
+
+- Upgrade wdlTools to 0.6.1
+- Upgrade dxda to 0.5.4
+- Increase number of API retries to 10
+- Fix to the "x appears with two different callable definitions" compilation error
+- Add missing required fields to findXXX/describe
+- Fix name regexp in DxFindDataObjects
+- Additional fixes and improvements
+
 ## 2.0.0-rc2
 
 - Mostly internal changes and code re-organization, in preparation for adding CWL support
