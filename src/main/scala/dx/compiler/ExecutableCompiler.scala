@@ -155,19 +155,18 @@ class ExecutableCompiler(extras: Option[Extras],
 
   /**
     * Converts an IR Paramter to a native input/output spec.
-    *
-    * For primitive types, and arrays of such types, we can map directly
-    * to the equivalent dx types. For example,
-    * Int  -> int
-    * Array[String] -> array:string
-    *
-    * Arrays can be empty, which is why they are always marked "optional".
-    * This notifies the platform runtime system not to throw an exception
-    * for an empty input/output array.
-    *
-    * Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
-    * These are called "Complex Types", or "Complex". They are handled
-    * by passing a JSON structure and a vector of dx:files.
+    * - For primitive types, and arrays of such types, we can map directly
+    *   to the equivalent dx types. For example,
+    *     Int  -> int
+    *     Array[String] -> array:string
+    * - Arrays can be empty, which is why they are always marked "optional".
+    *   This notifies the platform runtime system not to throw an exception
+    *   for an empty input/output array.
+    * - Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
+    *   These are called "Complex Types", or "Complex". They are handled
+    *   by passing a JSON structure and a vector of dx:files.
+    * - For parameters with defaults, we always set them to optional regardless
+    *   of their WdlType.
     * @param parameter the input Parameter
     * @return the DNAnexus inputDesc
     */
@@ -178,29 +177,26 @@ class ExecutableCompiler(extras: Option[Extras],
         parameterLinkSerializer.createFields(name, parameter.dxType, wdlValue).toMap
       case None => Map.empty
     }
+
+    def defaultValueToNative(name: String): Map[String, JsValue] = {
+      defaultValues.get(name) match {
+        case Some(jsv) => Map(DxIOSpec.Default -> jsv)
+        case None      => Map.empty
+      }
+    }
+
     val excludeAttributeNames: Set[String] = if (defaultValues.contains(name)) {
       Set(DxIOSpec.Default)
     } else {
       Set.empty
     }
-    val attributes =
+    val attributes = defaultValueToNative(name) ++
       parameterAttributesToNative(parameter.attributes, excludeAttributeNames)
     val (nativeType, optional) = TypeSerde.toNative(parameter.dxType)
-
-    def defaultValueToNative(name: String): Map[String, JsValue] = {
-      defaultValues.get(name) match {
-        case Some(jsv) => Map("default" -> jsv)
-        case None      => Map.empty
-      }
-    }
-
     val paramSpec = JsObject(
-        Map("name" -> JsString(name), "class" -> JsString(nativeType))
-          ++ optionalToNative(optional)
-          ++ defaultValueToNative(name)
-          ++ attributes
+        Map(DxIOSpec.Name -> JsString(name), DxIOSpec.Class -> JsString(nativeType)) ++ attributes ++
+          optionalToNative(optional || attributes.contains(DxIOSpec.Default))
     )
-
     if (nativeType == "hash") {
       // A JSON structure passed as a hash, and a vector of platform files
       val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
@@ -208,9 +204,9 @@ class ExecutableCompiler(extras: Option[Extras],
           paramSpec,
           JsObject(
               Map(
-                  "name" -> JsString(filesName),
-                  "class" -> JsString("array:file"),
-                  "optional" -> JsTrue
+                  DxIOSpec.Name -> JsString(filesName),
+                  DxIOSpec.Class -> JsString("array:file"),
+                  DxIOSpec.Optional -> JsTrue
               )
                 ++ defaultValueToNative(filesName)
               // some attributes don't makes sense for the files input
@@ -224,8 +220,7 @@ class ExecutableCompiler(extras: Option[Extras],
 
   /**
     * Similar to inputParameterToNative, but output parameters don't allow some
-    * fields: default, suggestions, choices. Thus, for parameters with defaults,
-    * we always set them to optional regardless of their type.
+    * fields: default, suggestions, choices.
     * @param parameter the output Parameter
     * @return the DNAnexus outputDesc
     */
@@ -235,7 +230,7 @@ class ExecutableCompiler(extras: Option[Extras],
       parameterAttributesToNative(parameter.attributes, InputOnlyKeys)
     val (nativeType, optional) = TypeSerde.toNative(parameter.dxType)
     val paramSpec = JsObject(
-        Map("name" -> JsString(name), "class" -> JsString(nativeType))
+        Map(DxIOSpec.Name -> JsString(name), DxIOSpec.Class -> JsString(nativeType))
           ++ optionalToNative(optional || parameter.defaultValue.isDefined)
           ++ attributes
     )
@@ -246,9 +241,9 @@ class ExecutableCompiler(extras: Option[Extras],
           paramSpec,
           JsObject(
               Map(
-                  "name" -> JsString(filesName),
-                  "class" -> JsString("array:file"),
-                  "optional" -> JsTrue
+                  DxIOSpec.Name -> JsString(filesName),
+                  DxIOSpec.Class -> JsString("array:file"),
+                  DxIOSpec.Optional -> JsTrue
               )
                 ++ attributes
           )
