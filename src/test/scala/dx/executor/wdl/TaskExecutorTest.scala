@@ -3,7 +3,7 @@ package dx.executor.wdl
 import java.nio.file.{Files, Path, Paths}
 
 import dx.Assumptions.isLoggedIn
-import dx.Tags.EdgeTest
+import dx.Tags.{ApiTest, EdgeTest}
 import dx.api.{
   DiskType,
   DxAnalysis,
@@ -130,6 +130,9 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
         wdlValue
 
       // single file
+      case f: WdlValues.V_File if f.value.startsWith("dx://") =>
+        // ignore files that start with dx:// - these will be localized at runtime
+        f
       case WdlValues.V_File(s) =>
         pathFromBasename(s) match {
           case Some(path) =>
@@ -175,20 +178,22 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  // Parse the WDL source code, and extract the single task that is supposed to be there.
-  // Also return the source script itself, verbatim.
-  private def runTask(wdlName: String): Unit = {
-    val wdlFile: Path = pathFromBasename(s"${wdlName}.wdl").get
-    val inputs: Map[String, JsValue] = pathFromBasename(s"${wdlName}_input.json") match {
+  private def getInputs(wdlName: String): Map[String, JsValue] = {
+    pathFromBasename(s"${wdlName}_input.json") match {
       case Some(path) if Files.exists(path) => JsUtils.getFields(JsUtils.jsFromFile(path))
       case _                                => Map.empty
     }
-    val outputsExpected: Option[Map[String, JsValue]] =
-      pathFromBasename(s"${wdlName}_output.json") match {
-        case Some(path) if Files.exists(path) => Some(JsUtils.getFields(JsUtils.jsFromFile(path)))
-        case _                                => None
-      }
+  }
 
+  private def getExpectedOutputs(wdlName: String): Option[Map[String, JsValue]] = {
+    pathFromBasename(s"${wdlName}_output.json") match {
+      case Some(path) if Files.exists(path) => Some(JsUtils.getFields(JsUtils.jsFromFile(path)))
+      case _                                => None
+    }
+  }
+  private def createTaskExecutor(wdlName: String): (TaskExecutor, TaskTestJobMeta) = {
+    val wdlFile: Path = pathFromBasename(s"${wdlName}.wdl").get
+    val inputs: Map[String, JsValue] = getInputs(wdlName)
     // Create a clean temp directory for the task to use
     val jobRootDir: Path = Files.createTempDirectory("dxwdl_applet_test")
     jobRootDir.toFile.deleteOnExit()
@@ -245,14 +250,21 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
                       standAloneTaskSource)
 
     // create TaskExecutor
-    val taskExectuor = TaskExecutor(jobMeta, streamAllFiles = false)
+    (TaskExecutor(jobMeta, streamAllFiles = false), jobMeta)
+  }
+
+  // Parse the WDL source code, and extract the single task that is supposed to be there.
+  // Also return the source script itself, verbatim.
+  private def runTask(wdlName: String): Unit = {
+    val (taskExecutor, jobMeta) = createTaskExecutor(wdlName)
+    val outputsExpected = getExpectedOutputs(wdlName)
 
     // run the steps of task execution in order
-    taskExectuor.apply(TaskAction.Prolog) shouldBe "success Prolog"
-    taskExectuor.apply(TaskAction.InstantiateCommand) shouldBe "success InstantiateCommand"
+    taskExecutor.apply(TaskAction.Prolog) shouldBe "success Prolog"
+    taskExecutor.apply(TaskAction.InstantiateCommand) shouldBe "success InstantiateCommand"
 
     // execute the shell script in a child job
-    val script: Path = workerPaths.getCommandFile()
+    val script: Path = jobMeta.workerPaths.getCommandFile()
     //println(FileUtils.readFileContent(script))
     if (Files.exists(script)) {
       // this will throw an exception if the script exits with a non-zero return code
@@ -261,7 +273,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     //println(FileUtils.readFileContent(workerPaths.stdout))
 
     // epilog
-    taskExectuor.apply(TaskAction.Epilog) shouldBe "success Epilog"
+    taskExecutor.apply(TaskAction.Epilog) shouldBe "success Epilog"
 
     if (outputsExpected.isDefined) {
       val outputs = jobMeta.outputs.getOrElse(Map.empty)
@@ -295,6 +307,32 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
 
   it should "localize a file to a task" in {
     runTask("cgrep")
+  }
+
+  it should "handle files with same name in different source folders" taggedAs ApiTest in {
+    val (taskExecutor, _) = createTaskExecutor("two_files")
+    val (localizedFiles, fileSourceToPath, dxdaManifest, dxfuseManifest) =
+      taskExecutor.taskSupport.localizeInputFiles(false)
+    localizedFiles.size shouldBe 2
+    fileSourceToPath.size shouldBe 2
+    dxfuseManifest shouldBe None
+    dxdaManifest shouldNot be(None)
+    val manifest = dxdaManifest.get.value.fields
+    manifest.size shouldBe 1
+    val folders = manifest.values.head match {
+      case JsArray(array) =>
+        array.map {
+          case JsObject(file) =>
+            file.get("folder") match {
+              case Some(JsString(folder)) => folder
+              case other                  => throw new Exception(s"invalid manifest entry ${other}")
+            }
+          case other => throw new Exception(s"invalid manifest entry ${other}")
+        }
+      case other => throw new Exception(s"invalid manifest ${other}")
+    }
+    folders.size shouldBe 2
+    folders.toSet.size shouldBe 2
   }
 
   // this test is invalid - automatic coercion to String is not allowed except
