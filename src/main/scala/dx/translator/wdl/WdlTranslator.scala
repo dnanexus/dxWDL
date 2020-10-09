@@ -7,7 +7,7 @@ import dx.core.ir.Type.TSchema
 import dx.core.ir._
 import dx.core.languages.Language
 import dx.core.languages.Language.Language
-import dx.core.languages.wdl.WdlUtils
+import dx.core.languages.wdl.{VersionSupport, WdlUtils}
 import dx.translator.{InputTranslator, ReorgSettings, Translator, TranslatorFactory}
 import spray.json.{JsArray, JsObject, JsString, JsValue}
 import wdlTools.types.{TypeCheckingRegime, TypeException, WdlTypes, TypedAbstractSyntax => TAT}
@@ -56,6 +56,7 @@ case class WdlTranslator(doc: TAT.Document,
                          locked: Boolean,
                          defaultRuntimeAttrs: Map[String, Value],
                          reorgAttrs: ReorgSettings,
+                         versionSupport: VersionSupport,
                          fileResolver: FileSourceResolver = FileSourceResolver.get,
                          dxApi: DxApi = DxApi.get,
                          logger: Logger = Logger.get)
@@ -149,6 +150,7 @@ case class WdlTranslator(doc: TAT.Document,
         locked,
         defaultRuntimeAttrs,
         reorgAttrs,
+        versionSupport,
         dxApi,
         fileResolver,
         logger
@@ -196,9 +198,9 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
                       fileResolver: FileSourceResolver,
                       dxApi: DxApi = DxApi.get,
                       logger: Logger = Logger.get): Option[WdlTranslator] = {
-    val (doc, typeAliases) =
+    val (doc, typeAliases, versionSupport) =
       try {
-        WdlUtils.parseAndCheckSourceFile(sourceFile, fileResolver, regime, logger)
+        VersionSupport.fromSourceFile(sourceFile, fileResolver, regime, dxApi, logger)
       } catch {
         case ex: TypeException =>
           // the file could be parsed, so it is WDL, but it failed type checking
@@ -217,6 +219,7 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
                       locked,
                       defaultRuntimeAttrs,
                       reorgAttrs,
+                      versionSupport,
                       fileResolver,
                       dxApi,
                       logger)

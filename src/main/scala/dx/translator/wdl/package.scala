@@ -4,20 +4,16 @@
   */
 package dx.translator.wdl
 
-import dx.core.ir.{ApplicationSource, DocumentSource, WorkflowSource}
-import dx.core.languages.wdl.WdlUtils
-import wdlTools.syntax.WdlVersion
+import dx.core.ir.{DocumentSource, WorkflowSource}
+import dx.core.languages.wdl.VersionSupport
 import wdlTools.types.{TypedAbstractSyntax => TAT}
 
-case class WdlDocumentSource(doc: TAT.Document) extends DocumentSource {
-  override def toString: String = WdlUtils.generateDocument(doc)
+case class WdlDocumentSource(doc: TAT.Document, versionSupport: VersionSupport)
+    extends DocumentSource {
+  override def toString: String = versionSupport.generateDocument(doc)
 }
 
-case class WdlApplicationSource(task: TAT.Task, wdlVersion: WdlVersion) extends ApplicationSource {
-  override def toString: String = WdlUtils.generateElement(task, wdlVersion)
-}
-
-case class WdlWorkflowSource(workflow: TAT.Workflow, wdlVersion: WdlVersion)
+case class WdlWorkflowSource(workflow: TAT.Workflow, versionSupport: VersionSupport)
     extends WorkflowSource {
-  override def toString: String = WdlUtils.generateElement(workflow, wdlVersion)
+  override def toString: String = versionSupport.generateElement(workflow)
 }

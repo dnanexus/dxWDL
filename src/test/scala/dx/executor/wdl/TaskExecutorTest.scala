@@ -17,7 +17,7 @@ import dx.api.{
 import dx.core.Constants
 import dx.core.io.{DxFileAccessProtocol, DxFileDescCache, DxWorkerPaths}
 import dx.core.ir.{ParameterLink, ParameterLinkDeserializer, ParameterLinkSerializer}
-import dx.core.languages.wdl.WdlUtils
+import dx.core.languages.wdl.{VersionSupport, WdlUtils}
 import wdlTools.util.CodecUtils
 import dx.executor.{JobMeta, TaskAction, TaskExecutor}
 import dx.translator.wdl.CodeGenerator
@@ -195,20 +195,7 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
     val workerPaths = DxWorkerPaths(jobRootDir)
     workerPaths.createCleanDirs()
 
-    // create a stand-alone task
-    val (doc, typeAliases) = WdlUtils.parseAndCheckSourceFile(wdlFile)
-    val codegen = CodeGenerator(typeAliases.toMap, doc.version.value, logger)
-    val tasks: Vector[TAT.Task] = doc.elements.collect {
-      case task: TAT.Task => task
-    }
-    tasks.size shouldBe 1
-    val task = tasks.head
-    val standAloneTask = codegen.createStandAloneTask(task)
-    val standAloneTaskSource = WdlUtils.generateDocument(standAloneTask)
-
-    // update paths of input files - this requires a round-trip de/ser
-    // JSON -> IR -> WDL -> update paths -> IR -> JSON
-    // which requires lots of auxilliarly objects
+    // create FileSourceResolver
     val dxFileDescCache = DxFileDescCache.empty
     val inputDeserializer: ParameterLinkDeserializer =
       ParameterLinkDeserializer(dxFileDescCache, dxApi)
@@ -218,6 +205,21 @@ class TaskExecutorTest extends AnyFlatSpec with Matchers {
         userProtocols = Vector(dxProtocol),
         logger = logger
     )
+
+    // create a stand-alone task
+    val (doc, typeAliases, versionSupport) = VersionSupport.fromSourceFile(wdlFile, fileResolver)
+    val codegen = CodeGenerator(typeAliases.toMap, doc.version.value, logger)
+    val tasks: Vector[TAT.Task] = doc.elements.collect {
+      case task: TAT.Task => task
+    }
+    tasks.size shouldBe 1
+    val task = tasks.head
+    val standAloneTask = codegen.createStandAloneTask(task)
+    val standAloneTaskSource = versionSupport.generateDocument(standAloneTask)
+
+    // update paths of input files - this requires a round-trip de/ser
+    // JSON -> IR -> WDL -> update paths -> IR -> JSON
+    // which requires some auxilliarly objects
     val outputSerializer: ParameterLinkSerializer = ParameterLinkSerializer(fileResolver, dxApi)
     val taskInputs = task.inputs.map(inp => inp.name -> inp).toMap
     val updatedInputs = inputDeserializer

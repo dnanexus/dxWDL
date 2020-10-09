@@ -306,7 +306,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
                                  _,
                                  _,
                                  ExecutableKindApplet,
-                                 WdlDocumentSource(doc),
+                                 WdlDocumentSource(doc, _),
                                  _,
                                  _) =>
                   // This is a task, include its source instead of a header.

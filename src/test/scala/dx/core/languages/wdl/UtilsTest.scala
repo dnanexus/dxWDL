@@ -1,10 +1,10 @@
 package dx.core.languages.wdl
 
 import dx.Tags.EdgeTest
-import dx.core.languages.wdl.{WdlUtils => WdlUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.{WdlTypes, TypedAbstractSyntax => TAT}
+import wdlTools.util.{Bindings, FileSourceResolver}
 
 class UtilsTest extends AnyFlatSpec with Matchers {
   private def validateTaskMeta(task: TAT.Task): Unit = {
@@ -18,6 +18,26 @@ class UtilsTest extends AnyFlatSpec with Matchers {
     kvs.get("id") should matchPattern {
       case Some(TAT.MetaValueString("applet-xxxx", _)) =>
     }
+  }
+
+  private def parseAndCheckSingleTask(
+      sourceCode: String,
+      fileResolver: FileSourceResolver = FileSourceResolver.get
+  ): (TAT.Task, Bindings[String, WdlTypes.T_Struct], TAT.Document) = {
+    val (doc, typeAliases) = WdlUtils.parseAndCheckSourceString(sourceCode, fileResolver)
+    if (doc.workflow.isDefined) {
+      throw new Exception("a workflow shouldn't be a member of this document")
+    }
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    if (tasks.isEmpty) {
+      throw new Exception("no tasks in this WDL program")
+    }
+    if (tasks.size > 1) {
+      throw new Exception("More than one task in this WDL program")
+    }
+    (tasks.values.head, typeAliases, doc)
   }
 
   it should "parse the meta section in wdl draft2" in {
@@ -37,7 +57,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
+    val (task, _, _) = parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -62,7 +82,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
+    val (task, _, _) = parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 
@@ -87,7 +107,7 @@ class UtilsTest extends AnyFlatSpec with Matchers {
          |
          |""".stripMargin
 
-    val (task, _, _) = WdlUtils.parseAndCheckSingleTask(srcCode)
+    val (task, _, _) = parseAndCheckSingleTask(srcCode)
     validateTaskMeta(task)
   }
 }

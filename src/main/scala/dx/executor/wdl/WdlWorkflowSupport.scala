@@ -8,14 +8,14 @@ import dx.core.Constants
 import dx.core.ir.{Block, BlockKind, ExecutableLink, Parameter, ParameterLink, Type, Value}
 import dx.core.ir.Type._
 import dx.core.ir.Value._
-import dx.core.languages.wdl.{WdlBlockInput, Runtime, WdlBlock, WdlUtils}
+import dx.core.languages.wdl.{Runtime, VersionSupport, WdlBlock, WdlBlockInput, WdlUtils}
 import dx.executor.{BlockContext, JobMeta, WorkflowSupport, WorkflowSupportFactory}
 import spray.json._
-import wdlTools.eval.{Eval, WdlValueBindings, EvalUtils}
+import wdlTools.eval.{Eval, EvalUtils, WdlValueBindings}
 import wdlTools.eval.WdlValues._
 import wdlTools.exec.{InputOutput, TaskInputOutput}
-import wdlTools.syntax.WdlVersion
-import wdlTools.types.{TypedAbstractSyntax => TAT, TypeUtils}
+import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
+import wdlTools.types.{TypeCheckingRegime, TypeUtils, TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes._
 import wdlTools.util.{JsUtils, Logger, TraceLevel}
 
@@ -62,7 +62,7 @@ object WdlWorkflowSupport {
 }
 
 case class WdlWorkflowSupport(workflow: TAT.Workflow,
-                              wdlVersion: WdlVersion,
+                              versionSupport: VersionSupport,
                               tasks: Map[String, TAT.Task],
                               wdlTypeAliases: Map[String, T_Struct],
                               jobMeta: JobMeta)
@@ -70,7 +70,7 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
   private val logger = jobMeta.logger
   private lazy val evaluator = Eval(
       jobMeta.workerPaths,
-      Some(wdlVersion),
+      Some(versionSupport.version),
       jobMeta.fileResolver,
       Logger.Quiet
   )
@@ -265,7 +265,12 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
         // add default values for any missing inputs
         val callInputs = callIO.inputsFromValues(inputWdlValues, evaluator, strict = true)
         val runtime =
-          Runtime(wdlVersion, task.runtime, task.hints, evaluator, None, ctx = Some(callInputs))
+          Runtime(versionSupport.version,
+                  task.runtime,
+                  task.hints,
+                  evaluator,
+                  None,
+                  ctx = Some(callInputs))
         try {
           val request = runtime.parseInstanceType
           val instanceType = jobMeta.instanceTypeDb.apply(request)
@@ -921,17 +926,24 @@ case class WdlWorkflowSupport(workflow: TAT.Workflow,
   }
 }
 
-case class WdlWorkflowSupportFactory() extends WorkflowSupportFactory {
+case class WdlWorkflowSupportFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate)
+    extends WorkflowSupportFactory {
   override def create(jobMeta: JobMeta): Option[WdlWorkflowSupport] = {
-    val (workflow, tasks, typeAliases, doc) =
+    val (doc, typeAliases, versionSupport) =
       try {
-        WdlUtils.parseAndCheckWorkflow(jobMeta.sourceCode, jobMeta.fileResolver)
+        VersionSupport.fromSourceString(jobMeta.sourceCode, jobMeta.fileResolver)
       } catch {
         case _: Throwable =>
           return None
       }
+    val workflow = doc.workflow.getOrElse(
+        throw new RuntimeException("This document should have a workflow")
+    )
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
     Some(
-        WdlWorkflowSupport(workflow, doc.version.value, tasks, typeAliases.toMap, jobMeta)
+        WdlWorkflowSupport(workflow, versionSupport, tasks, typeAliases.toMap, jobMeta)
     )
   }
 }

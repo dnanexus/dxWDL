@@ -21,6 +21,7 @@ import dx.core.languages.wdl.{
   OverridableBlockInputWithDynamicDefault,
   OverridableBlockInputWithStaticDefault,
   RequiredBlockInput,
+  VersionSupport,
   WdlBlock,
   WdlBlockInput,
   WdlUtils
@@ -35,6 +36,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
                               locked: Boolean,
                               defaultRuntimeAttrs: Map[String, Value],
                               reorgAttrs: ReorgSettings,
+                              versionSupport: VersionSupport,
                               dxApi: DxApi = DxApi.get,
                               fileResolver: FileSourceResolver = FileSourceResolver.get,
                               logger: Logger = Logger.get) {
@@ -145,7 +147,8 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           task.copy(runtime = task.runtime.map(rt => replaceContainer(rt, dxURL)))
         case _ => task
       }
-      val standAloneTask = WdlDocumentSource(codegen.createStandAloneTask(cleanedTask))
+      val standAloneTask =
+        WdlDocumentSource(codegen.createStandAloneTask(cleanedTask), versionSupport)
       Application(
           task.name,
           inputs,
@@ -160,13 +163,18 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     }
   }
 
-  private case class WdlWorkflowTranslator(wf: TAT.Workflow, dependencies: Map[String, Callable]) {
+  private case class WdlWorkflowTranslator(wf: TAT.Workflow,
+                                           availableDependencies: Map[String, Callable]) {
     private lazy val adjunctFiles: Vector[Adjuncts.AdjunctFile] =
       wdlBundle.adjunctFiles.getOrElse(wf.name, Vector.empty)
     private lazy val meta = WorkflowMetaTranslator(wdlBundle.version, wf.meta, adjunctFiles)
     private lazy val parameterMeta = ParameterMetaTranslator(wdlBundle.version, wf.parameterMeta)
-    private lazy val standAloneWorkflow =
-      WdlDocumentSource(codegen.standAloneWorkflow(wf, dependencies.values.toVector))
+    private lazy val standAloneWorkflow = {
+      val dependencyNames = WdlUtils.deepFindCalls(wf.body).map(_.unqualifiedName).toSet
+      val dependencies =
+        availableDependencies.view.filterKeys(dependencyNames.contains).values.toVector
+      WdlDocumentSource(codegen.standAloneWorkflow(wf, dependencies), versionSupport)
+    }
     // Only the toplevel workflow may be unlocked. This happens
     // only if the user specifically compiles it as "unlocked".
     private lazy val isLocked: Boolean = {
@@ -443,12 +451,13 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     private def translateCall(call: TAT.Call, env: CallEnv, locked: Boolean): Stage = {
       // Find the callee
       val calleeName = call.unqualifiedName
-      val callee: Callable = dependencies.get(calleeName) match {
+      val callee: Callable = availableDependencies.get(calleeName) match {
         case Some(x) => x
         case _ =>
           throw new Exception(
               s"""|Callable ${calleeName} should exist but is missing from the list of known 
-                  |tasks/workflows ${dependencies.keys}|""".stripMargin.replaceAll("\n", " ")
+                  |tasks/workflows ${availableDependencies.keys}|""".stripMargin
+                .replaceAll("\n", " ")
           )
       }
       // Extract the input values/links from the environment
@@ -948,7 +957,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
 
       // additional values needed to create the Workflow
       val wfInputLinks: Vector[LinkedVar] = allWfInputParameters.map(p => (p, WorkflowInput(p)))
-      val wfSource = WdlWorkflowSource(wf, wdlBundle.version)
+      val wfSource = WdlWorkflowSource(wf, versionSupport)
       // translate workflow-level metadata to IR
       val attributes = meta.translate
 
@@ -1078,7 +1087,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
       val wfOutputs =
         outputStage.outputs.map(param => (param, LinkInput(outputStage.dxStage, param.dxName)))
       val wfAttr = meta.translate
-      val wfSource = WdlWorkflowSource(wf, wdlBundle.version)
+      val wfSource = WdlWorkflowSource(wf, versionSupport)
       val irwf = Workflow(
           wf.name,
           wfInputs,
@@ -1183,7 +1192,7 @@ case class CallableTranslator(wdlBundle: WdlBundle,
           (irWf, irCallables)
       }
       // validate workflow stages
-      val allCallableNames = updatedCallables.map(_.name).toSet ++ dependencies.keySet
+      val allCallableNames = updatedCallables.map(_.name).toSet ++ availableDependencies.keySet
       val invalidStages =
         updatedWf.stages.filterNot(stage => allCallableNames.contains(stage.calleeName))
       if (invalidStages.nonEmpty) {
@@ -1199,14 +1208,20 @@ case class CallableTranslator(wdlBundle: WdlBundle,
     }
   }
 
+  /**
+    * Translates a WDL Callable to IR.
+    * @param callable the TAT.Callable to translate
+    * @param availableDependencies the available Callables upon which `callable` may depend
+    * @return ir.Callable
+    */
   def translateCallable(callable: TAT.Callable,
-                        dependencies: Map[String, Callable]): Vector[Callable] = {
+                        availableDependencies: Map[String, Callable]): Vector[Callable] = {
     callable match {
       case task: TAT.Task =>
         val taskTranslator = WdlTaskTranslator(task)
         Vector(taskTranslator.apply)
       case wf: TAT.Workflow =>
-        val wfTranslator = WdlWorkflowTranslator(wf, dependencies)
+        val wfTranslator = WdlWorkflowTranslator(wf, availableDependencies)
         wfTranslator.apply
     }
   }

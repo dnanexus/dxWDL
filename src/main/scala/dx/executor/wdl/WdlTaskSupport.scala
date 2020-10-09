@@ -11,7 +11,7 @@ import dx.core.io.{
   DxfuseManifestBuilder
 }
 import dx.core.ir.ParameterLink
-import dx.core.languages.wdl.{DxMetaHints, Runtime, WdlUtils}
+import dx.core.languages.wdl.{DxMetaHints, Runtime, VersionSupport, WdlUtils}
 import dx.executor.{FileUploader, JobMeta, TaskSupport, TaskSupportFactory}
 import dx.translator.wdl.IrToWdlValueBindings
 import spray.json._
@@ -23,9 +23,10 @@ import wdlTools.exec.{
   TaskCommandFileGenerator,
   TaskInputOutput
 }
-import wdlTools.syntax.{SourceLocation, WdlVersion}
+import wdlTools.syntax.SourceLocation
+import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.WdlTypes._
-import wdlTools.types.{TypedAbstractSyntax => TAT}
+import wdlTools.types.{TypeCheckingRegime, TypedAbstractSyntax => TAT}
 import wdlTools.util.{AddressableFileNode, Bindings, LocalFileSource, Logger, TraceLevel}
 
 object WdlTaskSupport {
@@ -56,7 +57,7 @@ object WdlTaskSupport {
 }
 
 case class WdlTaskSupport(task: TAT.Task,
-                          wdlVersion: WdlVersion,
+                          versionSupport: VersionSupport,
                           typeAliases: Bindings[String, T_Struct],
                           jobMeta: JobMeta,
                           fileUploader: FileUploader)
@@ -68,7 +69,7 @@ case class WdlTaskSupport(task: TAT.Task,
 
   private lazy val evaluator = Eval(
       jobMeta.workerPaths,
-      Some(wdlVersion),
+      Some(versionSupport.version),
       jobMeta.fileResolver,
       Logger.Quiet
   )
@@ -114,7 +115,7 @@ case class WdlTaskSupport(task: TAT.Task,
 
   private def createRuntime(env: Map[String, V]): Runtime = {
     Runtime(
-        wdlVersion,
+        versionSupport.version,
         task.runtime,
         task.hints,
         evaluator,
@@ -164,7 +165,7 @@ case class WdlTaskSupport(task: TAT.Task,
     }
   }
 
-  private lazy val parameterMeta = Meta.create(wdlVersion, task.parameterMeta)
+  private lazy val parameterMeta = Meta.create(versionSupport.version, task.parameterMeta)
 
   /**
     * Input files are represented as dx URLs (dx://proj-xxxx:file-yyyy::/A/B/C.txt)
@@ -535,18 +536,31 @@ case class WdlTaskSupport(task: TAT.Task,
   }
 }
 
-case class WdlTaskSupportFactory() extends TaskSupportFactory {
+case class WdlTaskSupportFactory(regime: TypeCheckingRegime = TypeCheckingRegime.Moderate)
+    extends TaskSupportFactory {
   override def create(jobMeta: JobMeta, fileUploader: FileUploader): Option[WdlTaskSupport] = {
-    val (task, typeAliases, doc) =
+    val (doc, typeAliases, versionSupport) =
       try {
-        WdlUtils.parseAndCheckSingleTask(jobMeta.sourceCode, jobMeta.fileResolver)
+        VersionSupport.fromSourceString(jobMeta.sourceCode, jobMeta.fileResolver, regime)
       } catch {
         case ex: Throwable =>
           Logger.error(s"error parsing ${jobMeta.sourceCode}", Some(ex))
           return None
       }
+    if (doc.workflow.isDefined) {
+      throw new Exception("a workflow shouldn't be a member of this document")
+    }
+    val tasks = doc.elements.collect {
+      case task: TAT.Task => task.name -> task
+    }.toMap
+    if (tasks.isEmpty) {
+      throw new Exception("no tasks in this WDL program")
+    }
+    if (tasks.size > 1) {
+      throw new Exception("More than one task in this WDL program")
+    }
     Some(
-        WdlTaskSupport(task, doc.version.value, typeAliases, jobMeta, fileUploader)
+        WdlTaskSupport(tasks.values.head, versionSupport, typeAliases, jobMeta, fileUploader)
     )
   }
 }

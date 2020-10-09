@@ -12,5 +12,4 @@ trait SourceCode {
   def toString: String
 }
 trait DocumentSource extends SourceCode
-trait ApplicationSource extends SourceCode
 trait WorkflowSource extends SourceCode

@@ -17,7 +17,7 @@ import dx.translator.wdl.WdlDocumentSource
 import org.scalatest.Inside._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import wdlTools.generators.code.WdlV1Generator
+import wdlTools.generators.code.WdlGenerator
 import wdlTools.util.Logger
 
 // These tests involve compilation -without- access to the platform.
@@ -980,10 +980,10 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
         val (_, callable) = bundle.allCallables.head
         callable shouldBe a[Application]
         val task = callable.asInstanceOf[Application]
-        val generator = WdlV1Generator()
+        val generator = WdlGenerator()
         val wdlDoc = task.document match {
-          case WdlDocumentSource(doc) => doc
-          case _                      => throw new Exception("expected a WDL document")
+          case WdlDocumentSource(doc, _) => doc
+          case _                         => throw new Exception("expected a WDL document")
         }
         val taskSource = generator.generateDocument(wdlDoc).mkString("\n")
         taskSource should include(commandSection)

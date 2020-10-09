@@ -11,7 +11,6 @@ import dx.core.languages.Language.Language
 import spray.json.{JsBoolean, JsObject, JsString, JsValue}
 import wdlTools.eval.{Coercion, EvalUtils}
 import wdlTools.eval.WdlValues._
-import wdlTools.generators.code.WdlV1Generator
 import wdlTools.syntax.{
   AbstractSyntax => AST,
   Parsers,
@@ -113,59 +112,6 @@ object WdlUtils {
     val parser = Parsers(followImports = true, fileResolver = fileResolver, logger = logger)
       .getParser(sourceCode)
     parseAndCheckSource(sourceCode, parser, fileResolver, regime, logger)
-  }
-
-  def parseAndCheckSingleTask(
-      sourceCode: String,
-      fileResolver: FileSourceResolver = FileSourceResolver.get
-  ): (TAT.Task, Bindings[String, WdlTypes.T_Struct], TAT.Document) = {
-    val (doc, typeAliases) = parseAndCheckSourceString(sourceCode, fileResolver)
-    if (doc.workflow.isDefined) {
-      throw new Exception("a workflow shouldn't be a member of this document")
-    }
-    val tasks = doc.elements.collect {
-      case task: TAT.Task => task.name -> task
-    }.toMap
-    if (tasks.isEmpty) {
-      throw new Exception("no tasks in this WDL program")
-    }
-    if (tasks.size > 1) {
-      throw new Exception("More than one task in this WDL program")
-    }
-    (tasks.values.head, typeAliases, doc)
-  }
-
-  def parseAndCheckWorkflow(
-      sourceCode: String,
-      fileResolver: FileSourceResolver = FileSourceResolver.get
-  ): (TAT.Workflow, Map[String, TAT.Task], Bindings[String, WdlTypes.T_Struct], TAT.Document) = {
-    val (doc, typeAliases) = parseAndCheckSourceString(sourceCode, fileResolver)
-    val workflow = doc.workflow.getOrElse(
-        throw new RuntimeException("This document should have a workflow")
-    )
-    val tasks = doc.elements.collect {
-      case task: TAT.Task => task.name -> task
-    }.toMap
-    (workflow, tasks, typeAliases, doc)
-  }
-
-  lazy val defaultGenerator: WdlV1Generator = WdlV1Generator()
-
-  def generateDocument(doc: TAT.Document): String = {
-    val sourceString = defaultGenerator.generateDocument(doc).mkString("\n")
-    Logger.get.ignore(WdlUtils.parseAndCheckSourceString(sourceString))
-    sourceString
-  }
-
-  def generateElement(element: TAT.Element, wdlVersion: WdlVersion): String = {
-    val sourceString = defaultGenerator.generateElement(element).mkString("\n")
-    // add the version statement so we can try to parse it
-    val standAloneString = s"version ${wdlVersion.name}\n\n${sourceString}"
-    // we only do parsing, not type checking here, since the element may
-    // not be stand-alone
-    val parser = Parsers.default.getParser(wdlVersion)
-    Logger.get.ignore(parseSource(StringFileNode(standAloneString), parser))
-    sourceString
   }
 
   // create a wdl-value of a specific type.
