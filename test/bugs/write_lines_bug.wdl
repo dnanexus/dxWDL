@@ -3,8 +3,17 @@
 task write_lines_bug {
     Array[File] files
     command <<<
-    filenames=${write_lines(files)}
-    cat $filenames
+    python3 <<CODE
+    # replace the random directory name with a deterministic one
+    dirs = {}
+    for f in [~{sep="<" write_lines(files)}]:
+      parts = f.split("/")
+      if parts[4] not in dirs:
+        dir = f"input{len(dirs)}"
+        dirs[parts[4]] = dir
+      parts[4] = dirs[parts[4]]
+      print(f"{'/'.join(parts)}\n")
+    CODE
     >>>
     output {
         Array[String] result = read_lines(stdout())
