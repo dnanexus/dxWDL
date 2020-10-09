@@ -38,18 +38,19 @@ case class WorkflowCompiler(extras: Option[Extras],
       case StaticInput(value) => Some(value)
       case _                  => parameter.defaultValue
     }
-    parameterToNative(parameter.copy(defaultValue = default))
+    inputParameterToNative(parameter.copy(defaultValue = default))
   }
 
   // Note: a single WDL output can generate one or two JSON outputs.
   private def workflowOutputParameterToNative(parameter: Parameter,
                                               stageInput: StageInput): Vector[JsValue] = {
-    val outputSpec: Map[String, Map[String, JsValue]] = parameterToNative(parameter).map { obj =>
-      val name = obj.fields.get("name") match {
-        case Some(JsString(name)) => name
-        case other                => throw new Exception(s"Unexpected value for 'name' field: ${other}")
-      }
-      name -> obj.fields
+    val outputSpec: Map[String, Map[String, JsValue]] = outputParameterToNative(parameter).map {
+      obj =>
+        val name = obj.fields.get("name") match {
+          case Some(JsString(name)) => name
+          case other                => throw new Exception(s"Unexpected value for 'name' field: ${other}")
+        }
+        name -> obj.fields
     }.toMap
 
     val outputSources: Vector[(String, JsValue)] = stageInput match {

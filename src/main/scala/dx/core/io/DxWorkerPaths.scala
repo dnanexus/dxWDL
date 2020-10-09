@@ -82,6 +82,10 @@ case class DxWorkerPaths(rootDir: Path)
     getMetaDir(ensureParentExists).resolve(DxWorkerPaths.DxfuseManifestFile)
   }
 
+  def getDxuaManifestFile(ensureParentExists: Boolean = false): Path = {
+    getMetaDir(ensureParentExists).resolve(DxWorkerPaths.DxuaManifestFile)
+  }
+
   /**
     * File for storing the state between prolog and epilog of the task runner.
     */
@@ -117,6 +121,7 @@ object DxWorkerPaths {
   val SetupStreamsFile = "setup_streams"
   val DxdaManifestFile = "dxdaManifest.json"
   val DxfuseManifestFile = "dxfuseManifest.json"
+  val DxuaManifestFile = "dxuaManifest.json"
   val DxfuseMountDir = "mnt"
   val TaskEnvFile = "taskEnv.json"
 

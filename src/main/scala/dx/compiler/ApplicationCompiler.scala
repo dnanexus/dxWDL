@@ -24,7 +24,8 @@ import wdlTools.util.Logger
 object ApplicationCompiler {
   val DefaultAppletTimeoutInDays = 2
   // templates
-  private val DockerPreambleTemplate = "templates/docker_preamble.ssp"
+  private val GenericDockerPreambleTemplate = "templates/generic_docker_preamble.ssp"
+  //private val EcrDockerPreambleTemplate = "templates/ecr_docker_preamble.ssp"
   private val DynamicAppletJobTemplate = "templates/dynamic_applet_script.ssp"
   private val StaticAppletJobTemplate = "templates/static_applet_script.ssp"
   private val WorkflowFragmentTempalate = "templates/workflow_fragment_script.ssp"
@@ -70,7 +71,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
         }
         // render the preamble
         renderer.render(
-            ApplicationCompiler.DockerPreambleTemplate,
+            ApplicationCompiler.GenericDockerPreambleTemplate,
             Map(
                 ApplicationCompiler.RegistryKey -> registry,
                 ApplicationCompiler.UsernameKey -> username,
@@ -291,23 +292,32 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
   ): Map[String, JsValue] = {
     logger.trace(s"Building /applet/new request for ${applet.name}")
     // convert inputs and outputs to dxapp inputSpec
-    def parametersToNative(params: Vector[Parameter], paramType: String): Vector[JsValue] = {
-      params
-        .sortWith(_.name < _.name)
-        .flatMap { param =>
-          try {
-            parameterToNative(param)
-          } catch {
-            case ex: Throwable =>
-              throw new Exception(
-                  s"Error converting ${paramType} parameter ${param} to native type",
-                  ex
-              )
-          }
+    val inputSpec: Vector[JsValue] = applet.inputs
+      .sortWith(_.name < _.name)
+      .flatMap { param =>
+        try {
+          inputParameterToNative(param)
+        } catch {
+          case ex: Throwable =>
+            throw new Exception(
+                s"Error converting input parameter ${param} to native type",
+                ex
+            )
         }
-    }
-    val inputSpec: Vector[JsValue] = parametersToNative(applet.inputs, "input")
-    val outputSpec: Vector[JsValue] = parametersToNative(applet.outputs, "output")
+      }
+    val outputSpec: Vector[JsValue] = applet.outputs
+      .sortWith(_.name < _.name)
+      .flatMap { param =>
+        try {
+          outputParameterToNative(param)
+        } catch {
+          case ex: Throwable =>
+            throw new Exception(
+                s"Error converting output parameter ${param} to native type",
+                ex
+            )
+        }
+      }
     // build the dxapp runSpec
     val (runSpec, runSpecDetails) = createRunSpec(applet)
     // A fragemnt is hidden, not visible under default settings. This

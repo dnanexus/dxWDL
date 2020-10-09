@@ -18,5 +18,3 @@ case class SerialFileUploader(dxApi: DxApi = DxApi.get) extends FileUploader {
     files.map(path => path -> dxApi.uploadFile(path)).toMap
   }
 }
-
-// TODO: implement parallel (probably UA-based) uploader

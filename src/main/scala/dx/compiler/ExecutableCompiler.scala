@@ -57,85 +57,101 @@ class ExecutableCompiler(extras: Option[Extras],
 
   // Create the IO Attributes
   private def parameterAttributesToNative(attrs: Vector[ParameterAttribute],
-                                          hasDefault: Boolean): Map[String, JsValue] = {
-    attrs.flatMap {
-      case ParameterAttributes.GroupAttribute(text) =>
-        Some(DxIOSpec.Group -> JsString(text))
-      case ParameterAttributes.HelpAttribute(text) =>
-        Some(DxIOSpec.Help -> JsString(text))
-      case ParameterAttributes.LabelAttribute(text) =>
-        Some(DxIOSpec.Label -> JsString(text))
-      case ParameterAttributes.PatternsAttribute(patterns) =>
-        patterns match {
-          case ParameterAttributes.PatternsArray(array) =>
-            Some(DxIOSpec.Patterns -> JsArray(array.map(JsString(_))))
-          // If we have the alternative patterns object, extrac the values, if any at all
-          case ParameterAttributes.PatternsObject(name, klass, tags) =>
-            Vector(
-                if (name.isEmpty) None else Some("name" -> JsArray(name.map(JsString(_)))),
-                if (tags.isEmpty) None else Some("tag" -> JsArray(tags.map(JsString(_)))),
-                klass.map("class" -> JsString(_))
-            ).flatten match {
-              case Vector() => None
-              case v        => Some(DxIOSpec.Patterns -> JsObject(v.toMap))
-            }
-        }
-      case ParameterAttributes.ChoicesAttribute(choices) =>
-        Some(DxIOSpec.Choices -> JsArray(choices.collect {
-          case ParameterAttributes.SimpleChoice(VString(value))  => JsString(value)
-          case ParameterAttributes.SimpleChoice(VInt(value))     => JsNumber(value)
-          case ParameterAttributes.SimpleChoice(VFloat(value))   => JsNumber(value)
-          case ParameterAttributes.SimpleChoice(VBoolean(value)) => JsBoolean(value)
-          case ParameterAttributes.FileChoice(value, name) => {
-            // TODO: support project and record choices
-            val dxLink = dxApi.resolveFile(value).asJson
-            if (name.isDefined) {
-              JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
-            } else {
-              dxLink
-            }
+                                          excludeAttributes: Set[String]): Map[String, JsValue] = {
+    attrs
+      .flatMap {
+        case ParameterAttributes.GroupAttribute(text) =>
+          Some(DxIOSpec.Group -> JsString(text))
+        case ParameterAttributes.HelpAttribute(text) =>
+          Some(DxIOSpec.Help -> JsString(text))
+        case ParameterAttributes.LabelAttribute(text) =>
+          Some(DxIOSpec.Label -> JsString(text))
+        case ParameterAttributes.PatternsAttribute(patterns) =>
+          patterns match {
+            case ParameterAttributes.PatternsArray(array) =>
+              Some(DxIOSpec.Patterns -> JsArray(array.map(JsString(_))))
+            // If we have the alternative patterns object, extrac the values, if any at all
+            case ParameterAttributes.PatternsObject(name, klass, tags) =>
+              Vector(
+                  if (name.isEmpty) None else Some("name" -> JsArray(name.map(JsString(_)))),
+                  if (tags.isEmpty) None else Some("tag" -> JsArray(tags.map(JsString(_)))),
+                  klass.map("class" -> JsString(_))
+              ).flatten match {
+                case Vector() => None
+                case v        => Some(DxIOSpec.Patterns -> JsObject(v.toMap))
+              }
           }
-          // TODO: ParameterAttributes.DirectoryChoice
-        }))
-      case ParameterAttributes.SuggestionsAttribute(suggestions) =>
-        Some(DxIOSpec.Suggestions -> JsArray(suggestions.collect {
-          case ParameterAttributes.SimpleSuggestion(VString(value))  => JsString(value)
-          case ParameterAttributes.SimpleSuggestion(VInt(value))     => JsNumber(value)
-          case ParameterAttributes.SimpleSuggestion(VFloat(value))   => JsNumber(value)
-          case ParameterAttributes.SimpleSuggestion(VBoolean(value)) => JsBoolean(value)
-          case ParameterAttributes.FileSuggestion(value, name, project, path) => {
-            // TODO: support project and record suggestions
-            val dxLink: Option[JsValue] = value match {
-              case Some(str) => Some(dxApi.resolveFile(str).asJson)
-              case None      => None
+        case ParameterAttributes.ChoicesAttribute(choices) =>
+          Some(DxIOSpec.Choices -> JsArray(choices.collect {
+            case ParameterAttributes.SimpleChoice(VString(value))  => JsString(value)
+            case ParameterAttributes.SimpleChoice(VInt(value))     => JsNumber(value)
+            case ParameterAttributes.SimpleChoice(VFloat(value))   => JsNumber(value)
+            case ParameterAttributes.SimpleChoice(VBoolean(value)) => JsBoolean(value)
+            case ParameterAttributes.FileChoice(value, name) => {
+              // TODO: support project and record choices
+              val dxLink = dxApi.resolveFile(value).asJson
+              if (name.isDefined) {
+                JsObject(Map("name" -> JsString(name.get), "value" -> dxLink))
+              } else {
+                dxLink
+              }
             }
-            if (name.isDefined || project.isDefined || path.isDefined) {
-              val attrs: Map[String, JsValue] = Vector(
-                  if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
-                  if (name.isDefined) Some("name" -> JsString(name.get)) else None,
-                  if (project.isDefined) Some("project" -> JsString(project.get)) else None,
-                  if (path.isDefined) Some("path" -> JsString(path.get)) else None
-              ).flatten.toMap
-              JsObject(attrs)
-            } else if (dxLink.isDefined) {
-              dxLink.get
-            } else {
-              throw new Exception(
-                  "Either 'value' or 'project' + 'path' must be defined for suggestions"
-              )
+            // TODO: ParameterAttributes.DirectoryChoice
+          }))
+        case ParameterAttributes.SuggestionsAttribute(suggestions) =>
+          Some(DxIOSpec.Suggestions -> JsArray(suggestions.collect {
+            case ParameterAttributes.SimpleSuggestion(VString(value))  => JsString(value)
+            case ParameterAttributes.SimpleSuggestion(VInt(value))     => JsNumber(value)
+            case ParameterAttributes.SimpleSuggestion(VFloat(value))   => JsNumber(value)
+            case ParameterAttributes.SimpleSuggestion(VBoolean(value)) => JsBoolean(value)
+            case ParameterAttributes.FileSuggestion(value, name, project, path) => {
+              // TODO: support project and record suggestions
+              val dxLink: Option[JsValue] = value match {
+                case Some(str) => Some(dxApi.resolveFile(str).asJson)
+                case None      => None
+              }
+              if (name.isDefined || project.isDefined || path.isDefined) {
+                val attrs: Map[String, JsValue] = Vector(
+                    if (dxLink.isDefined) Some("value" -> dxLink.get) else None,
+                    if (name.isDefined) Some("name" -> JsString(name.get)) else None,
+                    if (project.isDefined) Some("project" -> JsString(project.get)) else None,
+                    if (path.isDefined) Some("path" -> JsString(path.get)) else None
+                ).flatten.toMap
+                JsObject(attrs)
+              } else if (dxLink.isDefined) {
+                dxLink.get
+              } else {
+                throw new Exception(
+                    "Either 'value' or 'project' + 'path' must be defined for suggestions"
+                )
+              }
             }
-          }
-          // TODO: ParameterAttributes.DirectorySuggestion
-        }))
-      case ParameterAttributes.TypeAttribute(constraint) =>
-        Some(DxIOSpec.Type -> constraintToNative(constraint))
-      case ParameterAttributes.DefaultAttribute(value) if !hasDefault =>
-        // The default was specified in parameter_meta and was not specified in the
-        // parameter specification
-        Some(DxIOSpec.Default -> defaultValueToNative(value))
-      case _ => None
-    }.toMap
+            // TODO: ParameterAttributes.DirectorySuggestion
+          }))
+        case ParameterAttributes.TypeAttribute(constraint) =>
+          Some(DxIOSpec.Type -> constraintToNative(constraint))
+        case ParameterAttributes.DefaultAttribute(value) =>
+          // The default was specified in parameter_meta and was not specified in the
+          // parameter specification
+          Some(DxIOSpec.Default -> defaultValueToNative(value))
+        case _ => None
+      }
+      .toMap
+      .filterNot {
+        case (key, _) => excludeAttributes.contains(key)
+      }
   }
+
+  private def optionalToNative(optional: Boolean): Map[String, JsValue] = {
+    if (optional) {
+      Map("optional" -> JsTrue)
+    } else {
+      Map.empty[String, JsValue]
+    }
+  }
+
+  private val InputOnlyKeys: Set[String] =
+    Set(DxIOSpec.Default, DxIOSpec.Choices, DxIOSpec.Suggestions)
 
   /**
     * Converts an IR Paramter to a native input/output spec.
@@ -152,64 +168,93 @@ class ExecutableCompiler(extras: Option[Extras],
     * Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
     * These are called "Complex Types", or "Complex". They are handled
     * by passing a JSON structure and a vector of dx:files.
-    *
-    * @param parameter the parameter
-    * @return
+    * @param parameter the input Parameter
+    * @return the DNAnexus inputDesc
     */
-  protected def parameterToNative(parameter: Parameter): Vector[JsObject] = {
+  protected def inputParameterToNative(parameter: Parameter): Vector[JsObject] = {
     val name = parameter.dxName
-    val defaultVals: Map[String, JsValue] = parameter.defaultValue match {
-      case None => Map.empty
+    val defaultValues: Map[String, JsValue] = parameter.defaultValue match {
       case Some(wdlValue) =>
         parameterLinkSerializer.createFields(name, parameter.dxType, wdlValue).toMap
+      case None => Map.empty
     }
-    val attributes = parameterAttributesToNative(parameter.attributes, defaultVals.contains(name))
+    val excludeAttributeNames: Set[String] = if (defaultValues.contains(name)) {
+      Set(DxIOSpec.Default)
+    } else {
+      Set.empty
+    }
+    val attributes =
+      parameterAttributesToNative(parameter.attributes, excludeAttributeNames)
     val (nativeType, optional) = TypeSerde.toNative(parameter.dxType)
 
     def defaultValueToNative(name: String): Map[String, JsValue] = {
-      defaultVals.get(name) match {
-        case None      => Map.empty
+      defaultValues.get(name) match {
         case Some(jsv) => Map("default" -> jsv)
+        case None      => Map.empty
       }
     }
 
-    def optionalToNative(optional: Boolean): Map[String, JsValue] = {
-      if (optional) {
-        Map("optional" -> JsBoolean(true))
-      } else {
-        Map.empty[String, JsValue]
-      }
-    }
+    val paramSpec = JsObject(
+        Map("name" -> JsString(name), "class" -> JsString(nativeType))
+          ++ optionalToNative(optional)
+          ++ defaultValueToNative(name)
+          ++ attributes
+    )
 
     if (nativeType == "hash") {
       // A JSON structure passed as a hash, and a vector of platform files
       val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
       Vector(
-          JsObject(
-              Map("name" -> JsString(name), "class" -> JsString("hash"))
-                ++ optionalToNative(optional)
-                ++ defaultValueToNative(name)
-                ++ attributes
-          ),
+          paramSpec,
           JsObject(
               Map(
                   "name" -> JsString(filesName),
                   "class" -> JsString("array:file"),
-                  "optional" -> JsBoolean(true)
+                  "optional" -> JsTrue
               )
                 ++ defaultValueToNative(filesName)
+              // some attributes don't makes sense for the files input
+                ++ attributes.filterNot(x => InputOnlyKeys.contains(x._1))
+          )
+      )
+    } else {
+      Vector(paramSpec)
+    }
+  }
+
+  /**
+    * Similar to inputParameterToNative, but output parameters don't allow some
+    * fields: default, suggestions, choices. Thus, for parameters with defaults,
+    * we always set them to optional regardless of their type.
+    * @param parameter the output Parameter
+    * @return the DNAnexus outputDesc
+    */
+  protected def outputParameterToNative(parameter: Parameter): Vector[JsObject] = {
+    val name = parameter.dxName
+    val attributes =
+      parameterAttributesToNative(parameter.attributes, InputOnlyKeys)
+    val (nativeType, optional) = TypeSerde.toNative(parameter.dxType)
+    val paramSpec = JsObject(
+        Map("name" -> JsString(name), "class" -> JsString(nativeType))
+          ++ optionalToNative(optional || parameter.defaultValue.isDefined)
+          ++ attributes
+    )
+    if (nativeType == "hash") {
+      // A JSON structure passed as a hash, and a vector of platform files
+      val filesName = s"${name}${ParameterLink.FlatFilesSuffix}"
+      Vector(
+          paramSpec,
+          JsObject(
+              Map(
+                  "name" -> JsString(filesName),
+                  "class" -> JsString("array:file"),
+                  "optional" -> JsTrue
+              )
                 ++ attributes
           )
       )
     } else {
-      Vector(
-          JsObject(
-              Map("name" -> JsString(name), "class" -> JsString(nativeType))
-                ++ optionalToNative(optional)
-                ++ defaultValueToNative(name)
-                ++ attributes
-          )
-      )
+      Vector(paramSpec)
     }
   }
 

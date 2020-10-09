@@ -98,8 +98,25 @@
         exit ${bashDollar}rc
     fi
 
-    # evaluate applet outputs, and upload result files
+    # evaluate applet outputs, and upload result files -
+    # this may write a UA manifest
     java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task epilog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+
+    # Upload files using UA
+    if [[ -e ${dxPathConfig.getDxuaManifestFile().toString} ]]; then
+      rc=0
+      ua --manifest ${dxPathConfig.getDxuaManifestFile().toString} >/root/ua.log 2>&1 || rc=${bashDollar}? && true
+
+      # if there was an error during upload, print out the log
+      if [[ ${bashDollar}rc != 0 ]]; then
+        echo "upload agent failed rc=${bashDollar}rc"
+        if [[ -e /root/ua.log ]]; then
+          echo "The upload log is:"
+          cat /root/ua.log
+        fi
+        exit ${bashDollar}rc
+      fi
+    fi
 
     # unmount dxfuse
     if [[ -e ${dxPathConfig.getDxfuseManifestFile().toString} ]]; then
