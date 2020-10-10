@@ -250,32 +250,33 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       case None    => DxAccess.empty
       case Some(_) => DxAccess.empty.copy(allProjects = Some(DxAccessLevel.View))
     }
+    // update depending on applet type
+    val appletKindAccess = applet.kind match {
+      case ExecutableKindApplet if applet.container == NetworkDockerImage =>
+        // docker requires network access, because we are downloading the image from the network
+        Some(DxAccess.empty.copy(network = Vector("*")))
+      case ExecutableKindApplet =>
+        None
+      case ExecutableKindWorkflowOutputReorg =>
+        // The reorg applet requires higher permissions to organize the output directory.
+        Some(DxAccess.empty.copy(project = Some(DxAccessLevel.Contribute)))
+      case _ =>
+        // Scatters need network access, because they spawn subjobs that (may) use dx-docker.
+        // We end up allowing all applets to use the network
+        Some(DxAccess.empty.copy(network = Vector("*")))
+    }
     // merge all
     val access = defaultAccess
       .merge(taskAccess)
       .merge(taskSpecificAccess)
       .merge(allProjectsAccess)
-    // update depending on applet type
-    val updatedAccess = applet.kind match {
-      case ExecutableKindApplet =>
-        if (applet.container == NetworkDockerImage) {
-          // docker requires network access, because we are downloading the image from the network
-          access.merge(DxAccess.empty.copy(network = Vector("*")))
-        } else {
-          access
-        }
-      case ExecutableKindWorkflowOutputReorg =>
-        // The reorg applet requires higher permissions to organize the output directory.
-        access.merge(DxAccess.empty.copy(project = Some(DxAccessLevel.Contribute)))
-      case _ =>
-        // Scatters need network access, because they spawn subjobs that (may) use dx-docker.
-        // We end up allowing all applets to use the network
-        taskAccess.merge(DxAccess.empty.copy(network = Vector("*")))
-    }
-    updatedAccess.toJson match {
+      .mergeOpt(appletKindAccess)
+    val accessJson = access.toJson match {
       case fields if fields.isEmpty => JsNull
       case fields                   => JsObject(fields)
     }
+    println(accessJson)
+    accessJson
   }
 
   /**

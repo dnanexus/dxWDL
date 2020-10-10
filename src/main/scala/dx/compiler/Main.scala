@@ -228,6 +228,10 @@ object Main {
         (project, folder)
       case (None, Some(project), None) =>
         (project, "/")
+      case (None, None, None) =>
+        val project = dxApi.currentProjectId.get
+        Logger.get.warning(s"Project is unspecified...using currently select project ${project}")
+        (project, "/")
       case _ =>
         throw OptionParseException("Project is unspecified")
     }

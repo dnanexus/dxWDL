@@ -88,7 +88,7 @@ case class DxAccess(network: Vector[String],
 
   // Merge with an additional set of access requirments.
   // Take the maximum for each field, and merge the network.
-  def merge(dxa: DxAccess): DxAccess = {
+  def merge(from: DxAccess): DxAccess = {
     def mergeAccessLevels(al1: Option[DxAccessLevel],
                           al2: Option[DxAccessLevel]): Option[DxAccessLevel] = {
       Vector(al1, al2).flatten match {
@@ -104,18 +104,25 @@ case class DxAccess(network: Vector[String],
         case _            => None
       }
     }
-    val networkMerged = (network.toSet ++ dxa.network.toSet).toVector match {
+    val networkMerged = (network ++ from.network).toSet match {
       // "*" includes all other addresses
-      case v if v.contains("*") => Vector("*")
-      case v                    => v
+      case s if s.contains("*") => Vector("*")
+      case s                    => s.toVector
     }
     DxAccess(
         networkMerged,
-        mergeAccessLevels(project, dxa.project),
-        mergeAccessLevels(allProjects, dxa.allProjects),
-        mergeBooleans(developer, dxa.developer),
-        mergeBooleans(projectCreation, dxa.projectCreation)
+        mergeAccessLevels(project, from.project),
+        mergeAccessLevels(allProjects, from.allProjects),
+        mergeBooleans(developer, from.developer),
+        mergeBooleans(projectCreation, from.projectCreation)
     )
+  }
+
+  def mergeOpt(from: Option[DxAccess]): DxAccess = {
+    from match {
+      case Some(access) => merge(access)
+      case None         => this
+    }
   }
 }
 
