@@ -1,5 +1,5 @@
 {
-  "write_lines_bug.result": [
+  "write_lines_bug.strings": [
     "/home/dnanexus/inputs/input0/fileA",
     "/home/dnanexus/inputs/input0/fileB"
   ]

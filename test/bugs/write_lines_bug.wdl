@@ -36,13 +36,13 @@ task fix_paths {
     python3 <<CODE
     # replace the random directory name with a deterministic one
     dirs = {}
-    for f in ["~{sep="','" strings}"]:
+    for f in ['~{sep="','" strings}']:
       parts = f.split("/")
       if parts[4] not in dirs:
-        dir = f"input{len(dirs)}"
-        dirs[parts[4]] = dir
+        d = f"input{len(dirs)}"
+        dirs[parts[4]] = d
       parts[4] = dirs[parts[4]]
-      print(f"{'/'.join(parts)}\n")
+      print(f"{'/'.join(parts)}")
     CODE
     >>>
 
