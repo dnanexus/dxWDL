@@ -271,12 +271,10 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
       .merge(taskSpecificAccess)
       .merge(allProjectsAccess)
       .mergeOpt(appletKindAccess)
-    val accessJson = access.toJson match {
+    access.toJson match {
       case fields if fields.isEmpty => JsNull
       case fields                   => JsObject(fields)
     }
-    println(accessJson)
-    accessJson
   }
 
   /**
