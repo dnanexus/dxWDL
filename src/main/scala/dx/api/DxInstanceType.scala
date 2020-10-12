@@ -54,9 +54,11 @@ case class InstanceTypeRequest(dxInstanceType: Option[String] = None,
                                diskGB: Option[Long] = None,
                                diskType: Option[DiskType.DiskType] = None,
                                cpu: Option[Long] = None,
-                               gpu: Option[Boolean] = None) {
+                               gpu: Option[Boolean] = None,
+                               os: Option[ExecutionEnvironment] = None) {
   override def toString: String = {
-    s"memory=${memoryMB} disk=${diskGB} diskType=${diskType} cores=${cpu} gpu=${gpu} instancetype=${dxInstanceType}"
+    s"""memory=${memoryMB} disk=${diskGB} diskType=${diskType} cores=${cpu} gpu=${gpu} 
+       |os=${os} instancetype=${dxInstanceType}""".stripMargin.replaceAll("\n", " ")
   }
 }
 
@@ -82,14 +84,17 @@ case class DxInstanceType(name: String,
 
   // Does this instance satisfy the requirements?
   def satisfies(query: InstanceTypeRequest): Boolean = {
-    if (query.dxInstanceType.contains(name)) {
+    val s = if (query.dxInstanceType.contains(name)) {
       true
     } else {
       query.memoryMB.forall(_ <= memoryMB) &&
       query.diskGB.forall(_ <= diskGB) &&
       query.cpu.forall(_ <= cpu) &&
-      query.gpu.forall(_ == gpu)
+      query.gpu.forall(_ == gpu) &&
+      query.os.forall(queryOs => os.contains(queryOs))
     }
+    Logger.get.trace(s"${this} ${query} ${s}")
+    s
   }
 
   def compareByPrice(that: DxInstanceType): Int = {
@@ -166,8 +171,8 @@ object DxInstanceType extends DefaultJsonProtocol {
       DxInstanceType.apply
   )
   val Version2Suffix = "_v2"
-  val MemoryNormFactor = 1024.0
-  val DiskNormFactor = 16.0
+  val MemoryNormFactor: Double = 1024.0
+  val DiskNormFactor: Double = 16.0
 }
 
 case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAvailable: Boolean) {
@@ -184,8 +189,8 @@ case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAva
     * processing, launch jobs, etc.
     */
   lazy val defaultInstanceType: DxInstanceType = {
-    // exclude nano instances, they aren't strong enough.
     selectMinimalInstanceType(instanceTypes.values.filter { instanceType =>
+      instanceType.name.contains(DxInstanceType.Version2Suffix) &&
       !instanceType.name.contains("test") &&
       instanceType.memoryMB >= InstanceTypeDB.MinMemory &&
       instanceType.cpu >= InstanceTypeDB.MinCpu

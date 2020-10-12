@@ -1016,6 +1016,7 @@ Main.compile(args.toVector) shouldBe a[SuccessIR]
                                                       None,
                                                       None,
                                                       None,
+                                                      None,
                                                       None)
     }
   }

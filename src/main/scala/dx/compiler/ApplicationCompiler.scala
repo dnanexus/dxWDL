@@ -123,8 +123,8 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
   private def createRunSpec(applet: Application): (JsValue, Map[String, JsValue]) = {
     // find the dxWDL asset
     val instanceType: DxInstanceType = applet.instanceType match {
-      case StaticInstanceType(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu) =>
-        val request = InstanceTypeRequest(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu)
+      case StaticInstanceType(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu, os) =>
+        val request = InstanceTypeRequest(dxInstanceType, memoryMB, diskGB, diskType, cpu, gpu, os)
         instanceTypeDb.apply(request)
       case DefaultInstanceType | DynamicInstanceType =>
         instanceTypeDb.defaultInstanceType

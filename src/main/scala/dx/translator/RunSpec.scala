@@ -1,7 +1,7 @@
 package dx.translator
 
 import dx.api.DiskType.DiskType
-import dx.api.DxFile
+import dx.api.{DxFile, ExecutionEnvironment}
 import dx.core.ir.RuntimeRequirement
 
 /**
@@ -44,7 +44,8 @@ object RunSpec {
       diskGB: Option[Long],
       diskType: Option[DiskType],
       cpu: Option[Long],
-      gpu: Option[Boolean]
+      gpu: Option[Boolean],
+      os: Option[ExecutionEnvironment]
   ) extends InstanceType
   case object DynamicInstanceType extends InstanceType
 
