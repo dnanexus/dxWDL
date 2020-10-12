@@ -120,7 +120,7 @@ case class TaskExecutor(jobMeta: JobMeta,
     trace(s"current instance type: ${curInstanceType}")
     val isSufficient =
       try {
-        jobMeta.instanceTypeDb.compareByResources(reqInstanceType, curInstanceType) <= 0
+        jobMeta.instanceTypeDb.compareByResources(reqInstanceType, curInstanceType).exists(_ <= 0)
       } catch {
         case ex: Throwable =>
           logger.warning("error comparing current and required instance types",

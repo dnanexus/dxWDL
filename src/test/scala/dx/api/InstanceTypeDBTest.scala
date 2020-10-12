@@ -155,8 +155,9 @@ class InstanceTypeDBTest extends AnyFlatSpec with Matchers {
   private val dbNoPrices = genTestDB(false)
 
   it should "compare two instance types" in {
-    dbFull.compareByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be < 0
-    dbFull.compareByResources("mem1_ssd1_x4", "mem3_ssd1_x2") shouldBe 0
+    val c1 = dbFull.compareByResources("mem1_ssd1_x2", "mem1_ssd1_x8").get
+    c1 should be < 0
+    dbFull.compareByResources("mem1_ssd1_x4", "mem3_ssd1_x2") shouldBe None
     // non existant instance
     assertThrows[Exception] {
       dbFull.compareByResources("mem1_ssd2_x2", "ggxx") shouldBe 0

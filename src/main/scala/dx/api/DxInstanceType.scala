@@ -84,7 +84,7 @@ case class DxInstanceType(name: String,
 
   // Does this instance satisfy the requirements?
   def satisfies(query: InstanceTypeRequest): Boolean = {
-    val s = if (query.dxInstanceType.contains(name)) {
+    if (query.dxInstanceType.contains(name)) {
       true
     } else {
       query.memoryMB.forall(_ <= memoryMB) &&
@@ -93,8 +93,6 @@ case class DxInstanceType(name: String,
       query.gpu.forall(_ == gpu) &&
       query.os.forall(queryOs => os.contains(queryOs))
     }
-    Logger.get.trace(s"${this} ${query} ${s}")
-    s
   }
 
   def compareByPrice(that: DxInstanceType): Int = {
@@ -122,7 +120,7 @@ case class DxInstanceType(name: String,
     * @return
     * @example If A has more memory, disk space, and cores than B, then B < A.
     */
-  def compareByResources(that: DxInstanceType, fuzzy: Boolean = true): Int = {
+  def compareByResources(that: DxInstanceType, fuzzy: Boolean = true): Option[Int] = {
     val (memDelta, diskDelta) = if (fuzzy) {
       ((this.memoryMB.toDouble / DxInstanceType.MemoryNormFactor) - (that.memoryMB.toDouble / DxInstanceType.MemoryNormFactor),
        (this.diskGB.toDouble / DxInstanceType.DiskNormFactor) - (that.diskGB.toDouble / DxInstanceType.DiskNormFactor))
@@ -131,12 +129,11 @@ case class DxInstanceType(name: String,
     }
     val cpuDelta: Double = this.cpu - that.cpu
     val gpuDelta: Double = (if (this.gpu) 1 else 0) - (if (that.gpu) 1 else 0)
-    //println(Vector(memDelta, diskDelta, cpuDelta, gpuDelta))
     Set(memDelta, diskDelta, cpuDelta, gpuDelta).toVector.sortWith(_ < _) match {
-      case Vector(0)                  => 0
-      case deltas if deltas.head >= 0 => 1
-      case deltas if deltas.last <= 0 => -1
-      case _                          => 0
+      case Vector(0.0)                  => Some(0)
+      case deltas if deltas.head >= 0.0 => Some(1)
+      case deltas if deltas.last <= 0.0 => Some(-1)
+      case _                            => None
     }
   }
 
@@ -152,7 +149,7 @@ case class DxInstanceType(name: String,
     val costDiff = if (price.isDefined) {
       compareByPrice(that)
     } else {
-      compareByResources(that)
+      compareByResources(that).getOrElse(0)
     }
     costDiff match {
       case 0 => -compareByType(that)
@@ -189,17 +186,22 @@ case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAva
     * processing, launch jobs, etc.
     */
   lazy val defaultInstanceType: DxInstanceType = {
-    selectMinimalInstanceType(instanceTypes.values.filter { instanceType =>
-      instanceType.name.contains(DxInstanceType.Version2Suffix) &&
-      !instanceType.name.contains("test") &&
-      instanceType.memoryMB >= InstanceTypeDB.MinMemory &&
-      instanceType.cpu >= InstanceTypeDB.MinCpu
-    }).getOrElse(
-        throw new Exception(
-            s"""no instance types meet the minimal requirements memory >= ${InstanceTypeDB.MinMemory} 
-               |AND cpu >= ${InstanceTypeDB.MinCpu}""".stripMargin.replaceAll("\n", " ")
-        )
-    )
+    val (v2InstanceTypes, v1InstanceTypes) = instanceTypes.values
+      .filter { instanceType =>
+        !instanceType.name.contains("test") &&
+        instanceType.memoryMB >= InstanceTypeDB.MinMemory &&
+        instanceType.cpu >= InstanceTypeDB.MinCpu
+      }
+      .partition(_.name.contains(DxInstanceType.Version2Suffix))
+    // prefer v2 instance types
+    selectMinimalInstanceType(v2InstanceTypes)
+      .orElse(selectMinimalInstanceType(v1InstanceTypes))
+      .getOrElse(
+          throw new Exception(
+              s"""no instance types meet the minimal requirements memory >= ${InstanceTypeDB.MinMemory} 
+                 |AND cpu >= ${InstanceTypeDB.MinCpu}""".stripMargin.replaceAll("\n", " ")
+          )
+      )
   }
 
   def selectAll(query: InstanceTypeRequest): Iterable[DxInstanceType] = {
@@ -271,7 +273,7 @@ case class InstanceTypeDB(instanceTypes: Map[String, DxInstanceType], pricingAva
 
   // check if instance type A is smaller or equal in requirements to
   // instance type B
-  def compareByResources(name1: String, name2: String, fuzzy: Boolean = false): Int = {
+  def compareByResources(name1: String, name2: String, fuzzy: Boolean = false): Option[Int] = {
     Vector(name1, name2).map(instanceTypes.get) match {
       case Vector(Some(i1), Some(i2)) =>
         i1.compareByResources(i2, fuzzy = fuzzy)
