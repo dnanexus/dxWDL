@@ -121,7 +121,7 @@ case class DxInstanceType(name: String,
     * @example If A has more memory, disk space, and cores than B, then B < A.
     */
   def compareByResources(that: DxInstanceType, fuzzy: Boolean = true): Option[Int] = {
-    val (memDelta, diskDelta) = if (fuzzy) {
+    val (memDelta: Double, diskDelta: Double) = if (fuzzy) {
       ((this.memoryMB.toDouble / DxInstanceType.MemoryNormFactor) - (that.memoryMB.toDouble / DxInstanceType.MemoryNormFactor),
        (this.diskGB.toDouble / DxInstanceType.DiskNormFactor) - (that.diskGB.toDouble / DxInstanceType.DiskNormFactor))
     } else {
