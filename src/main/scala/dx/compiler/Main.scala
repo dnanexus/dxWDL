@@ -1,6 +1,6 @@
 package dx.compiler
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import com.typesafe.config.ConfigFactory
 import dx.api.{DxApi, DxApplet, DxDataObject, DxProject, DxUtils}
@@ -15,7 +15,7 @@ import dx.core.CliUtils._
 import dx.dxni.DxNativeInterface
 import dx.translator.{Extras, ExtrasParser, TranslatorFactory}
 import spray.json._
-import wdlTools.util.{Enum, FileSourceResolver, Logger, TraceLevel}
+import wdlTools.util.{Enum, FileSourceResolver, FileUtils, Logger, TraceLevel}
 
 /**
   * Compiler CLI.
@@ -450,7 +450,7 @@ object Main {
     }
 
     val language = options.getValue[Language]("language").getOrElse(Language.WdlDefault)
-    val outputFile: Path = options.getRequiredValue[Path]("outputFile")
+    val outputPath: Option[Path] = options.getValue[Path]("outputFile")
     val projectOpt = options.getValue[String]("project")
     val folderOpt = options.getValue[String]("folder")
     val pathOpt = options.getValue[String]("path")
@@ -485,10 +485,29 @@ object Main {
           }
       )
 
+    def writeOutput(doc: Vector[String]): Unit = {
+      val path = outputPath.map { path =>
+        if (Files.exists(path)) {
+          if (!force) {
+            throw new Exception(
+                s"Output file ${outputPath.toString} already exists, use -force to overwrite it"
+            )
+          }
+          path.toFile.delete
+        }
+        path
+      }
+      if (path.isDefined) {
+        FileUtils.writeFileContent(path.get, doc.mkString("\n"))
+      } else {
+        System.out.println(doc.mkString("\n"))
+      }
+    }
+
     val dxni = DxNativeInterface(fileResolver)
     if (apps == AppsOption.Only) {
       try {
-        dxni.apply(language, outputFile, force, pathOpt)
+        writeOutput(dxni.apply(language, pathOpt))
         Success()
       } catch {
         case e: Throwable => Failure(exception = Some(e))
@@ -502,27 +521,21 @@ object Main {
           throw new RuntimeException(s"unexpected value for --apps ${apps}")
       }
       try {
-        folderOrFile match {
+        val output = folderOrFile match {
           case Left(folder) =>
             dxni.apply(language,
-                       outputFile,
                        dxProject,
                        folder = Some(folder),
                        recursive = recursive,
-                       includeApps = includeApps,
-                       force = force)
+                       includeApps = includeApps)
           case Right(applet: DxApplet) =>
-            dxni.apply(language,
-                       outputFile,
-                       dxProject,
-                       applet = Some(applet),
-                       includeApps = includeApps,
-                       force = force)
+            dxni.apply(language, dxProject, applet = Some(applet), includeApps = includeApps)
           case _ =>
             throw OptionParseException(
                 s"Invalid folder/path ${folderOrFile}"
             )
         }
+        writeOutput(output)
         Success()
       } catch {
         case e: Throwable => Failure(exception = Some(e))
@@ -643,8 +656,8 @@ object Main {
         |    without modification. Default is to look for applets.
         |    options:
         |      -apps                  Whether to 'include' apps, 'exclude' apps, or 'only' generate app stubs.
-        |      -path <string>         Path to a specific applet
-        |      -o <string>            Destination file for WDL task definitions
+        |      -path <string>         Name of specific app/path to a specific applet
+        |      -o <path>              Destination file for WDL task definitions (defaults to stdout)
         |      -r | recursive         Recursive search
         |
         |Common options

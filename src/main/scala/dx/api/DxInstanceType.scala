@@ -26,21 +26,20 @@ price       comparative price
   */
 package dx.api
 
+import dx.api
 import wdlTools.util.{Enum, JsUtils, Logger}
 import wdlTools.util.Enum.enumFormat
 import spray.json.{RootJsonFormat, _}
 
+import scala.collection.immutable.ListMap
+
 object DiskType extends Enum {
   type DiskType = Value
   val HDD, SSD = Value
-  val Aliases = Map("sdd" -> SSD)
+  private val Aliases = Map("SDD" -> SSD)
 
-  override def hasNameIgnoreCase(name: String): Boolean = {
-    super.hasNameIgnoreCase(name) || Aliases.contains(name.toLowerCase)
-  }
-
-  override def withNameIgnoreCase(name: String): DiskType.DiskType = {
-    Aliases.getOrElse(name.toLowerCase, super.withNameIgnoreCase(name))
+  override protected lazy val nameToValue: ListMap[String, api.DiskType.Value] = {
+    ListMap.from(values.map(x => x.toString -> x).toVector ++ Aliases.toVector)
   }
 }
 
