@@ -5,7 +5,7 @@ import dx.core.Constants
 import dx.core.getVersion
 import dx.core.languages.Language.Language
 import dx.dxni.wdl.WdlDxNativeInterfaceFactory
-import wdlTools.util.{FileSourceResolver, FileUtils, Logger}
+import wdlTools.util.{FileSourceResolver, Logger}
 
 trait NativeInterfaceGenerator {
   def generate(apps: Vector[DxApp] = Vector.empty,

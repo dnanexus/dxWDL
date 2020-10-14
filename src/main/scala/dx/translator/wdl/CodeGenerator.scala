@@ -167,7 +167,7 @@ case class CodeGenerator(typeAliases: Map[String, WdlTypes.T_Struct],
       callable.outputVars
         .sortWith(_.name < _.name)
         .map { parameter =>
-          val wdlType = WdlUtils.fromIRType(parameter.dxType)
+          val wdlType = WdlUtils.fromIRType(parameter.dxType, typeAliases)
           val defaultVal = WdlUtils.getDefaultValueOfType(wdlType)
           TAT.OutputParameter(parameter.name, wdlType, defaultVal, SourceLocation.empty)
         }

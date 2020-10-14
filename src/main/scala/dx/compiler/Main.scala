@@ -151,7 +151,8 @@ object Main {
       dxApi: DxApi,
       project: Option[String],
       folder: Option[String],
-      path: Option[String] = None
+      path: Option[String] = None,
+      create: Boolean = false
   ): (DxProject, Either[String, DxDataObject]) = {
     val projectId = project.getOrElse({
       val projectId = dxApi.currentProjectId.get
@@ -173,7 +174,11 @@ object Main {
         // Validate the folder.
         // TODO: check for folder existance rather than listing the contents, which could
         //   be very large.
-        dxProject.listFolder(f)
+        if (create) {
+          dxProject.newFolder(f, parents = true)
+        } else {
+          dxProject.listFolder(f)
+        }
         Left(f)
       case (None, Some(p)) =>
         // validate the file
@@ -189,10 +194,10 @@ object Main {
     (dxProject, folderOrPath)
   }
 
-  private def resolveDestination(dxApi: DxApi,
-                                 project: String,
-                                 folder: String): (DxProject, String) = {
-    resolveDestination(dxApi, Some(project), Some(folder)) match {
+  private def resolveOrCreateDestination(dxApi: DxApi,
+                                         project: String,
+                                         folder: String): (DxProject, String) = {
+    resolveDestination(dxApi, Some(project), Some(folder), create = true) match {
       case (dxProject, Left(folder)) => (dxProject, folder)
       case _                         => throw new Exception("expected folder")
     }
@@ -228,6 +233,10 @@ object Main {
         (project, folder)
       case (None, Some(project), None) =>
         (project, "/")
+      case (None, None, Some(folder)) =>
+        val project = dxApi.currentProjectId.get
+        Logger.get.warning(s"Project is unspecified...using currently select project ${project}")
+        (project, folder)
       case (None, None, None) =>
         val project = dxApi.currentProjectId.get
         Logger.get.warning(s"Project is unspecified...using currently select project ${project}")
@@ -235,7 +244,7 @@ object Main {
       case _ =>
         throw OptionParseException("Project is unspecified")
     }
-    resolveDestination(dxApi, project, folder)
+    resolveOrCreateDestination(dxApi, project, folder)
   }
 
   def compile(args: Vector[String]): Termination = {
