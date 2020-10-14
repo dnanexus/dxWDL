@@ -33,6 +33,15 @@ import spray.json.{RootJsonFormat, _}
 object DiskType extends Enum {
   type DiskType = Value
   val HDD, SSD = Value
+  val Aliases = Map("sdd" -> SSD)
+
+  override def hasNameIgnoreCase(name: String): Boolean = {
+    super.hasNameIgnoreCase(name) || Aliases.contains(name.toLowerCase)
+  }
+
+  override def withNameIgnoreCase(name: String): DiskType.DiskType = {
+    Aliases.getOrElse(name.toLowerCase, super.withNameIgnoreCase(name))
+  }
 }
 
 case class ExecutionEnvironment(distribution: String,
