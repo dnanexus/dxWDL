@@ -1,5 +1,10 @@
 # Release Notes
 
+## 2.0.0-rc2 14-10-2020
+
+- Major code reorganization to separate the compiler from executor
+- Upgrade of dxda to v0.5.4 and dxfuse - to v0.22.4
+
 ## 2.0.0-rc2
 
 - Mostly internal changes and code re-organization, in preparation for adding CWL support
