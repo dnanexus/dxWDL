@@ -741,7 +741,7 @@ case class DxApi(logger: Logger = Logger.get,
         case _ =>
           throw new Exception(s"API call returned invalid exists field")
       }
-      existingIds match {
+      existingIds.filter(_.isInstanceOf[String]) match {
         case Vector() =>
           logger.trace(
               s"Created ${assetRecord.id} in ${destProject.id} pointing to asset ${assetName}"
