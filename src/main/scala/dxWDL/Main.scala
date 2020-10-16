@@ -183,7 +183,7 @@ object Main extends App {
             checkNumberOfArguments(keyword, 0, subargs)
             ("streamAllFiles", "")
           case "streamFiles" =>
-            checkNumberOfArguments(keyword, 0, subargs)
+            checkNumberOfArguments(keyword, 1, subargs)
             ("streamFiles", "")
           case "verbose" =>
             checkNumberOfArguments(keyword, 0, subargs)
@@ -336,10 +336,10 @@ object Main extends App {
         )
     }
 
-  private def parseStreamAllFiles(s: String): Boolean = {
+  private def parseStreamAllFiles(s: String): Option[String] = {
     s.toLowerCase match {
-      case "true"  => "all"
-      case "false" => null
+      case "true"  => Utils.ALL
+      case "false" => None
       case other =>
         throw new Exception(
             s"""|the streamAllFiles flag must be a boolean (true,false).
@@ -349,13 +349,13 @@ object Main extends App {
     }
   }
 
-  private def parseStreamFiles(s: String): Boolean = {
+  private def parseStreamFiles(s: String): Option[String] = {
     s.toLowerCase match {
-      case "all"  => "all"
-      case "none" => "none"
+      case "all"  => Utils.ALL
+      case "none" => Utils.NONE
       case other =>
         throw new Exception(
-            s"""|the streamFiles flag must be either "none", "all", or unset.
+            s"""|the streamFiles flag must be either "none", "all", or left unset.
                 |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
@@ -441,15 +441,21 @@ object Main extends App {
           size
         }
     }
-    if (options contains "streamAllFiles" && (options contains "streamFiles")) {
+    if (options contains "streamAllFiles" && options contains "streamFiles") {
         throw new InvalidInputException(
           "ERROR: cannot provide -streamAllFiles (deprecated) and -streamFiles at the same time."
         )
     }
-    val streamFiles = options.get("streamAllFiles") match {
-      case None => None
-      case Some(x) =>
-
+    if (options contains "streamFiles") {
+      val streamFiles = options.get("streamFiles")
+    } elif (options contains "streamAllFiles") {
+      val streamFiles = options.get("streamAllFiles") match {
+          case None => None
+          case Some(x) => x.map {
+            case "true" => Utils.ALL
+            case "false" => None
+          }
+      }
     }
 
     CompilerOptions(
@@ -994,7 +1000,10 @@ object Main extends App {
       case Some(op) if args.length == 4 =>
         val homeDir = Paths.get(args(1))
         val rtDebugLvl = parseRuntimeDebugLevel(args(2))
-        val streamAllFiles = parseStreamAllFiles(args(3))
+        val streamFiles = parseStreamFiles(args(3))
+        if (streamFiles == None) {
+          streamFiles = parseStreamAllFiles(args(3))
+        }
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
           Utils.jobFilesOfHomeDir(homeDir)
         val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)

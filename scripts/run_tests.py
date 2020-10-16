@@ -745,6 +745,8 @@ def main():
         compiler_flags.append("-verbose")
     if args.stream_all_files:
         compiler_flags.append("-streamAllFiles")
+    if args.stream_files:
+        compiler_flags.append("-streamFiles", args.stream_files)
     if args.verbose_key:
         for key in args.verbose_key:
             compiler_flags += ["-verboseKey", key]

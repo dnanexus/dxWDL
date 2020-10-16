@@ -47,6 +47,8 @@ object Utils {
   val DEFAULT_JOBS_PER_SCATTER = 500
   val MAX_JOBS_PER_SCATTER = 1000
   val SCATTER_CHUNK_SIZE = "scatterChunkSize"
+  val NONE = "none"
+  val ALL = "all"
 
   var traceLevel = 0
 
