@@ -729,10 +729,12 @@ case class DxApi(logger: Logger = Logger.get,
       val responseJs = projectClone(sourceProject.id, request)
       val existingIds = responseJs.fields.get("exists") match {
         case Some(JsArray(x)) =>
-          x.map {
-            case JsString(id) if DxUtils.isRecordId(id) => id
+          x.flatMap {
+            case JsString(id) if DxUtils.isRecordId(id) =>
+              Some(id)
             case JsString(id) =>
               logger.trace(s"ignoring non-record id ${id}", minLevel = TraceLevel.VVerbose)
+              None
             case other =>
               throw new Exception(s"expected 'exists' field to be a string, not ${other}")
           }
@@ -741,7 +743,7 @@ case class DxApi(logger: Logger = Logger.get,
         case _ =>
           throw new Exception(s"API call returned invalid exists field")
       }
-      existingIds.filter(_.isInstanceOf[String]) match {
+      existingIds match {
         case Vector() =>
           logger.trace(
               s"Created ${assetRecord.id} in ${destProject.id} pointing to asset ${assetName}"
