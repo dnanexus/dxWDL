@@ -282,7 +282,10 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
     inputs
       .map {
         case (iDef, womValue) =>
-          if (dxIoFunctions.config.streamAllFiles) {
+          if (dxIoFunctions.config.streamFiles == "all") {
+            findFiles(womValue)
+          } elif (dxIoFunctions.config.streamFiles == "none") {
+            //TODO
             findFiles(womValue)
           } else {
             // This is better than "iDef.parameterMeta", but it does not

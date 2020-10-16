@@ -50,8 +50,8 @@ object Main extends App {
   // runtime, not at compile time. On the cloud instance running the
   // job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
-    DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
+  private def buildRuntimePathConfig(streamFiles: Option[String], verbose: Boolean): DxPathConfig = {
+    DxPathConfig.apply(baseDNAxDir, streamFiles, verbose)
   }
 
   private def normKey(s: String): String = {
@@ -182,6 +182,9 @@ object Main extends App {
           case "streamAllFiles" =>
             checkNumberOfArguments(keyword, 0, subargs)
             ("streamAllFiles", "")
+          case "streamFiles" =>
+            checkNumberOfArguments(keyword, 0, subargs)
+            ("streamFiles", "")
           case "verbose" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
@@ -335,11 +338,24 @@ object Main extends App {
 
   private def parseStreamAllFiles(s: String): Boolean = {
     s.toLowerCase match {
-      case "true"  => true
-      case "false" => false
+      case "true"  => "all"
+      case "false" => null
       case other =>
         throw new Exception(
             s"""|the streamAllFiles flag must be a boolean (true,false).
+                |Value ${other} is illegal.""".stripMargin
+              .replaceAll("\n", " ")
+        )
+    }
+  }
+
+  private def parseStreamFiles(s: String): Boolean = {
+    s.toLowerCase match {
+      case "all"  => "all"
+      case "none" => "none"
+      case other =>
+        throw new Exception(
+            s"""|the streamFiles flag must be either "none", "all", or unset.
                 |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
@@ -425,6 +441,16 @@ object Main extends App {
           size
         }
     }
+    if (options contains "streamAllFiles" && (options contains "streamFiles")) {
+        throw new InvalidInputException(
+          "ERROR: cannot provide -streamAllFiles (deprecated) and -streamFiles at the same time."
+        )
+    }
+    val streamFiles = options.get("streamAllFiles") match {
+      case None => None
+      case Some(x) =>
+
+    }
 
     CompilerOptions(
         options contains "archive",
@@ -440,6 +466,7 @@ object Main extends App {
         options contains "projectWideReuse",
         options contains "reorg",
         options contains "streamAllFiles",
+        options contains "streamFiles",
         // options contains "execTree",
         treePrinter,
         runtimeDebugLevel,
@@ -558,7 +585,7 @@ object Main extends App {
           return SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
-          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
+          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamFiles, cOpt.verbose.on)
           val (retval, treeDesc) =
             top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
           treeDesc match {
@@ -1081,6 +1108,10 @@ object Main extends App {
         |                             job log at runtime. Zero means write the minimum,
         |                             one is the default, and two is for internal debugging.
         |      -streamAllFiles        mount all files with dxfuse, do not use the download agent
+        |      -streamFiles           if set to "all", it will mount all files with dxfuse and won't
+        |                             use the download agent; if set to "none", it will not use dxfuse
+        |                             for any files (it overrides stream options for particular inputs)
+        |
         |
         |  dxni
         |    Dx Native call Interface. Create stubs for calling dx
