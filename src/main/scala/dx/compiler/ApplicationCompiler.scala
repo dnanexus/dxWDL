@@ -14,7 +14,16 @@ import dx.core.Constants
 import dx.core.io.DxWorkerPaths
 import dx.core.ir._
 import wdlTools.util.CodecUtils
-import dx.translator.{DockerRegistry, DxAccess, DxExecPolicy, DxRunSpec, DxTimeout, Extras}
+import dx.translator.{
+  AwsDockerRegistry,
+  DockerRegistry,
+  DxAccess,
+  DxExecPolicy,
+  DxRunSpec,
+  DxTimeout,
+  Extras,
+  GenericDockerRegistry
+}
 import dx.translator.CallableAttributes._
 import dx.translator.RunSpec._
 import spray.json._
@@ -25,7 +34,7 @@ object ApplicationCompiler {
   val DefaultAppletTimeoutInDays = 2
   // templates
   private val GenericDockerPreambleTemplate = "templates/generic_docker_preamble.ssp"
-  //private val EcrDockerPreambleTemplate = "templates/ecr_docker_preamble.ssp"
+  private val EcrDockerPreambleTemplate = "templates/ecr_docker_preamble.ssp"
   private val DynamicAppletJobTemplate = "templates/dynamic_applet_script.ssp"
   private val StaticAppletJobTemplate = "templates/static_applet_script.ssp"
   private val WorkflowFragmentTempalate = "templates/workflow_fragment_script.ssp"
@@ -33,6 +42,9 @@ object ApplicationCompiler {
   // keys used in templates
   private val RegistryKey = "registry"
   private val UsernameKey = "username"
+  private val ConfigKey = "config"
+  private val CredentialsKey = "credentials"
+  private val ProfileKey = "profile"
 }
 
 case class ApplicationCompiler(typeAliases: Map[String, Type],
@@ -53,30 +65,51 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
 
   // Preamble required for accessing a private docker registry (if required)
   private lazy val dockerRegistry: Option[DockerRegistry] = extras.flatMap(_.dockerRegistry)
+  private def checkFile(name: String, uri: String): Unit = {
+    // check that the file is a valid platform path
+    try {
+      logger.ignore(dxApi.resolveFile(uri))
+    } catch {
+      case e: Throwable =>
+        throw new Exception(s"""|${name} has to point to a platform file.
+                                |It is now:
+                                |   ${uri}
+                                |Error:
+                                |  ${e}
+                                |""".stripMargin)
+    }
+  }
   private lazy val dockerPreamble: String = {
     dockerRegistry match {
-      case None                                                  => ""
-      case Some(DockerRegistry(registry, username, credentials)) =>
-        // check that the credentials file is a valid platform path
-        try {
-          logger.ignore(dxApi.resolveFile(credentials))
-        } catch {
-          case e: Throwable =>
-            throw new Exception(s"""|credentials has to point to a platform file.
-                                    |It is now:
-                                    |   ${credentials}
-                                    |Error:
-                                    |  ${e}
-                                    |""".stripMargin)
-        }
-        // render the preamble
+      case None => ""
+      case Some(GenericDockerRegistry(registry, username, credentials)) =>
+        checkFile("credentials", credentials)
         renderer.render(
             ApplicationCompiler.GenericDockerPreambleTemplate,
             Map(
                 ApplicationCompiler.RegistryKey -> registry,
                 ApplicationCompiler.UsernameKey -> username,
                 // strip the URL from the dx:// prefix, so we can use dx-download directly
-                "credentials" -> credentials.substring(DxPath.DxUriPrefix.length)
+                ApplicationCompiler.CredentialsKey -> credentials.substring(
+                    DxPath.DxUriPrefix.length
+                )
+            )
+        )
+      case Some(AwsDockerRegistry(registry, config, credentials, profile)) =>
+        checkFile("config", config)
+        checkFile("credentials", credentials)
+        renderer.render(
+            ApplicationCompiler.EcrDockerPreambleTemplate,
+            Map(
+                ApplicationCompiler.RegistryKey -> registry,
+                ApplicationCompiler.ProfileKey -> profile,
+                // strip the URL from the dx:// prefix, so we can use dx-download directly
+                ApplicationCompiler.ConfigKey -> config.substring(
+                    DxPath.DxUriPrefix.length
+                ),
+                ApplicationCompiler.CredentialsKey -> credentials.substring(
+                    DxPath.DxUriPrefix.length
+                )
             )
         )
     }

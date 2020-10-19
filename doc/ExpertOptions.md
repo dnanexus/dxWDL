@@ -976,6 +976,29 @@ configuration sets it to use native docker, and all applets are given
 the `allProjects: VIEW` permission. This allows them to access the
 credentials file, even if it is stored on a different project.
 
+### AWS ECR registries
+
+Logging into an AWS Elastic Container Registry (ECR) is a bit different
+than logging into a standard docker registry. Specifically, the AWS
+command line client is used to dynamically generate a password from a
+specific AWS user profile. To handle this use-case, dxWDL downloads two
+required files (the AWS `config` and `credentials` files), installs the
+AWS client, and generates the password. *For this to work, the profile in
+the `config` file must specify the AWS region.* See the 
+[AWS documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+for more details and examples.
+
+```
+{
+  "docker_registry": {
+    "registry": "<aws_account_id>.dkr.ecr.<region>.amazonaws.com",
+    "config": "dx://myproj/aws_config",
+    "credentials": "dx://myproj/aws_credentials",
+    "profile": "perkins"
+  }
+}
+```
+
 ## Storing a docker image as a file
 
 Normally, [docker](https://www.docker.com/) images are public, and

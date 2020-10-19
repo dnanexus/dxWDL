@@ -1,0 +1,60 @@
+<%@ val registry: String %>
+<%@ val config: String %>
+<%@ val credentials: String %>
+<%@ val profile: String %>
+<%@ val bashDollar: String = "$" %>
+# If we need to pull from ECR, download the credentials file and login.
+# Do not expose the credentials to the logs or to stdout.
+
+export DOCKER_REGISTRY=${registry}
+export AWS_CONFIG=${config}
+export AWS_CREDENTIALS=${credentials}
+export AWS_PROFILE=${profile}
+
+echo "Logging in to ECR ${bashDollar}{DOCKER_REGISTRY} with profile ${bashDollar}{AWS_PROFILE}"
+
+# download the config and credentials files to ~/.aws
+mkdir -p ${bashDollar}{HOME}/.aws
+
+# there has to be a single config file
+num_lines=${bashDollar}(dx ls ${bashDollar}{AWS_CONFIG} | wc --lines)
+if [[ ${bashDollar}num_lines != 1 ]]; then
+echo "There has to be exactly one config file, found ${bashDollar}num_lines."
+dx ls -l ${bashDollar}{AWS_CONFIG}
+exit 1
+fi
+dx download ${bashDollar}{AWS_CONFIG} -o ${bashDollar}{HOME}/.aws/config
+
+# there has to be a single credentials file
+num_lines=${bashDollar}(dx ls ${bashDollar}{AWS_CREDENTIALS} | wc --lines)
+if [[ ${bashDollar}num_lines != 1 ]]; then
+echo "There has to be exactly one credentials file, found ${bashDollar}num_lines."
+dx ls -l ${bashDollar}{AWS_CREDENTIALS}
+exit 1
+fi
+dx download ${bashDollar}{AWS_CREDENTIALS} -o ${bashDollar}{HOME}/.aws/credentials
+
+# install the aws client
+apt install -y awscli
+
+# get the password from the aws client
+password=${bashDollar}(aws ecr get-login-password)
+
+# Log into docker. Retry several times.
+set -e
+i=0
+while [[ ${bashDollar}i -le 5 ]]; do
+echo ${bashDollar}{password} | docker login ${bashDollar}{DOCKER_REGISTRY} --username AWS --password-stdin
+rc=${bashDollar}?
+if [[ ${bashDollar}rc == 0 ]]; then
+break
+fi
+i=${bashDollar}((i + 1))
+sleep 3
+echo "retry docker login (${bashDollar}i)"
+done
+set +e
+
+# cleanup
+apt autoclean && apt purge awscli
+rm -rf ${bashDollar}{HOME}/.aws

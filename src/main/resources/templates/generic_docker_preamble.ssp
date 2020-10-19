@@ -2,9 +2,8 @@
 <%@ val username: String %>
 <%@ val credentials: String %>
 <%@ val bashDollar: String = "$" %>
-# if we need to set up a private docker registry,
-# download the credentials file and login. Do not expose the
-# credentials to the logs or to stdout.
+# If we need to set up a private docker registry, download the credentials file and login.
+# Do not expose the credentials to the logs or to stdout.
 
 export DOCKER_REGISTRY=${registry}
 export DOCKER_USERNAME=${username}

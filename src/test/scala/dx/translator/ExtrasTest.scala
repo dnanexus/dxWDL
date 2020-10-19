@@ -727,7 +727,11 @@ class ExtrasTest extends AnyFlatSpec with Matchers {
 
     val extras = extrasParser.parse(data)
     extras.dockerRegistry should be(
-        Some(DockerRegistry("foo.bar.dnanexus.com", "perkins", "The Bandersnatch has gotten loose"))
+        Some(
+            GenericDockerRegistry("foo.bar.dnanexus.com",
+                                  "perkins",
+                                  "The Bandersnatch has gotten loose")
+        )
     )
   }
 

@@ -199,7 +199,13 @@ case class DxAppJson(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
   }
 }
 
-case class DockerRegistry(registry: String, username: String, credentials: String)
+sealed trait DockerRegistry {
+  val name: String
+}
+case class GenericDockerRegistry(name: String, username: String, credentials: String)
+    extends DockerRegistry
+case class AwsDockerRegistry(name: String, config: String, credentials: String, profile: String)
+    extends DockerRegistry
 
 sealed trait ReorgSettings {
   val enabled: Boolean
@@ -249,7 +255,7 @@ case class Extras(defaultRuntimeAttributes: Map[String, Value],
 }
 
 case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
-  private val DockerRegistryAttrs = Set("username", "registry", "credentials")
+  private val DockerRegistryAttrs = Set("username", "registry", "credentials", "config", "profile")
   private val CustomReorgAttrs = Set("app_id", "conf")
   private val ExtraAttrs = Set(
       "default_runtime_attributes",
@@ -563,16 +569,24 @@ case class ExtrasParser(dxApi: DxApi = DxApi.get, logger: Logger = Logger.get) {
                               |""".stripMargin.replaceAll("\n", ""))
 
     }
-    def getSome(fieldName: String): String = {
+    def getString(fieldName: String): String = {
       checkedParseStringField(fields, fieldName) match {
         case None    => throw new Exception(s"${fieldName} must be specified in the docker section")
         case Some(x) => x
       }
     }
-    val registry = getSome("registry")
-    val username = getSome("username")
-    val credentials = getSome("credentials")
-    Some(DockerRegistry(registry, username, credentials))
+    val registry = getString("registry")
+    if (registry.contains(".ecr.")) {
+      // this is an AWS Docker registry
+      val config = getString("config")
+      val credentials = getString("credentials")
+      val profile = getString("profile")
+      Some(AwsDockerRegistry(registry, config, credentials, profile))
+    } else {
+      val username = getString("username")
+      val credentials = getString("credentials")
+      Some(GenericDockerRegistry(registry, username, credentials))
+    }
   }
 
   def parseCustomReorgAttrs(jsv: JsValue): Option[CustomReorgSettings] = {
