@@ -1,11 +1,10 @@
 package dx.api
-import dx.api.DescriptionField.DescriptionField
 import spray.json.{JsObject, JsValue}
 
 case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxApi.get)
     extends BaseDxDataObjectDescribe(dxProject, dxApi) {
 
-  override protected val otherFields: Set[DescriptionField] = Set(
+  override protected val otherFields: Set[DescriptionField.DescriptionField] = Set(
       DescriptionField.Executable,
       DescriptionField.ExecutableName,
       DescriptionField.BillTo,
@@ -14,12 +13,9 @@ case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi 
       DescriptionField.ParentAnalysis,
       DescriptionField.Analysis,
       DescriptionField.Stage,
-      // TODO: right now Workflow just returns the wf ID - should return the full describe instead
       DescriptionField.Workflow,
-      // TODO: right now Stages just returns a mapping of stage ID to execution ID - should also
-      //  return the full describe for each stage
       DescriptionField.Stages,
-      DescriptionField.State,
+      DescriptionField.ExecutionState,
       DescriptionField.Workspace,
       DescriptionField.LaunchedBy,
       DescriptionField.Tags,
@@ -59,19 +55,22 @@ case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi 
     getField[Option[Map[String, JsValue]]](DescriptionField.Output)
 }
 
-case class NewDxApp(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxApi.get)
-    extends BaseDxObjectDescribe {
+case class NewDxApp(id: String,
+                    override val dxProject: Option[DxProject],
+                    override val dxApi: DxApi = DxApi.get)
+    extends BaseDxObjectDescribe
+    with NewDxApplication {
 
-  override protected val defaultFields: Set[DescriptionField] = {
+  override protected val defaultFields: Set[DescriptionField.DescriptionField] = {
     super.defaultFields | Set(DescriptionField.InputSpec, DescriptionField.OutputSpec)
   }
 
-  override protected def otherFields: Set[DescriptionField] = {
+  override protected val otherFields: Set[DescriptionField.DescriptionField] = {
     super.otherFields | Set(
         DescriptionField.BillTo,
         DescriptionField.Version,
         DescriptionField.Aliases,
-        DescriptionField.CreatedBy,
+        DescriptionField.AppCreatedBy,
         DescriptionField.Installed,
         DescriptionField.OpenSource,
         DescriptionField.IgnoreReuse,
@@ -95,5 +94,61 @@ case class NewDxApp(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxA
 
   override protected def callDescribe(request: Map[String, JsValue]): JsObject = {
     dxApi.appDescribe(id, request)
+  }
+
+  override protected def callRun(request: Map[String, JsValue]): JsObject = {
+    dxApi.appRun(id, request)
+  }
+}
+
+case class NewDxApplet(id: String,
+                       override val dxProject: Option[DxProject],
+                       override val dxApi: DxApi = DxApi.get)
+    extends BaseDxDataObjectDescribe(dxProject, dxApi)
+    with NewDxApplication {
+
+  override protected val defaultFields: Set[DescriptionField.DescriptionField] = {
+    super.defaultFields | Set(DescriptionField.InputSpec, DescriptionField.OutputSpec)
+  }
+
+  override protected val otherFields: Set[DescriptionField.DescriptionField] = {
+    super.otherFields | Set(
+        DescriptionField.Types,
+        DescriptionField.ObjectState,
+        DescriptionField.Hidden,
+        DescriptionField.Links,
+        DescriptionField.Sponsored,
+        DescriptionField.AppletCreatedBy,
+        DescriptionField.RunSpec,
+        DescriptionField.DxApiVersion,
+        DescriptionField.Access,
+        DescriptionField.Title,
+        DescriptionField.Summary,
+        DescriptionField.Description,
+        DescriptionField.DeveloperNotes,
+        DescriptionField.IgnoreReuse,
+        DescriptionField.HttpsApp,
+        DescriptionField.SponsoredUntil
+    )
+  }
+
+  override protected def callAddTags(request: Map[String, JsValue]): Unit = {
+    dxApi.appletAddTags(id, request)
+  }
+
+  override protected def callRemoveTags(request: Map[String, JsValue]): Unit = {
+    dxApi.appletRemoveTags(id, request)
+  }
+
+  override protected def callSetProperties(request: Map[String, JsValue]): Unit = {
+    dxApi.appletSetProperties(id, request)
+  }
+
+  override protected def callDescribe(request: Map[String, JsValue]): JsObject = {
+    dxApi.appletGet(id, request)
+  }
+
+  override protected def callRun(request: Map[String, JsValue]): JsObject = {
+    dxApi.appletRun(id, request)
   }
 }

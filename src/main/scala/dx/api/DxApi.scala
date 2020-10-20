@@ -226,6 +226,16 @@ case class DxApi(logger: Logger = Logger.get,
     callObject(DXAPI.analysisDescribe[JsonNode], id, fields)
   }
 
+  def analysisAddTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.analysisAddTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
+  def analysisRemoveTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.analysisRemoveTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
   def analysisSetProperties(id: String, fields: Map[String, JsValue]): Unit = {
     val result = callObject(DXAPI.analysisSetProperties[JsonNode], id, fields)
     logger.ignore(result)
@@ -241,6 +251,25 @@ case class DxApi(logger: Logger = Logger.get,
 
   def appletDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.appletDescribe[JsonNode], id, fields)
+  }
+
+  def appletGet(id: String, fields: Map[String, JsValue]): JsObject = {
+    callObject(DXAPI.appletGet[JsonNode], id, fields)
+  }
+
+  def appletAddTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.appletAddTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
+  def appletRemoveTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.appletRemoveTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
+  def appletSetProperties(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.appletSetProperties[JsonNode], id, fields)
+    logger.ignore(result)
   }
 
   def appletNew(fields: Map[String, JsValue]): JsObject = {

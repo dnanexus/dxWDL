@@ -18,6 +18,7 @@ import wdlTools.types.TypeCheckingRegime.TypeCheckingRegime
 import wdlTools.types.{TypeCheckingRegime, TypeUtils, TypedAbstractSyntax => TAT}
 import wdlTools.types.WdlTypes._
 import wdlTools.util.{JsUtils, Logger, TraceLevel}
+import wdlTools.util.CollectionUtils.IterableOnceExtensions
 
 case class WorkflowIO(workflow: TAT.Workflow, logger: Logger)
     extends InputOutput(workflow, logger) {
@@ -29,12 +30,6 @@ case class WorkflowIO(workflow: TAT.Workflow, logger: Logger)
 }
 
 object WdlWorkflowSupport {
-  implicit class FoldLeftWhile[A](trav: IterableOnce[A]) {
-    def foldLeftWhile[B](init: B)(where: B => Boolean)(op: (B, A) => B): B = {
-      trav.iterator.foldLeft(init)((acc, next) => if (where(acc)) op(acc, next) else acc)
-    }
-  }
-
   // this method is exposed for unit testing
   def getComplexScatterName(items: Iterator[Option[String]],
                             maxLength: Int = WorkflowSupport.JobNameLengthLimit): String = {
