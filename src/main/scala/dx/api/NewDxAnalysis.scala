@@ -39,6 +39,14 @@ case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi 
     dxApi.analysisDescribe(id, request)
   }
 
+  override protected def callAddTags(request: Map[String, JsValue]): Unit = {
+    dxApi.analysisAddTags(id, request)
+  }
+
+  override protected def callRemoveTags(request: Map[String, JsValue]): Unit = {
+    dxApi.analysisRemoveTags(id, request)
+  }
+
   override protected def callSetProperties(request: Map[String, JsValue]): Unit = {
     dxApi.analysisSetProperties(id, request)
   }
@@ -49,4 +57,43 @@ case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi 
 
   def output: Option[Map[String, JsValue]] =
     getField[Option[Map[String, JsValue]]](DescriptionField.Output)
+}
+
+case class NewDxApp(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxApi.get)
+    extends BaseDxObjectDescribe {
+
+  override protected val defaultFields: Set[DescriptionField] = {
+    super.defaultFields | Set(DescriptionField.InputSpec, DescriptionField.OutputSpec)
+  }
+
+  override protected def otherFields: Set[DescriptionField] = {
+    super.otherFields | Set(
+        DescriptionField.BillTo,
+        DescriptionField.Version,
+        DescriptionField.Aliases,
+        DescriptionField.CreatedBy,
+        DescriptionField.Installed,
+        DescriptionField.OpenSource,
+        DescriptionField.IgnoreReuse,
+        DescriptionField.Deleted,
+        DescriptionField.Installs,
+        DescriptionField.IsDeveloperFor,
+        DescriptionField.AuthorizedUsers,
+        DescriptionField.RegionalOptions,
+        DescriptionField.HttpsApp,
+        DescriptionField.Published,
+        DescriptionField.Title,
+        DescriptionField.Summary,
+        DescriptionField.Description,
+        DescriptionField.Categories,
+        DescriptionField.LineItemPerTest,
+        DescriptionField.Access,
+        DescriptionField.DxApi,
+        DescriptionField.RunSpec
+    )
+  }
+
+  override protected def callDescribe(request: Map[String, JsValue]): JsObject = {
+    dxApi.appDescribe(id, request)
+  }
 }

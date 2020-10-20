@@ -12,13 +12,17 @@ object ExecutableState extends Enum {
 
 case class SubtotalPriceInfo(subtotalPrice: Double, priceComputedAt: Long)
 
+case class PricingPolicy(unit: String, unitPrice: Double)
+
+case class RegionOptions(region: String, appletId: String, resourcesId: String, pricingPolicy: Option[PricingPolicy])
+
 object DescriptionField extends Enum {
   type DescriptionField = Value
-  val Analysis, BillTo, Class, Created, DelayWorkspaceDestruction, Details, Executable,
-      ExecutableName, Folder, Id, Input, LaunchedBy, Modified, Name, OriginalInput, Output,
-      ParentAnalysis, ParentJob, PriceComputedAt, Project, Properties, RootExecution, RunInput,
-      Stage, Stages, State, SubtotalPriceInfo, Tags, TotalPrice, Workflow, Workspace =
-    Value
+  val Aliases, Analysis, AuthorizedUsers, BillTo, Class, Created, CreatedBy, DelayWorkspaceDestruction, Deleted,
+      Details, Executable, ExecutableName, Folder, HttpsApp, Id, IgnoreReuse, Input, Installed, Installs,
+      IsDeveloperFor, LaunchedBy, Modified, Name, OpenSource, OriginalInput, Output, ParentAnalysis, ParentJob,
+      PriceComputedAt, Project, Properties, RegionalOptions, RootExecution, RunInput, Stage, Stages, State,
+      SubtotalPriceInfo, Tags, TotalPrice, Version, Workflow, Workspace = Value
 }
 
 trait DescriptionFieldSpec[T] {
@@ -102,27 +106,49 @@ abstract class EnumFieldSpec[T <: Enum](val key: String, resolve: String => T)
   }
 }
 
+object AliasesFieldSpec extends StringArrayFieldSpec("aliases")
 object AnalysisFieldSpec extends OptionalStringFieldSpec("analysis")
+object AuthorizedUsersFieldSpec extends StringArrayFieldSpec("authorizedUsers")
 object BillToFieldSpec extends StringFieldSpec("billTo")
 object ClassFieldSpec extends StringFieldSpec("class")
 object CreatedFieldSpec extends LongFieldSpec("created")
-object DelayWorkspaceDestructionSpec extends BooleanFieldSpec("delayWorkspaceDestruction")
+object CreatedByFieldSpec extends StringFieldSpec("createdBy")
+object DelayWorkspaceDestructionFieldSpec extends BooleanFieldSpec("delayWorkspaceDestruction")
+object DeletedFieldSpec extends BooleanFieldSpec("deleted")
 object DetailsFieldSpec extends JsValueFieldSpec("details")
 object ExecutableFieldSpec extends StringFieldSpec("executable")
 object ExecutableNameFieldSpec extends StringFieldSpec("executableName")
 object FolderFieldSpec extends StringFieldSpec("folder")
 object IdFieldSpec extends StringFieldSpec("id")
+object IgnoreReuseFieldSpec extends BooleanFieldSpec("ignoreReuse")
 object InputFieldSpec extends JsMapFieldSpec("input")
+object InstalledFieldSpec extends BooleanFieldSpec("installed")
+object InstallsFieldSpec extends LongFieldSpec("installs")
+object IsDeveloperForFieldSpec extends BooleanFieldSpec("isDeveloperFor")
 object LaunchedByFieldSpec extends StringFieldSpec("launchedBy")
 object ModifiedFieldSpec extends LongFieldSpec("modified")
 object NameFieldSpec extends StringFieldSpec("name")
+object OpenSourceFieldSpec extends BooleanFieldSpec("openSource")
 object OriginalInputFieldSpec extends JsMapFieldSpec("originalInput")
 object OutputFieldSpec extends OptionalJsMapFieldSpec("output")
-object ParentAnalysisSpec extends OptionalStringFieldSpec("parentAnalysis")
-object ParentJobSpec extends OptionalStringFieldSpec("parentJob")
-object PriceComputedAtSpec extends LongFieldSpec("priceComputedAt")
+object ParentAnalysisFieldSpec extends OptionalStringFieldSpec("parentAnalysis")
+object ParentJobFieldSpec extends OptionalStringFieldSpec("parentJob")
+object PriceComputedAtFieldSpec extends LongFieldSpec("priceComputedAt")
 object ProjectFieldSpec extends StringFieldSpec("project")
 object PropertiesFieldSpec extends StringMapFieldSpec("properties")
+object RegionalOptionsFieldSpec extends DescriptionFieldSpec[Vector[RegionOptions]] {
+  override val key: String = "regionaLOptions"
+  override def parse(jsValue: JsValue): Vector[RegionOptions] = {
+    jsValue.asJsObject.fields.map {
+      case (region, options) =>
+        val pricingPolicy = options.asJsObject.fields.get("pricingPolicy").map {
+          val fields = JsUtils.getFields(_)
+
+        }
+        RegionOptions(region, JsUtils.getString(options, Some("applet")), JsUtils.getString(options, Some("resources")), pricingPolicy)
+    }
+  }
+}
 object RootExecutionFieldSpec extends StringFieldSpec("rootExecution")
 object RunInputFieldSpec extends JsMapFieldSpec("runInput")
 object StageFieldSpec extends OptionalStringFieldSpec("stage")
@@ -147,7 +173,7 @@ object StateFieldSpec
         "state",
         ExecutableState.withNameIgnoreCase
     )
-object SubtotalPriceInfoSpec extends DescriptionFieldSpec[SubtotalPriceInfo] {
+object SubtotalPriceInfoFieldSpec extends DescriptionFieldSpec[SubtotalPriceInfo] {
   override val key = "subtotalPriceInfo"
   override def parse(jsValue: JsValue): SubtotalPriceInfo = {
     val subtotalPrice = JsUtils.getDouble(jsValue, Some("subtotalPrice"))
@@ -156,8 +182,9 @@ object SubtotalPriceInfoSpec extends DescriptionFieldSpec[SubtotalPriceInfo] {
   }
 }
 object TagsFieldSpec extends StringArrayFieldSpec("tags")
-object TotalPriceSpec extends LongFieldSpec("totalPrice")
-object WorkflowSpec extends DescriptionFieldSpec[String] {
+object TotalPriceFieldSpec extends LongFieldSpec("totalPrice")
+object VersionFieldSpec extends StringFieldSpec("version")
+object WorkflowFieldSpec extends DescriptionFieldSpec[String] {
   override val key: String = "workflow"
   override def parse(jsValue: JsValue): String = {
     JsUtils.getString(jsValue, Some("id"))
@@ -167,36 +194,47 @@ object WorkspaceFieldSpec extends StringFieldSpec("workspace")
 
 object DescriptionFieldSpec {
   val Specs: Map[DescriptionField.DescriptionField, DescriptionFieldSpec[_]] = Map(
+      DescriptionField.Aliases -> AliasesFieldSpec,
       DescriptionField.Analysis -> AnalysisFieldSpec,
+      DescriptionField.AuthorizedUsers -> AuthorizedUsersFieldSpec,
       DescriptionField.BillTo -> BillToFieldSpec,
       DescriptionField.Class -> ClassFieldSpec,
       DescriptionField.Created -> CreatedFieldSpec,
+      DescriptionField.CreatedBy -> CreatedByFieldSpec,
+      DescriptionField.Deleted -> DeletedFieldSpec,
       DescriptionField.Details -> DetailsFieldSpec,
-      DescriptionField.DelayWorkspaceDestruction -> DelayWorkspaceDestructionSpec,
+      DescriptionField.DelayWorkspaceDestruction -> DelayWorkspaceDestructionFieldSpec,
       DescriptionField.Executable -> ExecutableFieldSpec,
       DescriptionField.ExecutableName -> ExecutableNameFieldSpec,
       DescriptionField.Folder -> FolderFieldSpec,
       DescriptionField.Id -> IdFieldSpec,
+      DescriptionField.IgnoreReuse -> IgnoreReuseFieldSpec,
       DescriptionField.Input -> InputFieldSpec,
+      DescriptionField.Installed -> InstalledFieldSpec,
+      DescriptionField.Installs -> InstallsFieldSpec,
+      DescriptionField.IsDeveloperFor -> IsDeveloperForFieldSpec,
       DescriptionField.LaunchedBy -> LaunchedByFieldSpec,
       DescriptionField.Modified -> ModifiedFieldSpec,
       DescriptionField.Name -> NameFieldSpec,
       DescriptionField.OriginalInput -> OriginalInputFieldSpec,
+      DescriptionField.OpenSource -> OpenSourceFieldSpec,
       DescriptionField.Output -> OutputFieldSpec,
-      DescriptionField.ParentAnalysis -> ParentAnalysisSpec,
-      DescriptionField.ParentJob -> ParentJobSpec,
-      DescriptionField.PriceComputedAt -> PriceComputedAtSpec,
+      DescriptionField.ParentAnalysis -> ParentAnalysisFieldSpec,
+      DescriptionField.ParentJob -> ParentJobFieldSpec,
+      DescriptionField.PriceComputedAt -> PriceComputedAtFieldSpec,
       DescriptionField.Project -> ProjectFieldSpec,
       DescriptionField.Properties -> PropertiesFieldSpec,
+      DescriptionField.RegionalOptions -> RegionalOptionsFieldSpec,
       DescriptionField.RootExecution -> RootExecutionFieldSpec,
       DescriptionField.RunInput -> RunInputFieldSpec,
       DescriptionField.Stage -> StageFieldSpec,
       DescriptionField.Stages -> StagesFieldSpec,
       DescriptionField.State -> StateFieldSpec,
-      DescriptionField.SubtotalPriceInfo -> SubtotalPriceInfoSpec,
+      DescriptionField.SubtotalPriceInfo -> SubtotalPriceInfoFieldSpec,
       DescriptionField.Tags -> TagsFieldSpec,
-      DescriptionField.TotalPrice -> TotalPriceSpec,
-      DescriptionField.Workflow -> WorkflowSpec,
+      DescriptionField.TotalPrice -> TotalPriceFieldSpec,
+      DescriptionField.Version -> VersionFieldSpec,
+      DescriptionField.Workflow -> WorkflowFieldSpec,
       DescriptionField.Workspace -> WorkspaceFieldSpec
   )
 }
@@ -205,7 +243,7 @@ trait NewDxObjectDescribe {
   val id: String
 
   protected var cachedDescribeJs: Map[DescriptionField.DescriptionField, JsValue] = Map.empty
-  protected var cachedDescribe: Map[DescriptionField.DescriptionField, Any] = Map.empty
+  protected var cachedDescribe: Map[DescriptionField.DescriptionField, Option[Any]] = Map.empty
   protected val globalFields: Set[DescriptionField.DescriptionField] =
     Set(DescriptionField.Id, DescriptionField.Class)
 
@@ -297,28 +335,38 @@ trait NewDxObjectDescribe {
   ): Option[T] = {
     if (cachedDescribe.contains(field)) {
       cachedDescribe(field) match {
-        case value: T => Some(value)
-        case _        => throw new Exception(s"Invalid type for field ${field}")
+        case Some(value: T) => Some(value)
+        case None           => None
+        case _              => throw new Exception(s"Invalid type for field ${field}")
       }
     } else if (cachedDescribeJs.contains(field)) {
-      DescriptionFieldSpec.Specs(field) match {
-        case spec: DescriptionFieldSpec[T] =>
-          val value = spec.parse(cachedDescribeJs(field))
-          cachedDescribe += field -> value
-          Some(value)
+      val value = cachedDescribeJs(field) match {
+        case JsNull =>
+          None
         case _ =>
-          throw new Exception(s"Invalid type for field ${field}")
+          DescriptionFieldSpec.Specs(field) match {
+            case spec: DescriptionFieldSpec[T] =>
+              Some(spec.parse(cachedDescribeJs(field)))
+            case _ =>
+              throw new Exception(s"Invalid type for field ${field}")
+          }
       }
+      cachedDescribe += field -> value
+      value
     } else {
       None
     }
   }
 
-  def getField[T: ClassTag[T]](field: DescriptionField.DescriptionField): T = {
+  def getOptionalField[T: ClassTag[T]](field: DescriptionField.DescriptionField): Option[T] = {
     if (!cachedDescribeJs.contains(field)) {
       describe(Set(field), includeDefaults = false)
     }
-    getCachedField(field).get
+    getCachedField(field)
+  }
+
+  def getField[T: ClassTag[T]](field: DescriptionField.DescriptionField): T = {
+    getOptionalField[T](field).get
   }
 }
 
@@ -330,31 +378,15 @@ abstract class BaseDxObjectDescribe extends NewDxObjectDescribe {
     )
   }
 
-  override protected val otherFields: Set[DescriptionField.DescriptionField] = {
-    super.otherFields | Set(
-        DescriptionField.Tags,
-        DescriptionField.Properties
-    )
-  }
+  override protected val otherFields: Set[DescriptionField.DescriptionField] = Set(
+      DescriptionField.Details
+  )
 
   def created: Long = getField[Long](DescriptionField.Created)
 
   def modified: Long = getField[Long](DescriptionField.Modified)
 
-  def tags: Vector[String] = getField[Vector[String]](DescriptionField.Tags)
-
-  protected def callSetProperties(request: Map[String, JsValue]): Unit
-
-  def setProperties(newProperties: Map[String, String]): Unit = {
-    val jsProperties = JsObject(newProperties.view.mapValues(s => JsString(s)).toMap)
-    callSetProperties(Map("properties" -> jsProperties))
-    cachedDescribeJs += (DescriptionField.Properties -> jsProperties)
-    cachedDescribe += (DescriptionField.Properties -> newProperties)
-  }
-
-  def properties: Map[String, String] = getField[Map[String, String]](DescriptionField.Properties)
-
-  def details: JsValue = getField[JsValue](DescriptionField.Details)
+  def details: Option[JsValue] = getOptionalField[JsValue](DescriptionField.Details)
 }
 
 trait NewDxDataObjectDescribe extends NewDxObjectDescribe {
@@ -380,6 +412,13 @@ abstract class BaseDxDataObjectDescribe(dxProject: Option[DxProject], dxApi: DxA
     )
   }
 
+  override protected val otherFields: Set[DescriptionField.DescriptionField] = {
+    super.otherFields | Set(
+        DescriptionField.Tags,
+        DescriptionField.Properties
+    )
+  }
+
   override protected def createRequest(
       fields: Set[DescriptionField.DescriptionField]
   ): Map[String, JsValue] = {
@@ -391,4 +430,77 @@ abstract class BaseDxDataObjectDescribe(dxProject: Option[DxProject], dxApi: DxA
   def name: String = getField[String](DescriptionField.Name)
 
   def folder: String = getField[String](DescriptionField.Folder)
+
+  def tags: Vector[String] = getField[Vector[String]](DescriptionField.Tags)
+
+  protected def callAddTags(request: Map[String, JsValue]): Unit
+
+  protected def callRemoveTags(request: Map[String, JsValue]): Unit
+
+  /**
+    * Sets tags on this object.
+    * @param add new tags to add
+    * @param remove tags to remove
+    * @param reset whether to delete all existing tags before setting the new ones
+    * @return the updated Vector of tags
+    */
+  def setTags(add: Vector[String] = Vector.empty,
+              remove: Set[String] = Set.empty,
+              reset: Boolean = false): Vector[String] = {
+    val currentTags = tags
+    val toRemove = remove | (if (reset) currentTags.toSet else Set.empty)
+    val toAdd = add.filterNot(tag => currentTags.contains(tag) || remove.contains(tag))
+    if (toAdd.nonEmpty) {
+      val request = Map("tags" -> JsArray(toAdd.map(JsString(_))))
+      callAddTags(request)
+    }
+    if (toRemove.nonEmpty) {
+      val request = Map("tags" -> JsArray(toRemove.map(JsString(_)).toVector))
+      callRemoveTags(request)
+    }
+    val newTags = (currentTags ++ toAdd).filterNot(toRemove.contains)
+    cachedDescribeJs += DescriptionField.Tags -> JsArray(newTags.map(JsString(_)))
+    cachedDescribe += DescriptionField.Tags -> Some(newTags)
+    newTags
+  }
+
+  def properties: Map[String, String] = getField[Map[String, String]](DescriptionField.Properties)
+
+  protected def callSetProperties(request: Map[String, JsValue]): Unit
+
+  /**
+    * Sets properties on this object
+    * @param add keys to add/update
+    * @param remove keys to remove
+    * @param reset whether to delete all existing properties before setting the new ones
+    * @return the updated properties
+    */
+  def setProperties(add: Map[String, String] = Map.empty,
+                    remove: Set[String] = Set.empty,
+                    reset: Boolean = false): Map[String, String] = {
+    val currentProperties = properties
+    val toRemove = remove | (if (reset) currentProperties.keySet else Set.empty)
+    val toAddOrUpdate = add.filter {
+      case (key, value) =>
+        currentProperties.get(key) match {
+          case Some(curValue) if value != curValue => true
+          case None                                => true
+          case _                                   => false
+        }
+    }
+    val request = Map(
+        "properties" -> JsObject(
+            toAddOrUpdate.view.mapValues(JsString(_)).toMap ++ toRemove.map(_ -> JsNull).toMap
+        )
+    )
+    callSetProperties(request)
+    val newProperties = currentProperties.view
+      .filterKeys(!currentProperties.contains(_))
+      .toMap ++ toAddOrUpdate
+    cachedDescribeJs += DescriptionField.Properties -> newProperties.view
+      .mapValues(JsString(_))
+      .toMap
+    cachedDescribe += DescriptionField.Properties -> newProperties
+    newProperties
+  }
 }
