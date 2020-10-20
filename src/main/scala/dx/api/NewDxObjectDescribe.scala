@@ -18,11 +18,11 @@ case class RegionOptions(region: String, appletId: String, resourcesId: String, 
 
 object DescriptionField extends Enum {
   type DescriptionField = Value
-  val Aliases, Analysis, AuthorizedUsers, BillTo, Class, Created, CreatedBy, DelayWorkspaceDestruction, Deleted,
-      Details, Executable, ExecutableName, Folder, HttpsApp, Id, IgnoreReuse, Input, Installed, Installs,
-      IsDeveloperFor, LaunchedBy, Modified, Name, OpenSource, OriginalInput, Output, ParentAnalysis, ParentJob,
-      PriceComputedAt, Project, Properties, RegionalOptions, RootExecution, RunInput, Stage, Stages, State,
-      SubtotalPriceInfo, Tags, TotalPrice, Version, Workflow, Workspace = Value
+  val Access, Aliases, Analysis, AuthorizedUsers, BillTo, Categories, Class, Created, CreatedBy, DelayWorkspaceDestruction, Deleted,
+      Description, Details, DxApiVersion, Executable, ExecutableName, Folder, HttpsApp, Id, IgnoreReuse, Input, Installed, Installs,
+      IsDeveloperFor, LaunchedBy, LineItemPerTest, Modified, Name, OpenSource, OriginalInput, Output, ParentAnalysis, ParentJob,
+      PriceComputedAt, Project, Properties, Published, RegionalOptions, RootExecution, RunInput, RunSpec, Stage, Stages, State,
+      SubtotalPriceInfo, Summary, Tags, Title, TotalPrice, Version, Workflow, Workspace = Value
 }
 
 trait DescriptionFieldSpec[T] {
@@ -31,17 +31,17 @@ trait DescriptionFieldSpec[T] {
   def parse(jsValue: JsValue): T
 }
 
-abstract class JsValueFieldSpec(val key: String) extends DescriptionFieldSpec[JsValue] {
+case class JsValueFieldSpec(key: String) extends DescriptionFieldSpec[JsValue] {
   def parse(jsValue: JsValue): JsValue = jsValue
 }
 
-abstract class JsMapFieldSpec(val key: String) extends DescriptionFieldSpec[Map[String, JsValue]] {
+case class JsMapFieldSpec(key: String) extends DescriptionFieldSpec[Map[String, JsValue]] {
   def parse(jsValue: JsValue): Map[String, JsValue] = {
     JsUtils.getFields(jsValue)
   }
 }
 
-abstract class OptionalJsMapFieldSpec(val key: String)
+case class OptionalJsMapFieldSpec(key: String)
     extends DescriptionFieldSpec[Option[Map[String, JsValue]]] {
   def parse(jsValue: JsValue): Option[Map[String, JsValue]] = {
     jsValue match {
@@ -51,13 +51,13 @@ abstract class OptionalJsMapFieldSpec(val key: String)
   }
 }
 
-abstract class StringFieldSpec(val key: String) extends DescriptionFieldSpec[String] {
+case class StringFieldSpec(key: String) extends DescriptionFieldSpec[String] {
   def parse(jsValue: JsValue): String = {
     JsUtils.getString(jsValue)
   }
 }
 
-abstract class OptionalStringFieldSpec(val key: String)
+case class OptionalStringFieldSpec(key: String)
     extends DescriptionFieldSpec[Option[String]] {
   def parse(jsValue: JsValue): Option[String] = {
     jsValue match {
@@ -67,38 +67,38 @@ abstract class OptionalStringFieldSpec(val key: String)
   }
 }
 
-abstract class StringArrayFieldSpec(val key: String) extends DescriptionFieldSpec[Vector[String]] {
+case class StringArrayFieldSpec(key: String) extends DescriptionFieldSpec[Vector[String]] {
   def parse(jsValue: JsValue): Vector[String] = {
     JsUtils.getValues(jsValue).map(JsUtils.getString(_))
   }
 }
 
-abstract class StringMapFieldSpec(val key: String)
+case class StringMapFieldSpec(key: String)
     extends DescriptionFieldSpec[Map[String, String]] {
   def parse(jsValue: JsValue): Map[String, String] = {
     JsUtils.getFields(jsValue).view.mapValues(JsUtils.getString(_)).toMap
   }
 }
 
-abstract class BooleanFieldSpec(val key: String) extends DescriptionFieldSpec[Boolean] {
+case class BooleanFieldSpec(key: String) extends DescriptionFieldSpec[Boolean] {
   def parse(jsValue: JsValue): Boolean = {
     JsUtils.getBoolean(jsValue)
   }
 }
 
-abstract class LongFieldSpec(val key: String) extends DescriptionFieldSpec[Long] {
+case class LongFieldSpec(key: String) extends DescriptionFieldSpec[Long] {
   def parse(jsValue: JsValue): Long = {
     JsUtils.getLong(jsValue)
   }
 }
 
-abstract class DoubleFieldSpec(val key: String) extends DescriptionFieldSpec[Double] {
+case class DoubleFieldSpec(key: String) extends DescriptionFieldSpec[Double] {
   def parse(jsValue: JsValue): Double = {
     JsUtils.getDouble(jsValue)
   }
 }
 
-abstract class EnumFieldSpec[T <: Enum](val key: String, resolve: String => T)
+case class EnumFieldSpec[T <: Enum](key: String, resolve: String => T)
     extends DescriptionFieldSpec[T] {
   def parse(jsValue: JsValue): T = {
     val strValue = JsUtils.getString(jsValue, Some(key))
@@ -106,52 +106,24 @@ abstract class EnumFieldSpec[T <: Enum](val key: String, resolve: String => T)
   }
 }
 
-object AliasesFieldSpec extends StringArrayFieldSpec("aliases")
-object AnalysisFieldSpec extends OptionalStringFieldSpec("analysis")
-object AuthorizedUsersFieldSpec extends StringArrayFieldSpec("authorizedUsers")
-object BillToFieldSpec extends StringFieldSpec("billTo")
-object ClassFieldSpec extends StringFieldSpec("class")
-object CreatedFieldSpec extends LongFieldSpec("created")
-object CreatedByFieldSpec extends StringFieldSpec("createdBy")
-object DelayWorkspaceDestructionFieldSpec extends BooleanFieldSpec("delayWorkspaceDestruction")
-object DeletedFieldSpec extends BooleanFieldSpec("deleted")
-object DetailsFieldSpec extends JsValueFieldSpec("details")
-object ExecutableFieldSpec extends StringFieldSpec("executable")
-object ExecutableNameFieldSpec extends StringFieldSpec("executableName")
-object FolderFieldSpec extends StringFieldSpec("folder")
-object IdFieldSpec extends StringFieldSpec("id")
-object IgnoreReuseFieldSpec extends BooleanFieldSpec("ignoreReuse")
-object InputFieldSpec extends JsMapFieldSpec("input")
-object InstalledFieldSpec extends BooleanFieldSpec("installed")
-object InstallsFieldSpec extends LongFieldSpec("installs")
-object IsDeveloperForFieldSpec extends BooleanFieldSpec("isDeveloperFor")
-object LaunchedByFieldSpec extends StringFieldSpec("launchedBy")
-object ModifiedFieldSpec extends LongFieldSpec("modified")
-object NameFieldSpec extends StringFieldSpec("name")
-object OpenSourceFieldSpec extends BooleanFieldSpec("openSource")
-object OriginalInputFieldSpec extends JsMapFieldSpec("originalInput")
-object OutputFieldSpec extends OptionalJsMapFieldSpec("output")
-object ParentAnalysisFieldSpec extends OptionalStringFieldSpec("parentAnalysis")
-object ParentJobFieldSpec extends OptionalStringFieldSpec("parentJob")
-object PriceComputedAtFieldSpec extends LongFieldSpec("priceComputedAt")
-object ProjectFieldSpec extends StringFieldSpec("project")
-object PropertiesFieldSpec extends StringMapFieldSpec("properties")
 object RegionalOptionsFieldSpec extends DescriptionFieldSpec[Vector[RegionOptions]] {
   override val key: String = "regionaLOptions"
   override def parse(jsValue: JsValue): Vector[RegionOptions] = {
     jsValue.asJsObject.fields.map {
-      case (region, options) =>
-        val pricingPolicy = options.asJsObject.fields.get("pricingPolicy").map {
-          val fields = JsUtils.getFields(_)
-
+      case (region, JsObject(options)) =>
+        val pricingPolicy = options.get("pricingPolicy").map { obj =>
+          obj.asJsObject.getFields("unit", "unitPrice") match {
+            case Seq(JsString(unit), JsNumber(price)) =>
+              PricingPolicy(unit, price.toDouble)
+          }
         }
-        RegionOptions(region, JsUtils.getString(options, Some("applet")), JsUtils.getString(options, Some("resources")), pricingPolicy)
+        RegionOptions(
+          region, JsUtils.getString(options("applet")), JsUtils.getString(options("resources")), pricingPolicy
+        )
     }
-  }
+  }.toVector
 }
-object RootExecutionFieldSpec extends StringFieldSpec("rootExecution")
-object RunInputFieldSpec extends JsMapFieldSpec("runInput")
-object StageFieldSpec extends OptionalStringFieldSpec("stage")
+
 object StagesFieldSpec extends DescriptionFieldSpec[Map[String, String]] {
   override val key = "stages"
   override def parse(jsValue: JsValue): Map[String, String] = {
@@ -168,11 +140,7 @@ object StagesFieldSpec extends DescriptionFieldSpec[Map[String, String]] {
       .toMap
   }
 }
-object StateFieldSpec
-    extends EnumFieldSpec[ExecutableState.ExecutableState](
-        "state",
-        ExecutableState.withNameIgnoreCase
-    )
+
 object SubtotalPriceInfoFieldSpec extends DescriptionFieldSpec[SubtotalPriceInfo] {
   override val key = "subtotalPriceInfo"
   override def parse(jsValue: JsValue): SubtotalPriceInfo = {
@@ -181,62 +149,72 @@ object SubtotalPriceInfoFieldSpec extends DescriptionFieldSpec[SubtotalPriceInfo
     SubtotalPriceInfo(subtotalPrice, priceComputedAt)
   }
 }
-object TagsFieldSpec extends StringArrayFieldSpec("tags")
-object TotalPriceFieldSpec extends LongFieldSpec("totalPrice")
-object VersionFieldSpec extends StringFieldSpec("version")
+
 object WorkflowFieldSpec extends DescriptionFieldSpec[String] {
   override val key: String = "workflow"
   override def parse(jsValue: JsValue): String = {
     JsUtils.getString(jsValue, Some("id"))
   }
 }
-object WorkspaceFieldSpec extends StringFieldSpec("workspace")
 
 object DescriptionFieldSpec {
   val Specs: Map[DescriptionField.DescriptionField, DescriptionFieldSpec[_]] = Map(
-      DescriptionField.Aliases -> AliasesFieldSpec,
-      DescriptionField.Analysis -> AnalysisFieldSpec,
-      DescriptionField.AuthorizedUsers -> AuthorizedUsersFieldSpec,
-      DescriptionField.BillTo -> BillToFieldSpec,
-      DescriptionField.Class -> ClassFieldSpec,
-      DescriptionField.Created -> CreatedFieldSpec,
-      DescriptionField.CreatedBy -> CreatedByFieldSpec,
-      DescriptionField.Deleted -> DeletedFieldSpec,
-      DescriptionField.Details -> DetailsFieldSpec,
-      DescriptionField.DelayWorkspaceDestruction -> DelayWorkspaceDestructionFieldSpec,
-      DescriptionField.Executable -> ExecutableFieldSpec,
-      DescriptionField.ExecutableName -> ExecutableNameFieldSpec,
-      DescriptionField.Folder -> FolderFieldSpec,
-      DescriptionField.Id -> IdFieldSpec,
-      DescriptionField.IgnoreReuse -> IgnoreReuseFieldSpec,
-      DescriptionField.Input -> InputFieldSpec,
-      DescriptionField.Installed -> InstalledFieldSpec,
-      DescriptionField.Installs -> InstallsFieldSpec,
-      DescriptionField.IsDeveloperFor -> IsDeveloperForFieldSpec,
-      DescriptionField.LaunchedBy -> LaunchedByFieldSpec,
-      DescriptionField.Modified -> ModifiedFieldSpec,
-      DescriptionField.Name -> NameFieldSpec,
-      DescriptionField.OriginalInput -> OriginalInputFieldSpec,
-      DescriptionField.OpenSource -> OpenSourceFieldSpec,
-      DescriptionField.Output -> OutputFieldSpec,
-      DescriptionField.ParentAnalysis -> ParentAnalysisFieldSpec,
-      DescriptionField.ParentJob -> ParentJobFieldSpec,
-      DescriptionField.PriceComputedAt -> PriceComputedAtFieldSpec,
-      DescriptionField.Project -> ProjectFieldSpec,
-      DescriptionField.Properties -> PropertiesFieldSpec,
+      DescriptionField.Aliases -> StringArrayFieldSpec("aliases"),
+      DescriptionField.Analysis -> OptionalStringFieldSpec("analysis"),
+      DescriptionField.AuthorizedUsers -> StringArrayFieldSpec("authorizedUsers"),
+      DescriptionField.BillTo -> StringFieldSpec("billTo"),
+      DescriptionField.Categories -> StringArrayFieldSpec("categories"),
+      DescriptionField.Class -> StringFieldSpec("class"),
+      DescriptionField.Created -> LongFieldSpec("created"),
+      DescriptionField.CreatedBy -> StringFieldSpec("createdBy"),
+      DescriptionField.DelayWorkspaceDestruction -> BooleanFieldSpec("delayWorkspaceDestruction"),
+      DescriptionField.Deleted -> BooleanFieldSpec("deleted"),
+      DescriptionField.Description -> StringFieldSpec("description"),
+      DescriptionField.Details -> JsValueFieldSpec("details"),
+      DescriptionField.DxApiVersion -> StringFieldSpec("dxApi"),
+      DescriptionField.Executable -> StringFieldSpec("executable"),
+      DescriptionField.ExecutableName -> StringFieldSpec("executableName"),
+      DescriptionField.Folder -> StringFieldSpec("folder"),
+      DescriptionField.HttpsApp -> BooleanFieldSpec("httpsApp"),
+      DescriptionField.Id -> StringFieldSpec("id"),
+      DescriptionField.IgnoreReuse -> BooleanFieldSpec("ignoreReuse"),
+      DescriptionField.Input -> JsMapFieldSpec("input"),
+      DescriptionField.Installed -> BooleanFieldSpec("installed"),
+      DescriptionField.Installs -> LongFieldSpec("installs"),
+      DescriptionField.IsDeveloperFor -> BooleanFieldSpec("isDeveloperFor"),
+      DescriptionField.LaunchedBy -> StringFieldSpec("launchedBy"),
+      DescriptionField.LineItemPerTest -> BooleanFieldSpec("lineItemPerTest"),
+      DescriptionField.Modified -> LongFieldSpec("modified"),
+      DescriptionField.Name -> StringFieldSpec("name"),
+      DescriptionField.OpenSource -> BooleanFieldSpec("openSource"),
+      DescriptionField.OriginalInput -> JsMapFieldSpec("originalInput"),
+      DescriptionField.Output -> OptionalJsMapFieldSpec("output"),
+      DescriptionField.ParentAnalysis -> OptionalStringFieldSpec("parentAnalysis"),
+      DescriptionField.ParentJob -> OptionalStringFieldSpec("parentJob"),
+      DescriptionField.PriceComputedAt -> LongFieldSpec("priceComputedAt"),
+      DescriptionField.Project -> StringFieldSpec("project"),
+      DescriptionField.Properties -> StringMapFieldSpec("properties"),
+      DescriptionField.Published -> BooleanFieldSpec("published"),
       DescriptionField.RegionalOptions -> RegionalOptionsFieldSpec,
-      DescriptionField.RootExecution -> RootExecutionFieldSpec,
-      DescriptionField.RunInput -> RunInputFieldSpec,
-      DescriptionField.Stage -> StageFieldSpec,
+      DescriptionField.RootExecution -> StringFieldSpec("rootExecution"),
+      DescriptionField.RunInput -> JsMapFieldSpec("runInput"),
+      DescriptionField.Stage -> OptionalStringFieldSpec("stage"),
       DescriptionField.Stages -> StagesFieldSpec,
-      DescriptionField.State -> StateFieldSpec,
+      DescriptionField.State -> EnumFieldSpec[ExecutableState.ExecutableState](
+        "state",
+        ExecutableState.withNameIgnoreCase
+      ),
       DescriptionField.SubtotalPriceInfo -> SubtotalPriceInfoFieldSpec,
-      DescriptionField.Tags -> TagsFieldSpec,
-      DescriptionField.TotalPrice -> TotalPriceFieldSpec,
-      DescriptionField.Version -> VersionFieldSpec,
+      DescriptionField.Summary -> StringFieldSpec("summary"),
+      DescriptionField.Tags -> StringArrayFieldSpec("tags"),
+      DescriptionField.Title -> StringFieldSpec("title"),
+      DescriptionField.TotalPrice -> LongFieldSpec("totalPrice"),
+      DescriptionField.Version -> StringFieldSpec("version"),
       DescriptionField.Workflow -> WorkflowFieldSpec,
-      DescriptionField.Workspace -> WorkspaceFieldSpec
+      DescriptionField.Workspace -> StringFieldSpec("workspace")
   )
+  // Make sure we didn't forget to add any specs
+  assert(DescriptionField.values.forall(Specs.contains))
 }
 
 trait NewDxObjectDescribe {

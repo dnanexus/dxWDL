@@ -88,7 +88,7 @@ case class NewDxApp(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxA
         DescriptionField.Categories,
         DescriptionField.LineItemPerTest,
         DescriptionField.Access,
-        DescriptionField.DxApi,
+        DescriptionField.DxApiVersion,
         DescriptionField.RunSpec
     )
   }
