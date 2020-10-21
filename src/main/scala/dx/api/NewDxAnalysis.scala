@@ -1,4 +1,5 @@
 package dx.api
+import dx.api.DescriptionField.{Description, DescriptionField}
 import spray.json.{JsObject, JsValue}
 
 case class NewDxAnalysis(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxApi.get)
@@ -150,5 +151,31 @@ case class NewDxApplet(id: String,
 
   override protected def callRun(request: Map[String, JsValue]): JsObject = {
     dxApi.appletRun(id, request)
+  }
+}
+
+case class NewDxFile(id: String, dxProject: Option[DxProject], dxApi: DxApi = DxApi.get)
+    extends BaseDxDataObjectDescribe(dxProject, dxApi) {
+
+  override protected val defaultFields: Set[DescriptionField] = {
+    super.defaultFields | Set(DescriptionField.ArchivalState, DescriptionField.Size)
+  }
+
+  override protected val otherFields: Set[DescriptionField] = _
+
+  override protected def callAddTags(request: Map[String, JsValue]): Unit = {
+    dxApi.fileAddTags(id, request)
+  }
+
+  override protected def callRemoveTags(request: Map[String, JsValue]): Unit = {
+    dxApi.fileRemoveTags(id, request)
+  }
+
+  override protected def callSetProperties(request: Map[String, JsValue]): Unit = {
+    dxApi.fileSetProperties(id, request)
+  }
+
+  override protected def callDescribe(request: Map[String, JsValue]): JsObject = {
+    dxApi.fileDescribe(id, request)
   }
 }

@@ -317,6 +317,21 @@ case class DxApi(logger: Logger = Logger.get,
     logger.ignore(result)
   }
 
+  def fileAddTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.fileAddTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
+  def fileRemoveTags(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.fileRemoveTags[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
+  def fileSetProperties(id: String, fields: Map[String, JsValue]): Unit = {
+    val result = callObject(DXAPI.fileSetProperties[JsonNode], id, fields)
+    logger.ignore(result)
+  }
+
   def fileDescribe(id: String, fields: Map[String, JsValue]): JsObject = {
     callObject(DXAPI.fileDescribe[JsonNode], id, fields)
   }
