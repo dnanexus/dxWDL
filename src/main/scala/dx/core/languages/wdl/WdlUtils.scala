@@ -351,6 +351,7 @@ object WdlUtils {
       case (key, value) => key -> toIRType(value)
     })
   }
+
   def toIRType(wdlType: T): Type = {
     wdlType match {
       case T_Boolean     => TBoolean
