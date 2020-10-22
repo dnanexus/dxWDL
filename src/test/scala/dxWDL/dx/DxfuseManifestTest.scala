@@ -8,7 +8,7 @@ import dxWDL.util._
 class DxfuseManifestTest extends FlatSpec with Matchers {
   private val runtimeDebugLevel = 0
   lazy val homeDir = Paths.get(System.getProperty("user.home"))
-  lazy val dxPathConfig = DxPathConfig.apply(homeDir, false, runtimeDebugLevel >= 1)
+  lazy val dxPathConfig = DxPathConfig.apply(homeDir, None, runtimeDebugLevel >= 1)
   lazy private val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
 
   it should "detect and provide legible error for archived files" in {

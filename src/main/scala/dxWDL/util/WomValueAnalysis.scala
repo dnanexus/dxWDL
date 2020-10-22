@@ -13,7 +13,7 @@ object WomValueAnalysis {
   // These are used for evaluating if a WOM expression is constant.
   // Ideally, we should not be using any of the IO functions, since
   // these checks may be part of the compilation process.
-  private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"), false, false)
+  private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"), None, false)
   private lazy val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, 0)
 
   // Examine task foo:

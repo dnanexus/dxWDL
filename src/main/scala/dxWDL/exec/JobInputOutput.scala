@@ -279,10 +279,13 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, MetaValueElement],
                            inputs: Map[InputDefinition, WomValue]): Set[Furl] = {
+    if (dxIoFunctions.config.streamFiles.contains(StreamFiles.None)) {
+      return Set.empty
+    }
     inputs
       .map {
         case (iDef, womValue) =>
-          if (dxIoFunctions.config.streamAllFiles) {
+          if (dxIoFunctions.config.streamFiles.contains(StreamFiles.All)) {
             findFiles(womValue)
           } else {
             // This is better than "iDef.parameterMeta", but it does not

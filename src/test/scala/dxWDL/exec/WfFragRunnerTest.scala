@@ -2,7 +2,7 @@ package dxWDL.exec
 
 import java.nio.file.{Path, Paths}
 
-import cats.data.Validated.Valid
+import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -19,7 +19,7 @@ import dxWDL.util.{
 import wom.callable.WorkflowDefinition
 import wom.executable.WomBundle
 import wom.expression.WomExpression
-import wom.graph.ScatterVariableNode
+import wom.graph.{CallNode, Graph, ScatterVariableNode}
 import wom.graph.expression.ExposedExpressionNode
 import wom.types.{
   WomArrayType,
@@ -39,8 +39,6 @@ import wom.values.{
   WomValue
 }
 
-import scala.tools.nsc.backend.jvm.BackendReporting.Invalid
-
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
@@ -56,7 +54,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, runtimeDebugLevel >= 1)
+    val dxPathConfig = DxPathConfig.apply(jobHomeDir, None, runtimeDebugLevel >= 1)
     dxPathConfig.createCleanDirs()
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     (dxPathConfig, dxIoFunctions)
