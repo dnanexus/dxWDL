@@ -50,8 +50,9 @@ object Main extends App {
   // runtime, not at compile time. On the cloud instance running the
   // job, the user is "dnanexus", and the home directory is
   // "/home/dnanexus".
-  private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean): DxPathConfig = {
-    DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
+  private def buildRuntimePathConfig(streamFiles: StreamFiles.StreamFiles,
+                                     verbose: Boolean): DxPathConfig = {
+    DxPathConfig.apply(baseDNAxDir, Some(streamFiles), verbose)
   }
 
   private def normKey(s: String): String = {
@@ -181,7 +182,10 @@ object Main extends App {
             (keyword, subargs.head)
           case "streamAllFiles" =>
             checkNumberOfArguments(keyword, 0, subargs)
-            ("streamAllFiles", "")
+            ("streamFiles", "all")
+          case "streamFiles" =>
+            checkNumberOfArguments(keyword, 1, subargs)
+            ("streamFiles", subargs.head.toLowerCase)
           case "verbose" =>
             checkNumberOfArguments(keyword, 0, subargs)
             (keyword, "")
@@ -333,13 +337,13 @@ object Main extends App {
         )
     }
 
-  private def parseStreamAllFiles(s: String): Boolean = {
+  private def parseStreamFiles(s: String): StreamFiles.StreamFiles = {
     s.toLowerCase match {
-      case "true"  => true
-      case "false" => false
+      case "all"   => StreamFiles.All
+      case "false" => StreamFiles.None
       case other =>
         throw new Exception(
-            s"""|the streamAllFiles flag must be a boolean (true,false).
+            s"""|the streamFiles flag must be a boolean (true,false).
                 |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
@@ -426,6 +430,14 @@ object Main extends App {
         }
     }
 
+    val streamFiles = options.get("streamFiles") match {
+      case Some(List("all"))  => Some(StreamFiles.All)
+      case Some(List("none")) => Some(StreamFiles.None)
+      case None               => None
+      case other =>
+        throw new InvalidInputException(s"ERROR: invalid 'streamFiles' value ${other}")
+    }
+
     CompilerOptions(
         options contains "archive",
         compileMode,
@@ -439,7 +451,7 @@ object Main extends App {
         options contains "locked",
         options contains "projectWideReuse",
         options contains "reorg",
-        options contains "streamAllFiles",
+        streamFiles,
         // options contains "execTree",
         treePrinter,
         runtimeDebugLevel,
@@ -558,7 +570,7 @@ object Main extends App {
           return SuccessfulTerminationIR(ir)
 
         case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
-          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
+          val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamFiles, cOpt.verbose.on)
           val (retval, treeDesc) =
             top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt.execTree)
           treeDesc match {
@@ -967,10 +979,10 @@ object Main extends App {
       case Some(op) if args.length == 4 =>
         val homeDir = Paths.get(args(1))
         val rtDebugLvl = parseRuntimeDebugLevel(args(2))
-        val streamAllFiles = parseStreamAllFiles(args(3))
+        val streamFiles = parseStreamFiles(args(3))
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
           Utils.jobFilesOfHomeDir(homeDir)
-        val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
+        val dxPathConfig = buildRuntimePathConfig(streamFiles, rtDebugLvl >= 1)
         val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
         val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
@@ -1063,24 +1075,27 @@ object Main extends App {
         |    platform. If a WDL inputs files is specified, a dx JSON
         |    inputs file is generated from it.
         |    options
-        |      -archive               Archive older versions of applets
-        |      -compileMode <string>  Compilation mode, a debugging flag
-        |      -defaults <string>     File with Cromwell formatted default values (JSON)
-        |      -destination <string>  Output path on the platform for workflow
-        |      -execTree [json,pretty] Write out a json representation of the workflow
-        |      -extras <string>       JSON formatted file with extra options, for example
-        |                             default runtime options for tasks.
-        |      -inputs <string>       File with Cromwell formatted inputs
-        |      -locked                Create a locked-down workflow
-        |      -p | -imports <string> Directory to search for imported WDL files
-        |      -projectWideReuse      Look for existing applets/workflows in the entire project
-        |                             before generating new ones. The normal search scope is the
-        |                             target folder only.
-        |      -reorg                 Reorganize workflow output files
+        |      -archive                   Archive older versions of applets
+        |      -compileMode <string>      Compilation mode, a debugging flag
+        |      -defaults <string>         File with Cromwell formatted default values (JSON)
+        |      -destination <string>      Output path on the platform for workflow
+        |      -execTree [json,pretty]    Write out a json representation of the workflow
+        |      -extras <string>           JSON formatted file with extra options, for example
+        |                                 default runtime options for tasks.
+        |      -inputs <string>           File with Cromwell formatted inputs
+        |      -locked                    Create a locked-down workflow
+        |      -p | -imports <string>     Directory to search for imported WDL files
+        |      -projectWideReuse          Look for existing applets/workflows in the entire project
+        |                                 before generating new ones. The normal search scope is the
+        |                                 target folder only.
+        |      -reorg                     Reorganize workflow output files
         |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
-        |                             job log at runtime. Zero means write the minimum,
-        |                             one is the default, and two is for internal debugging.
-        |      -streamAllFiles        mount all files with dxfuse, do not use the download agent
+        |                                 job log at runtime. Zero means write the minimum,
+        |                                 one is the default, and two is for internal debugging.
+        |      -streamFiles [all,none]    whether to mount all files with dxfuse (do not use the 
+        |                                 download agent), or to mount no files with dxfuse (only use 
+        |                                 download agent); this setting overrides any per-file settings
+        |                                 in WDL parameter_meta sections.
         |
         |  dxni
         |    Dx Native call Interface. Create stubs for calling dx

@@ -48,7 +48,7 @@ case class Native(dxWDLrtId: Option[String],
   private val verbose2: Boolean = verbose.containsKey("Native")
   private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
-  private val streamAllFiles: Boolean = dxPathConfig.streamAllFiles
+  private val streamFiles: Option[StreamFiles.StreamFiles] = dxPathConfig.streamFiles
 
   // Are we setting up a private docker registry?
   private val dockerRegistryInfo: Option[DockerRegistry] = extras match {
@@ -376,7 +376,7 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptTaskBody(): String = {
     s"""|    # evaluate input arguments, and download input files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |
         |    echo "Using dxda version: $$(dx-download-agent version)"
         |    echo "Using dxfuse version: $$(dxfuse -version)"
@@ -470,7 +470,7 @@ case class Native(dxWDLrtId: Option[String],
         |    fi
         |
         |    # evaluate applet outputs, and upload result files
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |
         |    # unmount dxfuse
         |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
@@ -482,21 +482,21 @@ case class Native(dxWDLrtId: Option[String],
 
   private def genBashScriptWfFragment(): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |}
         |
         |continue() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal continue $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal continue $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |}
         |
         |collect() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |}""".stripMargin.trim
   }
 
   private def genBashScriptCmd(cmd: String): String = {
     s"""|main() {
-        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+        |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
         |}""".stripMargin.trim
   }
 
@@ -531,12 +531,12 @@ case class Native(dxWDLrtId: Option[String],
                 |set -e -o pipefail
                 |main() {
                 |    # check if this is the correct instance type
-                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
+                |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}`
                 |    if [[ $$correctInstanceType == "true" ]]; then
                 |        body
                 |    else
                 |       # evaluate the instance type, and launch a sub job on it
-                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
+                |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamFiles.toString}
                 |    fi
                 |}
                 |

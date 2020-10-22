@@ -2,6 +2,8 @@ package dxWDL.base
 
 import java.nio.file.Path
 
+import dxWDL.util.StreamFiles
+
 // Exception used for AppInternError
 class AppInternalException private (ex: RuntimeException) extends RuntimeException(ex) {
   def this(message: String) = this(new RuntimeException(message))
@@ -52,7 +54,7 @@ case class CompilerOptions(archive: Boolean,
                            locked: Boolean,
                            projectWideReuse: Boolean,
                            reorg: Boolean,
-                           streamAllFiles: Boolean,
+                           streamFiles: Option[StreamFiles.StreamFiles],
                            execTree: Option[TreePrinter],
                            runtimeDebugLevel: Option[Int],
                            verbose: Verbose,
