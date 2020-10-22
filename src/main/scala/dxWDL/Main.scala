@@ -339,11 +339,11 @@ object Main extends App {
 
   private def parseStreamFiles(s: String): StreamFiles.StreamFiles = {
     s.toLowerCase match {
-      case "all"   => StreamFiles.All
-      case "false" => StreamFiles.None
+      case "all"  => StreamFiles.All
+      case "none" => StreamFiles.None
       case other =>
         throw new Exception(
-            s"""|the streamFiles flag must be a boolean (true,false).
+            s"""|the streamFiles flag must be a string (all,none).
                 |Value ${other} is illegal.""".stripMargin
               .replaceAll("\n", " ")
         )
