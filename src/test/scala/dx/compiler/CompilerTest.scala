@@ -957,6 +957,27 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     trainsOutputVector.outputVars.size shouldBe 1
   }
 
+  it should "compile workflow with task imported by multiple paths" taggedAs NativeTest in {
+    val path = pathFromBasename("compiler", basename = "multi_import.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[Success]
+  }
+
+  it should "compile workflow with call to task having optional output" taggedAs NativeTest in {
+    val path = pathFromBasename("compiler", basename = "optional_call_output.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[Success]
+  }
+
+  it should "compile myriad workflow" taggedAs NativeTest in {
+    val path = pathFromBasename("myriad", basename = "dts_batch.wdl")
+    val args = path.toString :: cFlags
+    val retval = Main.compile(args.toVector)
+    retval shouldBe a[Success]
+  }
+
   it should "Set job-reuse flag" taggedAs NativeTest in {
     val path = pathFromBasename("compiler", "add_timeout.wdl")
     val extrasContent =

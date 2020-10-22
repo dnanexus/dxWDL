@@ -812,14 +812,36 @@ object WdlUtils {
         case TAT.ExprIfThenElse(cond, tBranch, fBranch, _, _) =>
           inner(cond) ++ inner(tBranch) ++ inner(fBranch)
         // Apply a standard library function to arguments.
-        //
-        // TODO: some arguments may be _optional_ we need to take that
-        // into account. We need to look into the function type
-        // and figure out which arguments are optional.
-        case TAT.ExprApply(_, _, elements, _, _) =>
-          elements.flatMap(inner)
+        case TAT.ExprApply(_, funcWdlType, elements, _, _) =>
+          // the function parameters might be optional even if the arguments are not
+          def maybeMakeOptional(inputs: Vector[(String, WdlTypes.T, Boolean)],
+                                argType: T): Vector[(String, WdlTypes.T, Boolean)] = {
+            if (TypeUtils.isOptional(argType)) {
+              inputs.map {
+                case (s, t, _) => (s, t, true)
+              }
+            } else {
+              inputs
+            }
+          }
+          funcWdlType match {
+            case _: T_Function0 => Vector.empty
+            case T_Function1(_, arg0Type, _) =>
+              maybeMakeOptional(inner(elements(0)), arg0Type)
+            case T_Function2(_, arg0Type, arg1Type, _) =>
+              Vector(
+                  maybeMakeOptional(inner(elements(0)), arg0Type),
+                  maybeMakeOptional(inner(elements(1)), arg1Type)
+              ).flatten
+            case T_Function3(_, arg0Type, arg1Type, arg2Type, _) =>
+              Vector(
+                  maybeMakeOptional(inner(elements(0)), arg0Type),
+                  maybeMakeOptional(inner(elements(1)), arg1Type),
+                  maybeMakeOptional(inner(elements(2)), arg2Type)
+              ).flatten
+          }
         // Access the field of a call/struct/etc. What we do here depends on the
-        // value of withMember. When we the expression value is a struct and we
+        // value of withMember. When the expression value is a struct and we
         // are generating a closure, we only need the parent struct, not the member.
         // Otherwise, we need to add the member name.
         // Note: this case was added to fix bug/APPS-104 - there may be other expressions
@@ -834,12 +856,12 @@ object WdlUtils {
         // Access a field of an identifier
         //   Int z = eliminateDuplicate.fields
         case TAT.ExprGetName(TAT.ExprIdentifier(id, _, _), fieldName, wdlType, _) =>
-          Vector((s"${id}.${fieldName}", wdlType, false))
+          Vector((s"${id}.${fieldName}", wdlType, TypeUtils.isOptional(wdlType)))
         // Access a field of the result of an expression
         case TAT.ExprGetName(expr, fieldName, _, _) =>
           inner(expr) match {
-            case Vector((name, wdlType, _)) =>
-              Vector((s"${name}.${fieldName}", wdlType, false))
+            case Vector((name, wdlType, optional)) =>
+              Vector((s"${name}.${fieldName}", wdlType, optional))
             case _ =>
               throw new Exception(
                   s"Unhandled ExprGetName construction ${TypeUtils.prettyFormatExpr(expr)}"
@@ -885,7 +907,6 @@ object WdlUtils {
       elements: Vector[TAT.WorkflowElement]
   ): (Map[String, (WdlTypes.T, Boolean)], Map[String, TAT.OutputParameter]) = {
     // accumulate the inputs, outputs, and local definitions.
-    //
     // start with:
     //  an empty list of inputs
     //  empty list of local definitions

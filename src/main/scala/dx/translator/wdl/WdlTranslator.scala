@@ -205,6 +205,10 @@ case class WdlTranslatorFactory(regime: TypeCheckingRegime = TypeCheckingRegime.
         case ex: TypeException =>
           // the file could be parsed, so it is WDL, but it failed type checking
           throw ex
+        case ex: Throwable if language.isDefined =>
+          // the user specified the language, but the file could not be parsed with
+          // the specified parser
+          throw ex
         case _: Throwable =>
           // there was some other error, probably a SyntaxException, meaning the
           // file couldn't be parsed, so it's probably not WDL
