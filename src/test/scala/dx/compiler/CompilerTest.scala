@@ -59,9 +59,9 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
                                                              s"/${unitTestsPath}",
                                                              "-locked")
   private lazy val cFlagsReorgIR: List[String] = cFlagsBase ++
-    List("-compileMode", "IR", "-folder", "/reorg_tests")
+    List("-compileMode", "IR", "-folder", s"/${unitTestsPath}/reorg_tests")
   private lazy val cFlagsReorgCompile: List[String] = cFlagsBase ++
-    List("-compileMode", "NativeWithoutRuntimeAsset", "-folder", "/reorg_tests")
+    List("-compileMode", "NativeWithoutRuntimeAsset", "-folder", s"/${unitTestsPath}/reorg_tests")
 
 //  val irArgs = path.toString :: "--extras" :: extraPath.toString :: (cFlagsBase ++ List(
 //    "-compileMode",
@@ -894,7 +894,7 @@ class CompilerTest extends AnyFlatSpec with Matchers with BeforeAndAfterAll {
     val path = pathFromBasename("subworkflows", basename = "trains_station.wdl")
     // upload random file
     val (_, uploadOut, _) = SysUtils.execCommand(
-        s"dx upload ${path.toString} --destination /reorg_tests --brief"
+        s"dx upload ${path.toString} --destination /${unitTestsPath}/reorg_tests --brief"
     )
     val fileId = uploadOut.trim
     val extrasContent =

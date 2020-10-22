@@ -1,18 +1,18 @@
 <%@ val dockerPreamble: String %>
 <%@ val rtTraceLevel: Int %>
-<%@ val streamAllFiles: Boolean %>
+<%@ val streamFiles: dx.core.io.StreamFiles.StreamFiles %>
 <%@ val bashDollar: String = "$" %>
 set -exo pipefail
 ${dockerPreamble}
 
 main() {
     # check if this is the correct instance type
-    correctInstanceType=`java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task checkInstanceType ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}`
+    correctInstanceType=`java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task checkInstanceType ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}`
     if [[ ${bashDollar}correctInstanceType == "true" ]]; then
         body
     else
         # evaluate the instance type, and launch a sub job on it
-        java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task relaunch ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+        java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task relaunch ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
     fi
 }
 

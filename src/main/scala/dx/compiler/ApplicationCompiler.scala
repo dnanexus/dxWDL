@@ -11,7 +11,7 @@ import dx.api.{
   InstanceTypeRequest
 }
 import dx.core.Constants
-import dx.core.io.DxWorkerPaths
+import dx.core.io.{DxWorkerPaths, StreamFiles}
 import dx.core.ir._
 import wdlTools.util.CodecUtils
 import dx.translator.{DockerRegistry, DxAccess, DxExecPolicy, DxRunSpec, DxTimeout, Extras}
@@ -40,7 +40,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
                                runtimeAsset: Option[JsValue],
                                runtimePathConfig: DxWorkerPaths,
                                runtimeTraceLevel: Int,
-                               streamAllFiles: Boolean,
+                               streamFiles: StreamFiles.StreamFiles,
                                scatterChunkSize: Int,
                                extras: Option[Extras],
                                parameterLinkSerializer: ParameterLinkSerializer,
@@ -85,7 +85,7 @@ case class ApplicationCompiler(typeAliases: Map[String, Type],
   private def generateJobScript(applet: Application): String = {
     val templateAttrs: Map[String, Any] = Map(
         "rtTraceLevel" -> runtimeTraceLevel,
-        "streamAllFiles" -> streamAllFiles
+        "streamFiles" -> streamFiles
     )
     applet.kind match {
       case ExecutableKindApplet =>

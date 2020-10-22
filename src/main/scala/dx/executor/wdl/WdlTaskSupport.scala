@@ -8,7 +8,8 @@ import dx.core.io.{
   DxdaManifest,
   DxdaManifestBuilder,
   DxfuseManifest,
-  DxfuseManifestBuilder
+  DxfuseManifestBuilder,
+  StreamFiles
 }
 import dx.core.ir.ParameterLink
 import dx.core.languages.wdl.{DxMetaHints, Runtime, VersionSupport, WdlUtils}
@@ -174,7 +175,7 @@ case class WdlTaskSupport(task: TAT.Task,
     * @return
     */
   override def localizeInputFiles(
-      streamAllFiles: Boolean
+      streamFiles: StreamFiles.StreamFiles
   ): (Map[String, JsValue],
       Map[AddressableFileNode, Path],
       Option[DxdaManifest],
@@ -204,28 +205,35 @@ case class WdlTaskSupport(task: TAT.Task,
           if (remote.isEmpty) {
             (localFilesToPath ++ local, filesToStream, filesToDownload)
           } else {
-            val stream = streamAllFiles || (parameterMeta.get(name) match {
-              case Some(V_String(DxMetaHints.ParameterMetaStream)) =>
-                true
-              case Some(V_Object(fields)) =>
-                // This enables the stream annotation in the object form of metadata value, e.g.
-                // bam_file : {
-                //   stream : true
-                // }
-                // We also support two aliases, dx_stream and localizationOptional
-                fields.view
-                  .filterKeys(
-                      Set(DxMetaHints.ParameterMetaStream,
-                          DxMetaHints.ParameterHintStream,
-                          Hints.LocalizationOptionalKey)
-                  )
-                  .values
-                  .exists {
-                    case V_Boolean(b) => b
-                    case _            => false
-                  }
-              case _ => false
-            })
+            val stream = streamFiles match {
+              case StreamFiles.All  => true
+              case StreamFiles.None => false
+              case StreamFiles.PerFile =>
+                parameterMeta.get(name) match {
+                  case Some(V_String(DxMetaHints.ParameterMetaStream)) =>
+                    true
+                  case Some(V_Object(fields)) =>
+                    // This enables the stream annotation in the object form of metadata value, e.g.
+                    // bam_file : {
+                    //   stream : true
+                    // }
+                    // We also support two aliases, dx_stream and localizationOptional
+                    fields.view
+                      .filterKeys(
+                          Set(DxMetaHints.ParameterMetaStream,
+                              DxMetaHints.ParameterHintStream,
+                              Hints.LocalizationOptionalKey)
+                      )
+                      .values
+                      .exists {
+                        case V_Boolean(b) => b
+                        case _            => false
+                      }
+                  case _ => false
+                }
+              case other =>
+                throw new Exception(s"unexpected StreamFiles value ${other}")
+            }
             if (stream) {
               (localFilesToPath ++ local, filesToStream ++ remote, filesToDownload)
             } else {

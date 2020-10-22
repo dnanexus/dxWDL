@@ -1,9 +1,9 @@
 <%@ val dxPathConfig: dx.core.io.DxWorkerPaths %>
 <%@ val rtTraceLevel: Int %>
-<%@ val streamAllFiles: Boolean %>
+<%@ val streamFiles: dx.core.io.StreamFiles.StreamFiles %>
 <% val bashDollar: String = "$" %>
     # evaluate input arguments, and download input files
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task prolog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task prolog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 
     echo "Using dxda version: ${bashDollar}(dx-download-agent version)"
     echo "Using dxfuse version: ${bashDollar}(dxfuse -version)"
@@ -72,7 +72,7 @@
     fi
 
     # construct the bash command and write it to a file
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task instantiateCommand ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task instantiateCommand ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 
     echo "bash command encapsulation script:"
     cat ${dxPathConfig.getCommandFile().toString}
@@ -100,7 +100,7 @@
 
     # evaluate applet outputs, and upload result files -
     # this may write a UA manifest
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task epilog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar task epilog ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 
     # Upload files using UA
     if [[ -e ${dxPathConfig.getDxuaManifestFile().toString} ]]; then

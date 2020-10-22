@@ -1,14 +1,14 @@
 <%@ val rtTraceLevel: Int %>
-<%@ val streamAllFiles: Boolean %>
+<%@ val streamFiles: dx.core.io.StreamFiles.StreamFiles %>
 <%@ val bashDollar: String = "$" %>
 main() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow run ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow run ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 }
 
 continue() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow continue ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow continue ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 }
 
 collect() {
-    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow collect ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamAllFiles) "-streamAllFiles" else ""}
+    java -jar ${bashDollar}{DX_FS_ROOT}/dxWDL.jar workflow collect ${bashDollar}{HOME} -traceLevel ${rtTraceLevel} ${if (streamFiles != dx.core.io.StreamFiles.PerFile) "-streamFiles " + streamFiles.toString else ""}
 }
