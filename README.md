@@ -1,5 +1,7 @@
 ![](https://github.com/dnanexus/dxWDL/workflows/Master%20Test%20Workflow/badge.svg)
 
+Note: dxWDL is now in maintaince mode. It will continue to receive bug fixes, but will have no new features. All new development is occurring in the [dxCompiler](https://github.com/dnanexus/dxCompiler) repository.
+
 dxWDL takes a pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
