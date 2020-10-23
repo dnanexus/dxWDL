@@ -6,7 +6,7 @@ import dxWDL.base.Utils
 
 object StreamFiles extends Enumeration {
   type StreamFiles = Value
-  val All, None = Value
+  val All, None, PerFile = Value
 }
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
@@ -58,7 +58,7 @@ case class DxPathConfig(homeDir: Path,
                         // file for storing the state between prolog and epilog of the task runner
                         runnerTaskEnv: Path,
                         // should we stream all files?
-                        streamFiles: Option[StreamFiles.StreamFiles],
+                        streamFiles: StreamFiles.StreamFiles,
                         verbose: Boolean) {
 
   // create all the directory paths, so we can start using them.
@@ -73,9 +73,7 @@ case class DxPathConfig(homeDir: Path,
 }
 
 object DxPathConfig {
-  def apply(homeDir: Path,
-            streamFiles: Option[StreamFiles.StreamFiles],
-            verbose: Boolean): DxPathConfig = {
+  def apply(homeDir: Path, streamFiles: StreamFiles.StreamFiles, verbose: Boolean): DxPathConfig = {
     val metaDir: Path = homeDir.resolve("meta")
     val inputFilesDir: Path = homeDir.resolve("inputs")
     val outputFilesDir: Path = homeDir.resolve("outputs")

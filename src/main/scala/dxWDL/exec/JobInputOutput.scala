@@ -279,15 +279,12 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
   // Figure out which files need to be streamed
   private def areStreaming(parameterMeta: Map[String, MetaValueElement],
                            inputs: Map[InputDefinition, WomValue]): Set[Furl] = {
-    if (dxIoFunctions.config.streamFiles.contains(StreamFiles.None)) {
-      return Set.empty
-    }
-    inputs
-      .map {
-        case (iDef, womValue) =>
-          if (dxIoFunctions.config.streamFiles.contains(StreamFiles.All)) {
-            findFiles(womValue)
-          } else {
+    dxIoFunctions.config.streamFiles match {
+      case StreamFiles.None => Set.empty
+      case StreamFiles.All  => inputs.values.flatMap(findFiles).toSet
+      case StreamFiles.PerFile =>
+        inputs.flatMap {
+          case (iDef, womValue) =>
             // This is better than "iDef.parameterMeta", but it does not
             // work on draft2.
             parameterMeta.get(iDef.name) match {
@@ -311,10 +308,9 @@ case class JobInputOutput(dxIoFunctions: DxIoFunctions,
               case _ =>
                 Vector.empty
             }
-          }
-      }
-      .flatten
-      .toSet
+
+        }.toSet
+    }
   }
 
   // After applying [loadInputs] above, we have the job inputs in the correct format,
