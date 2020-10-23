@@ -14,7 +14,8 @@ import dxWDL.util.{
   DxIoFunctions,
   DxPathConfig,
   InstanceTypeDB,
-  ParseWomSourceFile
+  ParseWomSourceFile,
+  StreamFiles
 }
 import wom.callable.WorkflowDefinition
 import wom.executable.WomBundle
@@ -54,7 +55,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, None, runtimeDebugLevel >= 1)
+    val dxPathConfig = DxPathConfig.apply(jobHomeDir, StreamFiles.Perfile, runtimeDebugLevel >= 1)
     dxPathConfig.createCleanDirs()
     val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
     (dxPathConfig, dxIoFunctions)
