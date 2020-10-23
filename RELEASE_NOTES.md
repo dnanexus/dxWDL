@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.49.4 22-Oct-2020
+
+* change streamAllFiles flag to streamFiles, with a new option to ignore streaming for all inputs
+
 ## 1.49.3 07-Oct-2020
 
 * Upgrade dxda to v0.5.4
