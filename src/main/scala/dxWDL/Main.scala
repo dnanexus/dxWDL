@@ -52,7 +52,7 @@ object Main extends App {
   // "/home/dnanexus".
   private def buildRuntimePathConfig(streamFiles: StreamFiles.StreamFiles,
                                      verbose: Boolean): DxPathConfig = {
-    DxPathConfig.apply(baseDNAxDir, Some(streamFiles), verbose)
+    DxPathConfig.apply(baseDNAxDir, streamFiles, verbose)
   }
 
   private def normKey(s: String): String = {
@@ -339,8 +339,9 @@ object Main extends App {
 
   private def parseStreamFiles(s: String): StreamFiles.StreamFiles = {
     s.toLowerCase match {
-      case "all"  => StreamFiles.All
-      case "none" => StreamFiles.None
+      case "all"     => StreamFiles.All
+      case "none"    => StreamFiles.None
+      case "perfile" => StreamFiles.PerFile
       case other =>
         throw new Exception(
             s"""|the streamFiles flag must be a string (all,none).
@@ -431,9 +432,9 @@ object Main extends App {
     }
 
     val streamFiles = options.get("streamFiles") match {
-      case Some(List("all"))  => Some(StreamFiles.All)
-      case Some(List("none")) => Some(StreamFiles.None)
-      case None               => None
+      case Some(List("all"))  => StreamFiles.All
+      case Some(List("none")) => StreamFiles.None
+      case None               => StreamFiles.PerFile
       case other =>
         throw new InvalidInputException(s"ERROR: invalid 'streamFiles' value ${other}")
     }
