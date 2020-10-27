@@ -12,7 +12,7 @@ This document maps the concepts from the CWL standards v1.2.0 to the OpenWDL v1.
 
 * [CWL v1.2.0 CommandLineTool specification](https://www.commonwl.org/v1.2.0/CommandLineTool.html)
 * [CWL v1.2.0 Workflow specification](https://www.commonwl.org/v1.2.0/Workflow.html)
-* [CWL v1.2.0 Schema Salad specfication)(https://www.commonwl.org/v1.2/SchemaSalad.html)
+* [CWL v1.2.0 Schema Salad specfication](https://www.commonwl.org/v1.2/SchemaSalad.html)
 * [WDL 1.0 specification](https://github.com/openwdl/wdl/blob/9049a884b56aebb84bce5b9a164e84584cc573ac/versions/1.0/SPEC.md) (2020-06-23)
 * [WDL 2.0 (development) specification](https://github.com/openwdl/wdl/blob/main/versions/development/SPEC.md)
 * [Cromwell-supported runtime attributes](https://cromwell.readthedocs.io/en/stable/RuntimeAttributes/)
