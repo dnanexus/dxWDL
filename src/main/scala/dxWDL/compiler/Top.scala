@@ -109,8 +109,7 @@ case class Top(cOpt: CompilerOptions) {
                cOpt.force,
                cOpt.archive,
                cOpt.locked,
-               cOpt.verbose,
-               cOpt.scatterChunkSize).apply(bundle)
+               cOpt.verbose).apply(bundle)
   }
 
   // check the declarations in [graph], and make sure they
@@ -241,8 +240,9 @@ case class Top(cOpt: CompilerOptions) {
       case Some(ex) => ex.defaultRuntimeAttributes
     }
 
-    val reorgApp: Either[Boolean, ReorgAttrs] = cOpt.extras match {
+    val perTaskWorkflowAttrs = cOpt.extras.map(_.perWorkflowDxAttributes).getOrElse(Map.empty)
 
+    val reorgApp: Either[Boolean, ReorgAttrs] = cOpt.extras match {
       case None => Left(cOpt.reorg)
       case Some(ex) =>
         ex.customReorgAttributes match {
@@ -252,7 +252,10 @@ case class Top(cOpt: CompilerOptions) {
 
     }
 
-    new GenerateIR(cOpt.verbose, defaultRuntimeAttrs)
+    new GenerateIR(cOpt.verbose,
+                   defaultRuntimeAttrs,
+                   perTaskWorkflowAttrs,
+                   cOpt.defaultScatterChunkSize)
       .apply(everythingBundle, allSources, language, cOpt.locked, reorgApp, adjunctFiles)
   }
 

@@ -43,8 +43,7 @@ case class Native(dxWDLrtId: Option[String],
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
-                  verbose: Verbose,
-                  scatterChunkSize: Int = Utils.DEFAULT_JOBS_PER_SCATTER) {
+                  verbose: Verbose) {
   private val verbose2: Boolean = verbose.containsKey("Native")
   private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
   private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
@@ -506,7 +505,7 @@ case class Native(dxWDLrtId: Option[String],
         throw new Exception("Sanity: generating a bash script for a native applet")
       case IR.AppletKindWorkflowCustomReorg(_) =>
         throw new Exception("Sanity: generating a bash script for a custom reorg applet")
-      case IR.AppletKindWfFragment(_, _, _) =>
+      case IR.AppletKindWfFragment(_, _, _, _) =>
         genBashScriptWfFragment()
       case IR.AppletKindWfInputs =>
         genBashScriptCmd("wfInputs")
@@ -1057,7 +1056,7 @@ case class Native(dxWDLrtId: Option[String],
 
     val metaInfo: Map[String, JsValue] =
       applet.kind match {
-        case IR.AppletKindWfFragment(calls, blockPath, fqnDictTypes) =>
+        case IR.AppletKindWfFragment(_, blockPath, fqnDictTypes, scatterChunkSize) =>
           // meta information used for running workflow fragments
           Map(
               "execLinkInfo" -> JsObject(linkInfo),
@@ -1066,9 +1065,14 @@ case class Native(dxWDLrtId: Option[String],
                 case (k, t) =>
                   val tStr = WomTypeSerialization(typeAliases).toString(t)
                   k -> JsString(tStr)
-              }),
-              Utils.SCATTER_CHUNK_SIZE -> JsNumber(scatterChunkSize)
-          )
+              })
+          ) ++ scatterChunkSize
+            .map { chunkSize =>
+              Map(
+                  Utils.SCATTER_CHUNK_SIZE -> JsNumber(chunkSize)
+              )
+            }
+            .getOrElse(Map.empty)
 
         case IR.AppletKindWfInputs | IR.AppletKindWfOutputs | IR.AppletKindWfCustomReorgOutputs |
             IR.AppletKindWorkflowOutputReorg =>
@@ -1195,8 +1199,8 @@ case class Native(dxWDLrtId: Option[String],
 
     // limit the applet dictionary, only to actual dependencies
     val calls: Vector[String] = applet.kind match {
-      case IR.AppletKindWfFragment(calls, _, _) => calls
-      case _                                    => Vector.empty
+      case IR.AppletKindWfFragment(calls, _, _, _) => calls
+      case _                                       => Vector.empty
     }
 
     val aplLinks: Map[String, ExecLinkInfo] = calls.map { tName =>

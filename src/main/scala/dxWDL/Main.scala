@@ -401,20 +401,29 @@ object Main extends App {
         case _                     => throw new Exception("debug level specified twice")
       }
 
-    if (extras != None) {
-      if (extras.contains("reorg") && (options contains "reorg")) {
+    if (extras.isDefined) {
+      if (extras.get.customReorgAttributes.isDefined && (options contains "reorg")) {
         throw new InvalidInputException(
             "ERROR: cannot provide --reorg option when reorg is specified in extras."
         )
       }
 
-      if (extras.contains("reorg") && (options contains "locked")) {
+      if (extras.get.customReorgAttributes.isDefined && (options contains "locked")) {
         throw new InvalidInputException(
             "ERROR: cannot provide --locked option when reorg is specified in extras."
         )
       }
     }
-    val scatterChunkSize = options.get("scatterChunkSize") match {
+
+    val streamFiles = options.get("streamFiles") match {
+      case Some(List("all"))  => StreamFiles.All
+      case Some(List("none")) => StreamFiles.None
+      case None               => StreamFiles.PerFile
+      case other =>
+        throw new InvalidInputException(s"ERROR: invalid 'streamFiles' value ${other}")
+    }
+
+    val scatterChunkSize: Int = options.get("scatterChunkSize") match {
       case None => Utils.DEFAULT_JOBS_PER_SCATTER
       case Some(x) =>
         val size = x.head.toInt
@@ -429,14 +438,6 @@ object Main extends App {
         } else {
           size
         }
-    }
-
-    val streamFiles = options.get("streamFiles") match {
-      case Some(List("all"))  => StreamFiles.All
-      case Some(List("none")) => StreamFiles.None
-      case None               => StreamFiles.PerFile
-      case other =>
-        throw new InvalidInputException(s"ERROR: invalid 'streamFiles' value ${other}")
     }
 
     CompilerOptions(

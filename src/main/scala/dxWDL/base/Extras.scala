@@ -13,13 +13,13 @@ import dxWDL.dx._
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
   def toJson: Map[String, JsValue] = {
     val restartOnFields = restartOn match {
-      case None => Map.empty
+      case None => Map.empty[String, JsValue]
       case Some(m) =>
         val jsm = m.map { case (name, i) => name -> JsNumber(i) }
         Map("restartOn" -> JsObject(jsm))
     }
     val maxRestartsFields = maxRestarts match {
-      case None    => Map.empty
+      case None    => Map.empty[String, JsValue]
       case Some(n) => Map("maxRestarts" -> JsNumber(n))
     }
     val m = restartOnFields ++ maxRestartsFields
@@ -187,6 +187,10 @@ case class DxAttrs(runSpec: Option[DxRunSpec], details: Option[DxDetails]) {
   }
 }
 
+case class DxScatterAttrs(chunkSize: Option[Int] = None)
+case class DxWorkflowAttrs(scatterDefaults: Option[DxScatterAttrs],
+                           perScatterAttrs: Map[String, DxScatterAttrs])
+
 case class ReorgAttrs(appId: String, reorgConf: String)
 
 case class DxLicense(name: String,
@@ -261,13 +265,14 @@ object WdlRuntimeAttrs extends DefaultJsonProtocol {
 
 case class DockerRegistry(registry: String, username: String, credentials: String)
 
-case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
-                  defaultTaskDxAttributes: Option[DxAttrs],
-                  perTaskDxAttributes: Map[String, DxAttrs],
-                  dockerRegistry: Option[DockerRegistry],
-                  customReorgAttributes: Option[ReorgAttrs],
-                  ignoreReuse: Option[Boolean],
-                  delayWorkspaceDestruction: Option[Boolean]) {
+case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs = WdlRuntimeAttrs(Map.empty),
+                  defaultTaskDxAttributes: Option[DxAttrs] = None,
+                  perTaskDxAttributes: Map[String, DxAttrs] = Map.empty,
+                  perWorkflowDxAttributes: Map[String, DxWorkflowAttrs] = Map.empty,
+                  dockerRegistry: Option[DockerRegistry] = None,
+                  customReorgAttributes: Option[ReorgAttrs] = None,
+                  ignoreReuse: Option[Boolean] = None,
+                  delayWorkspaceDestruction: Option[Boolean] = None) {
   def getDefaultAccess: DxAccess = {
     defaultTaskDxAttributes match {
       case None => DxAccess.empty
@@ -307,6 +312,7 @@ object Extras {
       "default_runtime_attributes",
       "default_task_dx_attributes",
       "per_task_dx_attributes",
+      "per_workflow_dx_attributes",
       "docker_registry",
       "custom_reorg",
       "ignoreReuse",
@@ -326,6 +332,7 @@ object Extras {
                                                   "JobTimeoutExceeded",
                                                   "*")
   val TASK_DX_ATTRS = Set("runSpec", "details")
+  val WORKFLOW_DX_ATTRS = Set("scatters", "scatterDefaults")
   val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
   private def checkedParseIntField(fields: Map[String, JsValue], fieldName: String): Option[Int] = {
@@ -594,6 +601,54 @@ object Extras {
 
   }
 
+  private def parseScatterAttrs(jsv: JsValue): DxScatterAttrs = {
+    jsv match {
+      case JsNull => DxScatterAttrs()
+      case JsObject(fields) =>
+        val chunkSize = fields
+          .get("chunkSize")
+          .map {
+            case JsNumber(n) => n.toInt
+            case other       => throw new Exception(s"invalid chunkSize ${other}")
+          }
+        DxScatterAttrs(chunkSize)
+      case _ =>
+        throw new Exception(s"invalid scatters value ${jsv}")
+    }
+  }
+
+  private def parseScatters(jsv: JsValue, verbose: Verbose): Map[String, DxScatterAttrs] = {
+    jsv match {
+      case JsObject(fields) =>
+        fields.map {
+          case (path, attrs: JsObject) =>
+            path -> parseScatterAttrs(attrs)
+          case other =>
+            throw new Exception(s"invalid scatter attribute ${other}")
+        }
+      case _ =>
+        throw new Exception(s"invalid scatters value ${jsv}")
+    }
+  }
+
+  private def parseWorkflowDxAttrs(jsv: JsValue, verbose: Verbose): Option[DxWorkflowAttrs] = {
+    jsv match {
+      case JsNull => None
+      case JsObject(fields) =>
+        val invalidAttrs = fields.keySet.diff(WORKFLOW_DX_ATTRS)
+        if (invalidAttrs.nonEmpty) {
+          throw new Exception(s"""|Unsupported workflow attribute(s) ${invalidAttrs.mkString(",")},
+                                  |we currently support ${WORKFLOW_DX_ATTRS}
+                                  |""".stripMargin.replaceAll("\n", ""))
+        }
+        val perScatterAttrs =
+          fields.get("scatters").map(parseScatters(_, verbose)).getOrElse(Map.empty)
+        val scatterDefaults = fields.get("scatterDefaults").map(parseScatterAttrs)
+        Some(DxWorkflowAttrs(scatterDefaults, perScatterAttrs))
+      case _ => throw new Exception(s"invalid workflow attributes ${jsv}")
+    }
+  }
+
   private def parseDockerRegistry(jsv: JsValue, verbose: Verbose): Option[DockerRegistry] = {
     if (jsv == JsNull)
       return None
@@ -746,11 +801,22 @@ object Extras {
           }
       }
 
+    val perWorkflowDxAttrs: Map[String, DxWorkflowAttrs] =
+      checkedParseObjectField(fields, "per_workflow_dx_attributes") match {
+        case JsNull => Map.empty
+        case jsObj =>
+          jsObj.asJsObject.fields.flatMap {
+            case (wfName, jsValue) =>
+              parseWorkflowDxAttrs(jsValue, verbose).map(attrs => wfName -> attrs)
+          }
+      }
+
     Extras(
         parseWdlRuntimeAttrs(checkedParseObjectField(fields, "default_runtime_attributes"),
                              verbose),
         parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes"), verbose),
         perTaskDxAttrs,
+        perWorkflowDxAttrs,
         parseDockerRegistry(checkedParseObjectField(fields, "docker_registry"), verbose),
         parseCustomReorgAttrs(
             checkedParseObjectField(fields, fieldName = "custom_reorg"),

@@ -1564,4 +1564,90 @@ class GenerateIRTest extends FlatSpec with Matchers {
       case other                        => throw new Exception("meta is not None or empty for inc task")
     }
   }
+
+  it should "recognize default and per-workflow attributes" in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    val extraPath = pathFromBasename("nested/extras", "four_levels_extras1.json")
+    val retval = Main.compile(
+        path.toString :: "--extras" :: extraPath.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("wrong termination type")
+    }
+    // there are two scatters - one should have its chunkSize set
+    // by the global default and the other should have it set by
+    // a per-scatter override
+    val stages = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf.stages
+      case _                     => throw new Exception("missing primary workflow")
+    }
+    val scatter = stages(1)
+    val outerScatterApplet = bundle.allCallables.get(scatter.calleeName) match {
+      case Some(applet: IR.Applet) => applet
+      case _                       => throw new Exception(s"missing applet for stage ${scatter}")
+    }
+    val innerName = outerScatterApplet.kind match {
+      case frag: IR.AppletKindWfFragment =>
+        frag.scatterChunkSize shouldBe Some(10)
+        frag.calls match {
+          case Vector(innerName) => innerName
+          case _                 => throw new Exception(s"wrong calls ${frag.calls}")
+        }
+      case _ => throw new Exception(s"wrong applet kind ${outerScatterApplet.kind}")
+    }
+    val innerScatterApplet = bundle.allCallables.get(innerName) match {
+      case Some(applet: IR.Applet) => applet
+      case _                       => throw new Exception(s"missing applet for stage ${innerName}")
+    }
+    innerScatterApplet.kind match {
+      case frag: IR.AppletKindWfFragment =>
+        frag.scatterChunkSize shouldBe Some(3)
+      case _ => throw new Exception(s"wrong applet kind ${innerScatterApplet.kind}")
+    }
+  }
+
+  it should "recognize per-workflow attributes with global default" in {
+    val path = pathFromBasename("nested", "four_levels.wdl")
+    val extraPath = pathFromBasename("nested/extras", "four_levels_extras2.json")
+    val retval = Main.compile(
+        path.toString :: "--extras" :: extraPath.toString :: cFlags
+    )
+    retval shouldBe a[Main.SuccessfulTerminationIR]
+    val bundle = retval match {
+      case Main.SuccessfulTerminationIR(ir) => ir
+      case _                                => throw new Exception("wrong termination type")
+    }
+    // there are two scatters - one should have its chunkSize set
+    // by the global default and the other should have it set by
+    // a per-scatter override
+    val stages = bundle.primaryCallable match {
+      case Some(wf: IR.Workflow) => wf.stages
+      case _                     => throw new Exception("missing primary workflow")
+    }
+    val scatter = stages(1)
+    val outerScatterApplet = bundle.allCallables.get(scatter.calleeName) match {
+      case Some(applet: IR.Applet) => applet
+      case _                       => throw new Exception(s"missing applet for stage ${scatter}")
+    }
+    val innerName = outerScatterApplet.kind match {
+      case frag: IR.AppletKindWfFragment =>
+        frag.scatterChunkSize shouldBe Some(Utils.DEFAULT_JOBS_PER_SCATTER)
+        frag.calls match {
+          case Vector(innerName) => innerName
+          case _                 => throw new Exception(s"wrong calls ${frag.calls}")
+        }
+      case _ => throw new Exception(s"wrong applet kind ${outerScatterApplet.kind}")
+    }
+    val innerScatterApplet = bundle.allCallables.get(innerName) match {
+      case Some(applet: IR.Applet) => applet
+      case _                       => throw new Exception(s"missing applet for stage ${innerName}")
+    }
+    innerScatterApplet.kind match {
+      case frag: IR.AppletKindWfFragment =>
+        frag.scatterChunkSize shouldBe Some(3)
+      case _ => throw new Exception(s"wrong applet kind ${innerScatterApplet.kind}")
+    }
+  }
 }
