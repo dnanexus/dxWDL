@@ -40,7 +40,7 @@ jobs:
 
           # set up DNAnexus staging environment
           dx login --noprojects --staging --token $AUTH_TOKEN
-          PROJECT=dxCompiler_playground
+          PROJECT=dxWDL_playground
           dx select $PROJECT
 
           # run tests
