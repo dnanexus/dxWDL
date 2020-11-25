@@ -7,7 +7,6 @@ import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
-
 import dxWDL.dx._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]], maxRestarts: Option[Int]) {
@@ -601,13 +600,19 @@ object Extras {
 
   }
 
-  private def parseScatterAttrs(jsv: JsValue): DxScatterAttrs = {
+  private def parseScatterAttrs(jsv: JsValue, verbose: Verbose): DxScatterAttrs = {
     jsv match {
       case JsNull => DxScatterAttrs()
       case JsObject(fields) =>
         val chunkSize = fields
           .get("chunkSize")
           .map {
+            case JsNumber(n) if n.toInt > Utils.MAX_JOBS_PER_SCATTER =>
+              Utils.warning(
+                  verbose,
+                  s"The number of jobs per scatter must be between 1-${Utils.MAX_JOBS_PER_SCATTER}"
+              )
+              Utils.MAX_JOBS_PER_SCATTER
             case JsNumber(n) => n.toInt
             case other       => throw new Exception(s"invalid chunkSize ${other}")
           }
@@ -622,7 +627,7 @@ object Extras {
       case JsObject(fields) =>
         fields.map {
           case (path, attrs: JsObject) =>
-            path -> parseScatterAttrs(attrs)
+            path -> parseScatterAttrs(attrs, verbose)
           case other =>
             throw new Exception(s"invalid scatter attribute ${other}")
         }
@@ -643,7 +648,7 @@ object Extras {
         }
         val perScatterAttrs =
           fields.get("scatters").map(parseScatters(_, verbose)).getOrElse(Map.empty)
-        val scatterDefaults = fields.get("scatterDefaults").map(parseScatterAttrs)
+        val scatterDefaults = fields.get("scatterDefaults").map(parseScatterAttrs(_, verbose))
         Some(DxWorkflowAttrs(scatterDefaults, perScatterAttrs))
       case _ => throw new Exception(s"invalid workflow attributes ${jsv}")
     }
