@@ -1,0 +1,55 @@
+name: WDL Integration Tests
+
+on:
+  push:
+    branches:
+      - v1 
+  pull_request:
+    branches:
+      - v1
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+      - labeled
+
+jobs:
+  test:
+    name: WDL Integration Tests (Staging)
+    if: contains(github.event.pull_request.labels.*.name, 'integration')
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v2
+      - name: Install java
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+      - name: Install dxpy and other dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https wget git openssh-server tree python3 python3-pip python3-venv
+          pip3 install setuptools wheel
+          pip3 install termcolor
+          pip3 install dxpy
+      - name: Run tests
+        env:
+          AUTH_TOKEN: ${{ secrets.DX_STAGING_TOKEN }}
+        run: |
+          export PATH="$PATH:$HOME/.local/bin"
+
+          # set up DNAnexus staging environment
+          dx login --noprojects --staging --token $AUTH_TOKEN
+          PROJECT=dxCompiler_playground
+          dx select $PROJECT
+
+          # run tests
+          cd ${GITHUB_WORKSPACE}
+          FOLDER=/builds/test_gha_dxwdl_$(date +%s)_$RANDOM
+          dx mkdir $FOLDER
+          python3 scripts/run_tests.py --test M --folder $FOLDER --project $PROJECT
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          path: ./dxWDL*.jar
+          retention-days: 2

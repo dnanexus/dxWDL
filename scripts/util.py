@@ -21,8 +21,6 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 #dxda_version = "v0.2.2"
 # If there isn't, lookup the latest version at docker hub
 #    https://hub.docker.com/r/dnanexus/dxda/tags?page=1&ordering=last_updated
-dxda_version = "v0.5.4"
-dxfuse_version = "v0.22.4"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -34,14 +32,18 @@ def get_appl_conf_path(top_dir):
 def get_runtime_conf_path(top_dir):
     return os.path.join(top_dir, "src", "main", "resources", "dxWDL_runtime.conf")
 
-def build_dirs(project, version_id):
-    user_desc = pwd.getpwuid(os.getuid())
-    username = user_desc.pw_name
-    base_folder = "/builds/{}/{}".format(username, version_id)
+def build_subdirs(project, base_folder):
+    """ Creates subfolder in the base folder needed for running tests"""
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
     project.new_folder(test_folder, parents=True)
     project.new_folder(applet_folder, parents=True)
+
+def build_dirs(project, version_id):
+    user_desc = pwd.getpwuid(os.getuid())
+    username = user_desc.pw_name
+    base_folder = "/builds/{}/{}".format(username, version_id)
+    build_subdirs(project, base_folder)
     return base_folder
 
 def get_project(project_name):
@@ -92,7 +94,7 @@ def make_asset_file(version_id, top_dir):
             { "name": "jq" }
         ],
         "instanceType": "mem1_ssd1_v2_x4",
-        "description": "Prerequisits for running WDL workflows compiled to the platform"
+        "description": "Prerequisites for running WDL workflows compiled to the platform"
     }
     with open(os.path.join(top_dir, "applet_resources/dxasset.json"), 'w') as fd:
         fd.write(json.dumps(asset_spec, indent=4))
@@ -115,7 +117,9 @@ def _sbt_assembly(top_dir, version_id):
 
 # download dxda for linux, and place it in the resources
 # sub-directory.
-def _download_dxda_into_resources(top_dir):
+def _download_dxda_into_resources(top_dir, dxda_version):
+    # TODO: if dxda is already downloaded, check that it's version matches
+    # TODO: if dxda_version is None, fetch latest
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # download dxda release, and place it in the resources directory
@@ -134,7 +138,7 @@ def _download_dxda_into_resources(top_dir):
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         text = p.stdout.read()
         retcode = p.wait()
-        print("downloading dxda{} {}", retcode, text)
+        print("downloading dxda{} {}".format(retcode, text))
         subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
         os.rename("resources/dx-download-agent-linux/dx-download-agent",
                   "resources/usr/bin/dx-download-agent")
@@ -142,10 +146,14 @@ def _download_dxda_into_resources(top_dir):
         shutil.rmtree("resources/dx-download-agent-linux")
 
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
-    
-def _add_dxfuse_to_resources(top_dir):
+
+
+def _add_dxfuse_to_resources(top_dir, dxfuse_version):
+    # TODO: if dxfuse is already downloaded, check that it's version matches
+    # TODO: if dxfuse_version is None, fetch latest
     p = os.path.join(top_dir, "applet_resources/resources/usr/bin/dxfuse")
     if not os.path.exists(p):
+        print("downloading dxfuse {} to {}".format(dxfuse_version, p))
         subprocess.check_call([
             "wget",
             "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
@@ -224,7 +232,11 @@ def _gen_config_file(version_id, top_dir, project_dict):
     print("Built configuration regions [{}] into {}".format(all_regions_str,
                                                             rt_conf_path))
 
-def build(project, folder, version_id, top_dir, path_dict):
+def build(project, folder, version_id, top_dir, path_dict, dependencies = None):
+    if dependencies is None:
+        with open(os.path.join(top_dir, "scripts/bundled_dependencies.json"), "rt") as inp:
+            dependencies = json.load(inp)
+
     # make sure the resources directory exists
     if not os.path.exists(os.path.join(top_dir, "applet_resources/resources/usr/bin")):
         os.makedirs(os.path.join(top_dir, "applet_resources/resources/usr/bin"))
@@ -232,14 +244,14 @@ def build(project, folder, version_id, top_dir, path_dict):
     asset = find_asset(project, folder)
     if asset is None:
         # get a copy of the dxfuse executable
-        _add_dxfuse_to_resources(top_dir)
+        _add_dxfuse_to_resources(top_dir, dependencies["dxfuse"])
 
         # Create a configuration file
         _gen_config_file(version_id, top_dir, path_dict)
         jar_path = _sbt_assembly(top_dir, version_id)
 
         # get a copy of the download agent (dxda)
-        _download_dxda_into_resources(top_dir)
+        _download_dxda_into_resources(top_dir, dependencies["dxda"])
 
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
