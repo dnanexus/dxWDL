@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import argparse
 from collections import namedtuple
 import dxpy
@@ -12,7 +12,6 @@ import subprocess
 from typing import Callable, Iterator, Union, Optional, List
 from termcolor import colored, cprint
 import time
-import traceback
 from dxpy.exceptions import DXJobFailureError
 
 import util
@@ -41,7 +40,6 @@ wdl_v1_list = [
     "linear_no_expressions",
     "linear",
     "optionals",
-    "optionals3",
 
     "spaces_in_file_paths",
     "strings",
@@ -73,11 +71,7 @@ wdl_v1_list = [
     "scatter_subworkflow_with_optional",
 
     # streaming
-    "streaming_inputs",
-
-    # input/output linear_no_expressions
-    "wf_with_input_expressions",
-    "wf_with_output_expressions"
+    "streaming_inputs"
 ]
 
 # docker image tests
@@ -88,7 +82,7 @@ docker_test_list = [
     "native_docker_file_image",
     "native_docker_file_image_gzip",
     "samtools_count",
-    "dynamic_docker_image"
+    "hostname_is_jobid",
 ]
 
 # wdl draft-2
@@ -116,11 +110,8 @@ draft2_test_list = [
     "subblocks",
     "var_type_change",
 
-    # calling native dx applets/apps
-    # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
-    #"call_native"
-
-    "write_lines_bug",
+     # calling native dx applets/apps
+    "call_native"
 ]
 
 single_tasks_list = [
@@ -135,8 +126,7 @@ single_tasks_list = [
 # because we don't want to give permissions for creating platform apps.
 ci_test_list = [
     "advanced",
-    # We currently do not have a code generator for draft-2, so cannot import dx_extern.wdl.
-    # "call_native",
+    "call_native",
     "call_with_defaults1",
     "trains",
     "files"
@@ -285,29 +275,25 @@ def validate_result(tname, exec_outputs, key, expected_val):
     exec_name = key.split('.')[0]
     field_name_parts = key.split('.')[1:]
 
-    field_name1 = ".".join(field_name_parts)
     # convert dots to ___
-    field_name2 = "___".join(field_name_parts)
+    field_name = "___".join(field_name_parts)
     if exec_name != tname:
         raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
         # get the actual results
-        if field_name1 in exec_outputs:
-            result = exec_outputs[field_name1]
-        elif field_name2 in exec_outputs:
-            result = exec_outputs[field_name2]
-        else:
-            cprint("field {} missing from executable results {}".format(field_name1, exec_outputs),
+        if field_name not in exec_outputs:
+            cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
                    "red")
             return False
+        result = exec_outputs[field_name]
         if ((type(result) is list) and
             (type(expected_val) is list)):
             result.sort()
             expected_val.sort()
-        if str(result).strip() != str(expected_val).strip():
+        if result != expected_val:
             cprint("Analysis {} gave unexpected results".format(tname),
                    "red")
-            cprint("Field {} should be ({}), actual = ({})".format(field_name1, expected_val, result),
+            cprint("Field {} should be {}, actual = {}".format(field_name, expected_val, result),
                    "red")
             return False
         return True
@@ -341,7 +327,6 @@ def build_test(tname, project, folder, version_id, compiler_flags):
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
-                "-force",
                 "-folder", folder,
                 "-project", project.get_id() ]
     cmdline += compiler_flags
@@ -356,21 +341,23 @@ def ensure_dir(path):
 
 def wait_for_completion(test_exec_objs):
     print("awaiting completion ...")
-    failures = []
-    for exec_obj in test_exec_objs:
-        tname = find_test_from_exec(exec_obj)
-        desc = test_files[tname]
-        try:
-            exec_obj.wait_on_done()
-            print("Executable {} succeeded".format(desc.name))
-        except DXJobFailureError:
-            if tname in test_failing:
-                print("Executable {} failed as expected".format(desc.name))
-            else:
-                cprint("Error: executable {} failed".format(desc.name), "red")
-                failures.append(tname)
-    print("tools execution completed")
-    return failures
+    # wait for analysis to finish while working around Travis 10m console inactivity timeout
+    noise = subprocess.Popen(["/bin/bash", "-c", "while true; do sleep 60; date; done"])
+    try:
+        for exec_obj in test_exec_objs:
+            try:
+                exec_obj.wait_on_done()
+            except DXJobFailureError:
+                tname = find_test_from_exec(exec_obj)
+                desc = test_files[tname]
+                if tname in test_failing:
+                    print("Executable {} failed as expected".format(desc.name))
+                else:
+                    raise RuntimeError("Executable {} failed".format(desc.name))
+    finally:
+        noise.kill()
+    print("done")
+
 
 # Run [workflow] on several inputs, return the analysis ID.
 def run_executable(project, test_folder, tname, oid, debug_flag, delay_workspace_destruction):
@@ -447,10 +434,9 @@ def run_test_subset(project, runnable, test_folder, debug_flag, delay_workspace_
     print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
 
     # Wait for completion
-    failed_execution = wait_for_completion(test_exec_objs)
+    wait_for_completion(test_exec_objs)
 
     print("Verifying results")
-    failed_verification = []
     for exec_obj in test_exec_objs:
         exec_desc = exec_obj.describe()
         tname = find_test_from_exec(exec_obj)
@@ -466,19 +452,6 @@ def run_test_subset(project, runnable, test_folder, debug_flag, delay_workspace_
             correct = validate_result(tname, exec_outputs, key, expected_val)
         if correct:
             print("Analysis {} passed".format(tname))
-        else:
-            failed_verification.append(tname)
-
-    if failed_execution or failed_verification:
-        all_failures = failed_execution + failed_verification
-        print("-----------------------------")
-        if failed_execution:
-            fexec = '\n'.join(failed_execution)
-            print(f"Tools failed execution: {len(failed_execution)}:\n{fexec}")
-        if failed_verification:
-            fveri = '\n'.join(failed_verification)
-            print(f"Tools failed results verification: {len(failed_verification)}:\n{fveri}")
-        raise RuntimeError("Failed")
 
 def print_test_list():
     l = [key for key in test_files.keys()]
@@ -555,45 +528,37 @@ def native_call_dxni(project, applet_folder, version_id, verbose: bool):
     cmdline_common = [ "java", "-jar",
                        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                        "dxni",
-                       "-force",
-                       "-folder", applet_folder,
-                       "-project", project.get_id()]
+                       "--force",
+                       "--folder", applet_folder,
+                       "--project", project.get_id()]
     if verbose:
         cmdline_common.append("--verbose")
 
-# draft-2 is not currently supported
-#     cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
-#                                         "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
-#     print(" ".join(cmdline_draft2))
-#     subprocess.check_output(cmdline_draft2)
+    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
+                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
+    print(" ".join(cmdline_draft2))
+    subprocess.check_output(cmdline_draft2)
 
-    cmdline_v1 = cmdline_common + [ "-language", "wdl_v1.0",
-                                    "-output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
     print(" ".join(cmdline_v1))
     subprocess.check_output(cmdline_v1)
 
 
 def dxni_call_with_path(project, path, version_id, verbose):
     # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline = [
-        "java",
-        "-jar",
-        os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-        "dxni",
-        "-force",
-        "-path",
-        path,
-        "-language",
-        "wdl_v1.0",
-        "-output",
-        os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")
-    ]
-    if project is not None:
-        cmdline.extend(["-project", project.get_id()])
+    cmdline_common = [ "java", "-jar",
+                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                       "dxni",
+                       "--force",
+                       "--path", path,
+                       "--project", project.get_id()]
     if verbose:
-        cmdline.append("-verbose")
-    print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
+        cmdline_common.append("--verbose")
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern_one.wdl")]
+    print(" ".join(cmdline_v1))
+    subprocess.check_output(cmdline_v1)
 
 # Set up the native calling tests
 def native_call_setup(project, applet_folder, version_id, verbose):
@@ -647,21 +612,21 @@ def native_call_app_setup(project, version_id, verbose):
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "dxni",
-                "-apps",
-                "only",
-                "-force",
-                "-language", "wdl_v1.0",
-                "-output", header_file]
+                "--apps",
+                "--force",
+                "--language", "wdl_v1.0",
+                "--output", header_file]
     if verbose:
         cmdline_common.append("--verbose")
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 
-    # check if providing an app-id in the path argument works
+
+    # check if providing an applet-id in the path argument works
     results = dxpy.bindings.search.find_one_app(name=app_name, zero_ok=True, more_ok=False)
     if results is None:
         raise RuntimeError("Could not find app {}".format(app_name))
-    dxni_call_with_path(None, results["id"], version_id, verbose)
+    dxni_call_with_path(project, results["id"], version_id, verbose)
 
 ######################################################################
 # Compile the WDL files to dx:workflows and dx:applets
@@ -707,8 +672,6 @@ def main():
                            action="store_true",
                            dest="test_list",
                            default=False)
-    argparser.add_argument("--clean", help="Remove build directory in the project after running tests",
-                           action="store_true", default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
@@ -749,9 +712,8 @@ def main():
     if args.folder is None:
         base_folder = util.build_dirs(project, version_id)
     else:
-        # Use existing prebuilt base folder
+        # Use existing prebuilt folder
         base_folder = args.folder
-        util.build_subdirs(project, base_folder)
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
     print("project: {} ({})".format(project.name, project.get_id()))
@@ -809,10 +771,7 @@ def main():
         if not args.compile_only:
             run_test_subset(project, runnable, test_folder, args.debug, args.delay_workspace_destruction)
     finally:
-        if args.clean:
-            project.remove_folder(base_folder, recurse=True, force=True)
         print("Completed running tasks in {}".format(args.project))
-
 
 if __name__ == '__main__':
     main()
