@@ -34,14 +34,18 @@ def get_appl_conf_path(top_dir):
 def get_runtime_conf_path(top_dir):
     return os.path.join(top_dir, "src", "main", "resources", "dxWDL_runtime.conf")
 
-def build_dirs(project, version_id):
-    user_desc = pwd.getpwuid(os.getuid())
-    username = user_desc.pw_name
-    base_folder = "/builds/{}/{}".format(username, version_id)
+def build_subdirs(project, base_folder):
+    """ Creates subfolder in the base folder needed for running tests"""
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
     project.new_folder(test_folder, parents=True)
     project.new_folder(applet_folder, parents=True)
+
+def build_dirs(project, version_id):
+    user_desc = pwd.getpwuid(os.getuid())
+    username = user_desc.pw_name
+    base_folder = "/builds/{}/{}".format(username, version_id)
+    build_subdirs(project, base_folder)
     return base_folder
 
 def get_project(project_name):
@@ -142,7 +146,7 @@ def _download_dxda_into_resources(top_dir):
         shutil.rmtree("resources/dx-download-agent-linux")
 
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
-    
+
 def _add_dxfuse_to_resources(top_dir):
     p = os.path.join(top_dir, "applet_resources/resources/usr/bin/dxfuse")
     if not os.path.exists(p):
