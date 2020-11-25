@@ -673,6 +673,7 @@ def main():
                            dest="test_list",
                            default=False)
     argparser.add_argument("--clean", help="Remove build directory in the project after running tests",
+                           action="store_true", default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
