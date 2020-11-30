@@ -10,7 +10,10 @@ import wom.types._
 import dxWDL.base._
 import dxWDL.util._
 
-case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
+case class GenerateIR(verbose: Verbose,
+                      defaultRuntimeAttrs: WdlRuntimeAttrs,
+                      perWorkflowAttrs: Map[String, DxWorkflowAttrs],
+                      defaultScatterChunkSize: Int) {
   val verbose2: Boolean = verbose.containsKey("GenerateIR")
 
   def sortByDependencies(allCallables: Vector[Callable]): Vector[Callable] = {
@@ -125,11 +128,15 @@ case class GenerateIR(verbose: Verbose, defaultRuntimeAttrs: WdlRuntimeAttrs) {
       WdlCodeGen(verbose, typeAliases, language)
         .standAloneWorkflow(wfSource, callablesUsedInWorkflow)
 
+    val workflowAttrs = perWorkflowAttrs.get(wf.name)
+
     val gir = new GenerateIRWorkflow(wf,
                                      wfSource,
                                      wfSourceStandAlone,
                                      callsLoToHi,
                                      callables,
+                                     workflowAttrs,
+                                     defaultScatterChunkSize,
                                      language,
                                      verbose,
                                      locked,

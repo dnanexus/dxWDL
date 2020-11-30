@@ -19,6 +19,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               wfSourceStandAlone: String,
                               callsLoToHi: Vector[String],
                               callables: Map[String, IR.Callable],
+                              workflowAttrs: Option[DxWorkflowAttrs],
+                              defaultScatterChunkSize: Int,
                               language: Language.Value,
                               verbose: Verbose,
                               locked: Boolean,
@@ -284,6 +286,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   private def compileNestedBlock(wfName: String,
                                  graph: Graph,
                                  blockPath: Vector[Int],
+                                 scatterPath: Option[String],
                                  env: CallEnv): (IR.Callable, Vector[IR.Callable]) = {
     val (inputNodes, _, subBlocks, outputNodes) =
       Block.splitGraph(graph, callsLoToHi)
@@ -302,7 +305,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       // This is a recursive call, to compile a  potentially
       // complex sub-block. It could have many calls generating
       // many applets and subworkflows.
-      val (stage, aux) = compileWfFragment(wfName, subBlocks(0), blockPath :+ 0, env)
+      val (stage, aux) = compileWfFragment(wfName, subBlocks(0), blockPath :+ 0, scatterPath, env)
       val fragName = stage.calleeName
       val main = aux.find(_.name == fragName) match {
         case None    => throw new Exception(s"Could not find ${fragName}")
@@ -343,6 +346,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                                                            outputNodes,
                                                            blockPath,
                                                            subBlocks,
+                                                           scatterPath,
                                                            IR.Level.Sub)
       (subwf, auxCallables)
     }
@@ -356,6 +360,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
   private def compileWfFragment(wfName: String,
                                 block: Block,
                                 blockPath: Vector[Int],
+                                scatterPath: Option[String],
                                 env: CallEnv): (IR.Stage, Vector[IR.Callable]) = {
     val stageName = block.makeName match {
       case None       => "eval"
@@ -401,37 +406,64 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     Utils.trace(verbose2, s"""|category : ${Block.Category.toString(catg)}
                               |""".stripMargin)
 
-    val (innerCall, auxCallables): (Option[String], Vector[IR.Callable]) = catg match {
-      case Block.AllExpressions(_) => (None, Vector.empty)
+    def parseScatterVariable(sctNode: ScatterNode): (String, WomType, String) = {
+      assert(sctNode.scatterVariableNodes.size == 1)
+      val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+      val iterVarName = svNode.identifier.localName.value
+      val newScatterPath = scatterPath.map(p => s"${p}.${iterVarName}").getOrElse(iterVarName)
+      (iterVarName, svNode.womType, newScatterPath)
+    }
+
+    val (innerCall, auxCallables, newScatterPath): (Option[String],
+                                                    Vector[IR.Callable],
+                                                    Option[String]) = catg match {
+      case Block.AllExpressions(_) => (None, Vector.empty, None)
       case Block.CallDirect(_, _) =>
         throw new Exception(s"a direct call should not reach this stage")
 
       // A block with no nested sub-blocks, and a single call.
       case Block.CallWithSubexpressions(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty, None)
       case Block.CallFragment(_, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty, None)
 
       // A conditional/scatter with exactly one call in the sub-block.
       // Can be executed by a fragment.
       case Block.CondOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
-      case Block.ScatterOneCall(_, _, cNode) =>
-        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty, None)
+      case Block.ScatterOneCall(_, sctNode, cNode) =>
+        val (_, _, newScatterPath) = parseScatterVariable(sctNode)
+        (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty, Some(newScatterPath))
 
       case Block.CondFullBlock(_, condNode) =>
-        val (callable, aux) = compileNestedBlock(wfName, condNode.innerGraph, blockPath, env)
-        (Some(callable.name), aux :+ callable)
+        val (callable, aux) =
+          compileNestedBlock(wfName, condNode.innerGraph, blockPath, scatterPath, env)
+        (Some(callable.name), aux :+ callable, None)
 
       case Block.ScatterFullBlock(_, sctNode) =>
         // add the iteration variable to the inner environment
-        assert(sctNode.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-        val iterVarName = svNode.identifier.localName.value
-        val cVar = CVar(iterVarName, svNode.womType, None)
+        val (iterVarName, iterVarType, newScatterPath) = parseScatterVariable(sctNode)
+        val cVar = CVar(iterVarName, iterVarType, None)
         val innerEnv = env + (iterVarName -> LinkedVar(cVar, IR.SArgEmpty))
-        val (callable, aux) = compileNestedBlock(wfName, sctNode.innerGraph, blockPath, innerEnv)
-        (Some(callable.name), aux :+ callable)
+        val (callable, aux) = compileNestedBlock(
+            wfName,
+            sctNode.innerGraph,
+            blockPath,
+            Some(newScatterPath),
+            innerEnv
+        )
+        (Some(callable.name), aux :+ callable, Some(newScatterPath))
+    }
+
+    val scatterChunkSize: Option[Int] = newScatterPath.map { sctPath =>
+      workflowAttrs
+        .flatMap { wfAttrs =>
+          wfAttrs.perScatterAttrs
+            .get(sctPath)
+            .orElse(wfAttrs.scatterDefaults)
+            .flatMap(scatterAttrs => scatterAttrs.chunkSize)
+        }
+        .getOrElse(defaultScatterChunkSize)
     }
 
     val applet = IR.Applet(
@@ -440,7 +472,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         outputVars,
         IR.InstanceTypeDefault,
         IR.DockerImageNone,
-        IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes),
+        IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes, scatterChunkSize),
         wfSourceStandAlone
     )
 
@@ -460,6 +492,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       wfInputs: Vector[(CVar, SArg)],
       blockPath: Vector[Int],
       subBlocks: Vector[Block],
+      scatterPath: Option[String],
       locked: Boolean
   ): (Vector[(IR.Stage, Vector[IR.Callable])], CallEnv) = {
     Utils.trace(verbose.on, s"Assembling workflow backbone ${wfName}")
@@ -501,7 +534,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         case _ =>
           //     A simple block that requires just one applet,
           // OR: A complex block that needs a subworkflow
-          val (stage, auxCallables) = compileWfFragment(wfName, block, blockPath :+ blockNum, env)
+          val (stage, auxCallables) =
+            compileWfFragment(wfName, block, blockPath :+ blockNum, scatterPath, env)
           for (cVar <- stage.outputs) {
             env = env + (cVar.name ->
               LinkedVar(cVar, IR.SArgLink(stage.id, cVar)))
@@ -762,6 +796,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
       outputNodes: Vector[GraphOutputNode],
       blockPath: Vector[Int],
       subBlocks: Vector[Block],
+      scatterPath: Option[String],
       level: IR.Level.Value
   ): (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) = {
     val wfInputs: Vector[(CVar, SArg)] = inputNodes.map {
@@ -789,7 +824,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     }.toVector
     val allWfInputs = wfInputs ++ clsInputs
 
-    val (allStageInfo, env) = assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, true)
+    val (allStageInfo, env) =
+      assembleBackbone(wfName, allWfInputs, blockPath, subBlocks, scatterPath, true)
     val (stages, auxCallables) = allStageInfo.unzip
     val wfAttr = unwrapWorkflowMeta()
 
@@ -863,7 +899,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
     }.toVector
 
     val (allStageInfo, env) =
-      assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, false)
+      assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, None, false)
     val (stages: Vector[IR.Stage], auxCallables) = allStageInfo.unzip
 
     // convert the outputs into an applet+stage
@@ -906,6 +942,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               outputNodes,
                               Vector.empty,
                               subBlocks,
+                              None,
                               IR.Level.Top)
       } else {
         compileWorkflowRegular(inputNodes, outputNodes, subBlocks)

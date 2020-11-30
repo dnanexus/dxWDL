@@ -9,7 +9,14 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base.{Utils, WdlRuntimeAttrs}
-import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile, StreamFiles}
+import dxWDL.util.{
+  DxIoFunctions,
+  DxInstanceType,
+  DxPathConfig,
+  InstanceTypeDB,
+  ParseWomSourceFile,
+  StreamFiles
+}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -127,7 +134,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     val jobHomeDir: Path = Paths.get("/tmp/dxwdl_applet_test")
     Utils.deleteRecursive(jobHomeDir.toFile)
     Utils.safeMkdir(jobHomeDir)
-    val dxPathConfig = DxPathConfig.apply(jobHomeDir, StreamFiles.Perfile, verbose)
+    val dxPathConfig = DxPathConfig.apply(jobHomeDir, StreamFiles.PerFile, verbose)
     dxPathConfig.createCleanDirs()
 
     val (language, womBundle: WomBundle, allSources, _, _) =

@@ -1,0 +1,11 @@
+{
+  "per_workflow_dx_attributes": {
+    "four_levels": {
+      "scatters": {
+        "i.j": {
+          "chunkSize": 3
+        }
+      }
+    }
+  }
+}

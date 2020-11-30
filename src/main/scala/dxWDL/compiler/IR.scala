@@ -337,7 +337,8 @@ object IR {
   case class AppletKindTask(task: CallableTaskDefinition) extends AppletKind
   case class AppletKindWfFragment(calls: Vector[String],
                                   blockPath: Vector[Int],
-                                  fqnDictTypes: Map[String, WomType])
+                                  fqnDictTypes: Map[String, WomType],
+                                  scatterChunkSize: Option[Int])
       extends AppletKind
   case object AppletKindWfInputs extends AppletKind
 
@@ -352,10 +353,9 @@ object IR {
   /** @param name          Name of applet
     * @param inputs        input arguments
     * @param outputs       output arguments
-    * @param instaceType   a platform instance name
+    * @param instanceType   a platform instance name
     * @param docker        is docker used? if so, what image
     * @param kind          Kind of applet: task, scatter, ...
-    * @param task          Task definition
     * @param womSourceCode WDL/CWL source code for task.
     * @param meta          Additional applet metadata
     * @param runtimeHints  Runtime hints

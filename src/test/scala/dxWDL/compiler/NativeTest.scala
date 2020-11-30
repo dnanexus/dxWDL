@@ -46,7 +46,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                          "-project",
                          dxTestProject.getId,
                          "-folder",
-                         "/" + unitTestsPath,
+                         s"/${unitTestsPath}",
                          "-force",
                          "-locked",
                          "-quiet")
@@ -57,7 +57,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       dxTestProject.getId,
                                       "-quiet",
                                       "--folder",
-                                      s"/${unitTestsPath}/reorg_tests")
+                                      s"/${unitTestsPath}/reorg_tests/",
+                                      "-force")
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
@@ -1253,7 +1254,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
       case Main.SuccessfulTermination(id) => id
-      case _                              => throw new Exception("sanity")
+      case _                              => throw new Exception("unexpected")
     }
 
     val wf = DxWorkflow.getInstance(wfId)
@@ -1285,7 +1286,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     val appletId = getAppletId(s"/${unitTestsPath}/applets/functional_reorg_test")
     // upload random file
     val (uploadOut, uploadErr) = Utils.execCommand(
-        s"dx upload ${path.toString} --destination /${unitTestsPath}/reorg_tests --brief"
+        s"dx upload ${path.toString} --destination /${unitTestsPath}/reorg_tests/ --brief"
     )
     val fileId = uploadOut.trim
     val extrasContent =
