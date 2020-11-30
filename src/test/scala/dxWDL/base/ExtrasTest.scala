@@ -13,7 +13,15 @@ class ExtrasTest extends FlatSpec with Matchers {
   val verbose2 = Verbose(false, true, Set.empty)
 
   private def getIdFromName(name: String): String = {
-    val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
+    val stdout =
+      try {
+        val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json")
+        stdout
+      } catch {
+        case ex: Throwable =>
+          val (stdout, _) = Utils.execCommand(s"dx describe ${name} --json --multi")
+          throw new Exception(s"found multiple results for ${name}: ${stdout}", ex)
+      }
     stdout.parseJson.asJsObject match {
       case JsObject(x) => JsObject(x).fields("id").convertTo[String]
     }
