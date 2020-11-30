@@ -57,7 +57,8 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       dxTestProject.getId,
                                       "-quiet",
                                       "--folder",
-                                      s"/${unitTestsPath}/reorg_tests/")
+                                      s"/${unitTestsPath}/reorg_tests/",
+                                      "-force")
 
   override def beforeAll(): Unit = {
     // build the directory with the native applets
@@ -1253,7 +1254,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     retval shouldBe a[Main.SuccessfulTermination]
     val wfId: String = retval match {
       case Main.SuccessfulTermination(id) => id
-      case _                              => throw new Exception("sanity")
+      case _                              => throw new Exception("unexpected")
     }
 
     val wf = DxWorkflow.getInstance(wfId)
