@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.50 09-Dec-2020
+
+* add per-workflow and per-scatter chunk size settings to extras.json
+
 ## 1.49.4 22-Oct-2020
 
 * change streamAllFiles flag to streamFiles, with a new option to ignore streaming for all inputs
