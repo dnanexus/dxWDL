@@ -2,12 +2,14 @@ package dxWDL.util
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
-import java.nio.file.{Paths}
+import java.nio.file.Paths
 import wom.types._
 import wom.values._
 import wom.expression._
 
 import dxWDL.base.Utils
+
+case class EvalException(msg: String) extends Exception(msg)
 
 object WomValueAnalysis {
   // These are used for evaluating if a WOM expression is constant.
@@ -93,18 +95,29 @@ object WomValueAnalysis {
     }
   }
 
+  def eval(expr: WomExpression, ctx: Map[String, WomValue] = Map.empty): WomValue = {
+    val result: ErrorOr[WomValue] =
+      expr.evaluateValue(ctx, dxIoFunctions)
+    result match {
+      case Valid(value) => value
+      case Invalid(err) => throw EvalException(s"invalid result: ${err.toString}")
+    }
+  }
+
   // Check if the WDL expression is a constant. If so, calculate and return it.
   // Otherwise, return None.
   //
   def ifConstEval(womType: WomType, expr: WomExpression): Option[WomValue] = {
-    val result: ErrorOr[WomValue] =
-      expr.evaluateValue(Map.empty[String, WomValue], dxIoFunctions)
-    result match {
-      case Invalid(_)                                                   => None
-      case Valid(value: WomValue) if requiresEvaluation(womType, value) =>
+    try {
+      val value = eval(expr)
+      if (requiresEvaluation(womType, value)) {
         // There are WDL constants that require evaluation.
         None
-      case Valid(value) => Some(value)
+      } else {
+        Some(value)
+      }
+    } catch {
+      case _: EvalException => None
     }
   }
 
