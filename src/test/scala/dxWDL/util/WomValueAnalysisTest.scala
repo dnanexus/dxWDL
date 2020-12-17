@@ -7,6 +7,8 @@ import wom.graph.expression.ExpressionNode
 import wom.types._
 import wom.values._
 
+import java.nio.file.Paths
+
 class WomValueAnalysisTest extends FlatSpec with Matchers {
 
   def parseExpressions(wdlCode: String): Vector[ExpressionNode] = {
@@ -118,5 +120,29 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
     val nodes = expressions.toList
     for (node <- nodes)
       WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
+  }
+
+  it should "return absolute paths for write_* functions" in {
+    val wdlCode = """|version 1.0
+                     |
+                     |workflow foo {
+                     |  Array[String] lines = ["hello", "goodbye"]
+                     |  File f = write_lines(lines)
+                     |}
+                     |""".stripMargin
+    val expressions = parseExpressions(wdlCode)
+    val results = expressions.foldLeft(Map.empty[String, WomValue]) {
+      case (ctx, exprNode) =>
+        val value: WomValue = WomValueAnalysis.eval(exprNode.womExpression, ctx)
+        ctx + (exprNode.identifier.localName.value -> value)
+    }
+    results.get("f") match {
+      case None => throw new AssertionError("failed to evaluate f")
+      case Some(f: WomFile) =>
+        println(f.value)
+        val path = Paths.get(f.value)
+        path.isAbsolute shouldBe true
+      case other => throw new AssertionError(s"expected WomFile not ${other}")
+    }
   }
 }
