@@ -120,7 +120,7 @@ case class DxIoFunctions(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
   override def writeFile(path: String, content: String): Future[WomSingleFile] = {
     Furl.parse(path) match {
       case FurlLocal(localPath) =>
-        val p = Paths.get(localPath)
+        val p = Paths.get(localPath).toAbsolutePath
         Utils.writeFileContent(p, content)
         Future(WomSingleFile(localPath))
       case fdx: FurlDx =>
