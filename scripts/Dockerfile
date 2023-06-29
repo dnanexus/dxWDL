@@ -1,7 +1,7 @@
 # An image that allows compiling a WDL program. It saves you the
 # requirement to install java.
 
-FROM ubuntu:16.04
+FROM ubuntu:xenial-20210416
 ARG VERSION
 
 # Install java-8
