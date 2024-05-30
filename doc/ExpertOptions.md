@@ -140,23 +140,23 @@ $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -default
 ## Describe WDL workflow to obtain execution tree
 
 You can describe a dnanexus workflow that was compiled by dxWDL to get an execution tree presentating the workfow.w.
-The execution tree will include information on the executables in the workflow (applets and subworkflows). 
-By default, the execution tree is return as JSON. You can supply a `--pretty` flag to return a pretty print. 
+The execution tree will include information on the executables in the workflow (applets and subworkflows).
+By default, the execution tree is return as JSON. You can supply a `--pretty` flag to return a pretty print.
 
 To obtain execution tree from a dxWDL compiled workflow:
 
 1. JSON - [example](./examples/four_levels.exectree.json)
 
 ```bash
-java -jar dxWDL-v1.46.5.jar describe <workflow_id> 
+java -jar dxWDL-v1.46.5.jar describe <workflow_id>
 ```
 
 2. prettyPrint - [example](./examples/four_levels.exectree.pretty.txt)
 
 ```bash
-java -jar dxWDL-v1.46.5.jar describe <workflow_id> -pretty 
+java -jar dxWDL-v1.46.5.jar describe <workflow_id> -pretty
 ```
-   
+
 # Extensions
 
 ## Runtime
@@ -213,6 +213,23 @@ File streaming is an optimization, and there are limiting rules to its
 correct usage. The file must be accessed only once, in sequential
 order, from the beginning. It need not be read to the end. If the task
 does not keep this contract, it could fail in unexpected ways.
+
+Currently the download tool (Dx Download Agent) used by dxWDL does not handle symliinked data transfer. If the streaming method does not perform well for the tool inside your workflow, you may consider using the file ID of the input data as string and use `dx download` in the command section to download the symlinked data to the worker for processing. Example:
+
+```wdl
+task download_test {
+
+    String bam
+
+    command {
+        dx download ${bam} -o - > ~/file.bam
+        samtools index ~/file.bam
+    }
+    output {
+        File result = "..."
+    }
+}
+```
 
 Some tasks have empty command sections. For example, the `fileSize`
 task (below) calculates the size of a file, but does not need to
@@ -303,7 +320,7 @@ A WDL task has two sections where metadata can be specified:
 * meta: Provides overall metadata about the task
 * parameter_meta: Provides metadata for each of the input parameters
 
-Both of these sections allow arbitrary keys and values; unrecognized keys must be ignored by the workflow engine. dxWDL recognized specific keys in each section that are used when generating the native DNAnexus applets. The purpose of these keys is to provide the same information that can be specified in the [dxapp.json](https://documentation.dnanexus.com/developer/apps/app-metadata) file. 
+Both of these sections allow arbitrary keys and values; unrecognized keys must be ignored by the workflow engine. dxWDL recognized specific keys in each section that are used when generating the native DNAnexus applets. The purpose of these keys is to provide the same information that can be specified in the [dxapp.json](https://documentation.dnanexus.com/developer/apps/app-metadata) file.
 
 ## meta section
 
@@ -594,7 +611,7 @@ task bwa_mem {
     description: "Align paired-end reads using BWA MEM"
     details: {
       upstreamLicenses: "GPLv3"
-    } 
+    }
   }
 
   parameter_meta {
@@ -626,7 +643,7 @@ task bwa_mem {
     read_group: {
       label: "Read Group",
       help: "(Optional) the read group to add to aligned reads",
-      group: "Advanced" 
+      group: "Advanced"
     }
     docker_image: {
       label: "Docker Image",
